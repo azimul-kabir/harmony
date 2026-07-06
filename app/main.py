@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.core.config import get_settings
 from app.core.logging import logger
-from app.database.database import init_database
+from app.database.init_db import init_db
 
 settings = get_settings()
 
@@ -24,7 +24,7 @@ def startup() -> None:
     Path(settings.staging_path).mkdir(parents=True, exist_ok=True)
     Path(settings.failed_path).mkdir(parents=True, exist_ok=True)
 
-    init_database()
+    init_db()
 
     logger.info("Harmony started")
 
