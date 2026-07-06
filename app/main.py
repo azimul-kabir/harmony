@@ -8,12 +8,16 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
 
+from app.api.library import router as library_router
+
 settings = get_settings()
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
 )
+
+app.include_router(library_router)
 
 templates = Jinja2Templates(directory="app/templates")
 
