@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card shadow">
+
+    <div class="card-body">
+
+        <h2>{{ app_name }}</h2>
+
+        <p class="text-muted">
+
+            Self-hosted Music Manager
+
+        </p>
+
+        <hr>
+
+        <table class="table">
+
+            <tr>
+
+                <th>Status</th>
+
+                <td>Running</td>
+
+            </tr>
+
+            <tr>
+
+                <th>Version</th>
+
+                <td>{{ version }}</td>
+
+            </tr>
+
+            <tr>
+
+                <th>Music Folder</th>
+
+                <td>{{ music_path }}</td>
+
+            </tr>
+
+            <tr>
+
+                <th>Downloads</th>
+
+                <td>{{ download_path }}</td>
+
+            </tr>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endblock %}

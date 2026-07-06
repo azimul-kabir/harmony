@@ -1,0 +1,21 @@
+[project]
+name = "harmony"
+version = "0.1.0"
+description = "Self-hosted music downloader and organizer for Navidrome."
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.116.1",
+    "uvicorn[standard]>=0.35.0",
+    "jinja2>=3.1.6",
+    "sqlalchemy>=2.0.43",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "python-dotenv>=1.1.1",
+    "loguru>=0.7.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

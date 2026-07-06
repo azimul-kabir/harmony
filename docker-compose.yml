@@ -1,0 +1,22 @@
+services:
+  harmony:
+
+    build: .
+
+    container_name: harmony
+
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    volumes:
+      - ./database:/database
+      - ./downloads:/downloads
+      - ./logs:/logs
+
+      # Change this on Synology
+      - ./music:/music
+
+    env_file:
+      - .env
