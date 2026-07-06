@@ -1,22 +1,14 @@
 services:
   harmony:
-
     build: .
-
     container_name: harmony
-
-    restart: unless-stopped
-
     ports:
       - "8080:8080"
 
     volumes:
+      - .:/app
       - ./database:/database
-      - ./downloads:/downloads
       - ./logs:/logs
+      - ./test_music:/music:ro
 
-      # Change this on Synology
-      - ./music:/music
-
-    env_file:
-      - .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
