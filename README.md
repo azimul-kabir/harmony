@@ -54,5 +54,4 @@ Harmony is under active development.
 
 ## License
 
-MIT Licensegit add .
-git commit -m "chore: project hygiene"
+MIT License
