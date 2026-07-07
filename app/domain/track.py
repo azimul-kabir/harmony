@@ -1,0 +1,16 @@
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class Track:
+    title: str
+    artist: str
+    album: str | None = None
+    album_artist: str | None = None
+    track: int | None = None
+    disc: int | None = None
+    year: int | None = None
+    genre: str | None = None
+    duration: float | None = None
+    isrc: str | None = None
+    path: str | None = None
