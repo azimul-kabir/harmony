@@ -11,26 +11,16 @@ class SpotDLClient:
     def __init__(self):
         self.settings = get_settings()
 
-    @staticmethod
-    def _extract_json(stdout: str):
-        start = stdout.find("[")
-
-        if start == -1:
-            raise RuntimeError("SpotDL did not return JSON.")
-
-        return json.loads(stdout[start:])
-
     def playlist(self, url: str) -> Playlist:
-        result = subprocess.run(
+        result = self._run(
             [
-                self.settings.spotdl_path,
                 "save",
                 url,
+                "--audio",
+                *self._audio_providers(),
                 "--save-file",
                 "-",
-            ],
-            capture_output=True,
-            text=True,
+            ]
         )
 
         if result.returncode != 0:
@@ -43,24 +33,41 @@ class SpotDLClient:
             for song in songs
         ]
 
-        validated.sort(
-            key=lambda song: song.list_position or 0
-        )
-
         tracks = [
             spotdl_song_to_track(song)
             for song in validated
         ]
 
         if not validated:
-            return Playlist(
-                name="",
-                url=url,
-                tracks=[],
-            )
+            raise RuntimeError("Playlist is empty.")
+
+        first = validated[0]
 
         return Playlist(
-            name=validated[0].list_name or "",
-            url=validated[0].list_url or url,
+            name=first.list_name or "Unknown Playlist",
+            url=first.list_url or "",
             tracks=tracks,
         )
+
+    def _audio_providers(self) -> list[str]:
+        return [
+            provider.strip()
+            for provider in self.settings.audio_providers.split(",")
+            if provider.strip()
+        ]
+
+    def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [self.settings.spotdl_path, *args],
+            capture_output=True,
+            text=True,
+        )
+
+    @staticmethod
+    def _extract_json(stdout: str):
+        start = stdout.find("[")
+
+        if start == -1:
+            raise RuntimeError("SpotDL did not return JSON.")
+
+        return json.loads(stdout[start:])

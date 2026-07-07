@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
 
+    # Audio providers (preferred order)
+    audio_providers: str = "youtube-music,youtube"
+
     # Download
     max_parallel_downloads: int = 3
 
