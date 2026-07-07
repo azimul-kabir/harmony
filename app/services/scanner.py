@@ -41,9 +41,11 @@ def scan_library(root: str | Path, db: Session):
 
         scanned_paths.add(metadata["path"])
 
-        upsert_song(db, metadata)
+        upsert_song(db, metadata, commit=False)
 
         processed += 1
+
+    db.commit()
 
     removed = delete_missing_songs(db, scanned_paths)
 

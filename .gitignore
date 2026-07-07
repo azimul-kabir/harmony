@@ -56,3 +56,6 @@ test_music/
 # -----------------------------
 .coverage
 htmlcov/
+
+test_music/*
+!test_music/.gitkeep
