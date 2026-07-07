@@ -1,3 +1,7 @@
-provider = SpotDLProvider()
+from app.downloaders.spotdl import SpotDLClient
 
-tracks = provider.get_playlist_tracks(url)
+client = SpotDLClient()
+
+
+def import_playlist(url: str):
+    return client.playlist(url)
