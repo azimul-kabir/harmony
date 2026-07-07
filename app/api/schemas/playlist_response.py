@@ -1,25 +1,26 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(slots=True)
-class Track:
+class TrackResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     title: str
     artist: str
-
     album: str | None = None
     album_artist: str | None = None
-
     track: int | None = None
     disc: int | None = None
-
     year: int | None = None
-    genre: str | None = None
     duration: float | None = None
-
-    # External identifiers
     spotify_id: str | None = None
     spotify_url: str | None = None
     isrc: str | None = None
 
-    # Local library
-    path: str | None = None
+
+class PlaylistResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    url: str
+    track_count: int
+    tracks: list[TrackResponse]

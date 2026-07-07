@@ -2,51 +2,107 @@
 
 *A self-hosted music library manager for collectors who want complete control over their music.*
 
-Harmony is a self-hosted music library manager designed for music collectors who want complete control over their music collection.
-
-It scans your local music library, extracts metadata, keeps a synchronized database of your collection, and lays the foundation for intelligent Spotify playlist analysis and automated downloads.
+Harmony is a self-hosted music management platform that combines a local music library with Spotify playlist analysis. It scans your music collection, stores metadata in a local database, imports Spotify playlists through SpotDL, and will intelligently determine which songs are already available in your library before downloading anything.
 
 ---
 
 ## Features
 
-### Current
+### Library Management
 
-- Music library scanning
-- Metadata extraction using Mutagen
-- SQLite music library database
-- Automatic library synchronization
-  - Detect new songs
-  - Detect updated songs
-  - Remove missing songs
+- Scan local music libraries
+- Extract metadata using Mutagen
+- Store library metadata in SQLite
+- Detect new, updated and removed songs
 - Library statistics API
+
+### Spotify Integration
+
+- Import Spotify playlists using SpotDL
+- Provider-independent domain models
+- REST API for playlist import
+
+### Platform
+
 - FastAPI REST API
-- Docker support
+- Docker & Docker Compose
 - Automated tests with pytest
 
 ---
 
-## In Development
+## Current Status
 
-- Spotify Playlist Analyzer
-- Playlist vs Library comparison
+### ✅ Implemented
+
+- Local library scanner
+- Metadata extraction
+- SQLite database
+- Automatic library synchronization
+- Library statistics
+- Spotify playlist import
+- SpotDL integration
+- Docker development environment
+- REST API
+
+### 🚧 In Development
+
+- Playlist vs library comparison
 - Missing song detection
-- Download queue integration
+- Download queue
+- Download engine
+
+### 📋 Planned
+
+- Duplicate detection
+- Metadata repair
+- Album artwork management
+- Playlist synchronization
+- Navidrome integration
+- Jellyfin integration
+- Scheduled automation
+- Web dashboard
 
 ---
 
-## Planned Features
+## API
 
-- SpotDL integration
-- Duplicate song detection
-- Metadata repair and normalization
-- Album artwork management
-- Library organization tools
-- Navidrome integration
-- Jellyfin integration
-- Web dashboard
-- Scan history
-- Automation and scheduled scans
+### Scan Library
+
+```bash
+curl -X POST http://localhost:8080/api/library/scan
+```
+
+### Library Statistics
+
+```bash
+curl http://localhost:8080/api/library/statistics
+```
+
+### Import Spotify Playlist
+
+```bash
+curl -X POST http://localhost:8080/api/playlists/import \
+-H "Content-Type: application/json" \
+-d '{
+  "url":"https://open.spotify.com/playlist/..."
+}'
+```
+
+Example response:
+
+```json
+{
+  "name": "Test",
+  "track_count": 3,
+  "tracks": [
+    {
+      "title": "Attention",
+      "artist": "Charlie Puth",
+      "album": "Voicenotes"
+    }
+  ]
+}
+```
 
 ---
 
@@ -57,6 +113,9 @@ It scans your local music library, extracts metadata, keeps a synchronized datab
 - SQLAlchemy
 - SQLite
 - Mutagen
+- SpotDL
+- yt-dlp
+- FFmpeg
 - Docker
 - Pytest
 
@@ -69,83 +128,50 @@ app/
 ├── api/
 ├── core/
 ├── database/
+├── domain/
+├── downloaders/
+├── mappers/
+├── schemas/
 ├── services/
 ├── static/
 └── templates/
 
-tests/
-music/
 database/
 logs/
+music/
+tests/
 ```
-
----
-
-## Current Version
-
-**v0.2.0**
 
 ---
 
 ## Roadmap
 
-### Completed
+### v0.3.x
 
-- Project foundation
-- Docker development environment
-- SQLite database
-- Music metadata extraction
-- Library scanner
-- Library synchronizer
-- Library statistics
-- Basic automated testing
+- Playlist comparison
+- Missing song detection
 
-### In Progress
+### v0.4.x
 
-- Spotify Playlist Analyzer
+- Download queue
+- Smart downloading
 
-### Planned
+### v0.5.x
 
-- Playlist comparison engine
-- Download manager
 - Duplicate detection
-- Metadata management
+- Metadata improvements
+
+### v0.6+
+
 - Web dashboard
 - Scheduled synchronization
-
----
-
-## Development
-
-Start the application:
-
-```bash
-docker compose up --build
-```
-
-Run the test suite:
-
-```bash
-docker compose exec harmony pytest
-```
-
-Scan the music library:
-
-```bash
-curl -X POST http://localhost:8080/api/library/scan
-```
-
-View library statistics:
-
-```bash
-curl http://localhost:8080/api/library/statistics
-```
+- Multi-provider support
 
 ---
 
 ## Vision
 
-Harmony aims to become a complete self-hosted music management platform that combines local music libraries with modern streaming services. Rather than replacing existing tools, Harmony will help users organize, synchronize, analyze, and expand their personal music collections while remaining fully under their control.
+Harmony aims to become an intelligent self-hosted music management platform. Rather than simply downloading music, Harmony understands your existing collection, compares it with streaming playlists, downloads only what is missing, and keeps your library organized automatically.
 
 ---
 
