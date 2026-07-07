@@ -6,6 +6,17 @@ from app.domain.playlist import Playlist
 from app.mappers.spotdl import spotdl_song_to_track
 from app.schemas.spotdl import SpotDLSong
 
+from pathlib import Path
+
+from app.domain.track import Track
+
+def download(
+    self,
+    track: Track,
+    output_dir: Path,
+) -> Path:
+    ...
+
 
 class SpotDLClient:
     def __init__(self):
@@ -48,6 +59,46 @@ class SpotDLClient:
             url=first.list_url or "",
             tracks=tracks,
         )
+
+    def download(
+        self,
+        track: Track,
+        output_dir: Path,
+    ) -> Path:
+        query = (
+            track.spotify_url
+            if track.spotify_url
+            else f"{track.artist} - {track.title}"
+        )
+
+        result = self._run(
+            [
+                query,
+                "--audio",
+                *self._audio_providers(),
+                "--output",
+                str(output_dir),
+            ]
+        )
+
+        print("STDOUT")
+        print(result.stdout)
+        print("STDERR")
+        print(result.stderr)
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr)
+
+        files = sorted(
+            output_dir.glob("*"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+
+        if not files:
+            raise RuntimeError("SpotDL did not produce any output file.")
+
+        return files[0]
 
     def _audio_providers(self) -> list[str]:
         return [
