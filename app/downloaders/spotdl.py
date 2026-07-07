@@ -1,13 +1,34 @@
-stdout = subprocess.run(...)
+import json
+import subprocess
 
-songs = json.loads(...)
+from app.core.config import get_settings
 
-validated = [
-    SpotDLSong.model_validate(song)
-    for song in songs
-]
 
-tracks = [
-    spotdl_song_to_track(song)
-    for song in validated
-]
+class SpotDLClient:
+    def __init__(self):
+        self.settings = get_settings()
+
+    def playlist(self, url: str):
+        result = subprocess.run(
+            [
+                self.settings.spotdl_path,
+                "save",
+                url,
+                "--save-file",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr)
+
+        start = result.stdout.find("[")
+
+        if start == -1:
+            raise RuntimeError("SpotDL did not return JSON.")
+
+        songs = json.loads(result.stdout[start:])
+
+        return songs

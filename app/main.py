@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from app.api.playlist import router as playlist_router
+
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
@@ -18,6 +20,8 @@ app = FastAPI(
 )
 
 app.include_router(library_router)
+
+app.include_router(playlist_router)
 
 templates = Jinja2Templates(directory="app/templates")
 
