@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from app.api import downloads
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -20,6 +22,8 @@ app = FastAPI(
 )
 
 app.include_router(library_router)
+
+app.include_router(downloads.router)
 
 app.include_router(playlist_router)
 

@@ -1,6 +1,15 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from app.domain.track import Track
+
+
+class JobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass(slots=True)

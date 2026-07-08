@@ -9,6 +9,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    sqlite3 \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
