@@ -212,6 +212,13 @@ tests/
 
 ---
 
+## Known Limitations
+
+- Downloading from YouTube Music may fail in cloud development environments (e.g. GitHub Codespaces) due to YouTube bot verification.
+- The same code works correctly on self-hosted environments such as Synology NAS.
+
+---
+
 ## Vision
 
 Harmony aims to become an intelligent self-hosted music management platform. Rather than simply downloading music, Harmony understands your existing collection, compares it with streaming playlists, downloads only what is missing, and keeps your library organized automatically through a modern REST API and background processing engine.
