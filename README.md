@@ -1,8 +1,13 @@
 # Harmony
 
+![Version](https://img.shields.io/badge/version-0.4.0-blue)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![Status](https://img.shields.io/badge/status-active_development-green)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
+
 *A self-hosted music library manager for collectors who want complete control over their music.*
 
-Harmony is a self-hosted music management platform that combines a local music library with Spotify playlist analysis. It scans your music collection, stores metadata in a local database, imports Spotify playlists through SpotDL, and will intelligently determine which songs are already available in your library before downloading anything.
+Harmony is a self-hosted music management platform that combines a local music library with Spotify playlist analysis. It scans your music collection, stores metadata in a local SQLite database, imports Spotify playlists, manages a persistent download queue, and will intelligently determine which songs are already available in your library before downloading anything.
 
 ---
 
@@ -18,19 +23,33 @@ Harmony is a self-hosted music management platform that combines a local music l
 
 ### Spotify Integration
 
-- Import Spotify playlists using SpotDL
+- Import Spotify playlists
+- SpotDL download integration
 - Provider-independent domain models
 - REST API for playlist import
+
+### Download Management
+
+- Persistent download queue
+- Background download worker
+- Automatic job processing
+- Job status tracking
+- Download history
+- Delete completed or failed jobs
+- Worker recovery after application restart
 
 ### Platform
 
 - FastAPI REST API
+- SQLAlchemy ORM
 - Docker & Docker Compose
 - Automated tests with pytest
 
 ---
 
 ## Current Status
+
+Version: **0.4.0**
 
 ### ✅ Implemented
 
@@ -41,22 +60,27 @@ Harmony is a self-hosted music management platform that combines a local music l
 - Library statistics
 - Spotify playlist import
 - SpotDL integration
+- Persistent download queue
+- Background download worker
+- Download job management
+- Download REST API
+- Worker recovery on startup
 - Docker development environment
-- REST API
 
 ### 🚧 In Development
 
-- Playlist vs library comparison
-- Missing song detection
-- Download queue
-- Download engine
+- Retry failed downloads
+- Duplicate download prevention
+- Automatic library import after download
 
 ### 📋 Planned
 
-- Duplicate detection
+- Playlist download queue
+- Playlist vs library comparison
+- Missing song detection
+- Duplicate music detection
 - Metadata repair
 - Album artwork management
-- Playlist synchronization
 - Navidrome integration
 - Jellyfin integration
 - Scheduled automation
@@ -88,20 +112,34 @@ curl -X POST http://localhost:8080/api/playlists/import \
 }'
 ```
 
-Example response:
+### Queue Download
 
-```json
-{
-  "name": "Test",
-  "track_count": 3,
-  "tracks": [
-    {
-      "title": "Attention",
-      "artist": "Charlie Puth",
-      "album": "Voicenotes"
-    }
-  ]
-}
+```bash
+curl -X POST http://localhost:8080/api/downloads \
+-H "Content-Type: application/json" \
+-d '{
+  "spotify_url":"https://open.spotify.com/track/...",
+  "title":"Attention",
+  "artist":"Charlie Puth"
+}'
+```
+
+### List Download Jobs
+
+```bash
+curl http://localhost:8080/api/downloads
+```
+
+### Get Download Job
+
+```bash
+curl http://localhost:8080/api/downloads/1
+```
+
+### Delete Download Job
+
+```bash
+curl -X DELETE http://localhost:8080/api/downloads/1
 ```
 
 ---
@@ -133,6 +171,7 @@ app/
 ├── mappers/
 ├── schemas/
 ├── services/
+├── workers/
 ├── static/
 └── templates/
 
@@ -146,32 +185,36 @@ tests/
 
 ## Roadmap
 
-### v0.3.x
+### v0.5.0
 
-- Playlist comparison
+- Retry failed downloads
+- Prevent duplicate download jobs
+- Automatic library import after successful downloads
+
+### v0.6.0
+
+- Playlist download queue
+- Playlist vs library comparison
 - Missing song detection
 
-### v0.4.x
+### v0.7.0
 
-- Download queue
-- Smart downloading
-
-### v0.5.x
-
-- Duplicate detection
+- Duplicate music detection
 - Metadata improvements
+- Album artwork management
 
-### v0.6+
+### v1.0.0
 
 - Web dashboard
 - Scheduled synchronization
 - Multi-provider support
+- Navidrome & Jellyfin integration
 
 ---
 
 ## Vision
 
-Harmony aims to become an intelligent self-hosted music management platform. Rather than simply downloading music, Harmony understands your existing collection, compares it with streaming playlists, downloads only what is missing, and keeps your library organized automatically.
+Harmony aims to become an intelligent self-hosted music management platform. Rather than simply downloading music, Harmony understands your existing collection, compares it with streaming playlists, downloads only what is missing, and keeps your library organized automatically through a modern REST API and background processing engine.
 
 ---
 
