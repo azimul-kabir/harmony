@@ -1,18 +1,61 @@
+# -----------------------------
+# Python
+# -----------------------------
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
 
+# -----------------------------
+# Virtual environments
+# -----------------------------
+.venv/
+venv/
+env/
+
+# -----------------------------
+# Environment
+# -----------------------------
 .env
 
-database/
+# -----------------------------
+# macOS
+# -----------------------------
+.DS_Store
 
-downloads/
-
-logs/
-
+# -----------------------------
+# IDE
+# -----------------------------
 .vscode/
-
 .idea/
 
-.pytest_cache/
+# -----------------------------
+# Runtime data
+# -----------------------------
+database/
+downloads/
+logs/
+music/
 
-.venv/
+# Test media
+test_music/
+
+# SQLite
+*.db
+*.sqlite3
+
+# -----------------------------
+# Docker
+# -----------------------------
+.docker/
+
+# -----------------------------
+# Coverage
+# -----------------------------
+.coverage
+htmlcov/
+
+test_music/*
+!test_music/.gitkeep

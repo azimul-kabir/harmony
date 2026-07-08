@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Harmony"
-    app_version: str = "0.1.0"
+    app_version: str = "0.4.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -15,12 +15,22 @@ class Settings(BaseSettings):
     music_path: str = "/music"
 
     download_path: str = "/downloads"
-
     staging_path: str = "/downloads/staging"
-
     failed_path: str = "/downloads/failed"
 
     log_level: str = "INFO"
+
+    # SpotDL
+    spotdl_path: str = "spotdl"
+    use_official_spotify_api: bool = False
+    spotify_client_id: str | None = None
+    spotify_client_secret: str | None = None
+
+    # Audio providers (preferred order)
+    audio_providers: str = "youtube-music,youtube"
+
+    # Download
+    max_parallel_downloads: int = 3
 
     model_config = SettingsConfigDict(
         env_file=".env",

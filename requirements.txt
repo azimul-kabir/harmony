@@ -7,3 +7,6 @@ loguru
 sqlalchemy>=2.0
 alembic>=1.16
 mutagen>=1.47
+pytest>=8.0
+spotdl>=4.5
+yt-dlp

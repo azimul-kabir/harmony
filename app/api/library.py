@@ -1,17 +1,23 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database.crud import library_statistics
-from app.database.session import SessionLocal
+from app.database.session import get_db
+from app.services.scanner import scan_library
 
 router = APIRouter(prefix="/api/library", tags=["Library"])
 
 
 @router.get("/statistics")
-def statistics():
-    db: Session = SessionLocal()
+def statistics(db: Session = Depends(get_db)):
+    return library_statistics(db)
 
-    try:
-        return library_statistics(db)
-    finally:
-        db.close()
+
+@router.post("/scan")
+def scan(db: Session = Depends(get_db)):
+    result = scan_library("/music", db)
+
+    return {
+        "status": "completed",
+        **result,
+    }
