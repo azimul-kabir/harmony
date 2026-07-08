@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.domain.track import Track
 
+from app.exceptions.download import TrackAlreadyExistsError
+
 from app.domain.download import JobStatus
 
 from app.api.schemas.download import (
@@ -35,7 +37,14 @@ def queue_download(
         spotify_url=request.spotify_url,
     )
 
-        return enqueue_track(db, track)
+        try:
+            return enqueue_track(db, track)
+
+        except TrackAlreadyExistsError as ex:
+            raise HTTPException(
+                status_code=409,
+                detail=str(ex),
+            )
 
 
 @router.get("", response_model=list[DownloadJobResponse])

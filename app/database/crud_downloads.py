@@ -55,6 +55,24 @@ def find_by_spotify_url(
     )
 
 
+def find_active_job_by_spotify_url(
+    db: Session,
+    spotify_url: str,
+) -> DownloadJob | None:
+    return db.scalar(
+        select(DownloadJob)
+        .where(
+            DownloadJob.spotify_url == spotify_url,
+            DownloadJob.status.in_(
+                (
+                    JobStatus.QUEUED,
+                    JobStatus.RUNNING,
+                )
+            ),
+        )
+    )
+
+
 def next_job(db: Session) -> DownloadJob | None:
     return db.scalar(
         select(DownloadJob)
