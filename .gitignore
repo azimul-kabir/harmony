@@ -34,13 +34,13 @@ env/
 # -----------------------------
 # Runtime data
 # -----------------------------
-database/
-downloads/
-logs/
-music/
+/database/
+/downloads/
+/logs/
+/music/
 
 # Test media
-test_music/
+/test_music/
 
 # SQLite
 *.db

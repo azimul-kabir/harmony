@@ -8,6 +8,11 @@ def enqueue_track(
     db: Session,
     track: Track,
 ):
+    if track.spotify_url is None:
+        raise ValueError(
+            "Track must have a Spotify URL."
+        )
+
     return create_job(
         db=db,
         spotify_url=track.spotify_url,
