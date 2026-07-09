@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session
 from app.database.crud import (
     UpsertStatus,
     delete_missing_songs,
-    upsert_song,
 )
-from app.services.metadata import read_metadata
+from app.services.library_import import import_file
 
 SUPPORTED_EXTENSIONS = {
     ".mp3",
@@ -32,7 +31,10 @@ def discover_music(root: str | Path) -> Iterator[Path]:
             yield file
 
 
-def scan_library(root: str | Path, db: Session):
+def scan_library(
+    root: str | Path,
+    db: Session,
+) -> dict:
     scanned_paths: set[str] = set()
 
     processed = 0
@@ -41,16 +43,16 @@ def scan_library(root: str | Path, db: Session):
     unchanged = 0
 
     for file in discover_music(root):
-        metadata = read_metadata(file)
+        scanned_paths.add(str(file.resolve()))
 
-        scanned_paths.add(metadata["path"])
-
-        status, _ = upsert_song(
-            db,
-            metadata,
-            commit=False,
+        status = import_file(
+            db=db,
+            path=file,
         )
-        
+
+        if status is None:
+            continue
+
         if status == UpsertStatus.NEW:
             new += 1
         elif status == UpsertStatus.UPDATED:
@@ -59,17 +61,18 @@ def scan_library(root: str | Path, db: Session):
             unchanged += 1
         else:
             raise ValueError(f"Unexpected upsert status: {status}")
-        
+
         processed += 1
 
-    db.commit()
-
-    removed = delete_missing_songs(db, scanned_paths)
+    removed = delete_missing_songs(
+        db,
+        scanned_paths,
+    )
 
     return {
-    "processed": processed,
-    "new": new,
-    "updated": updated,
-    "unchanged": unchanged,
-    "removed": removed,
+        "processed": processed,
+        "new": new,
+        "updated": updated,
+        "unchanged": unchanged,
+        "removed": removed,
     }

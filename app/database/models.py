@@ -90,14 +90,14 @@ class DownloadJob(Base):
         index=True,
     )
 
-    title: Mapped[str | None] = mapped_column(
+    title: Mapped[str] = mapped_column(
         String,
-        nullable=True,
-    )
+        nullable=False,
+        )
 
-    artist: Mapped[str | None] = mapped_column(
+    artist: Mapped[str] = mapped_column(
         String,
-        nullable=True,
+        nullable=False,
     )
 
     status: Mapped[JobStatus] = mapped_column(

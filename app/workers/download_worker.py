@@ -2,15 +2,16 @@ import time
 from datetime import datetime
 
 from app.core.logging import logger
-from app.database.session import SessionLocal
 from app.database.crud_downloads import (
     next_job,
     recover_running_jobs,
 )
 from app.database.models import DownloadJob
+from app.database.session import SessionLocal
 from app.domain.download import JobStatus
 from app.domain.track import Track
 from app.services.download import download_track
+from app.services.library_import import import_file
 
 
 def worker_loop() -> None:
@@ -65,8 +66,24 @@ def process_job(
 
         output_file = download_track(track)
 
-        job.status = JobStatus.COMPLETED
         job.output_file = str(output_file)
+
+        #
+        # Automatically import the downloaded file
+        # into the Harmony library.
+        #
+        try:
+            import_file(
+                db=db,
+                path=output_file,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to import downloaded file: {}",
+                output_file,
+            )
+
+        job.status = JobStatus.COMPLETED
         job.completed_at = datetime.utcnow()
 
         db.commit()
