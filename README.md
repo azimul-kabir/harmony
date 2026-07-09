@@ -2,7 +2,7 @@
 
 *A self-hosted music library manager for collectors who want complete control over their music.*
 
-> **Current Version:** v0.4.0  
+> **Current Version:** v0.5.0  
 > 🚧 Active development
 
 Harmony is a self-hosted music management platform that combines a local music library with Spotify playlist analysis. It scans your music collection, stores metadata in a local SQLite database, imports Spotify playlists, manages a persistent download queue, and intelligently determines which songs are already available in your library before downloading anything.
@@ -49,7 +49,7 @@ Harmony is a self-hosted music management platform that combines a local music l
 
 # Current Status
 
-**Version:** **0.4.0**
+**Version:** **0.5.0**
 
 ## ✅ Implemented
 
@@ -67,6 +67,9 @@ Harmony is a self-hosted music management platform that combines a local music l
 - Download REST API
 - Worker recovery after restart
 - Docker development environment
+- Intelligent playlist downloads
+- Smart queue management
+- Per-track playlist download reporting
 
 ## 🚧 In Development
 
@@ -124,7 +127,7 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "version": "0.4.0"
+  "version": "0.5.0"
 }
 ```
 
@@ -230,17 +233,13 @@ tests/
 
 # Roadmap
 
-## v0.5.0
-
-- Retry failed downloads
-- Prevent duplicate download jobs
-- Automatic library import after successful downloads
-
 ## v0.6.0
 
-- Playlist download queue
-- Smart playlist vs library comparison
-- Missing song detection
+- Retry failed downloads
+- Automatic library scan after successful downloads
+- Playlist synchronization
+- Duplicate detection using Spotify ID and ISRC
+- Album download support
 
 ## v0.7.0
 

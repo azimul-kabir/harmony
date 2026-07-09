@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
 
+from app.domain.queue import QueueResult, QueueStatus
+
 from app.database.crud import find_song_by_title_artist
 
 from app.exceptions.download import (
@@ -44,14 +46,22 @@ def enqueue_track(
     )
 
     if existing_job is not None:
-        return existing_job
+        return QueueResult(
+            job_id=existing_job.id,
+            status=QueueStatus.ALREADY_QUEUED,
+        )
 
     #
     # Queue new job
     #
-    return create_job(
+    job = create_job(
         db=db,
         spotify_url=track.spotify_url,
         title=track.title,
         artist=track.artist,
+    )
+
+    return QueueResult(
+        job_id=job.id,
+        status=QueueStatus.CREATED,
     )

@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.5.0
+
+### Added
+
+- Intelligent playlist download service
+- Playlist download API endpoint
+- Smart playlist processing
+- Prevention of downloading tracks already present in the local library
+- Prevention of duplicate active download jobs
+- Queue result domain models
+- Per-track playlist download results
+- Detailed playlist download summary
+- Download exception hierarchy
+
+### Changed
+
+- Refactored download queue to return structured queue results
+- Improved download queue architecture
+- Extended playlist download response with per-track status
+- Updated project documentation
+- Improved Docker development environment
+
+### Fixed
+
+- Restored database persistence layer
+- Fixed SQLite initialization
+- Fixed worker recovery after restart
+- Fixed duplicate download handling
+
+---
+
 ## v0.4.0
 
 ### Added
