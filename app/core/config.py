@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Harmony"
-    app_version: str = "0.4.0"
+    app_version: str = "0.5.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
