@@ -12,10 +12,12 @@ class UpsertStatus(str, Enum):
     UNCHANGED = "unchanged"
 
 
-def find_song_by_title_artist(
+def find_song(
     db: Session,
+    *,
     title: str,
     artist: str,
+    album: str | None = None,
 ) -> Song | None:
     return db.scalar(
         select(Song).where(

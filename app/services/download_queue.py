@@ -26,10 +26,11 @@ def enqueue_track(
     #
     # Already in library?
     #
-    song = find_song_by_title_artist(
+    song = find_song(
         db=db,
         title=track.title,
         artist=track.artist,
+        album=track.album,
     )
 
     if song is not None:
