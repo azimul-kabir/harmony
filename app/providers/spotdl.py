@@ -2,7 +2,6 @@ from app.providers.base import MetadataProvider
 
 
 class SpotDLProvider(MetadataProvider):
-
     def playlist(self, url: str):
         raise NotImplementedError
 

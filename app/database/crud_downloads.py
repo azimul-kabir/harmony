@@ -17,19 +17,14 @@ def create_job(
         spotify_url=track.spotify_url,
         spotify_track_id=track.spotify_track_id,
         spotify_album_id=track.spotify_album_id,
-
         title=track.title,
         artist=track.artist,
-
         album=track.album,
         album_artist=track.album_artist,
-
         track=track.track,
         disc=track.disc,
-
         year=track.year,
         isrc=track.isrc,
-
         status=JobStatus.QUEUED.value,
     )
 
@@ -43,13 +38,7 @@ def create_job(
 def list_jobs(
     db: Session,
 ) -> list[DownloadJob]:
-    return list(
-        db.scalars(
-            select(DownloadJob).order_by(
-                DownloadJob.created_at.desc()
-            )
-        )
-    )
+    return list(db.scalars(select(DownloadJob).order_by(DownloadJob.created_at.desc())))
 
 
 def get_job(
@@ -63,11 +52,7 @@ def find_by_spotify_url(
     db: Session,
     spotify_url: str,
 ) -> DownloadJob | None:
-    return db.scalar(
-        select(DownloadJob).where(
-            DownloadJob.spotify_url == spotify_url
-        )
-    )
+    return db.scalar(select(DownloadJob).where(DownloadJob.spotify_url == spotify_url))
 
 
 def find_active_job_by_spotify_url(
@@ -92,12 +77,8 @@ def next_job(
 ) -> DownloadJob | None:
     return db.scalar(
         select(DownloadJob)
-        .where(
-            DownloadJob.status == JobStatus.QUEUED.value
-        )
-        .order_by(
-            DownloadJob.created_at
-        )
+        .where(DownloadJob.status == JobStatus.QUEUED.value)
+        .order_by(DownloadJob.created_at)
     )
 
 
@@ -136,9 +117,7 @@ def recover_running_jobs(
     db: Session,
 ) -> None:
     running_jobs = db.scalars(
-        select(DownloadJob).where(
-            DownloadJob.status == JobStatus.RUNNING.value
-        )
+        select(DownloadJob).where(DownloadJob.status == JobStatus.RUNNING.value)
     )
 
     for job in running_jobs:

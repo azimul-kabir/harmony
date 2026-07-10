@@ -16,6 +16,7 @@ class QueueStatus(str, Enum):
     CREATED = "created"
     ALREADY_EXISTS = "already_exists"
 
+
 @dataclass(slots=True)
 class DownloadItem:
     track: Track

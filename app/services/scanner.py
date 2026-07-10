@@ -16,18 +16,12 @@ def scan_library(
 ) -> None:
     logger.info("Scanning {}", library)
 
-    existing = {
-        song.path: song
-        for song in db.scalars(select(Song)).all()
-    }
+    existing = {song.path: song for song in db.scalars(select(Song)).all()}
 
     found: set[str] = set()
 
     for file in library.rglob("*"):
-        if (
-            not file.is_file()
-            or file.suffix.lower() not in SUPPORTED_EXTENSIONS
-        ):
+        if not file.is_file() or file.suffix.lower() not in SUPPORTED_EXTENSIONS:
             continue
 
         metadata = read_metadata(file)

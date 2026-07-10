@@ -8,10 +8,10 @@ from app.database.crud_downloads import (
 from app.domain.queue import QueueResult, QueueStatus
 from app.domain.track import Track
 from app.exceptions.download import TrackAlreadyExistsError
-
-#
-# These will be implemented next
-#
+from app.services.spotify.metadata import (
+    resolve_album,
+    resolve_playlist,
+)
 
 
 def enqueue_track(
@@ -21,9 +21,6 @@ def enqueue_track(
     if track.spotify_url is None:
         raise ValueError("Spotify URL is required.")
 
-    #
-    # Already in library?
-    #
     song = find_song(
         db=db,
         title=track.title or "",
@@ -32,13 +29,8 @@ def enqueue_track(
     )
 
     if song is not None:
-        raise TrackAlreadyExistsError(
-            "Track already exists in library."
-        )
+        raise TrackAlreadyExistsError("Track already exists in library.")
 
-    #
-    # Already downloading?
-    #
     existing_job = find_active_job_by_spotify_url(
         db=db,
         spotify_url=track.spotify_url,
@@ -50,9 +42,6 @@ def enqueue_track(
             status=QueueStatus.ALREADY_QUEUED,
         )
 
-    #
-    # Queue new job
-    #
     job = create_job(
         db=db,
         track=track,
@@ -62,3 +51,43 @@ def enqueue_track(
         job_id=job.id,
         status=QueueStatus.CREATED,
     )
+
+
+def enqueue_album(
+    db: Session,
+    spotify_url: str,
+) -> list[QueueResult]:
+    results: list[QueueResult] = []
+
+    for track in resolve_album(spotify_url):
+        try:
+            results.append(
+                enqueue_track(
+                    db=db,
+                    track=track,
+                )
+            )
+        except TrackAlreadyExistsError:
+            pass
+
+    return results
+
+
+def enqueue_playlist(
+    db: Session,
+    spotify_url: str,
+) -> list[QueueResult]:
+    results: list[QueueResult] = []
+
+    for track in resolve_playlist(spotify_url):
+        try:
+            results.append(
+                enqueue_track(
+                    db=db,
+                    track=track,
+                )
+            )
+        except TrackAlreadyExistsError:
+            pass
+
+    return results

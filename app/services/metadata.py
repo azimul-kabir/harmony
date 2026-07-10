@@ -48,26 +48,21 @@ def read_metadata(file_path: str | Path) -> dict:
     return {
         "path": str(path),
         "filename": path.name,
-
         # Basic
         "title": _first(easy.get("title")),
         "artist": _first(easy.get("artist")),
         "album_artist": _first(easy.get("albumartist")),
         "album": _first(easy.get("album")),
-
         # Track
         "track": _parse_number(_first(easy.get("tracknumber"))),
         "disc": _parse_number(_first(easy.get("discnumber"))),
-
         # Other
         "genre": _first(easy.get("genre")),
         "year": _parse_number(_first(easy.get("date"))),
-
         # File
         "duration": round(audio.info.length, 2) if audio.info else None,
         "file_size": path.stat().st_size,
         "modified_time": int(path.stat().st_mtime),
-
         # External IDs
         "spotify_track_id": _first(tags.get("spotify_track_id")),
         "spotify_album_id": _first(tags.get("spotify_album_id")),

@@ -1,1 +1,1 @@
-from .queue import QueueResponse
+from .queue import QueueResponse as QueueResponse

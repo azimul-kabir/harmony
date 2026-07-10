@@ -21,16 +21,11 @@ def build_destination(metadata: dict) -> Path:
     source = Path(metadata["path"])
 
     album_artist = _safe(
-        metadata.get("album_artist")
-        or metadata.get("artist")
-        or "Unknown Artist"
+        metadata.get("album_artist") or metadata.get("artist") or "Unknown Artist"
     )
 
     album = metadata.get("album")
-    title = _safe(
-        metadata.get("title")
-        or source.stem
-    )
+    title = _safe(metadata.get("title") or source.stem)
 
     track = metadata.get("track")
 
@@ -44,16 +39,6 @@ def build_destination(metadata: dict) -> Path:
         else:
             filename = f"{title}{extension}"
 
-        return (
-            Path(settings.music_path)
-            / album_artist
-            / album
-            / filename
-        )
+        return Path(settings.music_path) / album_artist / album / filename
 
-    return (
-        Path(settings.music_path)
-        / album_artist
-        / "Singles"
-        / f"{title}{extension}"
-    )
+    return Path(settings.music_path) / album_artist / "Singles" / f"{title}{extension}"

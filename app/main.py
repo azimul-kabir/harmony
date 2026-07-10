@@ -22,6 +22,7 @@ from app.api.library import router as library_router
 
 settings = get_settings()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Path(settings.download_path).mkdir(parents=True, exist_ok=True)

@@ -30,12 +30,7 @@ def destination(track: Track, extension: str) -> Path:
     else:
         filename = f"{_safe(title)}{extension}"
 
-    return (
-        Path(settings.music_path)
-        / album_artist
-        / album
-        / filename
-    )
+    return Path(settings.music_path) / album_artist / album / filename
 
 
 def import_track(

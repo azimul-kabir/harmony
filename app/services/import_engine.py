@@ -41,9 +41,7 @@ def import_download(
     metadata = read_metadata(downloaded_file)
 
     if metadata is None:
-        raise MetadataReadError(
-            f"Unable to read metadata from {downloaded_file}"
-        )
+        raise MetadataReadError(f"Unable to read metadata from {downloaded_file}")
 
     destination = build_destination(metadata)
 
@@ -53,9 +51,7 @@ def import_download(
     )
 
     if is_duplicate(destination):
-        raise DuplicateTrackError(
-            f"{destination} already exists."
-        )
+        raise DuplicateTrackError(f"{destination} already exists.")
 
     destination.parent.mkdir(
         parents=True,
@@ -97,19 +93,13 @@ def import_download(
     except Exception as ex:
         db.rollback()
 
-        if (
-            moved
-            and destination.exists()
-            and not downloaded_file.exists()
-        ):
+        if moved and destination.exists() and not downloaded_file.exists():
             try:
                 shutil.move(
                     str(destination),
                     str(downloaded_file),
                 )
             except Exception:
-                logger.exception(
-                    "Failed to restore downloaded file."
-                )
+                logger.exception("Failed to restore downloaded file.")
 
         raise ImportError(str(ex)) from ex
