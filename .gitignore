@@ -19,6 +19,7 @@ env/
 # Environment
 # -----------------------------
 .env
+.env.development
 
 # -----------------------------
 # macOS
@@ -50,6 +51,7 @@ env/
 # Docker
 # -----------------------------
 .docker/
+.cache
 
 # -----------------------------
 # Coverage
@@ -59,3 +61,7 @@ htmlcov/
 
 test_music/*
 !test_music/.gitkeep
+
+# Local development
+.env.local
+docker-compose.local.yml

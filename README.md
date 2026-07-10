@@ -1,278 +1,185 @@
 # Harmony
 
-*A self-hosted music library manager for collectors who want complete control over their music.*
+Harmony is a self-hosted music library manager that downloads music from Spotify URLs, organizes your music collection, and maintains a searchable local library.
 
-> **Current Version:** v0.4.0  
-> 🚧 Active development
-
-Harmony is a self-hosted music management platform that combines a local music library with Spotify playlist analysis. It scans your music collection, stores metadata in a local SQLite database, imports Spotify playlists, manages a persistent download queue, and intelligently determines which songs are already available in your library before downloading anything.
+Harmony is designed to run on Docker, Synology NAS, Linux servers, or any environment capable of running Python and FFmpeg.
 
 ---
 
-# Features
+## Features
 
-## Library Management
+### Download
 
-- Scan local music libraries
-- Extract metadata using Mutagen
-- Store library metadata in SQLite
-- Detect new, updated and removed songs
-- Incremental library synchronization
-- Library statistics API
+- Download Spotify tracks
+- Download Spotify albums
+- Background download queue
+- Automatic duplicate detection
+- Resume interrupted downloads
 
-## Spotify Integration
+### Library Management
 
-- Import Spotify playlists
-- SpotDL download integration
-- Provider-independent architecture
-- REST API
+- Automatic library organization
 
-## Download Management
+```
+Artist/
+    Album/
+        01 - Track.mp3
+```
 
-- Persistent download queue
-- Background download worker
-- Automatic job processing
-- Job status tracking
-- Download history
-- Delete completed or failed jobs
-- Automatic recovery after application restart
+- Automatic metadata extraction
+- Library scanner
+- Library database
+- Duplicate detection
 
-## Platform
+### REST API
 
-- FastAPI REST API
-- SQLAlchemy ORM
-- SQLite
-- Docker & Docker Compose
-- Automated tests with pytest
+- Queue downloads
+- View download queue
+- Scan library
+- Browse library
+- Health endpoint
 
 ---
 
-# Current Status
+## Requirements
 
-**Version:** **0.4.0**
-
-## ✅ Implemented
-
-- Local library scanner
-- Metadata extraction
-- SQLite persistence
-- Automatic library synchronization
-- Library statistics
-- Spotify playlist import
-- Playlist comparison
-- SpotDL integration
-- Persistent download queue
-- Background download worker
-- Download job management
-- Download REST API
-- Worker recovery after restart
-- Docker development environment
-
-## 🚧 In Development
-
-- Retry failed downloads
-- Duplicate download prevention
-- Automatic library import after successful downloads
-
-## 📋 Planned
-
-- Playlist download queue
-- Smart playlist vs library comparison
-- Missing song detection
-- Duplicate music detection
-- Metadata repair
-- Album artwork management
-- Navidrome integration
-- Jellyfin integration
-- Scheduled automation
-- Web dashboard
+- Docker
+- FFmpeg
+- SpotDL
+- Spotify API credentials
 
 ---
 
-# Quick Start
+## Environment Variables
 
-## Clone the repository
+Example:
 
-```bash
-git clone https://github.com/azimul-kabir/harmony.git
-cd harmony
+```env
+APP_NAME=Harmony
+APP_VERSION=0.6.0
+
+DATABASE_URL=sqlite:////database/harmony.db
+
+MUSIC_PATH=/music
+
+DOWNLOAD_PATH=/downloads
+STAGING_PATH=/downloads/staging
+FAILED_PATH=/downloads/failed
+
+SPOTIFY_CLIENT_ID=xxxxxxxx
+SPOTIFY_CLIENT_SECRET=xxxxxxxx
 ```
 
-## Configure the application
+---
+
+## Running
+
+Development
 
 ```bash
-cp .env.example .env
+docker compose \
+  --env-file .env.development \
+  -f docker-compose.yml \
+  -f docker-compose.dev.yml \
+  up --build
 ```
 
-> The default configuration works without modification.  
-> Update `.env` only if you want to customize paths or use the official Spotify API credentials.
-
-## Start Harmony
+Production
 
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
-## Verify the installation
+---
 
-```bash
-curl http://localhost:8080/health
+## API
+
+### Download Track
+
+```http
+POST /api/downloads
 ```
-
-Expected response:
 
 ```json
 {
-  "status": "ok",
-  "version": "0.4.0"
+  "url": "https://open.spotify.com/track/..."
 }
 ```
 
+### Download Album
+
+```json
+{
+  "url": "https://open.spotify.com/album/..."
+}
+```
+
+### Download Playlist
+
+```json
+{
+  "url": "https://open.spotify.com/playlist/..."
+}
+```
+
+> Playlist support is currently experimental due to Spotify Web API authentication limitations.
+
 ---
 
-# API
+### Library
 
-## Scan Library
-
-```bash
-curl -X POST http://localhost:8080/api/library/scan
+```
+GET /api/library
 ```
 
-## Library Statistics
-
-```bash
-curl http://localhost:8080/api/library/statistics
 ```
-
-## Import Spotify Playlist
-
-```bash
-curl -X POST http://localhost:8080/api/playlists/import \
--H "Content-Type: application/json" \
--d '{
-  "url":"https://open.spotify.com/playlist/..."
-}'
-```
-
-## Queue Download
-
-```bash
-curl -X POST http://localhost:8080/api/downloads \
--H "Content-Type: application/json" \
--d '{
-  "spotify_url":"https://open.spotify.com/track/...",
-  "title":"Attention",
-  "artist":"Charlie Puth"
-}'
-```
-
-## List Download Jobs
-
-```bash
-curl http://localhost:8080/api/downloads
-```
-
-## Get Download Job
-
-```bash
-curl http://localhost:8080/api/downloads/1
-```
-
-## Delete Download Job
-
-```bash
-curl -X DELETE http://localhost:8080/api/downloads/1
+POST /api/library/scan
 ```
 
 ---
 
-# Technology Stack
-
-- Python 3.12
-- FastAPI
-- SQLAlchemy
-- SQLite
-- Mutagen
-- SpotDL
-- yt-dlp
-- FFmpeg
-- Docker
-- Pytest
-
----
-
-# Project Structure
+### Queue
 
 ```
-app/
-├── api/
-├── core/
-├── database/
-├── domain/
-├── downloaders/
-├── exceptions/
-├── mappers/
-├── providers/
-├── schemas/
-├── services/
-├── templates/
-└── workers/
-
-database/
-docs/
-downloads/
-logs/
-test_music/
-tests/
+GET /api/downloads
 ```
 
 ---
 
-# Roadmap
+### Health
 
-## v0.5.0
+```
+GET /health
+```
 
-- Retry failed downloads
-- Prevent duplicate download jobs
-- Automatic library import after successful downloads
+---
 
-## v0.6.0
+## Current Status
 
-- Playlist download queue
-- Smart playlist vs library comparison
-- Missing song detection
+### Implemented
 
-## v0.7.0
+- Track downloads
+- Album downloads
+- Duplicate detection
+- Automatic import
+- Library scanner
+- SQLite library database
+- REST API
+- Docker support
+- Synology support
 
-- Duplicate music detection
-- Metadata improvements
-- Album artwork management
+### Planned
 
-## v1.0.0
-
-- Web dashboard
+- Playlist metadata improvements
 - Scheduled synchronization
-- Multi-provider support
-- Navidrome integration
-- Jellyfin integration
+- Automatic artwork management
+- Lyrics
+- ReplayGain
+- Metadata enrichment
+- Web interface
 
 ---
 
-# Known Limitations
+## License
 
-- Downloading from YouTube Music may fail in cloud development environments (such as GitHub Codespaces) because YouTube occasionally requires bot verification.
-- The same code works correctly in self-hosted environments such as Synology NAS and other local Docker deployments.
-
----
-
-# Vision
-
-Harmony aims to become an intelligent, self-hosted music management platform for serious music collectors.
-
-Rather than simply downloading music, Harmony understands your existing collection, compares it with streaming playlists, downloads only what is missing, and keeps your library organized automatically through a modern REST API and background processing engine.
-
----
-
-# License
-
-MIT License
+MIT

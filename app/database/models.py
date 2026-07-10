@@ -10,7 +10,10 @@ from app.domain.download import JobStatus
 class Song(Base):
     __tablename__ = "songs"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
 
     path: Mapped[str] = mapped_column(
         String,
@@ -18,7 +21,9 @@ class Song(Base):
         index=True,
     )
 
-    filename: Mapped[str] = mapped_column(String)
+    filename: Mapped[str] = mapped_column(
+        String,
+    )
 
     artist: Mapped[str | None] = mapped_column(
         String,
@@ -38,6 +43,25 @@ class Song(Base):
     title: Mapped[str | None] = mapped_column(
         String,
         nullable=True,
+    )
+
+    spotify_track_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    spotify_album_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    isrc: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
     )
 
     track: Mapped[int | None] = mapped_column(
@@ -90,19 +114,62 @@ class DownloadJob(Base):
         index=True,
     )
 
-    title: Mapped[str | None] = mapped_column(
+    title: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    artist: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    spotify_track_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    spotify_album_id: Mapped[str | None] = mapped_column(
         String,
         nullable=True,
     )
 
-    artist: Mapped[str | None] = mapped_column(
+    album: Mapped[str | None] = mapped_column(
         String,
         nullable=True,
     )
 
-    status: Mapped[JobStatus] = mapped_column(
+    album_artist: Mapped[str | None] = mapped_column(
         String,
-        default=JobStatus.QUEUED,
+        nullable=True,
+    )
+
+    track: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    disc: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    year: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    isrc: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    # Stored as TEXT in SQLite.
+    # The application uses JobStatus enums and converts to/from .value.
+    status: Mapped[str] = mapped_column(
+        String,
+        default=JobStatus.QUEUED.value,
         nullable=False,
         index=True,
     )
@@ -120,6 +187,7 @@ class DownloadJob(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
+        nullable=False,
     )
 
     started_at: Mapped[datetime | None] = mapped_column(

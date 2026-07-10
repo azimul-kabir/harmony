@@ -1,6 +1,6 @@
 from enum import Enum
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.models import Song
@@ -12,10 +12,12 @@ class UpsertStatus(str, Enum):
     UNCHANGED = "unchanged"
 
 
-def find_song_by_title_artist(
+def find_song(
     db: Session,
+    *,
     title: str,
     artist: str,
+    album: str | None = None,
 ) -> Song | None:
     return db.scalar(
         select(Song).where(
@@ -26,17 +28,11 @@ def find_song_by_title_artist(
 
 
 def library_statistics(db: Session) -> dict:
-    songs = db.scalar(
-        select(func.count()).select_from(Song)
-    ) or 0
+    songs = db.scalar(select(func.count()).select_from(Song)) or 0
 
-    albums = db.scalar(
-        select(func.count(func.distinct(Song.album)))
-    ) or 0
+    albums = db.scalar(select(func.count(func.distinct(Song.album)))) or 0
 
-    artists = db.scalar(
-        select(func.count(func.distinct(Song.artist)))
-    ) or 0
+    artists = db.scalar(select(func.count(func.distinct(Song.artist)))) or 0
 
     return {
         "songs": songs,
@@ -51,11 +47,7 @@ def upsert_song(
     *,
     commit: bool = True,
 ) -> tuple[UpsertStatus, Song]:
-    song = db.scalar(
-        select(Song).where(
-            Song.path == metadata["path"]
-        )
-    )
+    song = db.scalar(select(Song).where(Song.path == metadata["path"]))
 
     if song is None:
         song = Song(**metadata)
@@ -89,11 +81,7 @@ def delete_missing_songs(
     existing_paths: set[str],
 ) -> int:
     songs_to_delete = list(
-        db.scalars(
-            select(Song).where(
-                Song.path.not_in(existing_paths)
-            )
-        )
+        db.scalars(select(Song).where(Song.path.not_in(existing_paths)))
     )
 
     count = len(songs_to_delete)

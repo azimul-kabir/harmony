@@ -1,92 +1,86 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
+from sqlalchemy import select
 
-from app.domain.track import Track
-
-from app.exceptions.download import TrackAlreadyExistsError
-
-from app.domain.download import JobStatus
-
-from app.api.schemas.download import (
-    DownloadJobResponse,
-    DownloadRequest,
+from app.api.schemas.download import DownloadRequest
+from app.database.models import DownloadJob
+from app.database.session import SessionLocal
+from app.services.download_queue import (
+    enqueue_album,
+    enqueue_playlist,
+    enqueue_track,
 )
-from app.database.session import get_db
-from app.services.download_queue import enqueue_track
-
-from app.database.crud_downloads import (
-    get_job,
-    list_jobs,
-    delete_job,
+from app.services.spotify.metadata import (
+    resolve_track,
 )
+from app.services.spotify.url import spotify_resource
 
 router = APIRouter(
     prefix="/api/downloads",
-    tags=["Downloads"],
+    tags=["downloads"],
 )
 
 
-@router.post("", response_model=DownloadJobResponse)
-def queue_download(
-    request: DownloadRequest,
-    db: Session = Depends(get_db),
-):
-        track = Track(
-        title=request.title,
-        artist=request.artist,
-        spotify_url=request.spotify_url,
-    )
+@router.post("", status_code=201)
+def queue_download(request: DownloadRequest):
+    db = SessionLocal()
 
-        try:
-            return enqueue_track(db, track)
+    try:
+        resource, _ = spotify_resource(request.url)
 
-        except TrackAlreadyExistsError as ex:
-            raise HTTPException(
-                status_code=409,
-                detail=str(ex),
+        if resource == "track":
+            track = resolve_track(request.url)
+
+            enqueue_track(
+                db=db,
+                track=track,
             )
 
+        elif resource == "album":
+            enqueue_album(
+                db=db,
+                spotify_url=request.url,
+            )
 
-@router.get("", response_model=list[DownloadJobResponse])
-def get_downloads(
-    db: Session = Depends(get_db),
-):
-    return list_jobs(db)
+        elif resource == "playlist":
+            enqueue_playlist(
+                db=db,
+                spotify_url=request.url,
+            )
+
+        else:
+            raise ValueError("Unsupported Spotify URL.")
+
+        return {
+            "status": "queued",
+        }
+
+    finally:
+        db.close()
 
 
-@router.get("/{job_id}")
-def get_download(
-    job_id: int,
-    db: Session = Depends(get_db),
-):
-    job = get_job(db, job_id)
+@router.get("")
+def list_downloads():
+    db = SessionLocal()
 
-    if job is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Job not found",
+    try:
+        jobs = (
+            db.execute(select(DownloadJob).order_by(DownloadJob.id.desc()))
+            .scalars()
+            .all()
         )
 
-    return job
+        return [
+            {
+                "id": job.id,
+                "status": job.status,
+                "title": job.title,
+                "artist": job.artist,
+                "spotify_url": job.spotify_url,
+                "output_file": job.output_file,
+                "error": job.error,
+            }
+            for job in jobs
+        ]
 
-
-@router.delete("/{job_id}", status_code=204)
-def delete_download(
-    job_id: int,
-    db: Session = Depends(get_db),
-):
-    job = get_job(db, job_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Job not found",
-        )
-
-    if job.status == JobStatus.RUNNING:
-        raise HTTPException(
-            status_code=409,
-            detail="Job is currently running.",
-        )
-
-    delete_job(db, job)
+    finally:
+        db.close()

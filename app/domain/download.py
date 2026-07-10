@@ -4,12 +4,17 @@ from enum import Enum
 from app.domain.track import Track
 
 
-class JobStatus(str, Enum):
+class JobStatus(Enum):
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
+    SKIPPED = "skipped"
     FAILED = "failed"
-    CANCELLED = "cancelled"
+
+
+class QueueStatus(str, Enum):
+    CREATED = "created"
+    ALREADY_EXISTS = "already_exists"
 
 
 @dataclass(slots=True)

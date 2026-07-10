@@ -10,12 +10,12 @@ from pathlib import Path
 
 from app.domain.track import Track
 
+
 def download(
     self,
     track: Track,
     output_dir: Path,
-) -> Path:
-    ...
+) -> Path: ...
 
 
 class SpotDLClient:
@@ -39,15 +39,9 @@ class SpotDLClient:
 
         songs = self._extract_json(result.stdout)
 
-        validated = [
-            SpotDLSong.model_validate(song)
-            for song in songs
-        ]
+        validated = [SpotDLSong.model_validate(song) for song in songs]
 
-        tracks = [
-            spotdl_song_to_track(song)
-            for song in validated
-        ]
+        tracks = [spotdl_song_to_track(song) for song in validated]
 
         if not validated:
             raise RuntimeError("Playlist is empty.")
