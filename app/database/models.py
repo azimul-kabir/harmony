@@ -105,6 +105,47 @@ class DownloadJob(Base):
         nullable=False,
     )
 
+    spotify_track_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    spotify_album_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    album: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    album_artist: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    track: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    disc: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    year: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    isrc: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
     # Stored as TEXT in SQLite.
     # The application uses JobStatus enums and converts to/from .value.
     status: Mapped[str] = mapped_column(

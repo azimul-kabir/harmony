@@ -15,8 +15,21 @@ def create_job(
 ) -> DownloadJob:
     job = DownloadJob(
         spotify_url=track.spotify_url,
+        spotify_track_id=track.spotify_track_id,
+        spotify_album_id=track.spotify_album_id,
+
         title=track.title,
         artist=track.artist,
+
+        album=track.album,
+        album_artist=track.album_artist,
+
+        track=track.track,
+        disc=track.disc,
+
+        year=track.year,
+        isrc=track.isrc,
+
         status=JobStatus.QUEUED.value,
     )
 
