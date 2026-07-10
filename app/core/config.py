@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
 
-    database_url: str = "sqlite:////database/harmony.db"
+    database_url: str = "sqlite:///database/harmony.db"
 
     music_path: str = "/music"
 

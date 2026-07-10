@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 @dataclass(slots=True)
 class Track:
     # Basic
-    title: str
-    artist: str
+    title: str | None = None
+    artist: str | None = None
 
     # Album
     album: str | None = None
@@ -29,7 +29,7 @@ class Track:
     spotify_track_id: str | None = None
     spotify_album_id: str | None = None
     spotify_url: str | None = None
-    isrc: str | None = None
+    isrc: str |None = None
 
     # Local library
     path: str | None = None

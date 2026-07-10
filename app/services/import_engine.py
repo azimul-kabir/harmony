@@ -1,16 +1,18 @@
 from pathlib import Path
+import shutil
 
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
 from app.database.crud import upsert_song
+from app.exceptions.library import (
+    DuplicateTrackError,
+    ImportError,
+    MetadataReadError,
+)
 from app.services.duplicate_detector import is_duplicate
 from app.services.library_paths import build_destination
 from app.services.metadata import read_metadata
-from app.exceptions.library import MetadataReadError
-from app.exceptions.library import DuplicateTrackError
-from app.exceptions.library import ImportError
-import shutil
 
 
 def import_download(
@@ -20,12 +22,13 @@ def import_download(
     """
     Import a downloaded file into the Harmony library.
 
-    Steps:
-        1. Read metadata
-        2. Build destination path
-        3. Check for duplicates
-        4. Move file into library
-        5. Update database
+    Steps
+    -----
+    1. Read metadata
+    2. Build destination path
+    3. Check duplicates
+    4. Move file
+    5. Update database
     """
 
     downloaded_file = Path(downloaded_file)
@@ -59,6 +62,8 @@ def import_download(
         exist_ok=True,
     )
 
+    moved = False
+
     try:
         logger.info("Moving file...")
 
@@ -66,6 +71,8 @@ def import_download(
             str(downloaded_file),
             str(destination),
         )
+
+        moved = True
 
         metadata["path"] = str(destination)
         metadata["filename"] = destination.name
@@ -88,15 +95,21 @@ def import_download(
         return destination
 
     except Exception as ex:
-            db.rollback()
+        db.rollback()
 
-            if destination.exists() and not downloaded_file.exists():
-                try:
-                    destination.rename(downloaded_file)
+        if (
+            moved
+            and destination.exists()
+            and not downloaded_file.exists()
+        ):
+            try:
+                shutil.move(
+                    str(destination),
+                    str(downloaded_file),
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to restore downloaded file."
+                )
 
-                except Exception:
-                    logger.exception(
-                        "Failed to restore downloaded file."
-                    )
-
-            raise ImportError(str(ex)) from ex
+        raise ImportError(str(ex)) from ex

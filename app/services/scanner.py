@@ -1,78 +1,56 @@
 from pathlib import Path
-from typing import Iterator
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database.crud import (
-    UpsertStatus,
-    delete_missing_songs,
-)
-from app.services.library_import import import_file
-
-SUPPORTED_EXTENSIONS = {
-    ".mp3",
-    ".flac",
-    ".m4a",
-    ".aac",
-    ".ogg",
-    ".opus",
-    ".wav",
-}
-
-
-def discover_music(root: str | Path) -> Iterator[Path]:
-    root = Path(root)
-
-    if not root.exists():
-        return
-
-    for file in root.rglob("*"):
-        if file.is_file() and file.suffix.lower() in SUPPORTED_EXTENSIONS:
-            yield file
+from app.core.logging import logger
+from app.database.crud import upsert_song
+from app.database.models import Song
+from app.services.metadata import read_metadata
+from app.services.tags import SUPPORTED_EXTENSIONS
 
 
 def scan_library(
-    root: str | Path,
     db: Session,
-) -> dict:
-    scanned_paths: set[str] = set()
+    library: Path,
+) -> None:
+    logger.info("Scanning {}", library)
 
-    processed = 0
-    new = 0
-    updated = 0
-    unchanged = 0
+    existing = {
+        song.path: song
+        for song in db.scalars(select(Song)).all()
+    }
 
-    for file in discover_music(root):
-        scanned_paths.add(str(file.resolve()))
+    found: set[str] = set()
 
-        status = import_file(
-            db=db,
-            path=file,
-        )
-
-        if status is None:
+    for file in library.rglob("*"):
+        if (
+            not file.is_file()
+            or file.suffix.lower() not in SUPPORTED_EXTENSIONS
+        ):
             continue
 
-        if status == UpsertStatus.NEW:
-            new += 1
-        elif status == UpsertStatus.UPDATED:
-            updated += 1
-        elif status == UpsertStatus.UNCHANGED:
-            unchanged += 1
-        else:
-            raise ValueError(f"Unexpected upsert status: {status}")
+        metadata = read_metadata(file)
 
-        processed += 1
+        metadata["path"] = str(file)
+        metadata["filename"] = file.name
 
-    removed = delete_missing_songs(
-        db,
-        scanned_paths,
+        upsert_song(
+            db=db,
+            metadata=metadata,
+            commit=False,
+        )
+
+        found.add(str(file))
+
+    for path, song in existing.items():
+        if path not in found:
+            logger.info("Removing missing file {}", path)
+            db.delete(song)
+
+    db.commit()
+
+    logger.info(
+        "Library scan finished. {} tracks indexed.",
+        len(found),
     )
-
-    return {
-        "processed": processed,
-        "new": new,
-        "updated": updated,
-        "unchanged": unchanged,
-        "removed": removed,
-    }

@@ -1,25 +1,23 @@
 from sqlalchemy.orm import Session
 
-from app.domain.queue import QueueResult, QueueStatus
-
 from app.database.crud import find_song
-
-from app.exceptions.download import (
-    TrackAlreadyExistsError,
-)
-
 from app.database.crud_downloads import (
     create_job,
     find_active_job_by_spotify_url,
 )
-
+from app.domain.queue import QueueResult, QueueStatus
 from app.domain.track import Track
+from app.exceptions.download import TrackAlreadyExistsError
+
+#
+# These will be implemented next
+#
 
 
 def enqueue_track(
     db: Session,
     track: Track,
-):
+) -> QueueResult:
     if track.spotify_url is None:
         raise ValueError("Spotify URL is required.")
 
@@ -28,8 +26,8 @@ def enqueue_track(
     #
     song = find_song(
         db=db,
-        title=track.title,
-        artist=track.artist,
+        title=track.title or "",
+        artist=track.artist or "",
         album=track.album,
     )
 
@@ -57,7 +55,7 @@ def enqueue_track(
     #
     job = create_job(
         db=db,
-        track=track
+        track=track,
     )
 
     return QueueResult(

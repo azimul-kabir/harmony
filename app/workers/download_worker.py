@@ -1,5 +1,7 @@
 import time
 
+from sqlalchemy.orm import Session
+
 from app.core.logging import logger
 from app.database.crud_downloads import (
     next_job,
@@ -19,7 +21,6 @@ def worker_loop() -> None:
     logger.info("Download worker started.")
 
     db = SessionLocal()
-
     try:
         recover_running_jobs(db)
     finally:
@@ -47,7 +48,7 @@ def worker_loop() -> None:
 
 
 def process_job(
-    db,
+    db: Session,
     job: DownloadJob,
 ) -> None:
     logger.info("Starting job #{}", job.id)
@@ -78,6 +79,7 @@ def process_job(
         )
 
         job.output_file = str(library_file)
+        job.error = None
         db.commit()
 
         update_status(
@@ -86,21 +88,22 @@ def process_job(
             status=JobStatus.COMPLETED,
         )
 
-        logger.info("Finished job #{}", job.id)
-
-    except DuplicateTrackError:
         logger.info(
-            "Track already exists. Skipping job #{}.",
+            "Finished job #{} -> {}",
             job.id,
+            library_file,
         )
 
-        if output_file and output_file.exists():
-            logger.info(
-                "Removing duplicate staging file: {}",
-                output_file,
-            )
+    except DuplicateTrackError as ex:
+        logger.info(
+            "Skipping duplicate: {}",
+            ex,
+        )
+
+        if output_file is not None and output_file.exists():
             output_file.unlink()
 
+        job.output_file = None
         job.error = None
         db.commit()
 
@@ -120,4 +123,7 @@ def process_job(
             status=JobStatus.FAILED,
         )
 
-        logger.exception("Job #{} failed", job.id)
+        logger.exception(
+            "Job #{} failed",
+            job.id,
+        )
