@@ -12,7 +12,7 @@ class TrackResponse(BaseModel):
     disc: int | None = None
     year: int | None = None
     duration: float | None = None
-    spotify_id: str | None = None
+    spotify_track_id: str | None = None
     spotify_url: str | None = None
     isrc: str | None = None
 
