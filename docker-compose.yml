@@ -2,14 +2,19 @@ services:
   harmony:
     build: .
     container_name: harmony
+
     ports:
       - "8080:8080"
 
     volumes:
-      - .:/app
       - ./database:/database
-      - ./downloads:/downloads
       - ./logs:/logs
-      - ./test_music:/music:ro
+      - /volume1/music/library:/music
+      - /volume1/music/incoming:/downloads
 
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    restart: unless-stopped
+
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8080
