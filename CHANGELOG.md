@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.6.0 - 2026-07-10
+
+### Added
+
+- Spotify track downloads
+- Spotify album downloads
+- Background download worker
+- Download queue
+- Automatic duplicate detection
+- Automatic library import
+- Library scanner
+- SQLite music database
+- REST API
+- Docker deployment
+- Synology NAS support
+
+### Improved
+
+- Automatic music organization
+- Metadata extraction
+- Error handling
+- Logging
+
+### Known Issues
+
+- Playlist downloads require a new metadata strategy due to Spotify Web API authentication changes.
+
 ## v0.5.0
 
 ### Added
