@@ -10,6 +10,7 @@ from app.services.metadata import read_metadata
 from app.exceptions.library import MetadataReadError
 from app.exceptions.library import DuplicateTrackError
 from app.exceptions.library import ImportError
+import shutil
 
 
 def import_download(
@@ -61,7 +62,10 @@ def import_download(
     try:
         logger.info("Moving file...")
 
-        downloaded_file.rename(destination)
+        shutil.move(
+            str(downloaded_file),
+            str(destination),
+        )
 
         metadata["path"] = str(destination)
         metadata["filename"] = destination.name
