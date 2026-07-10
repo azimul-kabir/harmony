@@ -17,7 +17,7 @@ def create_job(
         spotify_url=spotify_url,
         title=title,
         artist=artist,
-        status=JobStatus.QUEUED,
+        status=JobStatus.QUEUED.value,
     )
 
     db.add(job)
@@ -27,7 +27,9 @@ def create_job(
     return job
 
 
-def list_jobs(db: Session) -> list[DownloadJob]:
+def list_jobs(
+    db: Session,
+) -> list[DownloadJob]:
     return list(
         db.scalars(
             select(DownloadJob).order_by(
@@ -60,24 +62,29 @@ def find_active_job_by_spotify_url(
     spotify_url: str,
 ) -> DownloadJob | None:
     return db.scalar(
-        select(DownloadJob)
-        .where(
+        select(DownloadJob).where(
             DownloadJob.spotify_url == spotify_url,
             DownloadJob.status.in_(
                 (
-                    JobStatus.QUEUED,
-                    JobStatus.RUNNING,
+                    JobStatus.QUEUED.value,
+                    JobStatus.RUNNING.value,
                 )
             ),
         )
     )
 
 
-def next_job(db: Session) -> DownloadJob | None:
+def next_job(
+    db: Session,
+) -> DownloadJob | None:
     return db.scalar(
         select(DownloadJob)
-        .where(DownloadJob.status == JobStatus.QUEUED)
-        .order_by(DownloadJob.created_at)
+        .where(
+            DownloadJob.status == JobStatus.QUEUED.value
+        )
+        .order_by(
+            DownloadJob.created_at
+        )
     )
 
 
@@ -86,15 +93,15 @@ def update_status(
     job: DownloadJob,
     status: JobStatus,
 ) -> DownloadJob:
-    job.status = status
+    job.status = status.value
 
     if status == JobStatus.RUNNING:
         job.started_at = datetime.utcnow()
 
     elif status in (
         JobStatus.COMPLETED,
+        JobStatus.SKIPPED,
         JobStatus.FAILED,
-        JobStatus.CANCELLED,
     ):
         job.completed_at = datetime.utcnow()
 
@@ -117,12 +124,12 @@ def recover_running_jobs(
 ) -> None:
     running_jobs = db.scalars(
         select(DownloadJob).where(
-            DownloadJob.status == JobStatus.RUNNING
+            DownloadJob.status == JobStatus.RUNNING.value
         )
     )
 
     for job in running_jobs:
-        job.status = JobStatus.QUEUED
+        job.status = JobStatus.QUEUED.value
         job.started_at = None
 
     db.commit()

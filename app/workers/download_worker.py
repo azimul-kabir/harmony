@@ -1,10 +1,10 @@
 import time
-from datetime import datetime
 
 from app.core.logging import logger
 from app.database.crud_downloads import (
     next_job,
     recover_running_jobs,
+    update_status,
 )
 from app.database.models import DownloadJob
 from app.database.session import SessionLocal
@@ -51,10 +51,13 @@ def process_job(
 ) -> None:
     logger.info("Starting job #{}", job.id)
 
-    job.status = JobStatus.RUNNING
-    job.started_at = datetime.utcnow()
-    job.error = None
+    update_status(
+        db=db,
+        job=job,
+        status=JobStatus.RUNNING,
+    )
 
+    job.error = None
     db.commit()
 
     try:
@@ -66,39 +69,46 @@ def process_job(
 
         output_file = download_track(track)
 
-        #
-        # Automatically import the downloaded file
-        # into the Harmony library.
-        #
-        try:
-            library_file = import_downloaded_track(
-                db=db,
-                downloaded_file=output_file,
-                track=track,
-            )
+        library_file = import_downloaded_track(
+            db=db,
+            downloaded_file=output_file,
+        )
 
-            job.output_file = str(library_file)
-
-        except Exception:
-            logger.exception(
-                "Failed to import downloaded file: {}",
-                output_file,
-            )
-
-            raise
-
-        job.status = JobStatus.COMPLETED
-        job.completed_at = datetime.utcnow()
+        job.output_file = str(library_file)
 
         db.commit()
+
+        update_status(
+            db=db,
+            job=job,
+            status=JobStatus.COMPLETED,
+        )
 
         logger.info("Finished job #{}", job.id)
 
-    except Exception as ex:
-        job.status = JobStatus.FAILED
+    except FileExistsError as ex:
         job.error = str(ex)
-        job.completed_at = datetime.utcnow()
-
         db.commit()
+
+        update_status(
+            db=db,
+            job=job,
+            status=JobStatus.SKIPPED,
+        )
+
+        logger.info(
+            "Skipped job #{} because the track already exists.",
+            job.id,
+        )
+
+    except Exception as ex:
+        job.error = str(ex)
+        db.commit()
+
+        update_status(
+            db=db,
+            job=job,
+            status=JobStatus.FAILED,
+        )
 
         logger.exception("Job #{} failed", job.id)

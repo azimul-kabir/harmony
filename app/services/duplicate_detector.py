@@ -1,19 +1,9 @@
 from pathlib import Path
 
-from sqlalchemy.orm import Session
 
-
-def is_duplicate(
-    db: Session,
-    file: Path,
-) -> bool:
+def is_duplicate(destination: Path) -> bool:
     """
-    Placeholder duplicate detector.
-
-    Future implementation will compare:
-    - Spotify ID
-    - ISRC
-    - Metadata
+    Returns True if a file already exists at the destination.
     """
 
-    return False
+    return destination.exists()

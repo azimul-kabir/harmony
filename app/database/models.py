@@ -10,7 +10,10 @@ from app.domain.download import JobStatus
 class Song(Base):
     __tablename__ = "songs"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
 
     path: Mapped[str] = mapped_column(
         String,
@@ -18,7 +21,9 @@ class Song(Base):
         index=True,
     )
 
-    filename: Mapped[str] = mapped_column(String)
+    filename: Mapped[str] = mapped_column(
+        String,
+    )
 
     artist: Mapped[str | None] = mapped_column(
         String,
@@ -93,16 +98,18 @@ class DownloadJob(Base):
     title: Mapped[str] = mapped_column(
         String,
         nullable=False,
-        )
+    )
 
     artist: Mapped[str] = mapped_column(
         String,
         nullable=False,
     )
 
-    status: Mapped[JobStatus] = mapped_column(
+    # Stored as TEXT in SQLite.
+    # The application uses JobStatus enums and converts to/from .value.
+    status: Mapped[str] = mapped_column(
         String,
-        default=JobStatus.QUEUED,
+        default=JobStatus.QUEUED.value,
         nullable=False,
         index=True,
     )
@@ -120,6 +127,7 @@ class DownloadJob(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
+        nullable=False,
     )
 
     started_at: Mapped[datetime | None] = mapped_column(
