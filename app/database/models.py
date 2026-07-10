@@ -45,6 +45,25 @@ class Song(Base):
         nullable=True,
     )
 
+    spotify_track_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    spotify_album_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    isrc: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
     track: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
