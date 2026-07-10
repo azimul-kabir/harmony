@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # SpotDL
     spotdl_path: str = "spotdl"
     use_official_spotify_api: bool = False
+    spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
 

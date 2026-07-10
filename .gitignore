@@ -19,6 +19,7 @@ env/
 # Environment
 # -----------------------------
 .env
+.env.development
 
 # -----------------------------
 # macOS
