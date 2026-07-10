@@ -10,6 +10,7 @@ from app.database.models import DownloadJob
 from app.database.session import SessionLocal
 from app.domain.download import JobStatus
 from app.domain.track import Track
+from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
 from app.services.library_manager import import_downloaded_track
 
@@ -60,6 +61,8 @@ def process_job(
     job.error = None
     db.commit()
 
+    output_file = None
+
     try:
         track = Track(
             title=job.title,
@@ -75,7 +78,6 @@ def process_job(
         )
 
         job.output_file = str(library_file)
-
         db.commit()
 
         update_status(
@@ -86,19 +88,26 @@ def process_job(
 
         logger.info("Finished job #{}", job.id)
 
-    except FileExistsError as ex:
-        job.error = str(ex)
+    except DuplicateTrackError:
+        logger.info(
+            "Track already exists. Skipping job #{}.",
+            job.id,
+        )
+
+        if output_file and output_file.exists():
+            logger.info(
+                "Removing duplicate staging file: {}",
+                output_file,
+            )
+            output_file.unlink()
+
+        job.error = None
         db.commit()
 
         update_status(
             db=db,
             job=job,
             status=JobStatus.SKIPPED,
-        )
-
-        logger.info(
-            "Skipped job #{} because the track already exists.",
-            job.id,
         )
 
     except Exception as ex:
