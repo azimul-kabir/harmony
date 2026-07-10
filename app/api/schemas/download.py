@@ -3,8 +3,6 @@ from pydantic import BaseModel
 
 class DownloadRequest(BaseModel):
     spotify_url: str
-    title: str
-    artist: str
 
 
 class DownloadJobResponse(BaseModel):

@@ -12,7 +12,7 @@ from app.database.crud_downloads import (
     list_jobs,
 )
 from app.database.session import get_db
-from app.domain.track import Track
+from app.services.spotify.metadata import resolve_track
 from app.exceptions.download import TrackAlreadyExistsError
 from app.services.download_queue import enqueue_track
 
@@ -31,10 +31,8 @@ def queue_download(
     request: DownloadRequest,
     db: Session = Depends(get_db),
 ):
-    track = Track(
-        title=request.title,
-        artist=request.artist,
-        spotify_url=request.spotify_url,
+    track = resolve_track(  
+        request.spotify_url,
     )
 
     try:

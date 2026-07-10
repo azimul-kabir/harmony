@@ -1,3 +1,5 @@
+from app.domain.track import Track
+
 from datetime import datetime
 
 from sqlalchemy import select
@@ -9,14 +11,12 @@ from app.domain.download import JobStatus
 
 def create_job(
     db: Session,
-    spotify_url: str,
-    title: str,
-    artist: str,
+    track: Track,
 ) -> DownloadJob:
     job = DownloadJob(
-        spotify_url=spotify_url,
-        title=title,
-        artist=artist,
+        spotify_url=track.spotify_url,
+        title=track.title,
+        artist=track.artist,
         status=JobStatus.QUEUED.value,
     )
 

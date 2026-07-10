@@ -56,9 +56,7 @@ def enqueue_track(
     #
     job = create_job(
         db=db,
-        spotify_url=track.spotify_url,
-        title=track.title,
-        artist=track.artist,
+        track=track
     )
 
     return QueueResult(
