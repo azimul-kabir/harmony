@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.database.crud import find_song_by_title_artist
+from app.database.crud import find_song
 from app.domain.comparison import (
     ComparedTrack,
     PlaylistComparison,
@@ -18,10 +18,11 @@ def compare_with_library(
     tracks: list[ComparedTrack] = []
 
     for track in playlist.tracks:
-        song = find_song_by_title_artist(
-            db,
-            track.title,
-            track.artist,
+        song = find_song(
+            db=db,
+            title=track.title,
+            artist=track.artist,
+            album=track.album,
         )
 
         if song:

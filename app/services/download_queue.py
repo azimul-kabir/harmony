@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.queue import QueueResult, QueueStatus
 
-from app.database.crud import find_song_by_title_artist
+from app.database.crud import find_song
 
 from app.exceptions.download import (
     TrackAlreadyExistsError,

@@ -13,6 +13,6 @@ def spotdl_song_to_track(song: SpotDLSong) -> Track:
         year=song.year,
         duration=float(song.duration),
         isrc=song.isrc or None,
-        spotify_id=song.song_id,
+        spotify_track_id=song.song_id,
         spotify_url=song.url,
     )

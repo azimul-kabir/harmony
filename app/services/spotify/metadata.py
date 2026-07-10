@@ -27,23 +27,42 @@ def resolve_track(spotify_url: str) -> Track:
             f"Spotify returned incomplete metadata for {spotify_url}"
         )
 
+    artists = [
+        artist["name"]
+        for artist in data.get("artists", [])
+    ]
+
+    album_artists = [
+        artist["name"]
+        for artist in album.get("artists", [])
+    ]
+
+    images = album.get("images", [])
+
     return Track(
-        spotify_url=spotify_url,
         title=data.get("name"),
-        artist=", ".join(
-            artist["name"]
-            for artist in data.get("artists", [])
-        ),
+        artist=", ".join(artists),
+        artists=artists,
+
         album=album.get("name"),
-        album_artist=", ".join(
-            artist["name"]
-            for artist in album.get("artists", [])
-        ),
+        album_artist=", ".join(album_artists),
+
         track=data.get("track_number"),
         disc=data.get("disc_number"),
+
         year=int(album["release_date"][:4])
         if album.get("release_date")
         else None,
+
+        duration=data.get("duration_ms"),
+
+        spotify_track_id=data.get("id"),
+        spotify_album_id=album.get("id"),
+        spotify_url=spotify_url,
+
+        isrc=data.get("external_ids", {}).get("isrc"),
+
+        cover_url=images[0]["url"] if images else None,
     )
 
 
