@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<h2>Dashboard</h2>
+
+<div class="cards">
+
+    <div class="card">
+        <h3>Songs</h3>
+        <p>{{ stats.songs }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Downloads</h3>
+        <p>{{ stats.downloads }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Sources</h3>
+        <p>{{ stats.sources }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Failed Jobs</h3>
+        <p>{{ stats.failed }}</p>
+    </div>
+
+</div>
+
+<div class="panel">
+
+    <h3>Recent Activity</h3>
+
+    <p>No activity yet.</p>
+
+</div>
+
+{% endblock %}

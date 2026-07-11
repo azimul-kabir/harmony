@@ -1,27 +1,62 @@
 <!DOCTYPE html>
-
-<html>
-
+<html lang="en">
 <head>
 
-    <title>{{ app_name }}</title>
+    <meta charset="UTF-8">
+
+    <title>
+        {% block title %}Harmony{% endblock %}
+    </title>
 
     <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
-        rel="stylesheet">
+        rel="stylesheet"
+        href="/static/css/app.css"
+    >
 
 </head>
 
-<body class="bg-light">
+<body>
 
-<div class="container mt-5">
+<div class="layout">
 
-{% block content %}
+    <aside class="sidebar">
 
-{% endblock %}
+        <h1>Harmony</h1>
+
+        <nav>
+
+            <a href="/">Dashboard</a>
+
+            <a href="/downloads">
+                Downloads
+            </a>
+
+            <a href="/library">
+                Library
+            </a>
+
+            <a href="/sources">
+                Sources
+            </a>
+
+            <a href="/settings">
+                Settings
+            </a>
+
+        </nav>
+
+    </aside>
+
+    <main class="content">
+
+        {% block content %}
+        {% endblock %}
+
+    </main>
 
 </div>
 
-</body>
+<script src="/static/js/app.js"></script>
 
+</body>
 </html>

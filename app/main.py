@@ -14,7 +14,9 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
 from app.workers.download_worker import worker_loop
-from app.api.sync import router as sync_router
+from fastapi.staticfiles import StaticFiles
+from app.database.session import SessionLocal
+from app.services.dashboard import get_dashboard_stats
 
 settings = get_settings()
 
@@ -46,7 +48,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(sync_router)
+
+app.mount(
+    "/static",
+    StaticFiles(directory="app/static"),
+    name="static",
+)
+
+
 app.include_router(library_router)
 app.include_router(downloads.router)
 app.include_router(playlist_router)
@@ -57,16 +66,23 @@ templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/")
 def home(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "app_name": settings.app_name,
-            "version": settings.app_version,
-            "music_path": settings.music_path,
-            "download_path": settings.download_path,
-        },
-    )
+    db = SessionLocal()
+
+    try:
+        stats = get_dashboard_stats(db)
+
+        return templates.TemplateResponse(
+            "dashboard.html",
+            {
+                "request": request,
+                "app_name": settings.app_name,
+                "version": settings.app_version,
+                "stats": stats,
+            },
+        )
+
+    finally:
+        db.close()
 
 
 @app.get("/health")
