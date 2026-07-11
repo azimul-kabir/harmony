@@ -8,6 +8,8 @@ from app.database.crud_downloads import (
 from app.domain.queue import QueueResult, QueueStatus
 from app.domain.track import Track
 from app.exceptions.download import TrackAlreadyExistsError
+from app.services.duplicate_detector import is_duplicate
+from app.services.library_paths import build_destination
 from app.services.playlist import import_playlist
 from app.services.spotify.metadata import resolve_album
 
@@ -28,7 +30,7 @@ def enqueue_track(
         isrc=track.isrc,
     )
 
-    if song is not None:
+    if song is not None or _track_destination_exists(track):
         raise TrackAlreadyExistsError("Track already exists in library.")
 
     existing_job = find_active_job_by_spotify_url(
@@ -92,3 +94,16 @@ def enqueue_playlist(
             pass
 
     return results
+
+
+def _track_destination_exists(track: Track) -> bool:
+    metadata = {
+        "path": f"{track.title or track.spotify_track_id or 'download'}.mp3",
+        "title": track.title,
+        "artist": track.artist,
+        "album_artist": track.album_artist,
+        "album": track.album,
+        "track": track.track,
+    }
+
+    return is_duplicate(build_destination(metadata))
