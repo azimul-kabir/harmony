@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Downloads{% endblock %}
+
+{% block content %}
+
+<h2>Downloads</h2>
+
+<div class="cards">
+
+    <div class="card">
+        <h3>Total Jobs</h3>
+        <p>{{ jobs|length }}</p>
+    </div>
+
+</div>
+
+<table class="table">
+
+    <thead>
+        <tr>
+            <th>Status</th>
+            <th>Title</th>
+            <th>Artist</th>
+            <th>Album</th>
+        </tr>
+    </thead>
+
+    <tbody>
+
+    {% if jobs %}
+
+        {% for job in jobs %}
+
+        <tr>
+            <td>
+                <span class="badge badge-{{ job.status.lower() }}">
+                    {{ job.status }}
+                </span>
+            </td>
+            <td>{{ job.title }}</td>
+            <td>{{ job.artist }}</td>
+            <td>{{ job.album or "" }}</td>
+        </tr>
+
+        {% endfor %}
+
+    {% else %}
+
+    <tr>
+        <td colspan="4">
+            No downloads yet.
+        </td>
+    </tr>
+
+    {% endif %}
+
+    </tbody>
+
+</table>
+
+{% endblock %}

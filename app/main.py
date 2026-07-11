@@ -4,7 +4,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.templating import Jinja2Templates
 
 from app.api import downloads
 from app.api.library import router as library_router
@@ -17,6 +16,8 @@ from app.workers.download_worker import worker_loop
 from fastapi.staticfiles import StaticFiles
 from app.database.session import SessionLocal
 from app.services.dashboard import get_dashboard_stats
+from app.web.downloads import router as downloads_page_router
+from app.web.templates import templates
 
 settings = get_settings()
 
@@ -56,12 +57,11 @@ app.mount(
 )
 
 
+app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(downloads.router)
 app.include_router(playlist_router)
 app.include_router(sync_sources_router)
-
-templates = Jinja2Templates(directory="app/templates")
 
 
 @app.get("/")
