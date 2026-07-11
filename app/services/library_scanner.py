@@ -80,25 +80,23 @@ def iter_music_files(root: Path):
 
 
 def read_tags(path: Path) -> dict:
-    audio = File(path, easy=False)
+    audio = File(path, easy=True)
 
     if audio is None:
         return {}
 
-    tags = {}
-
     def get(key):
-        value = audio.tags.get(key) if audio.tags else None
+        value = audio.get(key)
 
-        if isinstance(value, list):
-            return str(value[0])
+        if not value:
+            return None
 
-        return value
+        return str(value[0])
 
-    tags["title"] = get("TIT2") or get("title")
-    tags["artist"] = get("TPE1") or get("artist")
-    tags["album"] = get("TALB") or get("album")
-    tags["album_artist"] = get("TPE2") or get("albumartist")
-    tags["genre"] = get("TCON") or get("genre")
-
-    return tags
+    return {
+        "title": get("title"),
+        "artist": get("artist"),
+        "album": get("album"),
+        "album_artist": get("albumartist"),
+        "genre": get("genre"),
+    }

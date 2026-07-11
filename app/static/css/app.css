@@ -69,9 +69,9 @@ body {
 }
 
 .card p {
-    margin: 15px 0 0;
-    font-size: 32px;
-    font-weight: bold;
+    font-size: 40px;
+    font-weight: 700;
+    color: #1565c0;
 }
 
 .panel {
@@ -79,4 +79,31 @@ body {
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+@media (max-width: 768px) {
+
+    .layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        padding: 16px;
+    }
+
+    .sidebar nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .content {
+        padding: 20px;
+    }
+
+    .cards {
+        grid-template-columns: 1fr;
+    }
+
 }
