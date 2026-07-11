@@ -4,14 +4,13 @@ from sqlalchemy import select
 from app.api.schemas.download import DownloadRequest
 from app.database.models import DownloadJob
 from app.database.session import SessionLocal
+from app.exceptions.download import TrackAlreadyExistsError
 from app.services.download_queue import (
     enqueue_album,
     enqueue_track,
 )
 from app.services.playlist_download import download_playlist
-from app.services.spotify.metadata import (
-    resolve_track,
-)
+from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
 
 router = APIRouter(
@@ -30,14 +29,21 @@ def queue_download(request: DownloadRequest):
         if resource == "track":
             track = resolve_track(request.url)
 
-            enqueue_track(
-                db=db,
-                track=track,
-            )
+            try:
+                result = enqueue_track(
+                    db=db,
+                    track=track,
+                )
 
-            return {
-                "status": "queued",
-            }
+                return {
+                    "status": result.status.value,
+                    "job_id": result.job_id,
+                }
+
+            except TrackAlreadyExistsError:
+                return {
+                    "status": "owned",
+                }
 
         if resource == "album":
             enqueue_album(
@@ -72,7 +78,11 @@ def list_downloads():
 
     try:
         jobs = (
-            db.execute(select(DownloadJob).order_by(DownloadJob.id.desc()))
+            db.execute(
+                select(DownloadJob).order_by(
+                    DownloadJob.id.desc()
+                )
+            )
             .scalars()
             .all()
         )
