@@ -21,9 +21,11 @@ def enqueue_track(
 
     song = find_song(
         db=db,
-        title=track.title or "",
-        artist=track.artist or "",
+        title=track.title,
+        artist=track.artist,
         album=track.album,
+        spotify_track_id=track.spotify_track_id,
+        isrc=track.isrc,
     )
 
     if song is not None:
