@@ -1,6 +1,5 @@
 from urllib.parse import urlparse
 
-from app.domain.playlist import Playlist
 from app.domain.track import Track
 from app.services.spotify.client import get_client
 
@@ -87,65 +86,6 @@ def resolve_album(
         )
 
     return tracks
-
-
-def resolve_playlist(
-    spotify_url: str,
-) -> list[Track]:
-    """
-    Resolve a Spotify playlist URL into a list of Harmony Track objects.
-    """
-
-    return resolve_playlist_details(spotify_url).tracks
-
-
-def resolve_playlist_details(
-    spotify_url: str,
-) -> Playlist:
-    """
-    Resolve a Spotify playlist URL into Harmony's Playlist model.
-
-    Spotify returns playlist items in pages. Walk every page so downloads do not
-    silently stop after the first batch of tracks.
-    """
-
-    spotify = get_client()
-
-    playlist_id = _extract_id(
-        spotify_url,
-        "playlist",
-    )
-
-    playlist = spotify.playlist(playlist_id)
-
-    if playlist is None:
-        raise RuntimeError(f"Spotify returned no metadata for {spotify_url}")
-
-    tracks: list[Track] = []
-
-    page = playlist.get("tracks") or {}
-
-    while page:
-        for item in page.get("items", []):
-            data = item.get("track")
-
-            if data is None or data.get("type") != "track" or data.get("is_local"):
-                continue
-
-            tracks.append(_track_from_spotify(data))
-
-        if not page.get("next"):
-            break
-
-        page = spotify.next(page)
-
-    external_urls = playlist.get("external_urls") or {}
-
-    return Playlist(
-        name=playlist.get("name") or "Unknown Playlist",
-        url=external_urls.get("spotify") or spotify_url,
-        tracks=tracks,
-    )
 
 
 def _track_from_spotify(
