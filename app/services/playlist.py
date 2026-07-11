@@ -1,7 +1,5 @@
-from app.downloaders.spotdl import SpotDLClient
-
-client = SpotDLClient()
+from app.services.spotify.metadata import resolve_playlist_details
 
 
 def import_playlist(url: str):
-    return client.playlist(url)
+    return resolve_playlist_details(url)
