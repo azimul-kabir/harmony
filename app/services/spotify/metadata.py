@@ -111,15 +111,10 @@ def resolve_playlist(
 
     tracks: list[Track] = []
 
-    items = (data.get("tracks") or {}).get("items") or []
-
-    for item in items:
+    for item in (data.get("tracks") or {}).get("items", []):
         track_data = item.get("track")
 
-        if track_data is None:
-            continue
-
-        if track_data.get("is_local"):
+        if track_data is None or track_data.get("is_local"):
             continue
 
         try:
