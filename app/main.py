@@ -20,6 +20,9 @@ from app.database.init_db import init_db
 
 from app.api.library import router as library_router
 
+import os
+from sqlalchemy import text
+
 settings = get_settings()
 
 
@@ -62,9 +65,9 @@ templates = Jinja2Templates(directory="app/templates")
 @app.get("/")
 def home(request: Request):
     return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
+        "index.html",
+        {
+            "request": request,
             "app_name": settings.app_name,
             "version": settings.app_version,
             "music_path": settings.music_path,
