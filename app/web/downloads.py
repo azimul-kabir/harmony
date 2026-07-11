@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request
+from app.core.config import get_settings
 from app.web.templates import templates
 from sqlalchemy import select
 
@@ -23,11 +24,16 @@ def downloads(request: Request):
             .all()
         )
 
+        from app.core.config import get_settings
+
+        settings = get_settings()
         return templates.TemplateResponse(
             "downloads.html",
             {
                 "request": request,
                 "jobs": jobs,
+                "app_name": settings.app_name,
+                "version": settings.app_version,
             },
         )
 
