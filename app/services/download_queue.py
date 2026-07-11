@@ -8,10 +8,8 @@ from app.database.crud_downloads import (
 from app.domain.queue import QueueResult, QueueStatus
 from app.domain.track import Track
 from app.exceptions.download import TrackAlreadyExistsError
-from app.services.spotify.metadata import (
-    resolve_album,
-    resolve_playlist,
-)
+from app.services.playlist import import_playlist
+from app.services.spotify.metadata import resolve_album
 
 
 def enqueue_track(
@@ -78,8 +76,9 @@ def enqueue_playlist(
     spotify_url: str,
 ) -> list[QueueResult]:
     results: list[QueueResult] = []
+    playlist = import_playlist(spotify_url)
 
-    for track in resolve_playlist(spotify_url):
+    for track in playlist.tracks:
         try:
             results.append(
                 enqueue_track(
