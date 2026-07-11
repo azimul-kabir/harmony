@@ -102,7 +102,7 @@ def resolve_playlist(
         "playlist",
     )
 
-    playlist = spotify.playlist(playlist_id)
+    data = spotify.playlist(playlist_id)
 
     if playlist is None:
         raise RuntimeError(
