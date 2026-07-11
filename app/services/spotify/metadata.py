@@ -79,11 +79,54 @@ def resolve_album(
                 spotify_track_id=item.get("id"),
                 spotify_album_id=album.get("id"),
                 spotify_url=external_urls.get("spotify"),
-                # Album endpoint doesn't provide ISRC.
                 isrc=None,
                 cover_url=images[0]["url"] if images else None,
             )
         )
+
+    return tracks
+
+
+def resolve_playlist(
+    spotify_url: str,
+) -> list[Track]:
+    """
+    Resolve a Spotify playlist URL into a list of Harmony Track objects.
+    """
+
+    spotify = get_client()
+
+    playlist_id = _extract_id(
+        spotify_url,
+        "playlist",
+    )
+
+    playlist = spotify.playlist(playlist_id)
+
+    if playlist is None:
+        raise RuntimeError(
+            f"Spotify returned no metadata for {spotify_url}"
+        )
+
+    tracks: list[Track] = []
+
+    items = (playlist.get("tracks") or {}).get("items") or []
+
+    for item in items:
+        track_data = item.get("track")
+
+        if track_data is None:
+            continue
+
+        if track_data.get("is_local"):
+            continue
+
+        try:
+            tracks.append(
+                _track_from_spotify(track_data)
+            )
+        except Exception:
+            continue
 
     return tracks
 
