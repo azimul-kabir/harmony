@@ -6,6 +6,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database.base import Base
 from app.domain.download import JobStatus
 
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Integer,
+    String,
+)
+
 
 class Song(Base):
     __tablename__ = "songs"
@@ -198,4 +208,52 @@ class DownloadJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime,
         nullable=True,
+    )
+
+
+class SyncSource(Base):
+    __tablename__ = "sync_sources"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    type = Column(
+        String,
+        nullable=False,
+    )
+
+    spotify_id = Column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    spotify_url = Column(
+        String,
+        nullable=False,
+    )
+
+    name = Column(
+        String,
+        nullable=False,
+    )
+
+    enabled = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    last_synced_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
     )
