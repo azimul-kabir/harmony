@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 
 from app.domain.track import Track
 from app.services.spotify.client import get_client
+from app.domain.playlist import Playlist
 
 
 def resolve_track(spotify_url: str) -> Track:
@@ -128,7 +129,11 @@ def resolve_playlist(
         except Exception:
             continue
 
-    return tracks
+    return Playlist(
+        name=data.get("name", "Unknown Playlist"),
+        url=spotify_url,
+        tracks=tracks,
+    )
 
 
 def _track_from_spotify(
