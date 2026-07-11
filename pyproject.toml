@@ -10,10 +10,15 @@ dependencies = [
     "uvicorn[standard]>=0.35.0",
     "jinja2>=3.1.6",
     "sqlalchemy>=2.0.43",
+    "alembic>=1.16",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
     "loguru>=0.7.3",
+    "mutagen>=1.47",
+    "spotdl>=4.5",
+    "spotipy>=2.25.0",
+    "yt-dlp>=2025.1.1",
 ]
 
 [build-system]
