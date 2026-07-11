@@ -90,9 +90,9 @@ def resolve_album(
 
 def resolve_playlist(
     spotify_url: str,
-) -> list[Track]:
+) -> Playlist:
     """
-    Resolve a Spotify playlist URL into a list of Harmony Track objects.
+    Resolve a Spotify playlist URL into a Playlist object.
     """
 
     spotify = get_client()
@@ -104,14 +104,14 @@ def resolve_playlist(
 
     data = spotify.playlist(playlist_id)
 
-    if playlist is None:
+    if data is None:
         raise RuntimeError(
             f"Spotify returned no metadata for {spotify_url}"
         )
 
     tracks: list[Track] = []
 
-    items = (playlist.get("tracks") or {}).get("items") or []
+    items = (data.get("tracks") or {}).get("items") or []
 
     for item in items:
         track_data = item.get("track")
