@@ -6,9 +6,9 @@ from app.database.models import DownloadJob
 from app.database.session import SessionLocal
 from app.services.download_queue import (
     enqueue_album,
-    enqueue_playlist,
     enqueue_track,
 )
+from app.services.playlist_download import download_playlist
 from app.services.spotify.metadata import (
     resolve_track,
 )
@@ -35,24 +35,32 @@ def queue_download(request: DownloadRequest):
                 track=track,
             )
 
-        elif resource == "album":
+            return {
+                "status": "queued",
+            }
+
+        if resource == "album":
             enqueue_album(
                 db=db,
                 spotify_url=request.url,
             )
 
-        elif resource == "playlist":
-            enqueue_playlist(
+            return {
+                "status": "queued",
+            }
+
+        if resource == "playlist":
+            summary = download_playlist(
                 db=db,
-                spotify_url=request.url,
+                url=request.url,
             )
 
-        else:
-            raise ValueError("Unsupported Spotify URL.")
+            return {
+                "status": "queued",
+                "summary": summary,
+            }
 
-        return {
-            "status": "queued",
-        }
+        raise ValueError("Unsupported Spotify URL.")
 
     finally:
         db.close()
