@@ -154,6 +154,31 @@ GET /health
 
 ---
 
+## Development
+
+### Requirements
+
+- Python 3.12
+- FFmpeg
+- SQLite3
+
+### Setup
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env.local
+```
+
+Run:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Or press **F5** in VS Code.
+
 ## Current Status
 
 ### Implemented

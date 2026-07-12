@@ -68,3 +68,6 @@ docker-compose.local.yml
 # Codespace development
 .env.development
 docker-compose.override.yml
+
+# VS Code local settings
+.vscode/settings.json

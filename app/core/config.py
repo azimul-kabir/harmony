@@ -13,6 +13,12 @@ ENV_FILE = (
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE,
+        case_sensitive=False,
+        extra="ignore",
+    )
+
     app_name: str = "Harmony"
     app_version: str = "0.5.0"
 
@@ -38,22 +44,6 @@ class Settings(BaseSettings):
     audio_providers: str = "youtube-music,youtube"
 
     max_parallel_downloads: int = 3
-
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-
-ENV_FILE = (
-    ".env.local"
-    if (ROOT / ".env.local").exists()
-    else ".env.development"
-)
-
-model_config = SettingsConfigDict(
-    env_file=ENV_FILE,
-    case_sensitive=False,
-    extra="ignore",
-)
 
 
 @lru_cache
