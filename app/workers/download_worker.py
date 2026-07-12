@@ -1,5 +1,12 @@
 import time
 
+from app.services.task_service import (
+    complete_task,
+    fail_task,
+    start_task,
+    update_progress,
+)
+
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
@@ -59,6 +66,18 @@ def process_job(
         status=JobStatus.RUNNING,
     )
 
+    if job.task is not None:
+        start_task(
+            db=db,
+            task=job.task,
+        )
+
+        update_progress(
+            db=db,
+            task=job.task,
+            current_item=job.title,
+        )
+
     job.error = None
     db.commit()
 
@@ -88,6 +107,25 @@ def process_job(
             status=JobStatus.COMPLETED,
         )
 
+        if job.task is not None:
+            update_progress(
+                db=db,
+                task=job.task,
+                completed=job.task.completed_items + 1,
+                current_item=None,
+            )
+
+            if (
+                job.task.completed_items
+                + job.task.failed_items
+                + job.task.skipped_items
+                >= job.task.total_items
+            ):
+                complete_task(
+                    db=db,
+                    task=job.task,
+                )
+
         logger.info(
             "Finished job #{} -> {}",
             job.id,
@@ -113,6 +151,25 @@ def process_job(
             status=JobStatus.SKIPPED,
         )
 
+        if job.task is not None:
+            update_progress(
+                db=db,
+                task=job.task,
+                skipped=job.task.skipped_items + 1,
+                current_item=None,
+            )
+
+            if (
+                job.task.completed_items
+                + job.task.failed_items
+                + job.task.skipped_items
+                >= job.task.total_items
+            ):
+                complete_task(
+                    db=db,
+                    task=job.task,
+                )
+
     except Exception as ex:
         job.error = str(ex)
         db.commit()
@@ -122,6 +179,25 @@ def process_job(
             job=job,
             status=JobStatus.FAILED,
         )
+
+        if job.task is not None:
+            update_progress(
+                db=db,
+                task=job.task,
+                failed=job.task.failed_items + 1,
+                current_item=None,
+            )
+
+            if (
+                job.task.completed_items
+                + job.task.failed_items
+                + job.task.skipped_items
+                >= job.task.total_items
+            ):
+                fail_task(
+                    db=db,
+                    task=job.task,
+                )
 
         logger.exception(
             "Job #{} failed",

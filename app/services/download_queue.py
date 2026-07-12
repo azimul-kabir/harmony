@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
 
+from app.services.task_service import create_task
+from app.domain.task import TaskType
 from app.database.crud import find_song
 from app.database.crud_downloads import (
     create_job,
@@ -17,6 +19,7 @@ from app.services.spotify.metadata import resolve_album
 def enqueue_track(
     db: Session,
     track: Track,
+    task_id: int | None = None,
 ) -> QueueResult:
     if track.spotify_url is None:
         raise ValueError("Spotify URL is required.")
@@ -31,7 +34,9 @@ def enqueue_track(
     )
 
     if song is not None or _track_destination_exists(track):
-        raise TrackAlreadyExistsError("Track already exists in library.")
+        raise TrackAlreadyExistsError(
+            "Track already exists in library."
+        )
 
     existing_job = find_active_job_by_spotify_url(
         db=db,
@@ -44,9 +49,21 @@ def enqueue_track(
             status=QueueStatus.ALREADY_QUEUED,
         )
 
+    if task_id is None:
+        task = create_task(
+            db=db,
+            name=track.title or "Unknown Track",
+            spotify_url=track.spotify_url,
+            task_type=TaskType.TRACK_DOWNLOAD,
+            total_items=1,
+        )
+
+        task_id = task.id
+
     job = create_job(
         db=db,
         track=track,
+        task_id=task_id,
     )
 
     return QueueResult(

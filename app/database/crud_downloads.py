@@ -1,6 +1,6 @@
 from app.domain.track import Track
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,8 +12,10 @@ from app.domain.download import JobStatus
 def create_job(
     db: Session,
     track: Track,
+    task_id: int | None = None,
 ) -> DownloadJob:
     job = DownloadJob(
+        task_id=task_id,
         spotify_url=track.spotify_url,
         spotify_track_id=track.spotify_track_id,
         spotify_album_id=track.spotify_album_id,
@@ -90,14 +92,14 @@ def update_status(
     job.status = status.value
 
     if status == JobStatus.RUNNING:
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(UTC)
 
     elif status in (
         JobStatus.COMPLETED,
         JobStatus.SKIPPED,
         JobStatus.FAILED,
     ):
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC)
 
     db.commit()
     db.refresh(job)

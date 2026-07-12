@@ -1,20 +1,28 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
-
-from app.database.base import Base
-from app.domain.download import JobStatus
-
-from datetime import datetime
-
 from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
+    ForeignKey,
     Integer,
     String,
+    Text,
 )
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
+
+from app.domain.task import (
+    TaskStatus,
+    TaskType,
+)
+
+from app.database.base import Base
+from app.domain.download import JobStatus
 
 
 class Song(Base):
@@ -110,12 +118,99 @@ class Song(Base):
     )
 
 
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    spotify_url: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    task_type: Mapped[str] = mapped_column(
+        String,
+        default=TaskType.TRACK_DOWNLOAD.value,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String,
+        default=TaskStatus.QUEUED.value,
+        nullable=False,
+    )
+
+    total_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    completed_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    skipped_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    failed_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    current_item: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    jobs = relationship(
+        "DownloadJob",
+        back_populates="task",
+    )
+
+
 class DownloadJob(Base):
     __tablename__ = "download_jobs"
 
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
+    )
+
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+
+    task = relationship(
+        "Task",
+        back_populates="jobs",
     )
 
     spotify_url: Mapped[str] = mapped_column(
