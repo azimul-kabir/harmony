@@ -23,10 +23,12 @@ async function refreshDashboard() {
 if (document.getElementById("songs-count")) {
     refreshDashboard();
     refreshActivity();
+    refreshTasks();
 
     setInterval(() => {
         refreshDashboard();
         refreshActivity();
+        refreshTasks();
     }, 5000);
 }
 
@@ -104,4 +106,100 @@ async function refreshActivity() {
             </div>
         `;
     }).join("");
+}
+
+
+function taskStatus(status) {
+
+    switch ((status ?? "").toUpperCase()) {
+
+        case "RUNNING":
+            return "⬇️ Downloading";
+
+        case "QUEUED":
+            return "⏳ Queued";
+
+        case "COMPLETED":
+            return "✅ Completed";
+
+        case "FAILED":
+            return "❌ Failed";
+
+        default:
+            return status;
+    }
+
+}
+
+
+async function refreshTasks() {
+
+    const container =
+        document.getElementById("active-tasks");
+
+    if (!container) {
+        return;
+    }
+
+    const response =
+        await fetch("/api/tasks");
+
+    if (!response.ok) {
+        return;
+    }
+
+    const tasks = await response.json();
+
+    if (tasks.length === 0) {
+        container.innerHTML =
+            "<p>No active tasks.</p>";
+        return;
+    }
+
+    container.innerHTML = tasks.map(task => {
+
+        const finished =
+            task.completed +
+            task.failed +
+            task.skipped;
+
+        const percent =
+            task.total === 0
+                ? 0
+                : (finished / task.total) * 100;
+
+        return `
+            <div class="task-item">
+
+                <div class="task-title">
+                    🎵 ${task.name}
+                </div>
+
+                <div class="task-status">
+                    ${taskStatus(task.status)}
+                </div>
+
+                <div class="task-progress-bar">
+                    <div
+                        class="task-progress-fill"
+                        style="width:${percent}%">
+                    </div>
+                </div>
+
+                <div class="task-progress">
+                    ${finished} / ${task.total}
+                </div>
+
+                ${
+                    task.current
+                        ? `<div class="task-current">
+                            Now downloading: ${task.current}
+                        </div>`
+                        : ""
+                }
+
+            </div>
+        `;
+    }).join("");
+
 }

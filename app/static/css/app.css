@@ -347,3 +347,54 @@ body {
     font-size: .9rem;
     color: #777;
 }
+
+.task-item {
+    padding: 16px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.task-item:last-child {
+    border-bottom: none;
+}
+
+.task-title {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.task-status {
+    margin-top: 4px;
+    color: #666;
+    font-size: 14px;
+}
+
+.task-progress {
+    margin-top: 8px;
+    font-weight: 600;
+}
+
+.task-current {
+    margin-top: 6px;
+    font-size: 14px;
+    color: #1565c0;
+}
+
+.task-progress-bar {
+    margin-top: 10px;
+    height: 8px;
+    background: #e5e5e5;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.task-progress-fill {
+    height: 100%;
+    background: #1565c0;
+    transition: width 0.3s ease;
+}
+
+.task-current {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #666;
+}
