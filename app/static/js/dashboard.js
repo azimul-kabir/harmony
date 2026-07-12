@@ -51,30 +51,56 @@ async function refreshActivity() {
     }
 
     container.innerHTML = jobs.map(job => {
-        let icon = "•";
+        console.log(job.status);
+        
+        const status = (job.status ?? "").toUpperCase();
 
-        switch (job.status) {
+        let icon = "🎵";
+        let label = status;
+
+        switch (status) {
             case "COMPLETED":
                 icon = "✅";
+                label = "Downloaded";
                 break;
+
             case "FAILED":
                 icon = "❌";
+                label = "Failed";
                 break;
+
             case "RUNNING":
                 icon = "⬇️";
+                label = "Downloading";
                 break;
+
             case "QUEUED":
                 icon = "⏳";
+                label = "Queued";
                 break;
+
             case "SKIPPED":
                 icon = "⏭️";
+                label = "Skipped";
                 break;
         }
 
         return `
             <div class="activity-item">
-                <strong>${icon} ${job.title ?? "Unknown Title"}</strong><br>
-                <small>${job.artist ?? "Unknown Artist"}</small>
+
+                <div class="activity-header">
+                    <span class="activity-icon">${icon}</span>
+                    <span class="activity-status">${label}</span>
+                </div>
+
+                <div class="activity-title">
+                    ${job.title ?? "Unknown Title"}
+                </div>
+
+                <div class="activity-artist">
+                    ${job.artist ?? "Unknown Artist"}
+                </div>
+
             </div>
         `;
     }).join("");

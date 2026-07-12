@@ -301,24 +301,49 @@ body {
 }
 
 #recent-activity {
-    margin-top: 20px;
+    margin-top: 12px;
 }
 
 .activity-item {
-    padding: 14px 0;
-    border-bottom: 1px solid #eee;
+    padding: 16px 0;
+    border-bottom: 1px solid #ececec;
 }
 
 .activity-item:last-child {
     border-bottom: none;
 }
 
+.activity-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.activity-icon {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+}
+
+.activity-status {
+    font-size: .8rem;
+    font-weight: 700;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
 .activity-title {
+    margin-left: 28px;
+    font-size: 1rem;
     font-weight: 600;
+    color: #222;
 }
 
 .activity-artist {
-    margin-top: 4px;
-    color: #666;
-    font-size: .95rem;
+    margin-left: 28px;
+    margin-top: 2px;
+    font-size: .9rem;
+    color: #777;
 }
