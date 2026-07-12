@@ -3,10 +3,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.services.import_engine import import_download
-from app.services.scanner import scan_library
-from app.core.config import get_settings
-
-settings = get_settings()
+from app.services.library_scanner import scan_file
 
 
 def import_downloaded_track(
@@ -18,9 +15,9 @@ def import_downloaded_track(
         downloaded_file=downloaded_file,
     )
 
-    scan_library(
+    scan_file(
         db=db,
-        library=Path(settings.music_path),
+        file=destination,
     )
 
     return destination
