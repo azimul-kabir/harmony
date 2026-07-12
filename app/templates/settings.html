@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+
+<h2>Settings</h2>
+
+<div class="card">
+
+    <table class="table">
+
+        <tr>
+            <th>Application</th>
+            <td>{{ settings.app_name }}</td>
+        </tr>
+
+        <tr>
+            <th>Version</th>
+            <td>{{ settings.app_version }}</td>
+        </tr>
+
+        <tr>
+            <th>Music Path</th>
+            <td>{{ settings.music_path }}</td>
+        </tr>
+
+        <tr>
+            <th>Download Path</th>
+            <td>{{ settings.download_path }}</td>
+        </tr>
+
+        <tr>
+            <th>Parallel Downloads</th>
+            <td>{{ settings.max_parallel_downloads }}</td>
+        </tr>
+
+        <tr>
+            <th>Spotify API</th>
+            <td>
+                {% if settings.spotify_client_id %}
+                    Configured
+                {% else %}
+                    Not configured
+                {% endif %}
+            </td>
+        </tr>
+
+    </table>
+
+</div>
+
+{% endblock %}

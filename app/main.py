@@ -5,6 +5,11 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.web.templates import (
+    templates,
+    template_context,
+)
+
 from app.api import downloads
 from app.api.library import router as library_router
 from app.api.playlist import router as playlist_router
@@ -17,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from app.database.session import SessionLocal
 from app.services.dashboard import get_dashboard_stats
 from app.web.downloads import router as downloads_page_router
-from app.web.templates import templates
+from app.api.settings import router as settings_router
 
 settings = get_settings()
 
@@ -57,6 +62,7 @@ app.mount(
 )
 
 
+app.include_router(settings_router)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(downloads.router)
@@ -73,12 +79,10 @@ def home(request: Request):
 
         return templates.TemplateResponse(
             "dashboard.html",
-            {
-                "request": request,
-                "app_name": settings.app_name,
-                "version": settings.app_version,
-                "stats": stats,
-            },
+            template_context(
+                request=request,
+                stats=stats,
+            ),
         )
 
     finally:
