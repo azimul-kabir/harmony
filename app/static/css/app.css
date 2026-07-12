@@ -186,3 +186,54 @@ body {
     font-size: 12px;
     opacity: 0.6;
 }
+
+#download-form {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+#download-form input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 15px;
+}
+
+#download-form button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#download-result {
+    margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+    #download-form {
+        flex-direction: column;
+    }
+
+    #download-form button {
+        width: 100%;
+    }
+}
+
+.success-message {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    background: #e8f5e9;
+}
+
+.error-message {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    background: #ffebee;
+}

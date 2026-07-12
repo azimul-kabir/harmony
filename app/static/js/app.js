@@ -1,1 +1,1 @@
-console.log("Harmony UI loaded");
+// Shared JavaScript for Harmony
