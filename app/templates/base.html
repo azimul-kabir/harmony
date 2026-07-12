@@ -25,15 +25,40 @@
 
         <nav>
 
-            <a href="/">Dashboard</a>
+            <a
+                href="/"
+                class="{% if page == 'dashboard' %}active{% endif %}"
+            >
+                Dashboard
+            </a>
 
-            <a href="/downloads">Downloads</a>
+            <a
+                href="/downloads"
+                class="{% if page == 'downloads' %}active{% endif %}"
+            >
+                Downloads
+            </a>
 
-            <a href="#">Library</a>
+            <a
+                href="/library"
+                class="{% if page == 'library' %}active{% endif %}"
+            >
+                Library
+            </a>
 
-            <a href="#">Sources</a>
+            <a
+                href="/sources"
+                class="{% if page == 'sources' %}active{% endif %}"
+            >
+                Sources
+            </a>
 
-            <a href="/settings">Settings</a>
+            <a
+                href="/settings"
+                class="{% if page == 'settings' %}active{% endif %}"
+            >
+                Settings
+            </a>
 
         </nav>
 
@@ -54,8 +79,10 @@
 
 </div>
 
-<script src="/static/js/app.js"></script>
 <script src="/static/js/downloads.js"></script>
+<script src="/static/js/app.js"></script>
+
+{% block scripts %}{% endblock %}
 
 </body>
 </html>

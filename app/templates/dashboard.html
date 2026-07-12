@@ -1,5 +1,3 @@
-{% include "partials/download_form.html" %}
-
 {% extends "base.html" %}
 
 {% block title %}Dashboard{% endblock %}
@@ -8,36 +6,48 @@
 
 <h2>Dashboard</h2>
 
-<div class="cards">
+<div class="page">
 
-    <div class="card">
-        <h3>Songs</h3>
-        <p>{{ stats.songs }}</p>
+    {% include "partials/download_form.html" %}
+
+    <div class="cards">
+
+        <div class="card">
+            <h3>Songs</h3>
+            <p id="songs-count">{{ stats.songs }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Downloads</h3>
+            <p id="downloads-count">{{ stats.downloads }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Sources</h3>
+            <p id="sources-count">{{ stats.sources }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Failed Jobs</h3>
+            <p id="failed-count">{{ stats.failed }}</p>
+        </div>
+
     </div>
 
-    <div class="card">
-        <h3>Downloads</h3>
-        <p>{{ stats.downloads }}</p>
-    </div>
+    <div class="panel">
 
-    <div class="card">
-        <h3>Sources</h3>
-        <p>{{ stats.sources }}</p>
-    </div>
+        <h3>Recent Activity</h3>
 
-    <div class="card">
-        <h3>Failed Jobs</h3>
-        <p>{{ stats.failed }}</p>
+        <div id="recent-activity">
+            <p>No activity yet.</p>
+        </div>
+
     </div>
 
 </div>
 
-<div class="panel">
+{% endblock %}
 
-    <h3>Recent Activity</h3>
-
-    <p>No activity yet.</p>
-
-</div>
-
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
 {% endblock %}

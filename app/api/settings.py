@@ -19,5 +19,6 @@ def settings_page(request: Request):
         template_context(
             request=request,
             settings=settings,
+            page="settings",
         ),
     )

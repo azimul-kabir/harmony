@@ -7,11 +7,13 @@ templates = Jinja2Templates(
 )
 
 
-def template_context(**kwargs):
-    settings = get_settings()
+settings = get_settings()
 
+
+def template_context(**kwargs):
     return {
         "app_name": settings.app_name,
         "version": settings.app_version,
+        "page": "",
         **kwargs,
     }

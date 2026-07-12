@@ -32,6 +32,7 @@ def downloads(request: Request):
             template_context(
                 request=request,
                 jobs=jobs,
+                page="downloads",
             ),
         )
 

@@ -1,4 +1,5 @@
 import threading
+from app.api.dashboard import router as dashboard_router
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -62,6 +63,7 @@ app.mount(
 )
 
 
+app.include_router(dashboard_router)
 app.include_router(settings_router)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
@@ -82,6 +84,7 @@ def home(request: Request):
             template_context(
                 request=request,
                 stats=stats,
+                page="dashboard",
             ),
         )
 
