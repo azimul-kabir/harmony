@@ -47,7 +47,7 @@ def start_task(
     db.refresh(task)
 
 
-def complete_task(
+def _complete_task(
     db: Session,
     task: Task,
 ) -> None:
@@ -59,7 +59,7 @@ def complete_task(
     db.refresh(task)
 
 
-def fail_task(
+def _fail_task(
     db: Session,
     task: Task,
 ) -> None:
@@ -71,26 +71,82 @@ def fail_task(
     db.refresh(task)
 
 
-def update_progress(
+def set_current_item(
     db: Session,
     task: Task,
-    *,
-    current_item: str | None = None,
-    completed: int | None = None,
-    skipped: int | None = None,
-    failed: int | None = None,
+    item: str | None,
 ) -> None:
-    if current_item is not None:
-        task.current_item = current_item
+    task.current_item = item
 
-    if completed is not None:
-        task.completed_items = completed
+    db.commit()
+    db.refresh(task)
 
-    if skipped is not None:
-        task.skipped_items = skipped
 
-    if failed is not None:
-        task.failed_items = failed
+def increment_completed(
+    db: Session,
+    task: Task,
+) -> None:
+    task.completed_items += 1
+
+    db.commit()
+    db.refresh(task)
+
+    _finish_if_complete(
+        db=db,
+        task=task,
+    )
+
+
+def increment_failed(
+    db: Session,
+    task: Task,
+) -> None:
+    task.failed_items += 1
+
+    db.commit()
+    db.refresh(task)
+
+    _finish_if_complete(
+        db=db,
+        task=task,
+    )
+
+
+def increment_skipped(
+    db: Session,
+    task: Task,
+) -> None:
+    task.skipped_items += 1
+
+    db.commit()
+    db.refresh(task)
+
+    _finish_if_complete(
+        db=db,
+        task=task,
+    )
+
+
+def _finish_if_complete(
+    db: Session,
+    task: Task,
+) -> None:
+    finished = (
+        task.completed_items
+        + task.failed_items
+        + task.skipped_items
+    )
+
+    if finished < task.total_items:
+        return
+
+    task.current_item = None
+    task.completed_at = datetime.now(UTC)
+
+    if task.failed_items > 0:
+        task.status = TaskStatus.FAILED.value
+    else:
+        task.status = TaskStatus.COMPLETED.value
 
     db.commit()
     db.refresh(task)

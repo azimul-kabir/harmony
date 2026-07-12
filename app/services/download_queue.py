@@ -24,29 +24,15 @@ def enqueue_track(
     if track.spotify_url is None:
         raise ValueError("Spotify URL is required.")
 
-    song = find_song(
-        db=db,
-        title=track.title,
-        artist=track.artist,
-        album=track.album,
-        spotify_track_id=track.spotify_track_id,
-        isrc=track.isrc,
-    )
+    if track.spotify_url is None:
+        raise ValueError("Spotify URL is required.")
 
-    if song is not None or _track_destination_exists(track):
+    if not _can_enqueue(
+        db=db,
+        track=track,
+    ):
         raise TrackAlreadyExistsError(
-            "Track already exists in library."
-        )
-
-    existing_job = find_active_job_by_spotify_url(
-        db=db,
-        spotify_url=track.spotify_url,
-    )
-
-    if existing_job is not None:
-        return QueueResult(
-            job_id=existing_job.id,
-            status=QueueStatus.ALREADY_QUEUED,
+            "Track already exists or is already queued."
         )
 
     if task_id is None:
@@ -76,18 +62,38 @@ def enqueue_album(
     db: Session,
     spotify_url: str,
 ) -> list[QueueResult]:
+    tracks = resolve_album(spotify_url)
+
+    queue: list[Track] = []
+
+    for track in tracks:
+        if _can_enqueue(
+            db=db,
+            track=track,
+        ):
+            queue.append(track)
+
+    if not queue:
+        return []
+
+    task = create_task(
+        db=db,
+        name=queue[0].album or "Unknown Album",
+        spotify_url=spotify_url,
+        task_type=TaskType.ALBUM_DOWNLOAD,
+        total_items=len(queue),
+    )
+
     results: list[QueueResult] = []
 
-    for track in resolve_album(spotify_url):
-        try:
-            results.append(
-                enqueue_track(
-                    db=db,
-                    track=track,
-                )
+    for track in queue:
+        results.append(
+            enqueue_track(
+                db=db,
+                track=track,
+                task_id=task.id,
             )
-        except TrackAlreadyExistsError:
-            pass
+        )
 
     return results
 
@@ -96,19 +102,38 @@ def enqueue_playlist(
     db: Session,
     spotify_url: str,
 ) -> list[QueueResult]:
-    results: list[QueueResult] = []
     playlist = import_playlist(spotify_url)
 
+    queue: list[Track] = []
+
     for track in playlist.tracks:
-        try:
-            results.append(
-                enqueue_track(
-                    db=db,
-                    track=track,
-                )
+        if _can_enqueue(
+            db=db,
+            track=track,
+        ):
+            queue.append(track)
+
+    if not queue:
+        return []
+
+    task = create_task(
+        db=db,
+        name=playlist.name,
+        spotify_url=spotify_url,
+        task_type=TaskType.PLAYLIST_DOWNLOAD,
+        total_items=len(queue),
+    )
+
+    results: list[QueueResult] = []
+
+    for track in queue:
+        results.append(
+            enqueue_track(
+                db=db,
+                track=track,
+                task_id=task.id,
             )
-        except TrackAlreadyExistsError:
-            pass
+        )
 
     return results
 
@@ -124,3 +149,36 @@ def _track_destination_exists(track: Track) -> bool:
     }
 
     return is_duplicate(build_destination(metadata))
+
+
+def _can_enqueue(
+    db: Session,
+    track: Track,
+) -> bool:
+    song = find_song(
+        db=db,
+        title=track.title,
+        artist=track.artist,
+        album=track.album,
+        spotify_track_id=track.spotify_track_id,
+        isrc=track.isrc,
+    )
+
+    if track.spotify_url is None:
+        return False
+
+    if song is not None:
+        return False
+
+    if _track_destination_exists(track):
+        return False
+
+    existing_job = find_active_job_by_spotify_url(
+        db=db,
+        spotify_url=track.spotify_url,
+    )
+
+    if existing_job is not None:
+        return False
+
+    return True

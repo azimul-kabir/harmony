@@ -1,10 +1,11 @@
 import time
 
 from app.services.task_service import (
-    complete_task,
-    fail_task,
+    increment_completed,
+    increment_failed,
+    increment_skipped,
+    set_current_item,
     start_task,
-    update_progress,
 )
 
 from sqlalchemy.orm import Session
@@ -72,10 +73,10 @@ def process_job(
             task=job.task,
         )
 
-        update_progress(
+        set_current_item(
             db=db,
             task=job.task,
-            current_item=job.title,
+            item=job.title,
         )
 
     job.error = None
@@ -108,23 +109,16 @@ def process_job(
         )
 
         if job.task is not None:
-            update_progress(
+            set_current_item(
                 db=db,
                 task=job.task,
-                completed=job.task.completed_items + 1,
-                current_item=None,
+                item=None,
             )
 
-            if (
-                job.task.completed_items
-                + job.task.failed_items
-                + job.task.skipped_items
-                >= job.task.total_items
-            ):
-                complete_task(
-                    db=db,
-                    task=job.task,
-                )
+            increment_completed(
+                db=db,
+                task=job.task,
+            )
 
         logger.info(
             "Finished job #{} -> {}",
@@ -152,23 +146,16 @@ def process_job(
         )
 
         if job.task is not None:
-            update_progress(
+            set_current_item(
                 db=db,
                 task=job.task,
-                skipped=job.task.skipped_items + 1,
-                current_item=None,
+                item=None,
             )
 
-            if (
-                job.task.completed_items
-                + job.task.failed_items
-                + job.task.skipped_items
-                >= job.task.total_items
-            ):
-                complete_task(
-                    db=db,
-                    task=job.task,
-                )
+            increment_skipped(
+                db=db,
+                task=job.task,
+            )
 
     except Exception as ex:
         job.error = str(ex)
@@ -181,23 +168,16 @@ def process_job(
         )
 
         if job.task is not None:
-            update_progress(
+            set_current_item(
                 db=db,
                 task=job.task,
-                failed=job.task.failed_items + 1,
-                current_item=None,
+                item=None,
             )
 
-            if (
-                job.task.completed_items
-                + job.task.failed_items
-                + job.task.skipped_items
-                >= job.task.total_items
-            ):
-                fail_task(
-                    db=db,
-                    task=job.task,
-                )
+            increment_failed(
+                db=db,
+                task=job.task,
+            )
 
         logger.exception(
             "Job #{} failed",
