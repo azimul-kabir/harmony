@@ -65,3 +65,24 @@ def delete_sync_source(
 ) -> None:
     db.delete(sync)
     db.commit()
+
+
+def update_sync_source_enabled(
+    db: Session,
+    sync_id: int,
+    enabled: bool,
+) -> SyncSource | None:
+    source = get_sync_source(
+        db=db,
+        sync_id=sync_id,
+    )
+
+    if source is None:
+        return None
+
+    source.enabled = enabled
+
+    db.commit()
+    db.refresh(source)
+
+    return source

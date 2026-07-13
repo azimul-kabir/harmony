@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}
+Sources - Harmony
+{% endblock %}
+
+{% block content %}
+
+<h1>Sources</h1>
+
+<p class="page-description">
+    Manage playlist and album sync sources.
+</p>
+
+<div class="panel">
+
+    <h2>Add Source</h2>
+
+    <form id="add-source-form">
+
+        <input
+            id="source-url"
+            type="url"
+            placeholder="Spotify playlist URL"
+            required
+        >
+
+        <button type="submit">
+            Add Source
+        </button>
+
+    </form>
+
+</div>
+
+<div
+    id="sources"
+    class="sources-grid"
+>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/sources.js"></script>
+{% endblock %}

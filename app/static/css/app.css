@@ -17,7 +17,7 @@
     gap: var(--space-md);
 }
 
-.card,
+.dashboard-card,
 .panel {
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -97,7 +97,7 @@ body {
     padding: 28px 36px;
 }
 
-.content h2 {
+.content h1 {
     margin: 0 0 24px;
     font-size: 2.2rem;
 }
@@ -108,21 +108,21 @@ body {
     gap: 20px;
 }
 
-.card {
+.dashboard-card {
     background: white;
     border-radius: 16px;
     padding: 24px;
     box-shadow: 0 4px 14px rgba(0,0,0,.06);
 }
 
-.card h3 {
+.dashboard-card h3 {
     margin: 0;
     color: #666;
     font-size: 1rem;
     font-weight: 600;
 }
 
-.card p {
+.dashboard-card p {
     margin: 18px 0 0;
     color: #1565c0;
     font-size: 3.2rem;
@@ -396,5 +396,132 @@ body {
 .task-current {
     margin-top: 10px;
     font-size: 14px;
+    color: #666;
+}
+
+.sources-grid {
+    display: grid;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.source-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.source-card h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.source-card p {
+    margin: 0.4rem 0;
+    font-size: 1rem;
+    color: #555;
+}
+
+.source-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 12px;
+}
+
+.source-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.source-meta {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.source-meta strong {
+    color: #666;
+    font-size: .9rem;
+}
+
+.source-actions button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #1565c0;
+    color: white;
+    font-weight: 600;
+}
+
+.source-actions button:hover {
+    background: #0d47a1;
+}
+
+.badge-enabled {
+    background: #2e7d32;
+}
+
+.badge-disabled {
+    background: #757575;
+}
+
+#add-source-form {
+    display: flex;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+#add-source-form input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 15px;
+}
+
+#add-source-form button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    background: #1565c0;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#add-source-form button:hover {
+    background: #0d47a1;
+}
+
+@media (max-width: 768px) {
+
+    #add-source-form {
+        flex-direction: column;
+    }
+
+    #add-source-form button {
+        width: 100%;
+    }
+
+}
+
+.empty-state {
+    text-align: center;
+    padding: 48px 24px;
+}
+
+.empty-state h3 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.empty-state p {
+    margin-top: 12px;
     color: #666;
 }

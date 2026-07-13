@@ -3,6 +3,7 @@ from app.api.tasks import router as tasks_router
 from app.api.dashboard import router as dashboard_router
 from contextlib import asynccontextmanager
 from pathlib import Path
+from app.web.sources import router as sources_page_router
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -70,6 +71,7 @@ app.include_router(settings_router)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(downloads.router)
+app.include_router(sources_page_router)
 app.include_router(playlist_router)
 app.include_router(sync_sources_router)
 
