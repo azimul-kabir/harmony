@@ -4,18 +4,6 @@ from sqlalchemy.orm import Session
 from app.database.models import SyncSource
 
 
-def get_all_sync_sources(
-    db: Session,
-):
-    return (
-        db.execute(
-            select(SyncSource).order_by(SyncSource.name)
-        )
-        .scalars()
-        .all()
-    )
-
-
 def create_sync_source(
     db: Session,
     *,
@@ -23,7 +11,7 @@ def create_sync_source(
     spotify_id: str,
     spotify_url: str,
     name: str,
-):
+) -> SyncSource:
     source = SyncSource(
         type=type,
         spotify_id=spotify_id,
@@ -38,15 +26,42 @@ def create_sync_source(
     return source
 
 
+def get_sync_source(
+    db: Session,
+    sync_id: int,
+) -> SyncSource | None:
+    return db.get(
+        SyncSource,
+        sync_id,
+    )
+
+
 def get_sync_source_by_spotify_id(
     db: Session,
     spotify_id: str,
-):
-    return (
-        db.execute(
-            select(SyncSource).where(
-                SyncSource.spotify_id == spotify_id
+) -> SyncSource | None:
+    return db.scalar(
+        select(SyncSource).where(
+            SyncSource.spotify_id == spotify_id
+        )
+    )
+
+
+def list_sync_sources(
+    db: Session,
+) -> list[SyncSource]:
+    return list(
+        db.scalars(
+            select(SyncSource).order_by(
+                SyncSource.name,
             )
         )
-        .scalar_one_or_none()
     )
+
+
+def delete_sync_source(
+    db: Session,
+    sync: SyncSource,
+) -> None:
+    db.delete(sync)
+    db.commit()

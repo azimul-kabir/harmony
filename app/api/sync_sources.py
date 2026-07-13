@@ -1,14 +1,22 @@
 from fastapi import APIRouter
+from fastapi import HTTPException
 
 from app.api.schemas.sync_source import SyncSourceRequest
 
 from app.database.crud_sync_sources import (
-    get_all_sync_sources,
+    list_sync_sources,
 )
 from app.database.session import SessionLocal
 
 from app.services.sync_sources import (
     create_playlist_source,
+)
+
+from app.database.crud_sync_sources import (
+    get_sync_source,
+)
+from app.services.playlist_sync import (
+    sync_playlist,
 )
 
 router = APIRouter(
@@ -22,7 +30,7 @@ def list_sources():
     db = SessionLocal()
 
     try:
-        sources = get_all_sync_sources(db)
+        sources = list_sync_sources(db)
 
         return [
             {
@@ -54,6 +62,43 @@ def create_source(request: SyncSourceRequest):
             "id": source.id,
             "name": source.name,
             "type": source.type,
+        }
+
+    finally:
+        db.close()
+
+
+@router.post("/{source_id}/sync")
+def sync_source(
+    source_id: int,
+):
+    db = SessionLocal()
+
+    try:
+        source = get_sync_source(
+            db=db,
+            sync_id=source_id,
+        )
+
+        if source is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Source not found.",
+            )
+
+        task = sync_playlist(
+            db=db,
+            source=source,
+        )
+
+        if task is None:
+            return {
+                "message": "Nothing to sync.",
+            }
+
+        return {
+            "task_id": task.id,
+            "message": "Playlist sync started.",
         }
 
     finally:

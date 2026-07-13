@@ -16,10 +16,12 @@ def create_task(
     spotify_url: str,
     task_type: TaskType,
     total_items: int,
+    source_id: int | None = None,
 ) -> Task:
     task = Task(
         name=name,
         spotify_url=spotify_url,
+        source_id=source_id,
         task_type=task_type.value,
         status=TaskStatus.QUEUED.value,
         total_items=total_items,

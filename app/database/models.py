@@ -2,7 +2,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -121,6 +120,10 @@ class Song(Base):
 class Task(Base):
     __tablename__ = "tasks"
 
+    source: Mapped["SyncSource | None"] = relationship(
+        back_populates="tasks",
+    )
+
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
@@ -134,6 +137,12 @@ class Task(Base):
     spotify_url: Mapped[str] = mapped_column(
         String,
         nullable=False,
+    )
+
+    source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sync_sources.id"),
+        nullable=True,
+        index=True,
     )
 
     task_type: Mapped[str] = mapped_column(
@@ -309,45 +318,49 @@ class DownloadJob(Base):
 class SyncSource(Base):
     __tablename__ = "sync_sources"
 
-    id = Column(
+    tasks: Mapped[list["Task"]] = relationship(
+        back_populates="source",
+    )
+
+    id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
     )
 
-    type = Column(
+    type: Mapped[str] = mapped_column(
         String,
         nullable=False,
     )
 
-    spotify_id = Column(
+    spotify_id: Mapped[str] = mapped_column(
         String,
         nullable=False,
         unique=True,
         index=True,
     )
 
-    spotify_url = Column(
+    spotify_url: Mapped[str] = mapped_column(
         String,
         nullable=False,
     )
 
-    name = Column(
+    name: Mapped[str] = mapped_column(
         String,
         nullable=False,
     )
 
-    enabled = Column(
+    enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=True,
     )
 
-    last_synced_at = Column(
+    last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime,
         nullable=True,
     )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
         default=datetime.utcnow,

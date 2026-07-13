@@ -121,8 +121,8 @@ def resolve_playlist(
             tracks.append(
                 _track_from_spotify(track_data)
             )
-        except Exception:
-            continue
+        except Exception as ex:
+            print(f"Track parse failed: {ex}")
 
     return Playlist(
         name=data.get("name", "Unknown Playlist"),
