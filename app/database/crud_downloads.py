@@ -2,7 +2,7 @@ from app.domain.track import Track
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.database.models import DownloadJob
@@ -74,14 +74,35 @@ def find_active_job_by_spotify_url(
     )
 
 
-def next_job(
+def claim_next_job(
     db: Session,
 ) -> DownloadJob | None:
-    return db.scalar(
-        select(DownloadJob)
-        .where(DownloadJob.status == JobStatus.QUEUED.value)
-        .order_by(DownloadJob.created_at)
-    )
+    # Acquire the SQLite write lock immediately.
+    db.execute(text("BEGIN IMMEDIATE"))
+
+    try:
+        job = db.scalar(
+            select(DownloadJob)
+            .where(DownloadJob.status == JobStatus.QUEUED.value)
+            .order_by(DownloadJob.created_at)
+            .limit(1)
+        )
+
+        if job is None:
+            db.commit()
+            return None
+
+        job.status = JobStatus.RUNNING.value
+        job.started_at = datetime.now(UTC)
+
+        db.commit()
+        db.refresh(job)
+
+        return job
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def update_status(

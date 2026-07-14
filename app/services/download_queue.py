@@ -21,11 +21,6 @@ def enqueue_track(
     track: Track,
     task_id: int | None = None,
 ) -> QueueResult:
-    if track.spotify_url is None:
-        raise ValueError("Spotify URL is required.")
-
-    if track.spotify_url is None:
-        raise ValueError("Spotify URL is required.")
 
     if not _can_enqueue(
         db=db,
@@ -35,11 +30,14 @@ def enqueue_track(
             "Track already exists or is already queued."
         )
 
+    spotify_url = track.spotify_url
+    assert spotify_url is not None
+
     if task_id is None:
         task = create_task(
             db=db,
             name=track.title or "Unknown Track",
-            spotify_url=track.spotify_url,
+            spotify_url=spotify_url,
             task_type=TaskType.TRACK_DOWNLOAD,
             total_items=1,
         )

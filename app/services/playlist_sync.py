@@ -1,12 +1,15 @@
 from sqlalchemy.orm import Session
 
+from app.core.logging import logger
 from app.database.models import SyncSource, Task
-from app.services.playlist import import_playlist
-from app.services.download_queue import _can_enqueue
-from app.domain.track import Track
 from app.domain.task import TaskType
+from app.domain.track import Track
+from app.services.download_queue import (
+    _can_enqueue,
+    enqueue_track,
+)
+from app.services.playlist import import_playlist
 from app.services.task_service import create_task
-from app.services.download_queue import enqueue_track
 
 
 def sync_playlist(
@@ -14,7 +17,7 @@ def sync_playlist(
     source: SyncSource,
 ) -> Task | None:
     """
-    Synchronize a single playlist source.
+    Synchronize a playlist source.
 
     Returns:
         Task:
@@ -24,13 +27,28 @@ def sync_playlist(
             If the playlist is already fully synchronized.
     """
 
+    logger.info(
+        "Starting sync for playlist '{}'",
+        source.name,
+    )
+
     playlist = import_playlist(
         source.spotify_url,
     )
 
+    logger.info(
+        "Playlist '{}' contains {} tracks.",
+        playlist.name,
+        len(playlist.tracks),
+    )
+
     if not playlist.tracks:
+        logger.warning(
+            "Playlist '{}' is empty.",
+            playlist.name,
+        )
         return None
-    
+
     queueable_tracks: list[Track] = [
         track
         for track in playlist.tracks
@@ -40,9 +58,19 @@ def sync_playlist(
         )
     ]
 
+    logger.info(
+        "{} of {} tracks need downloading.",
+        len(queueable_tracks),
+        len(playlist.tracks),
+    )
+
     if not queueable_tracks:
+        logger.info(
+            "Playlist '{}' is already synchronized.",
+            playlist.name,
+        )
         return None
-    
+
     task = create_task(
         db=db,
         name=playlist.name,
@@ -52,11 +80,21 @@ def sync_playlist(
         total_items=len(queueable_tracks),
     )
 
+    logger.info(
+        "Created task #{}.",
+        task.id,
+    )
+
     for track in queueable_tracks:
         enqueue_track(
             db=db,
             track=track,
             task_id=task.id,
         )
+
+    logger.info(
+        "Queued {} download jobs.",
+        len(queueable_tracks),
+    )
 
     return task

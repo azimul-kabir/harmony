@@ -43,7 +43,7 @@ class Settings(BaseSettings):
 
     audio_providers: str = "youtube-music,youtube"
 
-    max_parallel_downloads: int = 3
+    max_parallel_downloads: int = 4
 
 
 @lru_cache

@@ -1,4 +1,5 @@
 import time
+import threading
 
 from app.services.task_service import (
     increment_completed,
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import logger
 from app.database.crud_downloads import (
-    next_job,
+    claim_next_job,
     recover_running_jobs,
     update_status,
 )
@@ -26,7 +27,10 @@ from app.services.library_manager import import_downloaded_track
 
 
 def worker_loop() -> None:
-    logger.info("Download worker started.")
+    logger.info(
+        "{} started.",
+        threading.current_thread().name,
+    )
 
     db = SessionLocal()
     try:
@@ -38,7 +42,7 @@ def worker_loop() -> None:
         db = SessionLocal()
 
         try:
-            job = next_job(db)
+            job = claim_next_job(db)
 
             if job is None:
                 time.sleep(2)
@@ -60,12 +64,6 @@ def process_job(
     job: DownloadJob,
 ) -> None:
     logger.info("Starting job #{}", job.id)
-
-    update_status(
-        db=db,
-        job=job,
-        status=JobStatus.RUNNING,
-    )
 
     if job.task is not None:
         start_task(

@@ -1,28 +1,22 @@
 import json
 import subprocess
+from pathlib import Path
 
 from app.core.config import get_settings
 from app.domain.playlist import Playlist
+from app.domain.track import Track
 from app.mappers.spotdl import spotdl_song_to_track
 from app.schemas.spotdl import SpotDLSong
 
-from pathlib import Path
-
-from app.domain.track import Track
-
-
-def download(
-    self,
-    track: Track,
-    output_dir: Path,
-) -> Path: ...
-
 
 class SpotDLClient:
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
 
-    def playlist(self, url: str) -> Playlist:
+    def playlist(
+        self,
+        url: str,
+    ) -> Playlist:
         result = self._run(
             [
                 "save",
@@ -39,18 +33,24 @@ class SpotDLClient:
 
         songs = self._extract_json(result.stdout)
 
-        validated = [SpotDLSong.model_validate(song) for song in songs]
-
-        tracks = [spotdl_song_to_track(song) for song in validated]
+        validated = [
+            SpotDLSong.model_validate(song)
+            for song in songs
+        ]
 
         if not validated:
             raise RuntimeError("Playlist is empty.")
+
+        tracks = [
+            spotdl_song_to_track(song)
+            for song in validated
+        ]
 
         first = validated[0]
 
         return Playlist(
             name=first.list_name or "Unknown Playlist",
-            url=first.list_url or "",
+            url=first.list_url or url,
             tracks=tracks,
         )
 
@@ -75,22 +75,19 @@ class SpotDLClient:
             ]
         )
 
-        print("STDOUT")
-        print(result.stdout)
-        print("STDERR")
-        print(result.stderr)
-
         if result.returncode != 0:
             raise RuntimeError(result.stderr)
 
         files = sorted(
             output_dir.glob("*"),
-            key=lambda f: f.stat().st_mtime,
+            key=lambda file: file.stat().st_mtime,
             reverse=True,
         )
 
         if not files:
-            raise RuntimeError("SpotDL did not produce any output file.")
+            raise RuntimeError(
+                "SpotDL did not produce any output file."
+            )
 
         return files[0]
 
@@ -99,15 +96,6 @@ class SpotDLClient:
         url: str,
         output_dir: Path,
     ) -> subprocess.CompletedProcess[str]:
-        """
-        Download any Spotify resource supported by SpotDL.
-
-        Supported:
-        - Track
-        - Album
-        - Playlist
-        """
-
         return self._run(
             [
                 url,
@@ -125,18 +113,30 @@ class SpotDLClient:
             if provider.strip()
         ]
 
-    def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+    def _run(
+        self,
+        args: list[str],
+    ) -> subprocess.CompletedProcess[str]:
+        command = [
+            self.settings.spotdl_path,
+            *args,
+        ]
+
         return subprocess.run(
-            [self.settings.spotdl_path, *args],
+            command,
             capture_output=True,
             text=True,
         )
 
     @staticmethod
-    def _extract_json(stdout: str):
+    def _extract_json(
+        stdout: str,
+    ) -> list[dict]:
         start = stdout.find("[")
 
         if start == -1:
-            raise RuntimeError("SpotDL did not return JSON.")
+            raise RuntimeError(
+                "SpotDL did not return JSON."
+            )
 
         return json.loads(stdout[start:])

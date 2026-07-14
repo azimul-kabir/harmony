@@ -38,11 +38,19 @@ async def lifespan(app: FastAPI):
 
     init_db()
 
-    thread = threading.Thread(
-        target=worker_loop,
-        daemon=True,
+    logger.info("Starting Harmony...")
+
+    logger.info(
+        "Starting {} download workers...",
+        settings.max_parallel_downloads,
     )
-    thread.start()
+
+    for i in range(settings.max_parallel_downloads):
+        threading.Thread(
+            target=worker_loop,
+            daemon=True,
+            name=f"download-worker-{i + 1}",
+        ).start()
 
     logger.info("Harmony started")
 
