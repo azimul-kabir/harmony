@@ -94,6 +94,30 @@ class SpotDLClient:
 
         return files[0]
 
+    def download_url(
+        self,
+        url: str,
+        output_dir: Path,
+    ) -> subprocess.CompletedProcess[str]:
+        """
+        Download any Spotify resource supported by SpotDL.
+
+        Supported:
+        - Track
+        - Album
+        - Playlist
+        """
+
+        return self._run(
+            [
+                url,
+                "--audio",
+                *self._audio_providers(),
+                "--output",
+                str(output_dir),
+            ]
+        )
+
     def _audio_providers(self) -> list[str]:
         return [
             provider.strip()
