@@ -192,17 +192,6 @@ def _track_from_spotify(
     )
 
 
-def resolve_playlist(spotify_url):
-    # ... your existing code ...
-    try:
-        playlist_info = spotify.playlist(playlist_id, fields="name")
-    except SpotifyException as e:
-        if e.http_status == 404:
-            logger.warning(f"Playlist {playlist_id} not found via Official API.")
-            return None # Graceful failure
-        raise e # Re-raise for other errors
-
-
 def _extract_id(
     url: str,
     expected_type: str,
