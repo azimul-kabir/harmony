@@ -1,8 +1,23 @@
 from collections.abc import Generator
-
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
+from app.database.base import Base # Ensure this points to your Base definition
 
-from app.database.database import engine
+# Replace with your actual path if it differs
+SQLALCHEMY_DATABASE_URL = "sqlite:///./database/harmony.db"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, 
+    connect_args={"check_same_thread": False}
+)
+
+# --- WAL Mode for concurrency ---
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
+# -------------------------------
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -10,12 +25,9 @@ SessionLocal = sessionmaker(
     autocommit=False,
 )
 
-
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
-
     try:
         yield db
-
     finally:
         db.close()
