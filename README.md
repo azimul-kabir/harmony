@@ -1,210 +1,37 @@
-# Harmony
+# Harmony 🎵
 
-Harmony is a self-hosted music library manager that downloads music from Spotify URLs, organizes your music collection, and maintains a searchable local library.
+Harmony is a lightweight, real-time music manager and downloader designed to sync Spotify playlists, albums, and tracks directly to your local library. Built with a robust Python backend and a lightning-fast, reactive frontend, it is fully optimized for continuous deployment on home servers like Synology NAS.
 
-Harmony is designed to run on Docker, Synology NAS, Linux servers, or any environment capable of running Python and FFmpeg.
+## ✨ Features
 
----
+* **Real-Time UI (No Polling):** Powered by Server-Sent Events (SSE), the dashboard, active tasks, and download queues update instantly with buttery-smooth CSS animations.
+* **Smart Queue Management:** Automatically detects duplicate tracks (via database, file system, or active queue) and skips them before wasting bandwidth.
+* **Granular Task Control:** Pause, resume, and cancel download tasks dynamically from the UI.
+* **Continuous Playlist Sync:** Keep your local library up to date with your Spotify playlists. The sync engine accurately calculates missing tracks and updates gracefully.
+* **Docker First:** Built explicitly to run in isolated Docker containers with minimal resource footprints, perfect for NAS environments.
 
-## Features
+## 🛠 Tech Stack
 
-### Download
+* **Backend:** Python, FastAPI, SQLAlchemy, SpotDL
+* **Database:** SQLite
+* **Frontend:** HTML, CSS, Vanilla JavaScript (SSE)
+* **Infrastructure:** Docker, Docker Compose
 
-- Download Spotify tracks
-- Download Spotify albums
-- Background download queue
-- Automatic duplicate detection
-- Resume interrupted downloads
+## 🚀 Deployment (Synology NAS)
 
-### Library Management
+Harmony is optimized for deployment on Synology NAS using Docker Compose and standard user permissions to prevent root-owned file locks.
 
-- Automatic library organization
+1. **Prepare Directories:**
+   Create the necessary volume folders on your NAS:
+   * `/volume1/docker/harmony/database`
+   * `/volume1/docker/harmony/logs`
+   * `/volume1/music/library`
+   * `/volume1/music/incoming`
 
-```
-Artist/
-    Album/
-        01 - Track.mp3
-```
+2. **Configure Environment:**
+   Create a `.env.local` file with your environment variables (e.g., Spotify API keys, PUID/PGID).
 
-- Automatic metadata extraction
-- Library scanner
-- Library database
-- Duplicate detection
-
-### REST API
-
-- Queue downloads
-- View download queue
-- Scan library
-- Browse library
-- Health endpoint
-
----
-
-## Requirements
-
-- Docker
-- FFmpeg
-- SpotDL
-- Spotify API credentials
-
----
-
-## Environment Variables
-
-Example:
-
-```env
-APP_NAME=Harmony
-APP_VERSION=0.6.0
-
-DATABASE_URL=sqlite:////database/harmony.db
-
-MUSIC_PATH=/music
-
-DOWNLOAD_PATH=/downloads
-STAGING_PATH=/downloads/staging
-FAILED_PATH=/downloads/failed
-
-SPOTIFY_CLIENT_ID=xxxxxxxx
-SPOTIFY_CLIENT_SECRET=xxxxxxxx
-```
-
----
-
-## Running
-
-Development
-
-```bash
-docker compose \
-  --env-file .env.development \
-  -f docker-compose.yml \
-  -f docker-compose.dev.yml \
-  up --build
-```
-
-Production
-
-```bash
-docker compose up -d
-```
-
----
-
-## API
-
-### Download Track
-
-```http
-POST /api/downloads
-```
-
-```json
-{
-  "url": "https://open.spotify.com/track/..."
-}
-```
-
-### Download Album
-
-```json
-{
-  "url": "https://open.spotify.com/album/..."
-}
-```
-
-### Download Playlist
-
-```json
-{
-  "url": "https://open.spotify.com/playlist/..."
-}
-```
-
-> Playlist support is currently experimental due to Spotify Web API authentication limitations.
-
----
-
-### Library
-
-```
-GET /api/library
-```
-
-```
-POST /api/library/scan
-```
-
----
-
-### Queue
-
-```
-GET /api/downloads
-```
-
----
-
-### Health
-
-```
-GET /health
-```
-
----
-
-## Development
-
-### Requirements
-
-- Python 3.12
-- FFmpeg
-- SQLite3
-
-### Setup
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env.local
-```
-
-Run:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Or press **F5** in VS Code.
-
-## Current Status
-
-### Implemented
-
-- Track downloads
-- Album downloads
-- Duplicate detection
-- Automatic import
-- Library scanner
-- SQLite library database
-- REST API
-- Docker support
-- Synology support
-
-### Planned
-
-- Playlist metadata improvements
-- Scheduled synchronization
-- Automatic artwork management
-- Lyrics
-- ReplayGain
-- Metadata enrichment
-- Web interface
-
----
-
-## License
-
-MIT
+3. **Deploy:**
+   Use the local override configuration to spin up the container:
+   ```bash
+   sudo docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
