@@ -93,8 +93,8 @@ def resolve_playlist(
 ) -> Playlist:
     """
     Resolve a Spotify playlist URL into a Playlist object.
+    Supports continuous paging to retrieve massive/editorial playlists fully.
     """
-
     spotify = get_client()
 
     playlist_id = _extract_id(
@@ -102,30 +102,42 @@ def resolve_playlist(
         "playlist",
     )
 
-    data = spotify.playlist(playlist_id)
+    # Fetch the high-level playlist information first
+    playlist_info = spotify.playlist(playlist_id, fields="name")
 
-    if data is None:
+    if playlist_info is None:
         raise RuntimeError(
             f"Spotify returned no metadata for {spotify_url}"
         )
 
     tracks: list[Track] = []
 
-    for item in (data.get("tracks") or {}).get("items", []):
-        track_data = item.get("track")
+    # Use playlist_items to page through all tracks (100 at a time)
+    results = spotify.playlist_items(playlist_id)
+    
+    while results:
+        for item in results.get("items", []):
+            track_data = item.get("track")
 
-        if track_data is None or track_data.get("is_local"):
-            continue
+            # Skip missing tracks or local files uploaded by users
+            if track_data is None or track_data.get("is_local"):
+                continue
 
-        try:
-            tracks.append(
-                _track_from_spotify(track_data)
-            )
-        except Exception as ex:
-            print(f"Track parse failed: {ex}")
+            try:
+                tracks.append(
+                    _track_from_spotify(track_data)
+                )
+            except Exception as ex:
+                print(f"Track parse failed: {ex}")
+        
+        # Check if there is a next page of tracks, otherwise break loop
+        if results.get("next"):
+            results = spotify.next(results)
+        else:
+            results = None
 
     return Playlist(
-        name=data.get("name", "Unknown Playlist"),
+        name=playlist_info.get("name", "Unknown Playlist"),
         url=spotify_url,
         tracks=tracks,
     )
