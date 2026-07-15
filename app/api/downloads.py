@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends
+import asyncio
+import json
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.schemas.download import DownloadRequest
 from app.database.models import DownloadJob
-from app.database.session import get_db
+from app.database.session import get_db, SessionLocal
 from app.exceptions.download import TrackAlreadyExistsError
 from app.services.download_queue import (
     enqueue_album,
@@ -83,3 +86,36 @@ def list_downloads(db: Session = Depends(get_db)):
         }
         for job in jobs
     ]
+
+@router.get("/stream")
+async def stream_downloads_data(request: Request):
+    """Server-Sent Events endpoint for real-time download history updates."""
+    async def event_generator():
+        while True:
+            if await request.is_disconnected():
+                break
+            
+            db = SessionLocal()
+            try:
+                jobs = db.execute(
+                    select(DownloadJob).order_by(DownloadJob.id.desc())
+                ).scalars().all()
+                
+                payload = [
+                    {
+                        "id": job.id,
+                        "status": job.status,
+                        "title": job.title,
+                        "artist": job.artist,
+                        "album": job.album,
+                    }
+                    for job in jobs
+                ]
+                
+                yield f"data: {json.dumps(payload)}\n\n"
+            finally:
+                db.close()
+            
+            await asyncio.sleep(2)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
