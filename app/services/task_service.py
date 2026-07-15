@@ -152,3 +152,37 @@ def _finish_if_complete(
 
     db.commit()
     db.refresh(task)
+
+
+def pause_task(
+    db: Session,
+    task: Task,
+) -> None:
+    if task.status in (TaskStatus.QUEUED.value, TaskStatus.RUNNING.value):
+        task.status = TaskStatus.PAUSED.value
+        db.commit()
+        db.refresh(task)
+
+
+def resume_task(
+    db: Session,
+    task: Task,
+) -> None:
+    if task.status == TaskStatus.PAUSED.value:
+        # Revert to QUEUED so the database lock releases and workers can pick it up again
+        task.status = TaskStatus.QUEUED.value
+        db.commit()
+        db.refresh(task)
+
+
+def cancel_task(
+    db: Session,
+    task: Task,
+) -> None:
+    # Only cancel if it isn't already finished
+    if task.status not in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value):
+        task.status = TaskStatus.CANCELLED.value
+        task.completed_at = datetime.now(UTC)
+        task.current_item = None
+        db.commit()
+        db.refresh(task)
