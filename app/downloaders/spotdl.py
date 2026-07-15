@@ -72,6 +72,8 @@ class SpotDLClient:
                 *self._audio_providers(),
                 "--output",
                 str(output_dir),
+                "--threads",
+                "1", # Prevents internal SpotDL multi-threading from clashing with Harmony workers
             ]
         )
 
@@ -103,15 +105,14 @@ class SpotDLClient:
                 *self._audio_providers(),
                 "--output",
                 str(output_dir),
+                "--threads",
+                "1",
             ]
         )
 
     def _audio_providers(self) -> list[str]:
-        return [
-            provider.strip()
-            for provider in self.settings.audio_providers.split(",")
-            if provider.strip()
-        ]
+        # Strictly enforce YouTube Music as the primary provider, with YouTube as the fallback.
+        return ["youtube-music", "youtube"]
 
     def _run(
         self,
