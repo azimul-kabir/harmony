@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 from app.domain.track import Track
 from app.services.spotify.client import get_client
 from app.domain.playlist import Playlist
+from spotipy.exceptions import SpotifyException
 
 
 def resolve_track(spotify_url: str) -> Track:
@@ -181,6 +182,17 @@ def _track_from_spotify(
         isrc=(data.get("external_ids") or {}).get("isrc"),
         cover_url=images[0]["url"] if images else None,
     )
+
+
+def resolve_playlist(spotify_url):
+    # ... your existing code ...
+    try:
+        playlist_info = spotify.playlist(playlist_id, fields="name")
+    except SpotifyException as e:
+        if e.http_status == 404:
+            logger.warning(f"Playlist {playlist_id} not found via Official API.")
+            return None # Graceful failure
+        raise e # Re-raise for other errors
 
 
 def _extract_id(
