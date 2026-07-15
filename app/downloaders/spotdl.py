@@ -1,5 +1,7 @@
 import json
 import subprocess
+import tempfile
+import shutil
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -7,7 +9,6 @@ from app.domain.playlist import Playlist
 from app.domain.track import Track
 from app.mappers.spotdl import spotdl_song_to_track
 from app.schemas.spotdl import SpotDLSong
-
 
 class SpotDLClient:
     def __init__(self) -> None:
@@ -27,27 +28,25 @@ class SpotDLClient:
                 "-",
             ]
         )
-
         if result.returncode != 0:
             raise RuntimeError(result.stderr)
-
+            
         songs = self._extract_json(result.stdout)
-
+        
         validated = [
             SpotDLSong.model_validate(song)
             for song in songs
         ]
-
+        
         if not validated:
             raise RuntimeError("Playlist is empty.")
-
+            
         tracks = [
             spotdl_song_to_track(song)
             for song in validated
         ]
-
+        
         first = validated[0]
-
         return Playlist(
             name=first.list_name or "Unknown Playlist",
             url=first.list_url or url,
@@ -64,34 +63,48 @@ class SpotDLClient:
             if track.spotify_url
             else f"{track.artist} - {track.title}"
         )
-
-        result = self._run(
-            [
-                query,
-                "--audio",
-                *self._audio_providers(),
-                "--output",
-                str(output_dir),
-                "--threads",
-                "1", # Prevents internal SpotDL multi-threading from clashing with Harmony workers
-            ]
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr)
-
-        files = sorted(
-            output_dir.glob("*"),
-            key=lambda file: file.stat().st_mtime,
-            reverse=True,
-        )
-
-        if not files:
-            raise RuntimeError(
-                "SpotDL did not produce any output file."
+        
+        # Isolate this specific download in a unique temporary folder
+        # This prevents the 4 concurrent workers from colliding in the shared staging directory
+        with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            result = self._run(
+                [
+                    query,
+                    "--audio",
+                    *self._audio_providers(),
+                    "--output",
+                    str(temp_path),
+                    "--threads",
+                    "1", 
+                ]
             )
-
-        return files[0]
+            
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr)
+                
+            files = sorted(
+                temp_path.glob("*"),
+                key=lambda file: file.stat().st_mtime,
+                reverse=True,
+            )
+            
+            if not files:
+                raise RuntimeError(
+                    "SpotDL did not produce any output file."
+                )
+                
+            downloaded_file = files[0]
+            final_path = output_dir / downloaded_file.name
+            
+            # Move the file out of the temp bubble into the main staging area
+            if final_path.exists():
+                final_path.unlink()
+                
+            shutil.move(str(downloaded_file), str(final_path))
+            
+            return final_path
 
     def download_url(
         self,
@@ -111,7 +124,6 @@ class SpotDLClient:
         )
 
     def _audio_providers(self) -> list[str]:
-        # Strictly enforce YouTube Music as the primary provider, with YouTube as the fallback.
         return ["youtube-music", "youtube"]
 
     def _run(
@@ -122,22 +134,24 @@ class SpotDLClient:
             self.settings.spotdl_path,
             *args,
         ]
-
-        return subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-        )
+        
+        try:
+            return subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError("SpotDL execution timed out.") from e
 
     @staticmethod
     def _extract_json(
         stdout: str,
     ) -> list[dict]:
         start = stdout.find("[")
-
         if start == -1:
             raise RuntimeError(
                 "SpotDL did not return JSON."
             )
-
         return json.loads(stdout[start:])
