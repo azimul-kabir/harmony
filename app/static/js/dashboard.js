@@ -1,46 +1,17 @@
-async function refreshDashboard() {
-    const response = await fetch("/api/dashboard");
-
-    if (!response.ok) {
-        return;
-    }
-
-    const stats = await response.json();
-
+function renderStats(stats) {
+    if (!stats) return;
+    
     document.getElementById("songs-count").textContent = stats.songs;
     document.getElementById("downloads-count").textContent = stats.downloads;
     document.getElementById("sources-count").textContent = stats.sources;
     document.getElementById("failed-count").textContent = stats.failed;
 }
 
-if (document.getElementById("songs-count")) {
-    refreshDashboard();
-    refreshActivity();
-    refreshTasks();
-
-    setInterval(() => {
-        refreshDashboard();
-        refreshActivity();
-        refreshTasks();
-    }, 5000);
-}
-
-async function refreshActivity() {
+function renderActivity(jobs) {
     const container = document.getElementById("recent-activity");
+    if (!container) return;
 
-    if (!container) {
-        return;
-    }
-
-    const response = await fetch("/api/dashboard/activity");
-
-    if (!response.ok) {
-        return;
-    }
-
-    const jobs = await response.json();
-
-    if (jobs.length === 0) {
+    if (!jobs || jobs.length === 0) {
         container.innerHTML = "<p>No recent activity.</p>";
         return;
     }
@@ -118,34 +89,20 @@ function taskStatus(status) {
     }
 }
 
-// New function to handle the button clicks
 async function handleTaskAction(taskId, action) {
-    const response = await fetch(`/api/tasks/${taskId}/${action}`, {
+    // Send the command to the API
+    await fetch(`/api/tasks/${taskId}/${action}`, {
         method: "POST"
     });
-    
-    if (response.ok) {
-        // Instantly refresh the UI to show the new state
-        refreshTasks(); 
-    }
+    // We no longer manually refresh the UI here because the 
+    // SSE stream will push the new state in the next tick.
 }
 
-async function refreshTasks() {
+function renderTasks(tasks) {
     const container = document.getElementById("active-tasks");
+    if (!container) return;
 
-    if (!container) {
-        return;
-    }
-
-    const response = await fetch("/api/tasks");
-
-    if (!response.ok) {
-        return;
-    }
-
-    const tasks = await response.json();
-
-    if (tasks.length === 0) {
+    if (!tasks || tasks.length === 0) {
         container.innerHTML = "<p>No active tasks.</p>";
         return;
     }
@@ -202,3 +159,31 @@ async function refreshTasks() {
         `;
     }).join("");
 }
+
+function connectSSE() {
+    // Only connect if we are actually on the dashboard page
+    if (!document.getElementById("songs-count")) {
+        return;
+    }
+
+    // Establish the SSE connection
+    const eventSource = new EventSource("/api/dashboard/stream");
+
+    // Listen for incoming messages from the server
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        
+        // Push the new data to the DOM
+        renderStats(data.stats);
+        renderActivity(data.activity);
+        renderTasks(data.tasks);
+    };
+
+    // Handle connection drops and let the browser auto-reconnect
+    eventSource.onerror = function(error) {
+        console.error("SSE connection error, attempting to reconnect...", error);
+    };
+}
+
+// Initialize the stream on page load
+connectSSE();
