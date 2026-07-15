@@ -97,7 +97,9 @@ def resolve_playlist(
     Resolve a Spotify playlist URL into a Playlist object.
     Supports continuous paging to retrieve massive/editorial playlists fully.
     """
-    spotify = get_client()
+    # ---> THIS IS THE MISSING LINE <---
+    spotify = get_client() 
+    
     playlist_id = _extract_id(
         spotify_url,
         "playlist",
