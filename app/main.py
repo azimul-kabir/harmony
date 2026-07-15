@@ -73,12 +73,12 @@ app.mount(
 )
 
 
-app.include_router(library_router)
 app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
+app.include_router(library_page_router)
 app.include_router(downloads.router)
 app.include_router(sources_page_router)
 app.include_router(playlist_router)
