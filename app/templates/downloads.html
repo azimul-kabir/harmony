@@ -3,60 +3,61 @@
 {% block title %}Downloads{% endblock %}
 
 {% block content %}
+<h1>Download Music</h1>
 
-<h1>Downloads</h1>
+<div class="panel" style="margin-bottom: 24px;">
+    <p style="margin: 0; color: #555; font-size: 1.1rem;">
+        Paste a Spotify Track, Album, or Playlist URL below.
+    </p>
 
-<div class="cards">
-
-    <div class="card">
-        <h3>Total Jobs</h3>
-        <p>{{ jobs|length }}</p>
-    </div>
-
+    <form id="download-form">
+        <input 
+            type="url" 
+            id="spotify-url" 
+            placeholder="https://open.spotify.com/..." 
+            required
+            autocomplete="off"
+        >
+        <button type="submit" id="download-submit-btn">Download</button>
+    </form>
+    
+    <div id="download-result"></div>
 </div>
 
-<table class="table">
+<div class="panel">
+    <div class="filters-bar">
+        <div class="filter-pills" id="status-filters">
+            <button class="filter-pill active" data-filter="ALL">All</button>
+            <button class="filter-pill" data-filter="RUNNING">Downloading</button>
+            <button class="filter-pill" data-filter="FAILED">Failed</button>
+            <button class="filter-pill" data-filter="COMPLETED">Completed</button>
+        </div>
+        
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <input type="text" id="search-input" class="search-input" placeholder="Search artist or title...">
+            <button id="clear-history-btn" class="btn-danger">Clear History</button>
+        </div>
+    </div>
 
-    <thead>
-        <tr>
-            <th>Status</th>
-            <th>Title</th>
-            <th>Artist</th>
-            <th>Album</th>
-        </tr>
-    </thead>
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="width: 120px;">Status</th>
+                <th>Title</th>
+                <th>Artist</th>
+                <th>Album</th>
+                <th style="width: 100px;">Action</th>
+            </tr>
+        </thead>
+        <tbody id="downloads-body">
+            <tr>
+                <td colspan="5">Loading real-time data...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
 
-    <tbody id="downloads-body">
-
-    {% if jobs %}
-
-        {% for job in jobs %}
-
-        <tr>
-            <td>
-                <span class="badge badge-{{ job.status.lower() }}">
-                    {{ job.status }}
-                </span>
-            </td>
-            <td>{{ job.title }}</td>
-            <td>{{ job.artist }}</td>
-            <td>{{ job.album or "" }}</td>
-        </tr>
-
-        {% endfor %}
-
-    {% else %}
-
-    <tr>
-        <td colspan="4">
-            No downloads yet.
-        </td>
-    </tr>
-
-    {% endif %}
-
-    </tbody>
-
-</table>
-
+{% block scripts %}
+<script src="/static/js/downloads.js"></script>
 {% endblock %}
