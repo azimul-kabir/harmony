@@ -41,6 +41,26 @@ def start_task(
     db.commit()
     db.refresh(task)
 
+def _complete_task(
+    db: Session,
+    task: Task,
+) -> None:
+    task.status = TaskStatus.COMPLETED.value
+    task.completed_at = datetime.now(UTC)
+    task.current_item = None
+    db.commit()
+    db.refresh(task)
+
+def _fail_task(
+    db: Session,
+    task: Task,
+) -> None:
+    task.status = TaskStatus.FAILED.value
+    task.completed_at = datetime.now(UTC)
+    task.current_item = None
+    db.commit()
+    db.refresh(task)
+
 def set_current_item(
     db: Session,
     task: Task,
