@@ -1,6 +1,6 @@
 # Harmony 🎵
 
-Harmony is a lightweight, real-time music manager and downloader designed to sync Spotify playlists, albums, and tracks directly to your local library. Built with a robust Python backend and a lightning-fast, reactive frontend, it is fully optimized for continuous deployment on home servers like Synology NAS.
+Harmony is a lightweight, real-time music manager and downloader designed to sync Spotify playlists, albums, and tracks directly to your local library. Built with a robust Python backend and a lightning-fast, reactive frontend, it is fully optimized for continuous deployment on home servers.
 
 ## ✨ Features
 
@@ -8,7 +8,7 @@ Harmony is a lightweight, real-time music manager and downloader designed to syn
 * **Smart Queue Management:** Automatically detects duplicate tracks (via database, file system, or active queue) and skips them before wasting bandwidth.
 * **Granular Task Control:** Pause, resume, and cancel download tasks dynamically from the UI.
 * **Continuous Playlist Sync:** Keep your local library up to date with your Spotify playlists. The sync engine accurately calculates missing tracks and updates gracefully.
-* **Docker First:** Built explicitly to run in isolated Docker containers with minimal resource footprints, perfect for NAS environments.
+* **Docker First:** Built explicitly to run in isolated Docker containers with minimal resource footprints.
 
 ## 🛠 Tech Stack
 
@@ -17,21 +17,24 @@ Harmony is a lightweight, real-time music manager and downloader designed to syn
 * **Frontend:** HTML, CSS, Vanilla JavaScript (SSE)
 * **Infrastructure:** Docker, Docker Compose
 
-## 🚀 Deployment (Synology NAS)
+## 🚀 Deployment
 
-Harmony is optimized for deployment on Synology NAS using Docker Compose and standard user permissions to prevent root-owned file locks.
+Harmony is designed to be "Docker-First." While it is highly optimized for **Synology NAS**, it will run seamlessly on any system that supports Docker (Windows, macOS, Linux).
 
-1. **Prepare Directories:**
-   Create the necessary volume folders on your NAS:
-   * `/volume1/docker/harmony/database`
-   * `/volume1/docker/harmony/logs`
-   * `/volume1/music/library`
-   * `/volume1/music/incoming`
+### 1. Preparing the Environment
+Ensure your host machine has **Docker** and **Docker Compose** installed. Create a directory for your project and define the following local folder structure:
+* `database/` (for SQLite storage)
+* `logs/` (for application logs)
+* `music/` (for your library)
+* `downloads/` (for staging downloads)
 
-2. **Configure Environment:**
-   Create a `.env.local` file with your environment variables (e.g., Spotify API keys, PUID/PGID).
+### 2. Configuration
+Create a `.env.local` file in your root folder with your environment variables (e.g., Spotify API keys). 
 
-3. **Deploy:**
-   Use the local override configuration to spin up the container:
-   ```bash
-   sudo docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+*Note for Synology Users:* Use your specific `PUID` and `PGID` in `docker-compose.local.yml` to ensure correct file system permissions for your media shared folders.
+
+### 3. Deploying
+Navigate to your project directory and run the following command to spin up the container:
+
+```bash
+sudo docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
