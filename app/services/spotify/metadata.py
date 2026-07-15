@@ -4,6 +4,7 @@ from app.domain.track import Track
 from app.services.spotify.client import get_client
 from app.domain.playlist import Playlist
 from spotipy.exceptions import SpotifyException
+from app.core.logging import logger
 
 
 def resolve_track(spotify_url: str) -> Track:
@@ -97,14 +98,21 @@ def resolve_playlist(
     Supports continuous paging to retrieve massive/editorial playlists fully.
     """
     spotify = get_client()
-
     playlist_id = _extract_id(
         spotify_url,
         "playlist",
     )
-
-    # Fetch the high-level playlist information first
-    playlist_info = spotify.playlist(playlist_id, fields="name")
+    
+    # --- GRACEFUL ERROR HANDLING BLOCK ---
+    try:
+        # Fetch the high-level playlist information first
+        playlist_info = spotify.playlist(playlist_id, fields="name")
+    except SpotifyException as e:
+        if e.http_status == 404:
+            logger.warning(f"Playlist {playlist_id} not found via Official API (Likely Editorial/Private).")
+            raise RuntimeError(f"Playlist 404 - {e.msg}") from e
+        raise e # Re-raise if it's a different error like 401 Unauthorized
+    # -------------------------------------
 
     if playlist_info is None:
         raise RuntimeError(
@@ -112,25 +120,23 @@ def resolve_playlist(
         )
 
     tracks: list[Track] = []
-
+    
     # Use playlist_items to page through all tracks (100 at a time)
     results = spotify.playlist_items(playlist_id)
-    
+        
     while results:
         for item in results.get("items", []):
             track_data = item.get("track")
-
             # Skip missing tracks or local files uploaded by users
             if track_data is None or track_data.get("is_local"):
                 continue
-
             try:
                 tracks.append(
                     _track_from_spotify(track_data)
                 )
             except Exception as ex:
-                print(f"Track parse failed: {ex}")
-        
+                logger.warning(f"Track parse failed: {ex}")
+                
         # Check if there is a next page of tracks, otherwise break loop
         if results.get("next"):
             results = spotify.next(results)
