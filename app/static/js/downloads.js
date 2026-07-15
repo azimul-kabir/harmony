@@ -31,7 +31,6 @@ if (downloadForm) {
                     <div class="success-message">
                         <strong>Playlist queued successfully</strong><br>
                         ${data.summary.playlist_name}<br><br>
-
                         Queued: ${data.summary.queued}<br>
                         Already queued: ${data.summary.already_queued}<br>
                         Already owned: ${data.summary.owned}
@@ -52,7 +51,6 @@ if (downloadForm) {
             }
 
             input.value = "";
-
         } catch (error) {
             result.innerHTML = `
                 <div class="error-message">
@@ -63,22 +61,11 @@ if (downloadForm) {
     });
 }
 
-async function refreshDownloads() {
+function renderDownloads(jobs) {
     const tbody = document.getElementById("downloads-body");
+    if (!tbody) return;
 
-    if (!tbody) {
-        return;
-    }
-
-    const response = await fetch("/api/downloads");
-
-    if (!response.ok) {
-        return;
-    }
-
-    const jobs = await response.json();
-
-    if (jobs.length === 0) {
+    if (!jobs || jobs.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4">No downloads yet.</td>
@@ -101,10 +88,23 @@ async function refreshDownloads() {
     `).join("");
 }
 
-const downloadsBody = document.getElementById("downloads-body");
+function connectDownloadsSSE() {
+    // Only connect if we are actually on the downloads page
+    if (!document.getElementById("downloads-body")) {
+        return;
+    }
 
-if (downloadsBody) {
-    refreshDownloads();
+    const eventSource = new EventSource("/api/downloads/stream");
 
-    setInterval(refreshDownloads, 5000);
+    eventSource.onmessage = function(event) {
+        const jobs = JSON.parse(event.data);
+        renderDownloads(jobs);
+    };
+
+    eventSource.onerror = function(error) {
+        console.error("SSE connection error, attempting to reconnect...", error);
+    };
 }
+
+// Initialize the stream on page load
+connectDownloadsSSE();
