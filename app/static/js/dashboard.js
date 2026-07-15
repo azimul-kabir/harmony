@@ -18,7 +18,6 @@ function renderActivity(jobs) {
 
     container.innerHTML = jobs.map(job => {
         const status = (job.status ?? "").toUpperCase();
-
         let icon = "🎵";
         let label = status;
 
@@ -90,31 +89,69 @@ function taskStatus(status) {
 }
 
 async function handleTaskAction(taskId, action) {
-    // Send the command to the API
     await fetch(`/api/tasks/${taskId}/${action}`, {
         method: "POST"
     });
-    // We no longer manually refresh the UI here because the 
-    // SSE stream will push the new state in the next tick.
 }
 
 function renderTasks(tasks) {
     const container = document.getElementById("active-tasks");
     if (!container) return;
 
+    // Clear the "No active tasks" message if we are about to inject tasks
+    if (tasks && tasks.length > 0) {
+        const emptyMsg = container.querySelector("p");
+        if (emptyMsg) emptyMsg.remove();
+    }
+
+    const newTaskIds = (tasks || []).map(t => String(t.id));
+    const existingItems = container.querySelectorAll(".task-item");
+
+    // 1. Check for tasks that have finished (no longer pushed by the server)
+    existingItems.forEach(el => {
+        const id = el.dataset.taskId;
+        if (!newTaskIds.includes(id)) {
+            // Task has dropped from the queue. Fade it out!
+            if (!el.classList.contains("fading-out")) {
+                el.classList.add("fading-out");
+                
+                // Visually force a 100% completion state during the fade out
+                const statusEl = el.querySelector(".task-status");
+                if (statusEl) statusEl.textContent = "✅ Finished";
+                
+                const fillEl = el.querySelector(".task-progress-fill");
+                if (fillEl) fillEl.style.width = "100%";
+                
+                // Hide the pause/cancel controls immediately
+                const controls = el.querySelector(".task-controls");
+                if (controls) controls.remove();
+
+                // Remove the element from the DOM after the 3-second CSS animation ends
+                setTimeout(() => {
+                    el.remove();
+                    // If this was the last task, restore the empty message
+                    if (container.children.length === 0) {
+                        container.innerHTML = "<p>No active tasks.</p>";
+                    }
+                }, 3000);
+            }
+        }
+    });
+
     if (!tasks || tasks.length === 0) {
-        container.innerHTML = "<p>No active tasks.</p>";
+        if (container.children.length === 0) {
+            container.innerHTML = "<p>No active tasks.</p>";
+        }
         return;
     }
 
-    container.innerHTML = tasks.map(task => {
+    // 2. Surgically update existing tasks or create new ones
+    tasks.forEach(task => {
         const finished = task.completed + task.failed + task.skipped;
         const percent = task.total === 0 ? 0 : (finished / task.total) * 100;
-
-        // Generate dynamic control buttons based on task status
-        let actionButtons = "";
         const taskState = (task.status ?? "").toUpperCase();
-        
+
+        let actionButtons = "";
         if (taskState === "RUNNING" || taskState === "QUEUED") {
             actionButtons = `
                 <button onclick="handleTaskAction(${task.id}, 'pause')" style="cursor:pointer; margin-right: 5px;">⏸️ Pause</button>
@@ -127,63 +164,64 @@ function renderTasks(tasks) {
             `;
         }
 
-        return `
-            <div class="task-item">
-                <div class="task-title">
-                    🎵 ${task.name}
-                </div>
-                <div class="task-status">
-                    ${taskStatus(task.status)}
-                </div>
-                <div class="task-progress-bar">
-                    <div
-                        class="task-progress-fill"
-                        style="width:${percent}%">
-                    </div>
-                </div>
-                <div class="task-progress">
-                    ${finished} / ${task.total}
-                </div>
-                ${
-                    task.current
-                        ? `<div class="task-current">
-                            Now downloading: ${task.current}
-                        </div>`
-                        : ""
+        let el = container.querySelector(`.task-item[data-task-id="${task.id}"]`);
+        
+        if (el) {
+            // Update the specific elements to maintain buttery-smooth CSS width transitions
+            el.querySelector(".task-status").textContent = taskStatus(task.status);
+            el.querySelector(".task-progress-fill").style.width = `${percent}%`;
+            el.querySelector(".task-progress").textContent = `${finished} / ${task.total}`;
+            
+            const currentEl = el.querySelector(".task-current");
+            if (task.current) {
+                if (currentEl) {
+                    currentEl.textContent = `Now downloading: ${task.current}`;
+                } else {
+                    const newCurrent = document.createElement("div");
+                    newCurrent.className = "task-current";
+                    newCurrent.textContent = `Now downloading: ${task.current}`;
+                    el.insertBefore(newCurrent, el.querySelector(".task-controls"));
                 }
-                <!-- Inject the dynamic buttons here -->
-                <div class="task-controls" style="margin-top: 10px;">
-                    ${actionButtons}
+            } else if (currentEl) {
+                currentEl.remove();
+            }
+
+            el.querySelector(".task-controls").innerHTML = actionButtons;
+        } else {
+            // Insert a brand new task
+            const wrapper = document.createElement("div");
+            wrapper.className = "task-item";
+            wrapper.dataset.taskId = task.id;
+            wrapper.innerHTML = `
+                <div class="task-title">🎵 ${task.name}</div>
+                <div class="task-status">${taskStatus(task.status)}</div>
+                <div class="task-progress-bar">
+                    <div class="task-progress-fill" style="width:${percent}%"></div>
                 </div>
-            </div>
-        `;
-    }).join("");
+                <div class="task-progress">${finished} / ${task.total}</div>
+                ${task.current ? `<div class="task-current">Now downloading: ${task.current}</div>` : ""}
+                <div class="task-controls" style="margin-top: 10px;">${actionButtons}</div>
+            `;
+            container.appendChild(wrapper);
+        }
+    });
 }
 
 function connectSSE() {
-    // Only connect if we are actually on the dashboard page
-    if (!document.getElementById("songs-count")) {
-        return;
-    }
+    if (!document.getElementById("songs-count")) return;
 
-    // Establish the SSE connection
     const eventSource = new EventSource("/api/dashboard/stream");
 
-    // Listen for incoming messages from the server
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
-        
-        // Push the new data to the DOM
         renderStats(data.stats);
         renderActivity(data.activity);
         renderTasks(data.tasks);
     };
 
-    // Handle connection drops and let the browser auto-reconnect
     eventSource.onerror = function(error) {
         console.error("SSE connection error, attempting to reconnect...", error);
     };
 }
 
-// Initialize the stream on page load
 connectSSE();
