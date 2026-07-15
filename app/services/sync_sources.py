@@ -1,11 +1,8 @@
 from sqlalchemy.orm import Session
-
 from app.database.crud_sync_sources import (
     create_sync_source,
     get_sync_source_by_spotify_id,
 )
-# Use the robust import engine that includes the SpotDL fallback
-from app.services.playlist import import_playlist
 from app.services.spotify.url import spotify_resource
 
 def create_playlist_source(
@@ -24,13 +21,12 @@ def create_playlist_source(
     if existing:
         return existing
 
-    # This will now gracefully fall back to SpotDL if the Spotify API 404s
-    playlist = import_playlist(spotify_url)
-
+    # Create the source instantly without waiting 10 minutes for SpotDL.
+    # The background worker will update this name during the first sync.
     return create_sync_source(
         db=db,
         type="playlist",
         spotify_id=spotify_id,
         spotify_url=spotify_url,
-        name=playlist.name,
+        name="Fetching Playlist Data...",
     )
