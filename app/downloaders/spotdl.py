@@ -26,7 +26,8 @@ class SpotDLClient:
                 *self._audio_providers(),
                 "--save-file",
                 "-",
-            ]
+            ],
+            timeout=1200  # 20 MINUTES: Generous timeout for massive playlist scraping
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr)
@@ -64,8 +65,6 @@ class SpotDLClient:
             else f"{track.artist} - {track.title}"
         )
         
-        # Isolate this specific download in a unique temporary folder
-        # This prevents the 4 concurrent workers from colliding in the shared staging directory
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
             
@@ -78,7 +77,8 @@ class SpotDLClient:
                     str(temp_path),
                     "--threads",
                     "1", 
-                ]
+                ],
+                timeout=300  # 5 MINUTES: Standard timeout for a single track download
             )
             
             if result.returncode != 0:
@@ -98,7 +98,6 @@ class SpotDLClient:
             downloaded_file = files[0]
             final_path = output_dir / downloaded_file.name
             
-            # Move the file out of the temp bubble into the main staging area
             if final_path.exists():
                 final_path.unlink()
                 
@@ -120,7 +119,8 @@ class SpotDLClient:
                 str(output_dir),
                 "--threads",
                 "1",
-            ]
+            ],
+            timeout=300
         )
 
     def _audio_providers(self) -> list[str]:
@@ -129,6 +129,7 @@ class SpotDLClient:
     def _run(
         self,
         args: list[str],
+        timeout: int = 120, # Default fallback timeout
     ) -> subprocess.CompletedProcess[str]:
         command = [
             self.settings.spotdl_path,
@@ -140,10 +141,10 @@ class SpotDLClient:
                 command,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired as e:
-            raise RuntimeError("SpotDL execution timed out.") from e
+            raise RuntimeError(f"SpotDL execution timed out after {timeout} seconds.") from e
 
     @staticmethod
     def _extract_json(
