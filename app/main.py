@@ -1,5 +1,4 @@
 import threading
-from app.api import library
 from app.api.tasks import router as tasks_router
 from app.api.dashboard import router as dashboard_router
 from contextlib import asynccontextmanager
@@ -14,7 +13,7 @@ from app.web.templates import (
     template_context,
 )
 
-from app.api import downloads
+from app.api import downloads, library
 from app.api.library import router as library_router
 from app.api.playlist import router as playlist_router
 from app.api.sync_sources import router as sync_sources_router
@@ -74,7 +73,7 @@ app.mount(
 )
 
 
-app.include_router(library.router)
+app.include_router(library_router)
 app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
