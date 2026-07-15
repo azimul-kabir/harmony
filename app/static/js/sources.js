@@ -180,8 +180,10 @@ async function addSource(event) {
     event.preventDefault();
     const input = document.getElementById("source-url");
     const submitBtn = event.target.querySelector('button[type="submit"]');
+    
+    // Add the spinner here
     submitBtn.disabled = true;
-    submitBtn.textContent = "Adding...";
+    submitBtn.innerHTML = '<span class="spinner"></span>Adding...';
 
     const response = await fetch("/api/sources", {
         method: "POST",
@@ -192,6 +194,7 @@ async function addSource(event) {
     if (!response.ok) alert("Unable to add source.");
     
     input.value = "";
+    // Reset the button
     submitBtn.disabled = false;
     submitBtn.textContent = "Add Source";
 }
