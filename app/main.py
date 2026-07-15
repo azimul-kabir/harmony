@@ -15,6 +15,7 @@ from app.web.templates import (
 
 from app.api import downloads, library
 from app.api.library import router as library_router
+from app.web.library import router as library_page_router
 from app.api.playlist import router as playlist_router
 from app.api.sync_sources import router as sync_sources_router
 from app.core.config import get_settings
