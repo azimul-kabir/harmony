@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.schemas.download import DownloadRequest
 from app.database.models import DownloadJob
-from app.database.session import SessionLocal
+from app.database.session import get_db
 from app.exceptions.download import TrackAlreadyExistsError
 from app.services.download_queue import (
     enqueue_album,
@@ -18,87 +19,67 @@ router = APIRouter(
     tags=["downloads"],
 )
 
-
 @router.post("", status_code=201)
-def queue_download(request: DownloadRequest):
-    db = SessionLocal()
+def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
+    resource, _ = spotify_resource(request.url)
 
-    try:
-        resource, _ = spotify_resource(request.url)
-
-        if resource == "track":
-            track = resolve_track(request.url)
-
-            try:
-                result = enqueue_track(
-                    db=db,
-                    track=track,
-                )
-
-                return {
-                    "status": result.status.value,
-                    "job_id": result.job_id,
-                }
-
-            except TrackAlreadyExistsError:
-                return {
-                    "status": "owned",
-                }
-
-        if resource == "album":
-            enqueue_album(
+    if resource == "track":
+        track = resolve_track(request.url)
+        try:
+            result = enqueue_track(
                 db=db,
-                spotify_url=request.url,
+                track=track,
             )
-
             return {
-                "status": "queued",
+                "status": result.status.value,
+                "job_id": result.job_id,
+            }
+        except TrackAlreadyExistsError:
+            return {
+                "status": "owned",
             }
 
-        if resource == "playlist":
-            summary = download_playlist(
-                db=db,
-                url=request.url,
-            )
+    if resource == "album":
+        enqueue_album(
+            db=db,
+            spotify_url=request.url,
+        )
+        return {
+            "status": "queued",
+        }
 
-            return {
-                "status": "queued",
-                "summary": summary,
-            }
+    if resource == "playlist":
+        summary = download_playlist(
+            db=db,
+            url=request.url,
+        )
+        return {
+            "status": "queued",
+            "summary": summary,
+        }
 
-        raise ValueError("Unsupported Spotify URL.")
-
-    finally:
-        db.close()
-
+    raise ValueError("Unsupported Spotify URL.")
 
 @router.get("")
-def list_downloads():
-    db = SessionLocal()
-
-    try:
-        jobs = (
-            db.execute(
-                select(DownloadJob).order_by(
-                    DownloadJob.id.desc()
-                )
+def list_downloads(db: Session = Depends(get_db)):
+    jobs = (
+        db.execute(
+            select(DownloadJob).order_by(
+                DownloadJob.id.desc()
             )
-            .scalars()
-            .all()
         )
-
-        return [
-            {
-                "id": job.id,
-                "status": job.status,
-                "title": job.title,
-                "artist": job.artist,
-                "spotify_url": job.spotify_url,
-                "output_file": job.output_file,
-                "error": job.error,
-            }
-            for job in jobs
-        ]
-
-    finally:
-        db.close()
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": job.id,
+            "status": job.status,
+            "title": job.title,
+            "artist": job.artist,
+            "spotify_url": job.spotify_url,
+            "output_file": job.output_file,
+            "error": job.error,
+        }
+        for job in jobs
+    ]
