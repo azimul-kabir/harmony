@@ -1,6 +1,7 @@
 import asyncio
 import json
-from fastapi import APIRouter, Depends, HTTPException, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,20 +15,45 @@ from app.database.crud_sync_sources import (
     get_sync_source,
     list_sync_sources,
     update_sync_source_enabled,
+    create_sync_source,
+    get_sync_source_by_spotify_id,
 )
 from app.database.models import Task
 from app.database.session import get_db, SessionLocal
-from app.services.sync_sources import (
-    create_playlist_source,
-)
-from app.services.playlist_sync import (
-    sync_playlist,
-)
+from app.services.playlist_sync import sync_playlist
+from app.services.spotify.url import spotify_resource
 
 router = APIRouter(
     prefix="/api/sources",
     tags=["sources"],
 )
+
+def run_background_sync(source_id: int):
+    db = SessionLocal()
+    try:
+        source = get_sync_source(db=db, sync_id=source_id)
+        if source:
+            sync_playlist(db=db, source=source)
+    finally:
+        db.close()
+
+def create_playlist_source(db: Session, spotify_url: str):
+    resource, spotify_id = spotify_resource(spotify_url)
+    
+    if resource != "playlist":
+        raise ValueError("Only Spotify playlists are supported.")
+
+    existing = get_sync_source_by_spotify_id(db, spotify_id)
+    if existing:
+        return existing
+
+    return create_sync_source(
+        db=db,
+        type="playlist",
+        spotify_id=spotify_id,
+        spotify_url=spotify_url,
+        name="Fetching Playlist Data...",
+    )
 
 @router.get("")
 def list_sources(db: Session = Depends(get_db)):
@@ -57,7 +83,7 @@ def create_source(request: SyncSourceRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/{source_id}/sync")
-def sync_source(source_id: int, db: Session = Depends(get_db)):
+def sync_source(source_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     source = get_sync_source(
         db=db,
         sync_id=source_id,
@@ -67,58 +93,31 @@ def sync_source(source_id: int, db: Session = Depends(get_db)):
             status_code=404,
             detail="Source not found.",
         )
-    task = sync_playlist(
-        db=db,
-        source=source,
-    )
-    if task is None:
-        return {
-            "message": "Nothing to sync.",
-        }
+    
+    # Hand the heavy lifting off to the background instantly
+    background_tasks.add_task(run_background_sync, source.id)
+    
     return {
-        "task_id": task.id,
-        "message": "Playlist sync started.",
+        "message": "Playlist sync started in the background.",
     }
 
 @router.delete("/{source_id}")
 def delete_source(source_id: int, db: Session = Depends(get_db)):
-    source = get_sync_source(
-        db=db,
-        sync_id=source_id,
-    )
+    source = get_sync_source(db=db, sync_id=source_id)
     if source is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Source not found.",
-        )
-    delete_sync_source(
-        db=db,
-        sync=source,
-    )
-    return {
-        "message": "Source deleted.",
-    }
+        raise HTTPException(status_code=404, detail="Source not found.")
+    delete_sync_source(db=db, sync=source)
+    return {"message": "Source deleted."}
 
 @router.patch("/{source_id}")
 def update_source(source_id: int, request: SyncSourceUpdateRequest, db: Session = Depends(get_db)):
-    source = update_sync_source_enabled(
-        db=db,
-        sync_id=source_id,
-        enabled=request.enabled,
-    )
+    source = update_sync_source_enabled(db=db, sync_id=source_id, enabled=request.enabled)
     if source is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Source not found.",
-        )
-    return {
-        "id": source.id,
-        "enabled": source.enabled,
-    }
+        raise HTTPException(status_code=404, detail="Source not found.")
+    return {"id": source.id, "enabled": source.enabled}
 
 @router.get("/stream")
 async def stream_sources_data(request: Request):
-    """Server-Sent Events endpoint for real-time sources and task updates."""
     async def event_generator():
         while True:
             if await request.is_disconnected():
@@ -130,7 +129,6 @@ async def stream_sources_data(request: Request):
                 payload = []
                 
                 for source in sources:
-                    # Fetch the most recent task for this specific source
                     latest_task = db.execute(
                         select(Task)
                         .where(Task.source_id == source.id)
@@ -165,5 +163,4 @@ async def stream_sources_data(request: Request):
                 db.close()
             
             await asyncio.sleep(2)
-
     return StreamingResponse(event_generator(), media_type="text/event-stream")
