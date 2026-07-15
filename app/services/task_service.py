@@ -1,13 +1,10 @@
 from datetime import UTC, datetime
-
 from sqlalchemy.orm import Session
-
-from app.database.models import Task
+from app.database.models import Task, SyncSource
 from app.domain.task import (
     TaskStatus,
     TaskType,
 )
-
 
 def create_task(
     db: Session,
@@ -30,13 +27,10 @@ def create_task(
         failed_items=0,
         current_item=None,
     )
-
     db.add(task)
     db.commit()
     db.refresh(task)
-
     return task
-
 
 def start_task(
     db: Session,
@@ -44,34 +38,8 @@ def start_task(
 ) -> None:
     task.status = TaskStatus.RUNNING.value
     task.started_at = datetime.now(UTC)
-
     db.commit()
     db.refresh(task)
-
-
-def _complete_task(
-    db: Session,
-    task: Task,
-) -> None:
-    task.status = TaskStatus.COMPLETED.value
-    task.completed_at = datetime.now(UTC)
-    task.current_item = None
-
-    db.commit()
-    db.refresh(task)
-
-
-def _fail_task(
-    db: Session,
-    task: Task,
-) -> None:
-    task.status = TaskStatus.FAILED.value
-    task.completed_at = datetime.now(UTC)
-    task.current_item = None
-
-    db.commit()
-    db.refresh(task)
-
 
 def set_current_item(
     db: Session,
@@ -79,55 +47,44 @@ def set_current_item(
     item: str | None,
 ) -> None:
     task.current_item = item
-
     db.commit()
     db.refresh(task)
-
 
 def increment_completed(
     db: Session,
     task: Task,
 ) -> None:
     task.completed_items += 1
-
     db.commit()
     db.refresh(task)
-
     _finish_if_complete(
         db=db,
         task=task,
     )
-
 
 def increment_failed(
     db: Session,
     task: Task,
 ) -> None:
     task.failed_items += 1
-
     db.commit()
     db.refresh(task)
-
     _finish_if_complete(
         db=db,
         task=task,
     )
-
 
 def increment_skipped(
     db: Session,
     task: Task,
 ) -> None:
     task.skipped_items += 1
-
     db.commit()
     db.refresh(task)
-
     _finish_if_complete(
         db=db,
         task=task,
     )
-
 
 def _finish_if_complete(
     db: Session,
@@ -138,7 +95,6 @@ def _finish_if_complete(
         + task.failed_items
         + task.skipped_items
     )
-
     if finished < task.total_items:
         return
 
@@ -149,10 +105,15 @@ def _finish_if_complete(
         task.status = TaskStatus.FAILED.value
     else:
         task.status = TaskStatus.COMPLETED.value
+        
+        # UPDATE SOURCE LAST SYNC TIME
+        if task.source_id:
+            source = db.get(SyncSource, task.source_id)
+            if source:
+                source.last_synced_at = datetime.now(UTC)
 
     db.commit()
     db.refresh(task)
-
 
 def pause_task(
     db: Session,
@@ -163,23 +124,19 @@ def pause_task(
         db.commit()
         db.refresh(task)
 
-
 def resume_task(
     db: Session,
     task: Task,
 ) -> None:
     if task.status == TaskStatus.PAUSED.value:
-        # Revert to QUEUED so the database lock releases and workers can pick it up again
         task.status = TaskStatus.QUEUED.value
         db.commit()
         db.refresh(task)
-
 
 def cancel_task(
     db: Session,
     task: Task,
 ) -> None:
-    # Only cancel if it isn't already finished
     if task.status not in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value):
         task.status = TaskStatus.CANCELLED.value
         task.completed_at = datetime.now(UTC)
