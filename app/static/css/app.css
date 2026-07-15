@@ -38,7 +38,6 @@ body {
     min-height: 100vh;
 }
 
-/* Sidebar with sticky positioning combined with your flex settings */
 .sidebar {
     width: 220px;
     background: #222;
@@ -46,13 +45,11 @@ body {
     padding: 24px;
     display: flex;
     flex-direction: column;
-    
-    /* New Sticky Properties */
     position: sticky;
     top: 0;
-    height: 100vh; /* Takes up the full viewport height */
-    box-sizing: border-box; /* Ensures padding doesn't break the height */
-    overflow-y: auto; /* Adds a scrollbar to the sidebar if the menu gets too long */
+    height: 100vh;
+    box-sizing: border-box;
+    overflow-y: auto;
 }
 
 .sidebar a {
@@ -141,7 +138,6 @@ body {
     box-shadow: 0 4px 14px rgba(0,0,0,.06);
 }
 
-/* Updated media query to reset sticky positioning on mobile */
 @media (max-width: 768px) {
     .layout {
         flex-direction: column;
@@ -149,8 +145,6 @@ body {
     .sidebar {
         width: 100%;
         padding: 16px;
-        
-        /* Reset sticky for mobile */
         position: static;
         height: auto;
         overflow-y: visible;
@@ -348,6 +342,7 @@ body {
 .task-item {
     padding: 16px 0;
     border-bottom: 1px solid #eee;
+    transition: background-color 0.3s ease;
 }
 
 .task-item:last-child {
@@ -387,7 +382,7 @@ body {
 .task-progress-fill {
     height: 100%;
     background: #1565c0;
-    transition: width 0.3s ease;
+    transition: width 0.4s ease-out;
 }
 
 .sources-grid {
@@ -512,4 +507,17 @@ body {
 .empty-state p {
     margin-top: 12px;
     color: #666;
+}
+
+/* Custom fade out animation for completed tasks */
+@keyframes fadeOutTask {
+    0% { opacity: 1; transform: translateX(0); }
+    50% { opacity: 1; transform: translateX(0); }
+    100% { opacity: 0; transform: translateX(30px); }
+}
+
+.fading-out {
+    animation: fadeOutTask 3s forwards ease-in-out;
+    pointer-events: none;
+    background-color: #fcfcfc;
 }
