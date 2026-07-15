@@ -322,3 +322,128 @@ body {
 .btn-retry:hover {
     background: #5c636a;
 }
+
+/* --- Sources Grid & Cards --- */
+.sources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+.source-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.06);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border: 1px solid #eee;
+}
+
+.source-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.source-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #222;
+    word-break: break-word;
+}
+
+.source-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: #666;
+    background: #f9f9f9;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.source-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.source-actions button {
+    padding: 8px 14px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #444;
+    transition: all 0.2s;
+}
+
+.source-actions button:hover:not(:disabled) {
+    background: #f0f0f0;
+}
+
+.source-actions button.btn-primary-outline {
+    border-color: #1565c0;
+    color: #1565c0;
+}
+
+.source-actions button.btn-primary-outline:hover:not(:disabled) {
+    background: #1565c0;
+    color: white;
+}
+
+.source-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Task Progress --- */
+.task-progress-container {
+    background: #f8f9fa;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.task-progress-bar {
+    height: 8px;
+    background: #ddd;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.task-progress-fill {
+    height: 100%;
+    background: #1565c0;
+    transition: width 0.3s ease;
+}
+
+/* --- Library Pagination --- */
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
+}
+
+.btn-secondary {
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
