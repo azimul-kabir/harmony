@@ -2,11 +2,12 @@ from app.domain.track import Track
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, or_
 from sqlalchemy.orm import Session
 
-from app.database.models import DownloadJob
+from app.database.models import DownloadJob, Task
 from app.domain.download import JobStatus
+from app.domain.task import TaskStatus
 
 
 def create_job(
@@ -81,9 +82,18 @@ def claim_next_job(
     db.execute(text("BEGIN IMMEDIATE"))
 
     try:
+        # Check if the job's parent task is not active (paused or cancelled)
+        # If the job has no parent task (a standalone single track download), allow it.
         job = db.scalar(
             select(DownloadJob)
-            .where(DownloadJob.status == JobStatus.QUEUED.value)
+            .outerjoin(Task, DownloadJob.task_id == Task.id)
+            .where(
+                DownloadJob.status == JobStatus.QUEUED.value,
+                or_(
+                    Task.id == None,
+                    ~Task.status.in_((TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value))
+                )
+            )
             .order_by(DownloadJob.created_at)
             .limit(1)
         )
@@ -119,6 +129,7 @@ def update_status(
         JobStatus.COMPLETED,
         JobStatus.SKIPPED,
         JobStatus.FAILED,
+        JobStatus.CANCELLED, # Tracks completion time when manually aborted
     ):
         job.completed_at = datetime.now(UTC)
 
