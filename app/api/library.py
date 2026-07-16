@@ -12,11 +12,20 @@ router = APIRouter(
 )
 
 # --- Management: Deletions ---
-
 @router.get("/songs")
 def list_songs(db: Session = Depends(get_db)):
     songs = db.query(Song).all()
-    return [{"id": s.id, "title": s.title, "artist": s.artist, "album": s.album} for s in songs]
+    return [
+        {
+            "id": s.id, 
+            "title": s.title, 
+            "artist": s.artist, 
+            "album": s.album,
+            "filename": s.filename,
+            "path": s.path
+        } 
+        for s in songs
+    ]
 
 @router.delete("/song/{song_id}")
 def delete_song(song_id: int, db: Session = Depends(get_db)):
@@ -31,7 +40,6 @@ def delete_song(song_id: int, db: Session = Depends(get_db)):
     return {"status": "success"}
 
 # --- Maintenance: Rescanning ---
-
 @router.post("/rescan")
 def rescan():
     db = SessionLocal()
