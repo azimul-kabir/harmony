@@ -7,28 +7,26 @@
 </div>
 
 <div class="panel" style="margin-bottom: 24px;">
-    <p style="margin: 0 0 16px 0; color: #555; font-size: 1.1rem;">
+    <p style="margin: 0 0 16px 0; color: var(--text-muted); font-size: 1.05rem;">
         Add Spotify playlists here to automatically keep your local library synced.
     </p>
-    <form id="add-source-form" style="display: flex; gap: 12px; margin: 0;">
+    <form id="add-source-form" class="form-row" style="margin: 0;">
         <input
             id="source-url"
             type="url"
-            class="search-input"
-            style="flex: 1; width: auto; max-width: none; font-size: 1rem; padding: 14px 16px;"
             placeholder="Paste a Spotify Playlist URL..."
             required
             autocomplete="off"
         >
-        <button type="submit" class="btn-primary" style="padding: 14px 26px; border: none; border-radius: 8px; background: #1565c0; color: white; cursor: pointer; font-weight: 600; font-size: 1rem; transition: .2s;">
+        <button type="submit">
             + Add Source
         </button>
     </form>
 </div>
 
 <div id="sources" class="sources-grid">
-    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: white; border-radius: 16px; border: 1px solid #eee;" class="empty-state">
-        <span class="spinner" style="border-top-color:#1565c0;"></span> Loading sources...
+    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
+        <span class="spinner"></span> Loading sources...
     </div>
 </div>
 {% endblock %} 
