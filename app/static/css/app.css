@@ -44,7 +44,6 @@ body {
     padding: 24px;
     display: flex;
     flex-direction: column;
-    
     position: fixed;
     top: 0;
     left: 0;
@@ -423,6 +422,19 @@ body {
     transition: width 0.3s ease;
 }
 
+.task-item {
+    padding: 20px;
+    background: #fdfdfd;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    transition: opacity 3s ease;
+}
+
+.task-item.fading-out {
+    opacity: 0.2;
+}
+
 /* --- Library Pagination --- */
 .pagination-controls {
     display: flex;
@@ -441,6 +453,11 @@ body {
     border-radius: 6px;
     cursor: pointer;
     font-weight: 600;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background: #f1f1f1;
 }
 
 .btn-secondary:disabled {
@@ -462,4 +479,96 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* --- Dashboard Specific Grid Rules --- */
+.dashboard-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+.overview-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-md);
+}
+
+.bottom-split {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-lg);
+}
+
+.quick-actions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.text-center { text-align: center; }
+
+.empty-state {
+    color: #888;
+    font-style: italic;
+}
+
+.activity-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #eee;
+}
+
+.activity-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 120px;
+    flex-shrink: 0;
+}
+
+.activity-icon {
+    font-size: 1.2rem;
+}
+
+.activity-status {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.activity-title {
+    font-weight: 600;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 12px;
+}
+
+.activity-artist {
+    color: #666;
+    font-size: 0.9rem;
+    width: 150px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+    .bottom-split {
+        grid-template-columns: 1fr;
+    }
 }
