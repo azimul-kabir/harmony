@@ -1,4 +1,26 @@
-# Changelog
+### `CHANGELOG.md` Update
+
+```markdown
+## v1.0.0 - 2026-07-16
+
+### Added
+- Complete UI Overhaul: Redesigned the frontend into a focused 5-section application (Dashboard, Downloads, Sources, Library, Settings).
+- Real-Time Updates: Implemented Server-Sent Events (SSE) across the Dashboard, Downloads, and Sources pages for zero-latency UI updates without polling.
+- SpotDL Fallback Mechanism: Added automatic plain-text search fallback with `--dont-filter-results` to bypass strict duration filtering when official Spotify URLs return a `LookupError`.
+- Persistent SpotDL Cache: Added Docker volume mapping for SpotDL's internal cache to drastically reduce playlist scraping times.
+- Granular Task Controls: Added Pause, Resume, and Cancel capabilities for active sync and download tasks directly from the UI.
+- Library Maintenance Tools: Added debounced search, paginated views, batch deletion, and raw filename display for tracks missing ID3 metadata.
+- Error Visibility: Surfaced raw SpotDL extraction errors directly to the frontend for transparent debugging.
+
+### Changed
+- Offloaded playlist syncing to FastAPI `BackgroundTasks`, eliminating UI freezing and API timeouts during 10+ minute scrapes.
+- Updated SpotDL execution to use dynamic timeouts (20 minutes for full playlist scrapes, 5 minutes for individual track downloads).
+- Refined internal queue logic to gracefully handle `LookupError` exceptions by failing over to secondary queries.
+
+### Fixed
+- Fixed issue where valid regional, progressive, or extended tracks were skipped due to duration mismatches on YouTube.
+- Fixed a connection timeout bug where long playlist syncs caused the initial HTTP request to die.
+- Restored missing `_fail_task` and `_complete_task` handlers in the task service to prevent worker crashes.
 
 ## v0.6.0 - 2026-07-10
 
