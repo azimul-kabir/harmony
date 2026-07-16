@@ -59,57 +59,70 @@ class SpotDLClient:
         track: Track,
         output_dir: Path,
     ) -> Path:
-        query = (
-            track.spotify_url
-            if track.spotify_url
-            else f"{track.artist} - {track.title}"
-        )
+        # Define the strict URL query first, and a loose text fallback second
+        queries_to_try = []
+        if track.spotify_url:
+            queries_to_try.append(track.spotify_url)
+            
+        queries_to_try.append(f"{track.artist} - {track.title} audio")
         
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
-            
-            # Explicitly define the filename template so SpotDL doesn't misinterpret the temp directory
             output_template = f"{temp_path}/{{artist}} - {{title}}.{{output-ext}}"
             
-            result = self._run(
-                [
-                    query,
-                    "--audio",
-                    *self._audio_providers(),
-                    "--output",
-                    output_template,
-                    "--threads",
-                    "1", 
-                ],
-                timeout=300
-            )
+            last_error = None
             
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr)
-                
-            files = sorted(
-                temp_path.glob("*"),
-                key=lambda file: file.stat().st_mtime,
-                reverse=True,
-            )
-            
-            if not files:
-                # Capture the actual SpotDL terminal output to expose the real reason it skipped the track
-                error_msg = result.stdout.strip() or result.stderr.strip() or "No matching audio found on YouTube/YT Music."
-                
-                # Clean up the output string if it's too long or contains formatting
-                error_msg = error_msg.split('\n')[-1] 
-                raise RuntimeError(f"SpotDL Skipped: {error_msg}")
-                
-            downloaded_file = files[0]
-            final_path = output_dir / downloaded_file.name
-            
-            if final_path.exists():
-                final_path.unlink()
-                
-            shutil.move(str(downloaded_file), str(final_path))
-            
-            return final_path
+            # Loop through our query attempts
+            for query in queries_to_try:
+                try:
+                    result = self._run(
+                        [
+                            query,
+                            "--audio",
+                            *self._audio_providers(),
+                            "--output",
+                            output_template,
+                            "--threads",
+                            "1", 
+                        ],
+                        timeout=300
+                    )
+                    
+                    if result.returncode != 0:
+                        raise RuntimeError(result.stderr)
+                        
+                    files = sorted(
+                        temp_path.glob("*"),
+                        key=lambda file: file.stat().st_mtime,
+                        reverse=True,
+                    )
+                    
+                    if not files:
+                        error_msg = result.stdout.strip() or result.stderr.strip() or "No matching audio found."
+                        error_msg = error_msg.split('\n')[-1] 
+                        raise RuntimeError(f"SpotDL Skipped: {error_msg}")
+                        
+                    downloaded_file = files[0]
+                    final_path = output_dir / downloaded_file.name
+                    
+                    if final_path.exists():
+                        final_path.unlink()
+                        
+                    shutil.move(str(downloaded_file), str(final_path))
+                    
+                    return final_path
+                    
+                except RuntimeError as e:
+                    last_error = e
+                    # If SpotDL threw a LookupError, silently catch it and let the loop try the loose text search
+                    if "LookupError" in str(e):
+                        continue
+                    else:
+                        # If it's a completely different error, fail immediately
+                        raise e
+                        
+            # If all fallback attempts fail, raise the final error to the UI
+            raise last_error
 
     def download_url(
         self,
