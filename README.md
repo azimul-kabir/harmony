@@ -1,45 +1,177 @@
 # Harmony
 
-Harmony is a lightweight, real-time music manager and downloader designed to sync Spotify playlists, albums, and tracks directly to your local library. Built with a robust Python backend and a lightning-fast, reactive frontend, it is fully optimized for continuous deployment on home servers.
+Harmony is a self-hosted music downloader and library manager that automatically downloads, organizes, and synchronizes your music library from Spotify.
+
+Built for home servers, Docker, and NAS devices, Harmony combines an automated download pipeline with a modern web interface to create a continuously synchronized local music collection.
+
+**Current Version:** **v1.0.0**
+
+---
 
 ## Features
 
-* **Sleek 5-Section UI:** A polished, media-first interface divided into Dashboard, Downloads, Sources, Library, and Settings to keep management simple and focused.
-* **Real-Time UI (No Polling):** Powered by Server-Sent Events (SSE), the dashboard, active tasks, and download queues update instantly with buttery-smooth CSS animations.
-* **Smart Queue Management:** Automatically detects duplicate tracks (via database, file system, or active queue) and skips them before wasting bandwidth.
-* **Advanced SpotDL Fallback:** Integrates strict metadata matching via Spotify URLs, with an automatic loose-text search fallback (`--dont-filter-results`) to grab hard-to-find regional or extended progressive tracks.
-* **Granular Task Control:** Pause, resume, and cancel download tasks dynamically from the UI.
-* **Continuous Playlist Sync:** Keep your local library up to date with your Spotify playlists seamlessly in the background.
-* **Docker First:** Built explicitly to run in isolated Docker containers with persistent caching and minimal resource footprints.
+### Downloads
 
-## Tech Stack
+- Download Spotify tracks
+- Download Spotify albums
+- Download Spotify playlists
+- Multi-worker concurrent downloads
+- Background download queue
+- Automatic retry support
+- Download staging pipeline
+- SpotDL integration
 
-* **Backend:** Python 3.12, FastAPI, SQLAlchemy, SpotDL
-* **Database:** SQLite (WAL mode for concurrency)
-* **Frontend:** HTML, CSS, Vanilla JavaScript (SSE)
-* **Infrastructure:** Docker, Docker Compose
+---
 
-## Deployment
+### Playlist Synchronization
 
-Harmony is designed to be "Docker-First." While it is highly optimized for **Synology NAS**, it will run seamlessly on any system that supports Docker (Windows, macOS, Linux).
+- Save Spotify playlists as Sync Sources
+- Detect newly added tracks
+- Download only missing songs
+- Ignore existing library content
+- Queue only new downloads
+- One-click playlist synchronization
 
-### 1. Preparing the Environment
+---
 
-Ensure your host machine has **Docker** and **Docker Compose** installed. Create a directory for your project and define the following local folder structure:
-* `database/` (for SQLite storage and SpotDL cache)
-* `logs/` (for application logs)
-* `music/` (for your library)
-* `downloads/` (for staging downloads)
+### Library Management
 
-### 2. Configuration
+- Automatic music organization
+- Album and Singles folder structure
+- Duplicate detection
+- Metadata import
+- Automatic library database updates
+- Safe staging before import
+- Library rescan
+- Batch deletion
 
-Create a `.env.local` file in your root folder with your environment variables (e.g., Spotify API keys).
+---
 
-*Note for Synology Users:* Use your specific `PUID` and `PGID` in `docker-compose.local.yml` to ensure correct file system permissions for your media shared folders.
+### Web Interface
 
-### 3. Deploying
+- Dashboard
+- Downloads
+- Sources
+- Library
+- Settings
+- Responsive mobile layout
+- Desktop layout
+- Light Mode
+- Dark Mode
+- Automatic OS Theme Support
 
-Navigate to your project directory and run the following command to spin up the container:
+---
+
+### Download Pipeline
+
+Harmony uses a safe multi-stage download pipeline.
+
+```
+Spotify
+      │
+      ▼
+Download Queue
+      │
+      ▼
+Download Workers
+      │
+      ▼
+Staging Folder
+      │
+      ▼
+Import Engine
+      │
+      ▼
+Music Library
+      │
+      ▼
+SQLite Database
+```
+
+Downloads are never written directly into the music library until they have been successfully imported and verified.
+
+---
+
+## Technology Stack
+
+### Backend
+
+- Python 3.12
+- FastAPI
+- SQLAlchemy
+- SpotDL
+
+### Frontend
+
+- HTML5
+- CSS3
+- Vanilla JavaScript
+
+### Database
+
+- SQLite
+
+### Deployment
+
+- Docker
+- Docker Compose
+- Synology NAS
+- Linux
+- macOS
+
+---
+
+## Installation
+
+Clone the repository.
 
 ```bash
-sudo docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+git clone https://github.com/azimul-kabir/harmony.git
+
+cd harmony
+```
+
+Create an environment file.
+
+```text
+.env.local
+```
+
+Configure your Spotify API credentials.
+
+```text
+SPOTIFY_CLIENT_ID=xxxxxxxxxxxxxxxx
+SPOTIFY_CLIENT_SECRET=xxxxxxxxxxxxxxxx
+```
+
+Build and start Harmony.
+
+```bash
+docker compose up -d --build
+```
+
+Open your browser.
+
+```
+http://localhost:8080
+```
+
+---
+
+## Roadmap
+
+Future releases will continue expanding Harmony with features including:
+
+- Enhanced Library browser
+- Advanced metadata editor
+- Search and filtering
+- Smart collections
+- Scheduled synchronization
+- Additional music source support
+- Improved real-time updates
+
+---
+
+## License
+
+MIT License
