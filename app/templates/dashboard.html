@@ -26,28 +26,32 @@
     </section>
 
     <!-- Middle Row: Active Tasks -->
-    <section class="panel">
-        <h3>Active Tasks</h3>
-        <div id="active-tasks" style="margin-top: 16px;">
+    <section class="panel" style="padding: 0; overflow: hidden;">
+        <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
+            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Active Tasks</h3>
+        </div>
+        <div id="active-tasks" style="padding: 24px;">
             <p class="empty-state">No active tasks.</p>
         </div>
     </section>
 
     <!-- Bottom Row: Split -->
     <div class="bottom-split">
-        <section class="panel" style="overflow: hidden;">
-            <h3>Recent Activity</h3>
-            <div id="recent-activity" class="activity-list">
+        <section class="panel" style="padding: 0; overflow: hidden;">
+            <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
+                <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Recent Activity</h3>
+            </div>
+            <div id="recent-activity" class="activity-list" style="padding: 24px;">
                 <p class="empty-state">No recent activity.</p>
             </div>
         </section>
         
         <section class="panel">
-            <h3>Quick Actions</h3>
+            <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: var(--text-main);">Quick Actions</h3>
             <div class="quick-actions-grid">
-                <button id="btn-sync-all" class="btn-primary" style="padding: 12px; font-size: 1rem; border: none; border-radius: 8px; background: #1565c0; color: white; cursor: pointer; font-weight: 600;">Sync All Sources</button>
-                <a href="/downloads" class="btn-secondary text-center" style="padding: 12px; font-size: 1rem; text-decoration: none; display: block;">+ Download Music</a>
-                <a href="/sources" class="btn-secondary text-center" style="padding: 12px; font-size: 1rem; text-decoration: none; display: block;">+ Add Source</a>
+                <button id="btn-sync-all" class="btn-primary" style="width: 100%;">↻ Sync All Sources</button>
+                <a href="/downloads" class="quick-action-btn">+ Download Music</a>
+                <a href="/sources" class="quick-action-btn">+ Add Automation Source</a>
             </div>
         </section>
     </div>
