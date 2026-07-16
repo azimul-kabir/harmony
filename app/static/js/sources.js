@@ -79,11 +79,11 @@ function renderSources(sources) {
         let actionsHtml = "";
         if (!isTaskActive) {
             actionsHtml = `
-                <button class="btn-primary-outline sync-btn" data-id="${source.id}">↻ Sync Now</button>
-                <button class="toggle-btn" data-id="${source.id}" data-enabled="${source.enabled}">
+                <button class="btn-secondary sync-btn" data-id="${source.id}" style="color: var(--primary); border-color: var(--primary); background: transparent;">↻ Sync</button>
+                <button class="btn-secondary toggle-btn" data-id="${source.id}" data-enabled="${source.enabled}">
                     ${source.enabled ? "Disable" : "Enable"}
                 </button>
-                <button class="delete-btn" data-id="${source.id}" style="color: #dc3545; margin-left: auto; border: none; background: transparent;">Delete</button>
+                <button class="btn-secondary delete-btn" data-id="${source.id}">Delete</button>
             `;
         }
 
