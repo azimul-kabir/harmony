@@ -68,17 +68,20 @@ class SpotDLClient:
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
             
+            # Explicitly define the filename template so SpotDL doesn't misinterpret the temp directory
+            output_template = f"{temp_path}/{{artist}} - {{title}}.{{output-ext}}"
+            
             result = self._run(
                 [
                     query,
                     "--audio",
                     *self._audio_providers(),
                     "--output",
-                    str(temp_path),
+                    output_template,
                     "--threads",
                     "1", 
                 ],
-                timeout=300  # 5 MINUTES: Standard timeout for a single track download
+                timeout=300
             )
             
             if result.returncode != 0:
@@ -91,9 +94,12 @@ class SpotDLClient:
             )
             
             if not files:
-                raise RuntimeError(
-                    "SpotDL did not produce any output file."
-                )
+                # Capture the actual SpotDL terminal output to expose the real reason it skipped the track
+                error_msg = result.stdout.strip() or result.stderr.strip() or "No matching audio found on YouTube/YT Music."
+                
+                # Clean up the output string if it's too long or contains formatting
+                error_msg = error_msg.split('\n')[-1] 
+                raise RuntimeError(f"SpotDL Skipped: {error_msg}")
                 
             downloaded_file = files[0]
             final_path = output_dir / downloaded_file.name
