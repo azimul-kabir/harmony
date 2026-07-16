@@ -30,13 +30,18 @@ def list_songs(db: Session = Depends(get_db)):
 @router.delete("/song/{song_id}")
 def delete_song(song_id: int, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
-    if song and os.path.exists(song.path):
-        try:
-            os.remove(song.path)
-        except OSError:
-            pass
+    if song:
+        # 1. Try to delete the physical file if it exists
+        if os.path.exists(song.path):
+            try:
+                os.remove(song.path)
+            except OSError:
+                pass
+        
+        # 2. Always delete the database record
         db.delete(song)
         db.commit()
+        
     return {"status": "success"}
 
 # --- Maintenance: Rescanning ---
