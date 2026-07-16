@@ -59,12 +59,12 @@ class SpotDLClient:
         track: Track,
         output_dir: Path,
     ) -> Path:
-        # Define the strict URL query first, and a loose text fallback second
+        # Define the queries as tuples: (query_string, use_loose_matching_flag)
         queries_to_try = []
         if track.spotify_url:
-            queries_to_try.append(track.spotify_url)
+            queries_to_try.append((track.spotify_url, False))
             
-        queries_to_try.append(f"{track.artist} - {track.title} audio")
+        queries_to_try.append((f"{track.artist} - {track.title} audio", True))
         
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
@@ -73,20 +73,23 @@ class SpotDLClient:
             last_error = None
             
             # Loop through our query attempts
-            for query in queries_to_try:
+            for query, loose_match in queries_to_try:
                 try:
-                    result = self._run(
-                        [
-                            query,
-                            "--audio",
-                            *self._audio_providers(),
-                            "--output",
-                            output_template,
-                            "--threads",
-                            "1", 
-                        ],
-                        timeout=300
-                    )
+                    command_args = [
+                        query,
+                        "--audio",
+                        *self._audio_providers(),
+                        "--output",
+                        output_template,
+                        "--threads",
+                        "1", 
+                    ]
+                    
+                    # Inject the override flag for the fallback attempt
+                    if loose_match:
+                        command_args.append("--dont-filter-results")
+                        
+                    result = self._run(command_args, timeout=300)
                     
                     if result.returncode != 0:
                         raise RuntimeError(result.stderr)
@@ -114,11 +117,10 @@ class SpotDLClient:
                     
                 except RuntimeError as e:
                     last_error = e
-                    # If SpotDL threw a LookupError, silently catch it and let the loop try the loose text search
+                    # Silently catch the LookupError and proceed to the next fallback attempt
                     if "LookupError" in str(e):
                         continue
                     else:
-                        # If it's a completely different error, fail immediately
                         raise e
                         
             # If all fallback attempts fail, raise the final error to the UI
