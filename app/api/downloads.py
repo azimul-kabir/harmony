@@ -1,86 +1,98 @@
-from fastapi import APIRouter
-from sqlalchemy import select
+import asyncio
+import json
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select, delete
+from sqlalchemy.orm import Session
 
 from app.api.schemas.download import DownloadRequest
 from app.database.models import DownloadJob
-from app.database.session import SessionLocal
+from app.database.session import get_db, SessionLocal
+from app.exceptions.download import TrackAlreadyExistsError
 from app.services.download_queue import (
     enqueue_album,
-    enqueue_playlist,
     enqueue_track,
 )
-from app.services.spotify.metadata import (
-    resolve_track,
-)
+from app.services.playlist_download import download_playlist
+from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
+from app.domain.download import JobStatus
 
 router = APIRouter(
     prefix="/api/downloads",
     tags=["downloads"],
 )
 
-
 @router.post("", status_code=201)
-def queue_download(request: DownloadRequest):
-    db = SessionLocal()
+def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
+    resource, _ = spotify_resource(request.url)
 
-    try:
-        resource, _ = spotify_resource(request.url)
+    if resource == "track":
+        track = resolve_track(request.url)
+        try:
+            result = enqueue_track(db=db, track=track)
+            return {"status": result.status.value, "job_id": result.job_id}
+        except TrackAlreadyExistsError:
+            return {"status": "owned"}
 
-        if resource == "track":
-            track = resolve_track(request.url)
+    if resource == "album":
+        enqueue_album(db=db, spotify_url=request.url)
+        return {"status": "queued"}
 
-            enqueue_track(
-                db=db,
-                track=track,
-            )
+    if resource == "playlist":
+        summary = download_playlist(db=db, url=request.url)
+        return {"status": "queued", "summary": summary}
 
-        elif resource == "album":
-            enqueue_album(
-                db=db,
-                spotify_url=request.url,
-            )
+    raise ValueError("Unsupported Spotify URL.")
 
-        elif resource == "playlist":
-            enqueue_playlist(
-                db=db,
-                spotify_url=request.url,
-            )
-
-        else:
-            raise ValueError("Unsupported Spotify URL.")
-
-        return {
-            "status": "queued",
-        }
-
-    finally:
-        db.close()
-
-
-@router.get("")
-def list_downloads():
-    db = SessionLocal()
-
-    try:
-        jobs = (
-            db.execute(select(DownloadJob).order_by(DownloadJob.id.desc()))
-            .scalars()
-            .all()
+@router.post("/clear", status_code=200)
+def clear_history(db: Session = Depends(get_db)):
+    """Deletes all completed, skipped, and failed jobs to keep the UI clean."""
+    db.execute(
+        delete(DownloadJob).where(
+            DownloadJob.status.in_([
+                JobStatus.COMPLETED.value, 
+                JobStatus.FAILED.value, 
+                JobStatus.SKIPPED.value
+            ])
         )
+    )
+    db.commit()
+    return {"status": "success"}
 
-        return [
-            {
-                "id": job.id,
-                "status": job.status,
-                "title": job.title,
-                "artist": job.artist,
-                "spotify_url": job.spotify_url,
-                "output_file": job.output_file,
-                "error": job.error,
-            }
-            for job in jobs
-        ]
+@router.get("/stream")
+async def stream_downloads_data(request: Request):
+    """Server-Sent Events endpoint for real-time download history updates."""
+    async def event_generator():
+        while True:
+            if await request.is_disconnected():
+                break
+            
+            db = SessionLocal()
+            try:
+                # Limit to the 100 most recent jobs to prevent memory/DOM overflow
+                jobs = db.execute(
+                    select(DownloadJob)
+                    .order_by(DownloadJob.id.desc())
+                    .limit(100)
+                ).scalars().all()
+                
+                payload = [
+                    {
+                        "id": job.id,
+                        "status": job.status,
+                        "title": job.title,
+                        "artist": job.artist,
+                        "album": job.album,
+                        "spotify_url": job.spotify_url
+                    }
+                    for job in jobs
+                ]
+                
+                yield f"data: {json.dumps(payload)}\n\n"
+            finally:
+                db.close()
+            
+            await asyncio.sleep(2)
 
-    finally:
-        db.close()
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

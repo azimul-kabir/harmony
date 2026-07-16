@@ -1,7 +1,24 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
+
+from app.domain.task import (
+    TaskStatus,
+    TaskType,
+)
 
 from app.database.base import Base
 from app.domain.download import JobStatus
@@ -100,12 +117,109 @@ class Song(Base):
     )
 
 
+class Task(Base):
+    __tablename__ = "tasks"
+
+    source: Mapped["SyncSource | None"] = relationship(
+        back_populates="tasks",
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    spotify_url: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sync_sources.id"),
+        nullable=True,
+        index=True,
+    )
+
+    task_type: Mapped[str] = mapped_column(
+        String,
+        default=TaskType.TRACK_DOWNLOAD.value,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String,
+        default=TaskStatus.QUEUED.value,
+        nullable=False,
+    )
+
+    total_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    completed_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    skipped_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    failed_items: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    current_item: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    jobs = relationship(
+        "DownloadJob",
+        back_populates="task",
+    )
+
+
 class DownloadJob(Base):
     __tablename__ = "download_jobs"
 
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
+    )
+
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id"),
+        nullable=True,
+        index=True,
+    )
+
+    task = relationship(
+        "Task",
+        back_populates="jobs",
     )
 
     spotify_url: Mapped[str] = mapped_column(
@@ -198,4 +312,56 @@ class DownloadJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime,
         nullable=True,
+    )
+
+
+class SyncSource(Base):
+    __tablename__ = "sync_sources"
+
+    tasks: Mapped[list["Task"]] = relationship(
+        back_populates="source",
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    type: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    spotify_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    spotify_url: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
     )

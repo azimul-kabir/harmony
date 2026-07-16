@@ -1,24 +1,32 @@
 import threading
-
+from app.api.tasks import router as tasks_router
+from app.api.dashboard import router as dashboard_router
 from contextlib import asynccontextmanager
-
-from app.workers.download_worker import worker_loop
-
 from pathlib import Path
-
-from app.api import downloads
+from app.web.sources import router as sources_page_router
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.templating import Jinja2Templates
 
+from app.web.templates import (
+    templates,
+    template_context,
+)
+
+from app.api import downloads, library
+from app.api.library import router as library_router
+from app.web.library import router as library_page_router
 from app.api.playlist import router as playlist_router
-
+from app.api.sync_sources import router as sync_sources_router
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
-
-from app.api.library import router as library_router
+from app.workers.download_worker import worker_loop
+from fastapi.staticfiles import StaticFiles
+from app.database.session import SessionLocal
+from app.services.dashboard import get_dashboard_stats
+from app.web.downloads import router as downloads_page_router
+from app.api.settings import router as settings_router
 
 settings = get_settings()
 
@@ -31,11 +39,19 @@ async def lifespan(app: FastAPI):
 
     init_db()
 
-    thread = threading.Thread(
-        target=worker_loop,
-        daemon=True,
+    logger.info("Starting Harmony...")
+
+    logger.info(
+        "Starting {} download workers...",
+        settings.max_parallel_downloads,
     )
-    thread.start()
+
+    for i in range(settings.max_parallel_downloads):
+        threading.Thread(
+            target=worker_loop,
+            daemon=True,
+            name=f"download-worker-{i + 1}",
+        ).start()
 
     logger.info("Harmony started")
 
@@ -50,27 +66,44 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+app.mount(
+    "/static",
+    StaticFiles(directory="app/static"),
+    name="static",
+)
+
+
+app.include_router(tasks_router)
+app.include_router(dashboard_router)
+app.include_router(settings_router)
+app.include_router(downloads_page_router)
 app.include_router(library_router)
-
+app.include_router(library_page_router)
 app.include_router(downloads.router)
-
+app.include_router(sources_page_router)
 app.include_router(playlist_router)
-
-templates = Jinja2Templates(directory="app/templates")
+app.include_router(sync_sources_router)
 
 
 @app.get("/")
 def home(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "app_name": settings.app_name,
-            "version": settings.app_version,
-            "music_path": settings.music_path,
-            "download_path": settings.download_path,
-        },
-    )
+    db = SessionLocal()
+
+    try:
+        stats = get_dashboard_stats(db)
+
+        return templates.TemplateResponse(
+            "dashboard.html",
+            template_context(
+                request=request,
+                stats=stats,
+                page="dashboard",
+            ),
+        )
+
+    finally:
+        db.close()
 
 
 @app.get("/health")

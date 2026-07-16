@@ -15,10 +15,29 @@ class UpsertStatus(str, Enum):
 def find_song(
     db: Session,
     *,
-    title: str,
-    artist: str,
+    title: str | None = None,
+    artist: str | None = None,
     album: str | None = None,
+    spotify_track_id: str | None = None,
+    isrc: str | None = None,
 ) -> Song | None:
+    if spotify_track_id:
+        song = db.scalar(
+            select(Song).where(Song.spotify_track_id == spotify_track_id)
+        )
+
+        if song is not None:
+            return song
+
+    if isrc:
+        song = db.scalar(select(Song).where(Song.isrc == isrc))
+
+        if song is not None:
+            return song
+
+    if not title or not artist:
+        return None
+
     return db.scalar(
         select(Song).where(
             func.lower(Song.title) == title.lower(),

@@ -7,6 +7,8 @@ from app.domain.track import Track
 class JobStatus(Enum):
     QUEUED = "queued"
     RUNNING = "running"
+    PAUSED = "paused"       # New state
+    CANCELLED = "cancelled" # New state
     COMPLETED = "completed"
     SKIPPED = "skipped"
     FAILED = "failed"

@@ -1,19 +1,22 @@
 from app.domain.track import Track
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text, or_
 from sqlalchemy.orm import Session
 
-from app.database.models import DownloadJob
+from app.database.models import DownloadJob, Task
 from app.domain.download import JobStatus
+from app.domain.task import TaskStatus
 
 
 def create_job(
     db: Session,
     track: Track,
+    task_id: int | None = None,
 ) -> DownloadJob:
     job = DownloadJob(
+        task_id=task_id,
         spotify_url=track.spotify_url,
         spotify_track_id=track.spotify_track_id,
         spotify_album_id=track.spotify_album_id,
@@ -72,14 +75,44 @@ def find_active_job_by_spotify_url(
     )
 
 
-def next_job(
+def claim_next_job(
     db: Session,
 ) -> DownloadJob | None:
-    return db.scalar(
-        select(DownloadJob)
-        .where(DownloadJob.status == JobStatus.QUEUED.value)
-        .order_by(DownloadJob.created_at)
-    )
+    # Acquire the SQLite write lock immediately.
+    db.execute(text("BEGIN IMMEDIATE"))
+
+    try:
+        # Check if the job's parent task is not active (paused or cancelled)
+        # If the job has no parent task (a standalone single track download), allow it.
+        job = db.scalar(
+            select(DownloadJob)
+            .outerjoin(Task, DownloadJob.task_id == Task.id)
+            .where(
+                DownloadJob.status == JobStatus.QUEUED.value,
+                or_(
+                    Task.id == None,
+                    ~Task.status.in_((TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value))
+                )
+            )
+            .order_by(DownloadJob.created_at)
+            .limit(1)
+        )
+
+        if job is None:
+            db.commit()
+            return None
+
+        job.status = JobStatus.RUNNING.value
+        job.started_at = datetime.now(UTC)
+
+        db.commit()
+        db.refresh(job)
+
+        return job
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def update_status(
@@ -90,14 +123,15 @@ def update_status(
     job.status = status.value
 
     if status == JobStatus.RUNNING:
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(UTC)
 
     elif status in (
         JobStatus.COMPLETED,
         JobStatus.SKIPPED,
         JobStatus.FAILED,
+        JobStatus.CANCELLED, # Tracks completion time when manually aborted
     ):
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC)
 
     db.commit()
     db.refresh(job)

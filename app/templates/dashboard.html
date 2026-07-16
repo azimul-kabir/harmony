@@ -1,0 +1,59 @@
+{% extends "base.html" %} 
+{% block title %}Dashboard{% endblock %} 
+
+{% block content %} 
+<h1>Dashboard</h1> 
+
+<div class="dashboard-grid">
+    <!-- Top Row: Overview Cards -->
+    <section class="overview-cards">
+        <div class="dashboard-card">
+            <h3>Songs</h3>
+            <p id="card-songs">{{ stats.songs }}</p>
+        </div>
+        <div class="dashboard-card">
+            <h3>Total Downloads</h3>
+            <p id="card-downloads">{{ stats.downloads }}</p>
+        </div>
+        <div class="dashboard-card">
+            <h3>Sources</h3>
+            <p id="card-sources">{{ stats.sources }}</p>
+        </div>
+        <div class="dashboard-card">
+            <h3>Failed Jobs</h3>
+            <p id="card-failed">{{ stats.failed }}</p>
+        </div>
+    </section>
+
+    <!-- Middle Row: Active Tasks -->
+    <section class="panel">
+        <h3>Active Tasks</h3>
+        <div id="active-tasks" style="margin-top: 16px;">
+            <p class="empty-state">No active tasks.</p>
+        </div>
+    </section>
+
+    <!-- Bottom Row: Split -->
+    <div class="bottom-split">
+        <section class="panel" style="overflow: hidden;">
+            <h3>Recent Activity</h3>
+            <div id="recent-activity" class="activity-list">
+                <p class="empty-state">No recent activity.</p>
+            </div>
+        </section>
+        
+        <section class="panel">
+            <h3>Quick Actions</h3>
+            <div class="quick-actions-grid">
+                <button id="btn-sync-all" class="btn-primary" style="padding: 12px; font-size: 1rem; border: none; border-radius: 8px; background: #1565c0; color: white; cursor: pointer; font-weight: 600;">Sync All Sources</button>
+                <a href="/downloads" class="btn-secondary text-center" style="padding: 12px; font-size: 1rem; text-decoration: none; display: block;">+ Download Music</a>
+                <a href="/sources" class="btn-secondary text-center" style="padding: 12px; font-size: 1rem; text-decoration: none; display: block;">+ Add Source</a>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %} 
+
+{% block scripts %} 
+<script src="/static/js/dashboard.js"></script> 
+{% endblock %}

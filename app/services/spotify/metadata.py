@@ -2,6 +2,9 @@ from urllib.parse import urlparse
 
 from app.domain.track import Track
 from app.services.spotify.client import get_client
+from app.domain.playlist import Playlist
+from spotipy.exceptions import SpotifyException
+from app.core.logging import logger
 
 
 def resolve_track(spotify_url: str) -> Track:
@@ -21,37 +24,7 @@ def resolve_track(spotify_url: str) -> Track:
     if data is None:
         raise RuntimeError(f"Spotify returned no metadata for {spotify_url}")
 
-    album = data.get("album")
-
-    if album is None:
-        raise RuntimeError(f"Spotify returned incomplete metadata for {spotify_url}")
-
-    artists = [artist["name"] for artist in (data.get("artists") or [])]
-
-    album_artists = [artist["name"] for artist in (album.get("artists") or [])]
-
-    images = album.get("images") or []
-
-    release_date = album.get("release_date")
-
-    year = int(release_date[:4]) if release_date else None
-
-    return Track(
-        title=data.get("name"),
-        artist=", ".join(artists),
-        artists=artists,
-        album=album.get("name"),
-        album_artist=", ".join(album_artists),
-        track=data.get("track_number"),
-        disc=data.get("disc_number"),
-        year=year,
-        duration=data.get("duration_ms"),
-        spotify_track_id=data.get("id"),
-        spotify_album_id=album.get("id"),
-        spotify_url=spotify_url,
-        isrc=(data.get("external_ids") or {}).get("isrc"),
-        cover_url=images[0]["url"] if images else None,
-    )
+    return _track_from_spotify(data, fallback_url=spotify_url)
 
 
 def resolve_album(
@@ -109,7 +82,6 @@ def resolve_album(
                 spotify_track_id=item.get("id"),
                 spotify_album_id=album.get("id"),
                 spotify_url=external_urls.get("spotify"),
-                # Album endpoint doesn't provide ISRC.
                 isrc=None,
                 cover_url=images[0]["url"] if images else None,
             )
@@ -120,68 +92,104 @@ def resolve_album(
 
 def resolve_playlist(
     spotify_url: str,
-) -> list[Track]:
+) -> Playlist:
     """
-    Resolve a Spotify playlist URL into a list of Harmony Track objects.
+    Resolve a Spotify playlist URL into a Playlist object.
+    Supports continuous paging to retrieve massive/editorial playlists fully.
     """
-
-    spotify = get_client()
-
+    # ---> THIS IS THE MISSING LINE <---
+    spotify = get_client() 
+    
     playlist_id = _extract_id(
         spotify_url,
         "playlist",
     )
+    
+    # --- GRACEFUL ERROR HANDLING BLOCK ---
+    try:
+        # Fetch the high-level playlist information first
+        playlist_info = spotify.playlist(playlist_id, fields="name")
+    except SpotifyException as e:
+        if e.http_status == 404:
+            logger.warning(f"Playlist {playlist_id} not found via Official API (Likely Editorial/Private).")
+            raise RuntimeError(f"Playlist 404 - {e.msg}") from e
+        raise e # Re-raise if it's a different error like 401 Unauthorized
+    # -------------------------------------
 
-    playlist = spotify.playlist(playlist_id)
-
-    if playlist is None:
-        raise RuntimeError(f"Spotify returned no metadata for {spotify_url}")
-
-    tracks: list[Track] = []
-
-    for item in playlist.get("tracks", {}).get("items", []):
-        data = item.get("track")
-
-        if data is None:
-            continue
-
-        album = data.get("album")
-
-        if album is None:
-            continue
-
-        artists = [artist["name"] for artist in (data.get("artists") or [])]
-
-        album_artists = [artist["name"] for artist in (album.get("artists") or [])]
-
-        images = album.get("images") or []
-
-        release_date = album.get("release_date")
-
-        year = int(release_date[:4]) if release_date else None
-
-        external_urls = data.get("external_urls") or {}
-
-        tracks.append(
-            Track(
-                title=data.get("name"),
-                artist=", ".join(artists),
-                artists=artists,
-                album=album.get("name"),
-                album_artist=", ".join(album_artists),
-                track=data.get("track_number"),
-                disc=data.get("disc_number"),
-                year=year,
-                duration=data.get("duration_ms"),
-                spotify_track_id=data.get("id"),
-                spotify_album_id=album.get("id"),
-                spotify_url=external_urls.get("spotify"),
-                isrc=(data.get("external_ids") or {}).get("isrc"),
-                cover_url=images[0]["url"] if images else None,
-            )
+    if playlist_info is None:
+        raise RuntimeError(
+            f"Spotify returned no metadata for {spotify_url}"
         )
 
-    return tracks
+    tracks: list[Track] = []
+    
+    # Use playlist_items to page through all tracks (100 at a time)
+    results = spotify.playlist_items(playlist_id)
+        
+    while results:
+        for item in results.get("items", []):
+            track_data = item.get("track")
+            # Skip missing tracks or local files uploaded by users
+            if track_data is None or track_data.get("is_local"):
+                continue
+            try:
+                tracks.append(
+                    _track_from_spotify(track_data)
+                )
+            except Exception as ex:
+                logger.warning(f"Track parse failed: {ex}")
+                
+        # Check if there is a next page of tracks, otherwise break loop
+        if results.get("next"):
+            results = spotify.next(results)
+        else:
+            results = None
+
+    return Playlist(
+        name=playlist_info.get("name", "Unknown Playlist"),
+        url=spotify_url,
+        tracks=tracks,
+    )
+
+
+def _track_from_spotify(
+    data: dict,
+    *,
+    fallback_url: str | None = None,
+) -> Track:
+    album = data.get("album")
+
+    if album is None:
+        raise RuntimeError("Spotify returned incomplete track metadata.")
+
+    artists = [artist["name"] for artist in (data.get("artists") or [])]
+
+    album_artists = [artist["name"] for artist in (album.get("artists") or [])]
+
+    images = album.get("images") or []
+
+    release_date = album.get("release_date")
+
+    year = int(release_date[:4]) if release_date else None
+
+    external_urls = data.get("external_urls") or {}
+
+    return Track(
+        title=data.get("name"),
+        artist=", ".join(artists),
+        artists=artists,
+        album=album.get("name"),
+        album_artist=", ".join(album_artists),
+        track=data.get("track_number"),
+        disc=data.get("disc_number"),
+        year=year,
+        duration=data.get("duration_ms"),
+        spotify_track_id=data.get("id"),
+        spotify_album_id=album.get("id"),
+        spotify_url=external_urls.get("spotify") or fallback_url,
+        isrc=(data.get("external_ids") or {}).get("isrc"),
+        cover_url=images[0]["url"] if images else None,
+    )
 
 
 def _extract_id(

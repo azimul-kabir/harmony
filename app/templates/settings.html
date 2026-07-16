@@ -1,0 +1,125 @@
+{% extends "base.html" %} 
+{% block title %}Settings{% endblock %} 
+
+{% block content %} 
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <h1 style="margin: 0;">Settings</h1>
+    <span class="badge badge-running" style="font-size: 0.9rem; padding: 6px 12px;">Read-Only (Configured via .env)</span>
+</div>
+
+<div class="sources-grid" style="grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));">
+    
+    <!-- General & Paths -->
+    <div class="panel" style="padding: 0; overflow: hidden;">
+        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">📁 Storage Paths</h3>
+        </div>
+        <table class="table command-table" style="margin: 0; box-shadow: none;">
+            <tbody>
+                <tr>
+                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Library Path</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.music_path }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Download Path</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.download_path }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Staging Path</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.staging_path }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Failed Path</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.failed_path }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Download Engine -->
+    <div class="panel" style="padding: 0; overflow: hidden;">
+        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">⚡ Download Engine</h3>
+        </div>
+        <table class="table command-table" style="margin: 0; box-shadow: none;">
+            <tbody>
+                <tr>
+                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Max Workers</td>
+                    <td style="color: #555;">{{ settings.max_parallel_downloads }} concurrent threads</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Audio Providers</td>
+                    <td style="color: #555;">{{ settings.audio_providers }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">SpotDL Path</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.spotdl_path }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Spotify API -->
+    <div class="panel" style="padding: 0; overflow: hidden;">
+        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">🎧 Spotify Metadata</h3>
+        </div>
+        <table class="table command-table" style="margin: 0; box-shadow: none;">
+            <tbody>
+                <tr>
+                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Client ID</td>
+                    <td>
+                        {% if settings.spotify_client_id %}
+                            <span class="badge badge-completed">Configured</span>
+                        {% else %}
+                            <span class="badge badge-failed">Missing</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Client Secret</td>
+                    <td>
+                        {% if settings.spotify_client_secret %}
+                            <span class="badge badge-completed">Configured</span>
+                        {% else %}
+                            <span class="badge badge-failed">Missing</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Official API</td>
+                    <td style="color: #555;">{{ "Enabled" if settings.use_official_spotify_api else "Disabled (Fallback Mode)" }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- System Info -->
+    <div class="panel" style="padding: 0; overflow: hidden;">
+        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">⚙️ System Information</h3>
+        </div>
+        <table class="table command-table" style="margin: 0; box-shadow: none;">
+            <tbody>
+                <tr>
+                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Harmony Version</td>
+                    <td style="color: #555;">v{{ settings.app_version }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Log Level</td>
+                    <td><span class="badge badge-queued">{{ settings.log_level }}</span></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Database URL</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.database_url }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; padding-left: 24px;">Internal Host</td>
+                    <td style="color: #555; font-family: monospace;">{{ settings.host }}:{{ settings.port }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}
