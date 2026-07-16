@@ -1,41 +1,58 @@
-{% extends "base.html" %}
+{% extends "base.html" %} 
+{% block title %}Library Manager{% endblock %} 
 
-{% block title %}Library Manager{% endblock %}
+{% block content %} 
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <h1 style="margin: 0;">Local Library</h1>
+    <button id="btn-rescan" class="btn-secondary" style="padding: 10px 16px; font-weight: 600; background: white;">
+        ↻ Rescan Library
+    </button>
+</div>
 
-{% block content %}
-<h1>Library Manager</h1>
-
-<div class="panel">
-    <div class="filters-bar" style="margin-bottom: 20px;">
-        <input type="text" id="library-search" class="search-input" placeholder="Search by title, artist, or album..." style="width: 300px;">
+<div class="panel" style="padding: 0;">
+    <div class="filters-bar" style="padding: 20px 24px; border-bottom: 1px solid #eee; margin-bottom: 0;">
+        <input 
+            type="text" 
+            id="library-search" 
+            class="search-input" 
+            placeholder="Search by title, artist, or album..." 
+            style="width: 350px;"
+            autocomplete="off"
+        >
         <button id="delete-selected" class="btn-danger" disabled>Delete Selected</button>
     </div>
-
+    
     <div style="overflow-x: auto;">
-        <table class="table">
+        <table class="table command-table" style="border-radius: 0; box-shadow: none; margin: 0;">
             <thead>
                 <tr>
-                    <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
+                    <th style="width: 40px; padding-left: 24px;">
+                        <input type="checkbox" id="select-all" style="cursor: pointer;">
+                    </th>
                     <th>Title</th>
                     <th>Artist</th>
                     <th>Album</th>
                 </tr>
             </thead>
             <tbody id="library-body">
-                <tr><td colspan="4" style="text-align:center; padding: 20px;">Loading library...</td></tr>
+                <tr>
+                    <td colspan="4" class="text-center empty-state" style="padding: 40px;">
+                        <span class="spinner" style="border-top-color:#1565c0;"></span> Loading library...
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
 
     <!-- Pagination Controls -->
-    <div class="pagination-controls">
+    <div class="pagination-controls" style="border-radius: 0 0 16px 16px; background: #fdfdfd; margin-top: 0; padding: 16px 24px;">
         <button id="btn-prev" class="btn-secondary" disabled>Previous</button>
         <span id="page-info" style="font-weight: 600; color: #555;">Page 1</span>
         <button id="btn-next" class="btn-secondary" disabled>Next</button>
     </div>
 </div>
-{% endblock %}
+{% endblock %} 
 
-{% block scripts %}
-<script src="/static/js/library.js"></script>
+{% block scripts %} 
+<script src="/static/js/library.js"></script> 
 {% endblock %}
