@@ -1,88 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
     <meta charset="UTF-8">
-
-    <title>
-        {% block title %}Harmony{% endblock %}
-    </title>
-
-    <link
-        rel="stylesheet"
-        href="/static/css/app.css"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{% block title %}Harmony{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/app.css">
 </head>
-
 <body>
-
 <div class="layout">
-
     <aside class="sidebar">
-
         <h1>Harmony</h1>
-
         <nav>
-
-            <a
-                href="/"
-                class="{% if page == 'dashboard' %}active{% endif %}"
-            >
-                Dashboard
+            <a href="/" class="{% if page == 'dashboard' %}active{% endif %}">
+                <span class="nav-icon">🏠</span> <span class="nav-text">Dashboard</span>
             </a>
-
-            <a
-                href="/downloads"
-                class="{% if page == 'downloads' %}active{% endif %}"
-            >
-                Downloads
+            <a href="/downloads" class="{% if page == 'downloads' %}active{% endif %}">
+                <span class="nav-icon">⬇️</span> <span class="nav-text">Downloads</span>
             </a>
-
-            <a
-                href="/sources"
-                class="{% if page == 'sources' %}active{% endif %}"
-            >
-                Sources
+            <a href="/sources" class="{% if page == 'sources' %}active{% endif %}">
+                <span class="nav-icon">🔄</span> <span class="nav-text">Sources</span>
             </a>
-            
-            <a
-                href="/library"
-                class="{% if page == 'library' %}active{% endif %}"
-            >
-                Library
+            <a href="/library" class="{% if page == 'library' %}active{% endif %}">
+                <span class="nav-icon">🎵</span> <span class="nav-text">Library</span>
             </a>
-
-            <a
-                href="/settings"
-                class="{% if page == 'settings' %}active{% endif %}"
-            >
-                Settings
+            <a href="/settings" class="{% if page == 'settings' %}active{% endif %}">
+                <span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span>
             </a>
-
         </nav>
-
         <div class="sidebar-footer">
             <div class="footer-title">{{ app_name }}</div>
             <div class="footer-author">by AziM</div>
             <div class="footer-version">v{{ version }}</div>
         </div>
-
     </aside>
-
     <main class="content">
-
         {% block content %}
         {% endblock %}
-
     </main>
-
 </div>
-
-<script src="/static/js/downloads.js"></script>
 <script src="/static/js/app.js"></script>
-
 {% block scripts %}{% endblock %}
-
 </body>
 </html>
