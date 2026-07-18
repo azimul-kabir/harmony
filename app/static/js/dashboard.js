@@ -29,6 +29,58 @@ function renderStats(stats) {
     document.getElementById("card-failed").textContent = stats.failed;
 }
 
+function renderWorkers(workers, maxWorkers) {
+    const container = document.getElementById("workers-grid");
+    const badge = document.getElementById("worker-count-badge");
+    if (!container) return;
+
+    badge.textContent = `${workers.length} / ${maxWorkers} Active`;
+    
+    if (workers.length > 0) {
+        badge.classList.remove("badge-queued");
+        badge.classList.add("badge-running");
+    } else {
+        badge.classList.remove("badge-running");
+        badge.classList.add("badge-queued");
+    }
+
+    let html = "";
+    // Build a visual card for every allowed worker thread
+    for (let i = 0; i < maxWorkers; i++) {
+        if (i < workers.length) {
+            // Worker is actively downloading
+            const worker = workers[i];
+            html += `
+                <div class="worker-card">
+                    <div class="worker-header">
+                        <span>Thread ${i + 1}</span>
+                        <span class="worker-status active"><span class="spinner" style="width:10px;height:10px;border-width:2px;margin:0;"></span></span>
+                    </div>
+                    <div class="worker-track" title="${worker.title ?? "Unknown"}">${worker.title ?? "Unknown Title"}</div>
+                    <div class="worker-artist" title="${worker.artist ?? "Unknown"}">${worker.artist ?? "Unknown Artist"}</div>
+                    <div class="task-progress-bar" style="margin-top:4px;">
+                        <div class="task-progress-fill worker-pulse"></div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Worker is idle and waiting for a job
+            html += `
+                <div class="worker-card idle">
+                    <div class="worker-header">
+                        <span>Thread ${i + 1}</span>
+                        <span class="worker-status">Waiting</span>
+                    </div>
+                    <div class="worker-track" style="color: var(--text-muted);">Idle</div>
+                    <div class="worker-artist">-</div>
+                </div>
+            `;
+        }
+    }
+    
+    container.innerHTML = html;
+}
+
 function renderActivity(jobs) {
     const container = document.getElementById("recent-activity");
     if (!container) return;
@@ -106,7 +158,7 @@ function renderTasks(tasks) {
                 setTimeout(() => {
                     el.remove();
                     if (container.children.length === 0) {
-                        container.innerHTML = "<p class='empty-state'>No active tasks.</p>";
+                        container.innerHTML = "<p class='empty-state'>No active queue tasks.</p>";
                     }
                 }, 3000);
             }
@@ -115,7 +167,7 @@ function renderTasks(tasks) {
 
     if (!tasks || tasks.length === 0) {
         if (container.children.length === 0) {
-            container.innerHTML = "<p class='empty-state'>No active tasks.</p>";
+            container.innerHTML = "<p class='empty-state'>No active queue tasks.</p>";
         }
         return;
     }
@@ -148,11 +200,11 @@ function renderTasks(tasks) {
             const currentEl = el.querySelector(".task-current");
             if (task.current) {
                 if (currentEl) {
-                    currentEl.textContent = `Now downloading: ${task.current}`;
+                    currentEl.textContent = `Processing: ${task.current}`;
                 } else {
                     const newCurrent = document.createElement("div");
                     newCurrent.className = "task-current";
-                    newCurrent.textContent = `Now downloading: ${task.current}`;
+                    newCurrent.textContent = `Processing: ${task.current}`;
                     newCurrent.style = "font-size:0.85rem; color:var(--text-muted); margin-top:8px;";
                     el.insertBefore(newCurrent, el.querySelector(".task-controls"));
                 }
@@ -175,7 +227,7 @@ function renderTasks(tasks) {
                     </div>
                 </div>
                 <div class="task-progress" style="font-size:0.85rem; color:var(--text-muted); margin-top:4px; text-align:right;">${finished} / ${task.total}</div>
-                ${task.current ? `<div class="task-current" style="font-size:0.85rem; color:var(--text-muted); margin-top:8px;">Now downloading: ${task.current}</div>` : ""}
+                ${task.current ? `<div class="task-current" style="font-size:0.85rem; color:var(--text-muted); margin-top:8px;">Processing: ${task.current}</div>` : ""}
                 <div class="task-controls" style="margin-top: 16px; display: flex; gap: 8px;">${actionButtons}</div>
             `;
             container.appendChild(wrapper);
@@ -189,6 +241,7 @@ function connectSSE() {
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
         renderStats(data.stats);
+        renderWorkers(data.workers || [], data.max_workers || 4); // NEW: Render workers
         renderActivity(data.activity);
         renderTasks(data.tasks);
     };
