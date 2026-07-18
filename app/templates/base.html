@@ -43,9 +43,9 @@
         {% block content %}
         {% endblock %}
     </main>
-</div> <!-- End of layout wrapper -->
+</div> <!-- End of Layout Wrapper -->
 
-<!-- Global Mini Player (Moved completely outside the layout and content divs) -->
+<!-- Global Elements explicitly moved OUTSIDE the layout to fix fixed-position bugs -->
 <div id="global-mini-player" class="mini-player hidden">
     <div class="mini-player-header">
         <span id="mp-status">Downloading...</span>
@@ -57,12 +57,10 @@
     </div>
 </div>
 
-<!-- Global Floating Action Button (Moved outside) -->
 <button id="global-fab" class="fab-btn" title="Quick Download">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 </button>
 
-<!-- Global Download Modal (Moved outside) -->
 <div id="download-modal" class="modal-overlay hidden">
     <div class="modal-content">
         <div class="modal-header">
