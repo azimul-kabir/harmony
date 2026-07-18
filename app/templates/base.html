@@ -41,6 +41,18 @@
     <main class="content">
         {% block content %}
         {% endblock %}
+        
+        <!-- Global Mini Player -->
+        <div id="global-mini-player" class="mini-player hidden">
+            <div class="mini-player-header">
+                <span id="mp-status">Downloading...</span>
+                <span id="mp-count" style="color: var(--text-muted);">0 / 0</span>
+            </div>
+            <div class="mini-player-title" id="mp-title">Waiting...</div>
+            <div class="task-progress-bar" style="margin-top: 4px; height: 4px;">
+                <div id="mp-progress" class="task-progress-fill" style="width: 0%;"></div>
+            </div>
+        </div>
     </main>
 </div>
 <script src="/static/js/app.js"></script>
