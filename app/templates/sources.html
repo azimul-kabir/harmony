@@ -25,8 +25,29 @@
 </div>
 
 <div id="sources" class="sources-grid">
-    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
-        <span class="spinner"></span> Loading sources...
+    <!-- Skeleton Loading State -->
+    <div class="skeleton-card">
+        <div style="display: flex; justify-content: space-between;">
+            <div class="skeleton skeleton-text title"></div>
+            <div class="skeleton skeleton-text" style="width: 60px; height: 24px; border-radius: 999px;"></div>
+        </div>
+        <div class="skeleton skeleton-text" style="height: 60px; border-radius: 8px;"></div>
+        <div style="display: flex; gap: 8px; margin-top: auto;">
+            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
+            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
+        </div>
+    </div>
+    
+    <div class="skeleton-card">
+        <div style="display: flex; justify-content: space-between;">
+            <div class="skeleton skeleton-text title" style="width: 50%;"></div>
+            <div class="skeleton skeleton-text" style="width: 60px; height: 24px; border-radius: 999px;"></div>
+        </div>
+        <div class="skeleton skeleton-text" style="height: 60px; border-radius: 8px;"></div>
+        <div style="display: flex; gap: 8px; margin-top: auto;">
+            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
+            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
+        </div>
     </div>
 </div>
 {% endblock %} 
