@@ -56,12 +56,12 @@ function renderPage() {
                 <td style="padding-left: 24px;">
                     <input type="checkbox" class="song-check" data-id="${s.id}" style="cursor: pointer;">
                 </td>
-                <td style="font-weight: 600; color: #222;">
+                <td style="font-weight: 600; color: var(--text-main);">
                     ${s.title || 'Unknown Title'}
                     ${!s.title && s.filename ? `<div style="font-size: 0.8rem; font-weight: normal; color: #dc3545; margin-top: 4px; word-break: break-all;">📁 ${s.filename}</div>` : ''}
                 </td>
-                <td style="color: #666;">${s.artist || 'Unknown Artist'}</td>
-                <td style="color: #666;">${s.album || 'Unknown Album'}</td>
+                <td style="color: var(--text-muted);">${s.artist || 'Unknown Artist'}</td>
+                <td style="color: var(--text-muted);">${s.album || 'Unknown Album'}</td>
             </tr>
         `).join("");
     }
