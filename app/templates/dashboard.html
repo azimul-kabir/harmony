@@ -25,13 +25,24 @@
         </div>
     </section>
 
+    <!-- NEW: Download Workers -->
+    <section class="panel" style="padding: 0; overflow: hidden;">
+        <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Download Workers</h3>
+            <span id="worker-count-badge" class="badge badge-queued" style="font-size: 0.8rem;">0 Active</span>
+        </div>
+        <div id="workers-grid" class="workers-grid" style="padding: 24px;">
+            <p class="empty-state">Connecting to download engine...</p>
+        </div>
+    </section>
+
     <!-- Middle Row: Active Tasks -->
     <section class="panel" style="padding: 0; overflow: hidden;">
         <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
-            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Active Tasks</h3>
+            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Active Queue Tasks</h3>
         </div>
         <div id="active-tasks" style="padding: 24px;">
-            <p class="empty-state">No active tasks.</p>
+            <p class="empty-state">No active queue tasks.</p>
         </div>
     </section>
 
@@ -50,8 +61,6 @@
             <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: var(--text-main);">Quick Actions</h3>
             <div class="quick-actions-grid">
                 <button id="btn-sync-all" class="btn-primary" style="width: 100%;">↻ Sync All Sources</button>
-                <a href="/downloads" class="quick-action-btn">+ Download Music</a>
-                <a href="/sources" class="quick-action-btn">+ Add Automation Source</a>
             </div>
         </section>
     </div>

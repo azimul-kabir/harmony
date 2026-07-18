@@ -12,19 +12,24 @@
         <h1>Harmony</h1>
         <nav>
             <a href="/" class="{% if page == 'dashboard' %}active{% endif %}">
-                <span class="nav-icon">🏠</span> <span class="nav-text">Dashboard</span>
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <span class="nav-text">Dashboard</span>
             </a>
             <a href="/downloads" class="{% if page == 'downloads' %}active{% endif %}">
-                <span class="nav-icon">⬇️</span> <span class="nav-text">Downloads</span>
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span class="nav-text">Downloads</span>
             </a>
             <a href="/sources" class="{% if page == 'sources' %}active{% endif %}">
-                <span class="nav-icon">🔄</span> <span class="nav-text">Sources</span>
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+                <span class="nav-text">Sources</span>
             </a>
             <a href="/library" class="{% if page == 'library' %}active{% endif %}">
-                <span class="nav-icon">🎵</span> <span class="nav-text">Library</span>
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                <span class="nav-text">Library</span>
             </a>
             <a href="/settings" class="{% if page == 'settings' %}active{% endif %}">
-                <span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span>
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                <span class="nav-text">Settings</span>
             </a>
         </nav>
         <div class="sidebar-footer">
@@ -33,11 +38,49 @@
             <div class="footer-version">v{{ version }}</div>
         </div>
     </aside>
+    
     <main class="content">
         {% block content %}
         {% endblock %}
     </main>
+</div> <!-- End of Layout Wrapper -->
+
+<!-- Global Elements explicitly moved OUTSIDE the layout to fix fixed-position bugs -->
+<div id="global-mini-player" class="mini-player hidden">
+    <div class="mini-player-header">
+        <span id="mp-status">Downloading...</span>
+        <span id="mp-count" style="color: var(--text-muted);">0 / 0</span>
+    </div>
+    <div class="mini-player-title" id="mp-title">Waiting...</div>
+    <div class="task-progress-bar" style="margin-top: 4px; height: 4px;">
+        <div id="mp-progress" class="task-progress-fill" style="width: 0%;"></div>
+    </div>
 </div>
+
+<button id="global-fab" class="fab-btn" title="Quick Download">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+</button>
+
+<div id="download-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>New Download</h2>
+            <button id="modal-close-btn" class="modal-close">&times;</button>
+        </div>
+        <form id="modal-download-form" class="modal-form">
+            <input 
+                type="url" 
+                id="modal-spotify-url" 
+                placeholder="Paste Spotify Track, Album, or Playlist URL..." 
+                required 
+                autocomplete="off"
+            >
+            <button type="submit" id="modal-submit-btn" class="btn-primary">Start Ingestion</button>
+        </form>
+        <div id="modal-result-box"></div>
+    </div>
+</div>
+
 <script src="/static/js/app.js"></script>
 {% block scripts %}{% endblock %}
 </body>

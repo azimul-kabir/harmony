@@ -112,9 +112,9 @@ function renderFilteredDownloads() {
         return `
             <tr>
                 <td style="padding-left: 24px;">${statusHtml}</td>
-                <td style="font-weight: 600; color: #222;">${job.title ?? ""}</td>
-                <td style="color: #666;">${job.artist ?? ""}</td>
-                <td style="color: #666;">${job.album ?? ""}</td>
+                <td style="font-weight: 600; color: var(--text-main);">${job.title ?? ""}</td>
+                <td style="color: var(--text-muted);">${job.artist ?? ""}</td>
+                <td style="color: var(--text-muted);">${job.album ?? ""}</td>
                 <td style="text-align: right; padding-right: 24px;">${actionHtml}</td>
             </tr>
         `;
