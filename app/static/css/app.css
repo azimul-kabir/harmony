@@ -640,3 +640,54 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     width: 100%;
     animation: pulse-bar 1.5s infinite ease-in-out;
 }
+
+/* -------------------------------------
+   PAGE TRANSITIONS & SKELETON LOADERS
+-------------------------------------- */
+/* Smooth page load transition */
+.content {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Skeleton Base */
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-surface-alt) 25%, var(--border-color) 50%, var(--bg-surface-alt) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite linear;
+    border-radius: 6px;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Skeleton Components */
+.skeleton-text { height: 16px; margin-bottom: 8px; width: 100%; }
+.skeleton-text.short { width: 40%; }
+.skeleton-text.title { height: 20px; width: 70%; margin-bottom: 12px; }
+.skeleton-avatar { width: 40px; height: 40px; border-radius: 50%; }
+
+.skeleton-row {
+    display: flex; 
+    gap: 16px; 
+    align-items: center; 
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+.skeleton-row-content { flex: 1; }
+
+.skeleton-card {
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
