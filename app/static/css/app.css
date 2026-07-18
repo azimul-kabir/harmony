@@ -108,13 +108,19 @@ body {
 .sidebar a.active { background: var(--primary); color: white; }
 .nav-icon { display: none; width: 22px; height: 22px; } /* Hidden on desktop */
 
-/* Content */
+/* Content & Page Transitions */
 .content {
     flex: 1;
     padding: 32px 40px;
     margin-left: 220px; 
     width: calc(100% - 220px);
     box-sizing: border-box;
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; } /* Fixed: transform: none prevents breaking position:fixed children */
 }
 
 .content h1 { margin: 0 0 24px; font-size: 2rem; }
@@ -128,7 +134,7 @@ body {
     padding: 24px;
     margin-bottom: 24px;
     position: relative;
-    overflow: visible !important; /* CRITICAL FIX: prevents sticky header from hiding */
+    overflow: visible !important;
 }
 
 .dashboard-card {
@@ -141,7 +147,7 @@ body {
 .dashboard-card h3 { margin: 0; color: var(--text-muted); font-size: 1rem; font-weight: 600; }
 .dashboard-card p { margin: 16px 0 0; color: var(--primary); font-size: 2.8rem; font-weight: 700; line-height: 1; }
 
-/* Forms & Inputs (The Unified Look) */
+/* Forms & Inputs */
 .form-row {
     display: flex;
     gap: 12px;
@@ -293,6 +299,127 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .empty-state { color: var(--text-muted); font-style: italic; text-align: center; }
 
 /* -------------------------------------
+   DOWNLOAD WORKERS GRID
+-------------------------------------- */
+.workers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.worker-card { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); transition: opacity 0.3s ease; }
+.worker-card.idle { background: var(--bg-surface-alt); opacity: 0.6; border-style: dashed; }
+.worker-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.worker-status.active { color: var(--primary); }
+.worker-track { font-weight: 600; font-size: 1rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.worker-artist { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes pulse-bar { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+.worker-pulse { width: 100%; animation: pulse-bar 1.5s infinite ease-in-out; }
+
+/* -------------------------------------
+   GLOBAL MINI-PLAYER
+-------------------------------------- */
+.mini-player {
+    position: fixed;
+    bottom: 32px;
+    right: 40px;
+    width: 320px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+    padding: 16px;
+    z-index: 1500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+
+.mini-player.hidden { transform: translateY(150%); opacity: 0; pointer-events: none; }
+.mini-player-header { display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+.mini-player-title { font-weight: 600; color: var(--text-main); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* -------------------------------------
+   GLOBAL FAB & DOWNLOAD MODAL
+-------------------------------------- */
+.fab-btn {
+    position: fixed;
+    bottom: 32px;
+    right: 380px; 
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 16px rgba(13, 110, 253, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1400;
+    transition: transform 0.2s ease, background-color 0.2s;
+}
+.fab-btn:hover { background: var(--primary-hover); transform: scale(1.05); }
+.fab-btn svg { width: 24px; height: 24px; }
+
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+.modal-overlay.hidden { opacity: 0; pointer-events: none; }
+.modal-content {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 500px;
+    max-width: 90%;
+    padding: 24px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    transform: scale(1);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+.modal-overlay.hidden .modal-content { transform: scale(0.9); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.modal-header h2 { margin: 0; font-size: 1.4rem; color: var(--text-main); }
+.modal-close { background: transparent; border: none; font-size: 2rem; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0; }
+.modal-close:hover { color: var(--text-main); }
+.modal-form { display: flex; flex-direction: column; gap: 16px; }
+.modal-form input {
+    width: 100%;
+    padding: 14px;
+    font-size: 1rem;
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    box-sizing: border-box;
+}
+.modal-form button { padding: 14px; font-size: 1rem; font-weight: 600; border-radius: 8px; }
+
+/* -------------------------------------
+   SKELETON LOADERS
+-------------------------------------- */
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-surface-alt) 25%, var(--border-color) 50%, var(--bg-surface-alt) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite linear;
+    border-radius: 6px;
+}
+@keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.skeleton-text { height: 16px; margin-bottom: 8px; width: 100%; }
+.skeleton-text.short { width: 40%; }
+.skeleton-text.title { height: 20px; width: 70%; margin-bottom: 12px; }
+.skeleton-avatar { width: 40px; height: 40px; border-radius: 50%; }
+.skeleton-row { display: flex; gap: 16px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border-color); }
+.skeleton-row-content { flex: 1; }
+.skeleton-card { padding: 20px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-surface); display: flex; flex-direction: column; gap: 12px; }
+
+/* -------------------------------------
    📱 MOBILE & RESPONSIVE DESIGN
 -------------------------------------- */
 @media (max-width: 900px) {
@@ -300,7 +427,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @media (max-width: 768px) {
-    /* Push content up to make room for bottom nav */
     .layout { padding-bottom: 75px; }
     
     .content {
@@ -309,7 +435,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         padding: 20px 16px;
     }
     
-    /* Transform Sidebar to Bottom Navigation */
     .sidebar {
         width: 100%;
         height: 75px;
@@ -353,7 +478,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     
     .nav-text { font-weight: 600; }
 
-    /* Fix Layout Breaks on Mobile */
     .form-row { flex-direction: column; }
     .activity-item { grid-template-columns: 1fr; gap: 8px; padding: 16px; }
     .activity-artist { text-align: left; }
@@ -362,22 +486,31 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .panel { padding: 16px; }
     .sources-grid { grid-template-columns: 1fr; }
 
-    /* -------------------------------------
-       TABLE TO CARD TRANSFORMATION 
-    -------------------------------------- */
-    /* 1. Hide the table headers completely */
-    .command-table thead { 
-        display: none; 
+    .mini-player {
+        bottom: 85px; 
+        right: 12px;
+        left: 12px;
+        width: auto;
+        border-radius: 10px;
+        padding: 12px 16px;
+        box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
     }
 
-    /* 2. Force the table elements to behave like block elements */
+    .fab-btn {
+        bottom: 165px;
+        right: 20px;
+        width: 52px;
+        height: 52px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    /* TABLE TO CARD TRANSFORMATION */
+    .command-table thead { display: none; }
     .command-table, .command-table tbody, .command-table tr, .command-table td { 
         display: block; 
         width: 100%; 
         box-sizing: border-box; 
     }
-
-    /* 3. Style the Table Row as a Card */
     .command-table tr {
         background: var(--bg-surface-alt);
         border: 1px solid var(--border-color);
@@ -393,301 +526,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         gap: 6px 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
+    .command-table td { padding: 0 !important; border: none !important; background: transparent !important; }
 
-    /* 4. Map the table cells to the grid layout */
-    .command-table td {
-        padding: 0 !important;
-        border: none !important;
-        background: transparent !important;
-    }
+    #downloads-body tr td:nth-child(1) { grid-area: status; align-self: end; margin-top: 8px; } 
+    #downloads-body tr td:nth-child(2) { grid-area: title; font-size: 1.1rem; } 
+    #downloads-body tr td:nth-child(3) { grid-area: artist; font-size: 0.9rem; } 
+    #downloads-body tr td:nth-child(4) { display: none; } 
+    #downloads-body tr td:nth-child(5) { grid-area: action; align-self: center; } 
 
-    /* Downloads Table Specific Mapping */
-    #downloads-body tr td:nth-child(1) { grid-area: status; align-self: end; margin-top: 8px; } /* Status */
-    #downloads-body tr td:nth-child(2) { grid-area: title; font-size: 1.1rem; } /* Title */
-    #downloads-body tr td:nth-child(3) { grid-area: artist; font-size: 0.9rem; } /* Artist */
-    #downloads-body tr td:nth-child(4) { display: none; } /* Hide Album to save space */
-    #downloads-body tr td:nth-child(5) { grid-area: action; align-self: center; } /* Retry/Actions */
-
-    /* Library Table Specific Mapping */
-    #library-body tr { position: relative; padding-right: 48px; } /* Make room for checkbox */
-    #library-body tr td:nth-child(1) { position: absolute; top: 16px; right: 16px; width: auto; } /* Checkbox */
-    #library-body tr td:nth-child(2) { font-size: 1.1rem; margin-right: 30px; } /* Title */
-    #library-body tr td:nth-child(3) { font-size: 0.9rem; margin-top: 2px; } /* Artist */
-    #library-body tr td:nth-child(4) { font-size: 0.85rem; color: var(--text-muted); opacity: 0.8; } /* Album */
-}
-
-/* -------------------------------------
-   GLOBAL MINI-PLAYER
--------------------------------------- */
-.mini-player {
-    position: fixed;
-    bottom: 32px;
-    right: 40px;
-    width: 320px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
-    padding: 16px;
-    z-index: 1500;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    /* Spring physics animation */
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
-}
-
-.mini-player.hidden {
-    transform: translateY(150%);
-    opacity: 0;
-    pointer-events: none;
-}
-
-.mini-player-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--primary);
-}
-
-.mini-player-title {
-    font-weight: 600;
-    color: var(--text-main);
-    font-size: 0.95rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-@media (max-width: 768px) {
-    .mini-player {
-        bottom: 85px; /* Sits directly above the 75px bottom nav bar */
-        right: 12px;
-        left: 12px;
-        width: auto;
-        border-radius: 10px;
-        padding: 12px 16px;
-        box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
-    }
-}
-
-/* -------------------------------------
-   GLOBAL FAB & DOWNLOAD MODAL
--------------------------------------- */
-.fab-btn {
-    position: fixed;
-    bottom: 32px;
-    right: 380px; /* Positions it nicely next to the desktop mini-player */
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: var(--primary);
-    color: white;
-    border: none;
-    box-shadow: 0 4px 16px rgba(13, 110, 253, 0.3);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1400;
-    transition: transform 0.2s ease, background-color 0.2s;
-}
-.fab-btn:hover { background: var(--primary-hover); transform: scale(1.05); }
-.fab-btn svg { width: 24px; height: 24px; }
-
-/* Modal Backdrop Overlay */
-.modal-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 3000;
-    opacity: 1;
-    transition: opacity 0.2s ease;
-}
-.modal-overlay.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-/* Modal Window Container */
-.modal-content {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    width: 500px;
-    max-width: 90%;
-    padding: 24px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    transform: scale(1);
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15);
-}
-.modal-overlay.hidden .modal-content {
-    transform: scale(0.9);
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-.modal-header h2 { margin: 0; font-size: 1.4rem; color: var(--text-main); }
-.modal-close {
-    background: transparent;
-    border: none;
-    font-size: 2rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    line-height: 1;
-    padding: 0;
-}
-.modal-close:hover { color: var(--text-main); }
-
-.modal-form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-.modal-form input {
-    width: 100%;
-    padding: 14px;
-    font-size: 1rem;
-    border: 1px solid var(--border-input);
-    border-radius: 8px;
-    background: var(--bg-surface);
-    color: var(--text-main);
-    box-sizing: border-box;
-}
-.modal-form button {
-    padding: 14px;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 8px;
-}
-
-@media (max-width: 768px) {
-    .fab-btn {
-        bottom: 165px; /* Safely floats above the expanded mobile mini-player zone */
-        right: 20px;
-        width: 52px;
-        height: 52px;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-    }
-}
-
-/* -------------------------------------
-   DOWNLOAD WORKERS GRID
--------------------------------------- */
-.workers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-}
-.worker-card {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
-    transition: opacity 0.3s ease;
-}
-.worker-card.idle {
-    background: var(--bg-surface-alt);
-    opacity: 0.6;
-    border-style: dashed;
-}
-.worker-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-}
-.worker-status.active { color: var(--primary); }
-.worker-track {
-    font-weight: 600;
-    font-size: 1rem;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.worker-artist {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-@keyframes pulse-bar {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-.worker-pulse {
-    width: 100%;
-    animation: pulse-bar 1.5s infinite ease-in-out;
-}
-
-/* -------------------------------------
-   PAGE TRANSITIONS & SKELETON LOADERS
--------------------------------------- */
-/* Smooth page load transition */
-.content {
-    animation: fadeIn 0.3s ease-out forwards;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Skeleton Base */
-.skeleton {
-    background: linear-gradient(90deg, var(--bg-surface-alt) 25%, var(--border-color) 50%, var(--bg-surface-alt) 75%);
-    background-size: 200% 100%;
-    animation: skeleton-loading 1.5s infinite linear;
-    border-radius: 6px;
-}
-
-@keyframes skeleton-loading {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-/* Skeleton Components */
-.skeleton-text { height: 16px; margin-bottom: 8px; width: 100%; }
-.skeleton-text.short { width: 40%; }
-.skeleton-text.title { height: 20px; width: 70%; margin-bottom: 12px; }
-.skeleton-avatar { width: 40px; height: 40px; border-radius: 50%; }
-
-.skeleton-row {
-    display: flex; 
-    gap: 16px; 
-    align-items: center; 
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border-color);
-}
-.skeleton-row-content { flex: 1; }
-
-.skeleton-card {
-    padding: 20px;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    background: var(--bg-surface);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    #library-body tr { position: relative; padding-right: 48px; } 
+    #library-body tr td:nth-child(1) { position: absolute; top: 16px; right: 16px; width: auto; } 
+    #library-body tr td:nth-child(2) { font-size: 1.1rem; margin-right: 30px; } 
+    #library-body tr td:nth-child(3) { font-size: 0.9rem; margin-top: 2px; } 
+    #library-body tr td:nth-child(4) { font-size: 0.85rem; color: var(--text-muted); opacity: 0.8; } 
 }
