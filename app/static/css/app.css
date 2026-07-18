@@ -504,7 +504,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
     }
 
-/* -------------------------------------
+    /* -------------------------------------
        TABLE TO CARD TRANSFORMATION 
     -------------------------------------- */
     .command-table thead { display: none; }
@@ -576,4 +576,46 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         opacity: 0.8;
         word-break: break-word;
     } 
+
+    /* -------------------------------------
+       SETTINGS PAGE FIXES 
+    -------------------------------------- */
+    /* Override the inline 450px minimum width on the settings container */
+    .sources-grid { 
+        grid-template-columns: 1fr !important; 
+    }
+
+    /* Convert the 2-column settings table into a stacked card */
+    .sources-grid .command-table tr {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 16px;
+        background: var(--bg-surface-alt);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    /* Target the Labels (Left Column) */
+    .sources-grid .command-table td:nth-child(1) {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        width: 100% !important; /* Overrides inline widths */
+    }
+
+    /* Target the Values (Right Column) */
+    .sources-grid .command-table td:nth-child(2) {
+        font-family: monospace;
+        font-size: 0.95rem;
+        color: var(--text-main) !important;
+        
+        /* CRITICAL: Forces long paths and API keys to wrap */
+        word-break: break-all; 
+        white-space: normal;
+    }
 }
