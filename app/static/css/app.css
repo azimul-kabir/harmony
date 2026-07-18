@@ -579,3 +579,64 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
     }
 }
+
+/* -------------------------------------
+   DOWNLOAD WORKERS GRID
+-------------------------------------- */
+.workers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+.worker-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    transition: opacity 0.3s ease;
+}
+.worker-card.idle {
+    background: var(--bg-surface-alt);
+    opacity: 0.6;
+    border-style: dashed;
+}
+.worker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+.worker-status.active { color: var(--primary); }
+.worker-track {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.worker-artist {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+@keyframes pulse-bar {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+.worker-pulse {
+    width: 100%;
+    animation: pulse-bar 1.5s infinite ease-in-out;
+}
