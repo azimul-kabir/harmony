@@ -113,7 +113,7 @@ body {
     flex: 1;
     padding: 32px 40px;
     margin-left: 220px; 
-    width: calc(100% - 220px); /* CRITICAL FIX: prevents tables from pushing content under sidebar */
+    width: calc(100% - 220px);
     box-sizing: border-box;
 }
 
@@ -127,6 +127,8 @@ body {
     border: 1px solid var(--border-color);
     padding: 24px;
     margin-bottom: 24px;
+    position: relative;
+    overflow: visible !important; /* CRITICAL FIX: prevents sticky header from hiding */
 }
 
 .dashboard-card {
@@ -190,7 +192,7 @@ body {
 .table-responsive { 
     width: 100%; 
     overflow-x: auto; 
-    -webkit-overflow-scrolling: touch; /* Enables buttery smooth momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch; 
     scrollbar-width: thin;
     scrollbar-color: var(--border-input) transparent;
 }
@@ -264,8 +266,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .task-item { padding: 20px; background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 16px; }
 .task-item.fading-out { opacity: 0.3; }
 
-/* Filter Tabs */
-.filters-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+/* Filter Tabs & Sticky Headers */
+.filters-bar { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    flex-wrap: wrap; 
+    gap: 12px; 
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-surface);
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+    margin-bottom: 0;
+}
 .filter-tabs { display: flex; gap: 24px; overflow-x: auto; margin-bottom: -1px; }
 .filter-tab { padding: 12px 0; border: none; border-bottom: 3px solid transparent; background: transparent; font-size: 1rem; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
 .filter-tab:hover { color: var(--primary); }
@@ -345,4 +361,57 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .search-input { width: 100%; }
     .panel { padding: 16px; }
     .sources-grid { grid-template-columns: 1fr; }
+
+    /* -------------------------------------
+       TABLE TO CARD TRANSFORMATION 
+    -------------------------------------- */
+    /* 1. Hide the table headers completely */
+    .command-table thead { 
+        display: none; 
+    }
+
+    /* 2. Force the table elements to behave like block elements */
+    .command-table, .command-table tbody, .command-table tr, .command-table td { 
+        display: block; 
+        width: 100%; 
+        box-sizing: border-box; 
+    }
+
+    /* 3. Style the Table Row as a Card */
+    .command-table tr {
+        background: var(--bg-surface-alt);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        margin-bottom: 16px;
+        padding: 16px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas: 
+            "title action"
+            "artist action"
+            "status action";
+        gap: 6px 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    /* 4. Map the table cells to the grid layout */
+    .command-table td {
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    /* Downloads Table Specific Mapping */
+    #downloads-body tr td:nth-child(1) { grid-area: status; align-self: end; margin-top: 8px; } /* Status */
+    #downloads-body tr td:nth-child(2) { grid-area: title; font-size: 1.1rem; } /* Title */
+    #downloads-body tr td:nth-child(3) { grid-area: artist; font-size: 0.9rem; } /* Artist */
+    #downloads-body tr td:nth-child(4) { display: none; } /* Hide Album to save space */
+    #downloads-body tr td:nth-child(5) { grid-area: action; align-self: center; } /* Retry/Actions */
+
+    /* Library Table Specific Mapping */
+    #library-body tr { position: relative; padding-right: 48px; } /* Make room for checkbox */
+    #library-body tr td:nth-child(1) { position: absolute; top: 16px; right: 16px; width: auto; } /* Checkbox */
+    #library-body tr td:nth-child(2) { font-size: 1.1rem; margin-right: 30px; } /* Title */
+    #library-body tr td:nth-child(3) { font-size: 0.9rem; margin-top: 2px; } /* Artist */
+    #library-body tr td:nth-child(4) { font-size: 0.85rem; color: var(--text-muted); opacity: 0.8; } /* Album */
 }
