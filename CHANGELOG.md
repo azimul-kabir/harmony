@@ -1,35 +1,61 @@
 # Changelog
-All notable changes to Harmony will be documented in this file.
 
-## v1.1.0 - 2026-07-18
+All notable changes to Harmony are documented in this file.
 
-This release drastically improves the frontend experience, transforming Harmony from a functional web dashboard into a highly polished, tactile, and native-feeling mobile web application.
+The format is based on **Keep a Changelog**, and this project follows **Semantic Versioning**.
+
+---
+
+## [1.1.0] - 2026-07-18
 
 ### Added
-- **Global Mini-Player:** Added a persistent, floating download bar tied to the SSE stream. Users can now navigate the entire app while keeping track of active download progress.
-- **Floating Action Button (FAB) & Overlay:** Implemented a global quick-add button. Users can now queue new Spotify tracks, albums, or playlists from any page via a floating modal.
-- **Worker Thread Visualization:** The Dashboard now exposes the active Python backend threads. Users can visually track what each concurrent worker is processing in real-time.
-- **Skeleton Loaders:** Replaced static "Loading..." text with modern, pulsating placeholder blocks during data fetches for a smoother perceived load time.
-- **Page Transitions:** Introduced a subtle 300ms fade-in animation to reduce visual jarring when navigating between application sections.
+
+- Added a persistent floating **Download Status Bar** that remains visible across all pages and displays real-time download progress.
+- Added a global **Quick Add** floating action button (FAB) for instantly queueing Spotify tracks, albums, and playlists from anywhere in the application.
+- Added a global download modal accessible from every page.
+- Added real-time visualization of active download workers on the Dashboard.
+- Added skeleton loading animations to improve perceived loading performance.
+- Added subtle page transition animations for smoother navigation.
+- Added responsive mobile card layouts for Library, Downloads, and Settings pages.
+- Added sticky search bars and filter headers for improved navigation on long pages.
+- Added bottom spacing to scrolling views to prevent floating controls from covering content.
 
 ### Changed
-- **Mobile-First Layouts:** Data tables on the Library, Downloads, and Settings pages now automatically transform into touch-friendly stacked cards on screens under 768px, completely eliminating horizontal scrolling.
-- **Sticky Headers:** Search inputs and filter tabs are now pinned to the top of the viewport when scrolling, preserving user context on long lists.
-- **Compact Command Center:** Shrunk the download input section spacing to maximize screen real estate for viewing the active queue on mobile devices.
-- **Aesthetic Polish:** Replaced basic emojis with crisp, monochrome SVG icons and adjusted hardcoded text colors to ensure perfect contrast switching during OS Light/Dark mode toggles.
+
+- Redesigned the interface with a mobile-first approach.
+- Converted desktop-style tables into touch-friendly responsive cards on smaller screens.
+- Reduced spacing in the Dashboard command center to maximize available screen space.
+- Improved overall responsiveness across mobile and desktop devices.
+- Replaced emoji icons with clean monochrome SVG icons.
+- Improved typography, spacing, and visual hierarchy throughout the application.
+- Enhanced automatic Light and Dark Mode appearance.
+- Improved color contrast for better accessibility.
 
 ### Fixed
-- Fixed an issue where long file paths, API keys, or unspaced song titles would break container boundaries and force horizontal scrolling on mobile.
-- Fixed a CSS stacking context bug that caused floating UI elements (FAB, Mini-Player) to anchor to the bottom of the scrolling page instead of the viewport.
-- Added padding offsets to ensure the floating action button no longer obscures the last item in scrolling lists.
-- Fixed "ghost" skeleton loaders persisting on the Sources page after DOM patching.
 
-## v1.0.0 - 2026-07-16
-Initial Production Release
-Harmony reaches its first stable release with a complete end-to-end download pipeline, playlist synchronization, multi-worker downloads, automated library organization, and a modern responsive web interface.
+- Fixed horizontal scrolling caused by long filenames, API keys, and unbroken text.
+- Fixed floating UI elements incorrectly positioning relative to scrolling containers.
+- Fixed floating action button overlapping the final items in scrolling lists.
+- Fixed skeleton loaders occasionally remaining visible after page updates.
+- Fixed various responsive layout inconsistencies across mobile devices.
+- Improved stability of live UI updates from Server-Sent Events (SSE).
+
+### Performance
+
+- Improved perceived loading speed through skeleton loaders.
+- Reduced unnecessary layout reflows during navigation.
+- Improved responsiveness while monitoring concurrent downloads.
+- Optimized scrolling performance on mobile devices.
+- Smoothed page transitions throughout the application.
+
+---
+
+## [1.0.0] - 2026-07-16
 
 ### Added
+
 #### Download Engine
+
 - Spotify track downloads
 - Spotify album downloads
 - Spotify playlist downloads
@@ -41,65 +67,73 @@ Harmony reaches its first stable release with a complete end-to-end download pip
 - Configurable audio providers
 
 #### Playlist Synchronization
+
 - Sync Sources
 - One-click playlist synchronization
-- Download only newly added tracks[cite: 1]
-- Automatic duplicate detection[cite: 1]
-- Task-based synchronization workflow[cite: 1]
+- Download only newly added tracks
+- Automatic duplicate detection
+- Task-based synchronization workflow
 
 #### Library
-- Automatic folder organization[cite: 1]
-- Album and Singles support[cite: 1]
-- Duplicate detection[cite: 1]
-- Metadata import[cite: 1]
-- Library database management[cite: 1]
-- Library rescan[cite: 1]
-- Batch deletion[cite: 1]
+
+- Automatic folder organization
+- Album and Singles support
+- Duplicate detection
+- Metadata import
+- Library database management
+- Library rescan
+- Batch deletion
 
 #### Web Interface
-- Dashboard[cite: 1]
-- Downloads[cite: 1]
-- Sources[cite: 1]
-- Library[cite: 1]
-- Settings[cite: 1]
-- Responsive mobile interface[cite: 1]
-- Desktop interface[cite: 1]
-- Light Mode[cite: 1]
-- Dark Mode[cite: 1]
-- Automatic OS Theme Support[cite: 1]
+
+- Dashboard
+- Downloads
+- Sources
+- Library
+- Settings
+- Responsive mobile interface
+- Desktop interface
+- Light Mode
+- Dark Mode
+- Automatic OS Theme Support
 
 #### Infrastructure
-- Docker support[cite: 1]
-- Synology NAS compatibility[cite: 1]
-- SQLite database[cite: 1]
-- Background workers[cite: 1]
-- Task management[cite: 1]
-- Download queue[cite: 1]
-- Import pipeline[cite: 1]
+
+- Docker support
+- Synology NAS compatibility
+- SQLite database
+- Background workers
+- Task management
+- Download queue
+- Import pipeline
 
 ### Changed
-- Refactored download pipeline into independent services[cite: 1]
-- Introduced dedicated SpotDL client wrapper[cite: 1]
-- Improved playlist synchronization workflow[cite: 1]
-- Improved task management architecture[cite: 1]
-- Improved duplicate detection[cite: 1]
-- Improved download reliability[cite: 1]
-- Modernized project structure[cite: 1]
-- Improved responsive UI across desktop and mobile devices[cite: 1]
+
+- Refactored the download pipeline into independent services.
+- Introduced a dedicated SpotDL client wrapper.
+- Improved playlist synchronization workflow.
+- Improved task management architecture.
+- Improved duplicate detection.
+- Improved download reliability.
+- Modernized the project structure.
+- Enhanced responsive UI across desktop and mobile devices.
 
 ### Performance
-- Added configurable concurrent download workers[cite: 1]
-- Faster playlist processing[cite: 1]
-- Reduced duplicate checks[cite: 1]
-- Improved queue throughput[cite: 1]
-- Better background processing[cite: 1]
+
+- Added configurable concurrent download workers.
+- Faster playlist processing.
+- Reduced duplicate checks.
+- Improved queue throughput.
+- Better background processing.
 
 ### Fixed
-- Improved download stability[cite: 1]
-- Improved playlist synchronization reliability[cite: 1]
-- Improved metadata handling[cite: 1]
-- Improved duplicate detection accuracy[cite: 1]
-- Improved import consistency[cite: 1]
+
+- Improved download stability.
+- Improved playlist synchronization reliability.
+- Improved metadata handling.
+- Improved duplicate detection accuracy.
+- Improved import consistency.
 
 ### Notes
-Harmony v1.0.0 represents the first stable release of the project and establishes the core architecture for future development while maintaining backward compatibility[cite: 1].
+
+Harmony v1.0.0 represents the first stable release of the project, establishing the foundation for future development while maintaining a reliable and scalable architecture.
