@@ -5,9 +5,12 @@ function renderSources(sources) {
     const container = document.getElementById("sources");
     if (!container) return;
 
+    // Destroy skeleton loaders when real data arrives
+    container.querySelectorAll('.skeleton-card').forEach(skel => skel.remove());
+
     if (sources.length === 0) {
         container.innerHTML = `
-            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: white; border-radius: 16px; border: 1px solid #eee;" class="empty-state">
+            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
                 <h3>No sources yet</h3>
                 <p>Add your first Spotify playlist above to start syncing.</p>
             </div>
@@ -44,25 +47,25 @@ function renderSources(sources) {
                 if (status === "RUNNING" || status === "QUEUED") {
                     taskActions = `
                         <button class="btn-secondary pause-btn" data-task-id="${t.id}">⏸ Pause</button>
-                        <button class="btn-secondary cancel-btn" data-task-id="${t.id}" style="color: #dc3545;">🚫 Cancel</button>
+                        <button class="btn-secondary cancel-btn" data-task-id="${t.id}" style="color: var(--danger); border-color: var(--danger);">🚫 Cancel</button>
                     `;
                 } else if (status === "PAUSED") {
                     taskActions = `
                         <button class="btn-secondary resume-btn" data-task-id="${t.id}">▶ Resume</button>
-                        <button class="btn-secondary cancel-btn" data-task-id="${t.id}" style="color: #dc3545;">🚫 Cancel</button>
+                        <button class="btn-secondary cancel-btn" data-task-id="${t.id}" style="color: var(--danger); border-color: var(--danger);">🚫 Cancel</button>
                     `;
                 }
 
                 taskHtml = `
                     <div class="task-progress-container" style="margin-top: 16px;">
-                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight: 600; color: #444;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight: 600; color: var(--text-main);">
                             <span>${status === 'RUNNING' ? 'Syncing...' : status}</span>
                             <span>${finished} / ${t.total} Tracks</span>
                         </div>
                         <div class="task-progress-bar">
                             <div class="task-progress-fill" style="width:${percent}%"></div>
                         </div>
-                        ${t.current ? `<div style="font-size: 0.8rem; color: #666; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Downloading: ${t.current}</div>` : ""}
+                        ${t.current ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Downloading: ${t.current}</div>` : ""}
                         <div style="margin-top: 12px; display:flex; gap: 8px;">
                             ${taskActions}
                         </div>
@@ -114,11 +117,6 @@ function renderSources(sources) {
             card.id = `source-card-${source.id}`;
             card.className = "source-card";
             card.innerHTML = innerHTML;
-            
-            // Remove the loading state if this is the first card being added
-            const emptyState = container.querySelector('.empty-state');
-            if(emptyState) emptyState.remove();
-
             container.appendChild(card);
         }
     });
@@ -133,7 +131,7 @@ function renderSources(sources) {
 
     if (container.children.length === 0) {
         container.innerHTML = `
-            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: white; border-radius: 16px; border: 1px solid #eee;" class="empty-state">
+            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
                 <h3>No sources yet</h3>
                 <p>Add your first Spotify playlist above to start syncing.</p>
             </div>
@@ -156,7 +154,7 @@ function bindEvents() {
 async function handleTaskAction(event, action) {
     const taskId = event.target.dataset.taskId;
     event.target.disabled = true;
-    event.target.innerHTML = '<span class="spinner" style="border-top-color:#1565c0; width:10px; height:10px;"></span>...';
+    event.target.innerHTML = '<span class="spinner" style="border-top-color:var(--primary); width:10px; height:10px;"></span>...';
     await fetch(`/api/tasks/${taskId}/${action}`, { method: "POST" });
 }
 
@@ -181,7 +179,7 @@ async function toggleSource(event) {
 async function syncSource(event) {
     const id = event.target.dataset.id;
     event.target.disabled = true;
-    event.target.innerHTML = '<span class="spinner" style="border-top-color:#1565c0; width:10px; height:10px;"></span> Initiating...';
+    event.target.innerHTML = '<span class="spinner" style="border-top-color:var(--primary); width:10px; height:10px;"></span> Initiating...';
     const response = await fetch(`/api/sources/${id}/sync`, { method: "POST" });
     if (!response.ok) {
         alert("Sync failed.");
