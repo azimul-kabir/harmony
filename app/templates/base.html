@@ -38,49 +38,51 @@
             <div class="footer-version">v{{ version }}</div>
         </div>
     </aside>
+    
     <main class="content">
         {% block content %}
         {% endblock %}
-        
-        <!-- Global Mini Player -->
-        <div id="global-mini-player" class="mini-player hidden">
-            <div class="mini-player-header">
-                <span id="mp-status">Downloading...</span>
-                <span id="mp-count" style="color: var(--text-muted);">0 / 0</span>
-            </div>
-            <div class="mini-player-title" id="mp-title">Waiting...</div>
-            <div class="task-progress-bar" style="margin-top: 4px; height: 4px;">
-                <div id="mp-progress" class="task-progress-fill" style="width: 0%;"></div>
-            </div>
-        </div>
-
-        <!-- Global Floating Action Button -->
-        <button id="global-fab" class="fab-btn" title="Quick Download">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        </button>
-
-        <!-- Global Download Modal -->
-        <div id="download-modal" class="modal-overlay hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>New Download</h2>
-                    <button id="modal-close-btn" class="modal-close">&times;</button>
-                </div>
-                <form id="modal-download-form" class="modal-form">
-                    <input 
-                        type="url" 
-                        id="modal-spotify-url" 
-                        placeholder="Paste Spotify Track, Album, or Playlist URL..." 
-                        required 
-                        autocomplete="off"
-                    >
-                    <button type="submit" id="modal-submit-btn" class="btn-primary">Start Ingestion</button>
-                </form>
-                <div id="modal-result-box"></div>
-            </div>
-        </div>
     </main>
+</div> <!-- End of layout wrapper -->
+
+<!-- Global Mini Player (Moved completely outside the layout and content divs) -->
+<div id="global-mini-player" class="mini-player hidden">
+    <div class="mini-player-header">
+        <span id="mp-status">Downloading...</span>
+        <span id="mp-count" style="color: var(--text-muted);">0 / 0</span>
+    </div>
+    <div class="mini-player-title" id="mp-title">Waiting...</div>
+    <div class="task-progress-bar" style="margin-top: 4px; height: 4px;">
+        <div id="mp-progress" class="task-progress-fill" style="width: 0%;"></div>
+    </div>
 </div>
+
+<!-- Global Floating Action Button (Moved outside) -->
+<button id="global-fab" class="fab-btn" title="Quick Download">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+</button>
+
+<!-- Global Download Modal (Moved outside) -->
+<div id="download-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>New Download</h2>
+            <button id="modal-close-btn" class="modal-close">&times;</button>
+        </div>
+        <form id="modal-download-form" class="modal-form">
+            <input 
+                type="url" 
+                id="modal-spotify-url" 
+                placeholder="Paste Spotify Track, Album, or Playlist URL..." 
+                required 
+                autocomplete="off"
+            >
+            <button type="submit" id="modal-submit-btn" class="btn-primary">Start Ingestion</button>
+        </form>
+        <div id="modal-result-box"></div>
+    </div>
+</div>
+
 <script src="/static/js/app.js"></script>
 {% block scripts %}{% endblock %}
 </body>
