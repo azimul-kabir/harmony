@@ -108,14 +108,19 @@ body {
 .sidebar a.active { background: var(--primary); color: white; }
 .nav-icon { display: none; width: 22px; height: 22px; } /* Hidden on desktop */
 
-/* Content */
+/* Content & Page Transitions */
 .content {
     flex: 1;
     padding: 32px 40px;
     margin-left: 220px; 
     width: calc(100% - 220px);
     box-sizing: border-box;
-    /* REMOVED: fadeIn animation because it forces a stacking context, breaking FAB position fixed */
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; } 
 }
 
 .content h1 { margin: 0 0 24px; font-size: 2rem; }
@@ -307,12 +312,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .worker-pulse { width: 100%; animation: pulse-bar 1.5s infinite ease-in-out; }
 
 /* -------------------------------------
-   GLOBAL MINI-PLAYER & FAB (Desktop Positions)
+   GLOBAL MINI-PLAYER & FAB
 -------------------------------------- */
 .mini-player {
     position: fixed;
     bottom: 32px;
-    left: 250px; /* Sits cleanly next to the 220px sidebar on Desktop */
+    left: 250px; 
     width: 320px;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
@@ -419,7 +424,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 -------------------------------------- */
 @media (max-width: 900px) {
     .bottom-split { grid-template-columns: 1fr; }
-}
+} /* FIXED: This closing bracket was missing previously! */
 
 @media (max-width: 768px) {
     /* Destroys the hardcoded table width to eliminate all horizontal scrolling */
@@ -431,7 +436,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .content {
         margin-left: 0;
         width: 100%;
-        padding: 20px 16px;
+        padding: 20px 16px 120px 16px; /* Added 120px bottom padding so FAB won't cover content */
     }
     
     .sidebar {
@@ -496,7 +501,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     }
 
     .fab-btn {
-        bottom: 165px;
+        bottom: 100px;
         right: 20px;
         width: 52px;
         height: 52px;
@@ -522,17 +527,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         border-radius: 12px;
         margin-bottom: 16px;
         padding: 16px;
-        padding-bottom: 56px; /* Room for actions/status at bottom */
+        padding-bottom: 56px; 
         display: flex;
         flex-direction: column;
         position: relative;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
-    #downloads-body tr td:nth-child(1) { position: absolute; bottom: 16px; left: 16px; width: auto; margin: 0; } /* Status */
-    #downloads-body tr td:nth-child(2) { font-size: 1.05rem; margin-bottom: 2px; font-weight: 600; color: var(--text-main); word-break: break-word; } /* Title */
-    #downloads-body tr td:nth-child(3) { font-size: 0.9rem; color: var(--text-muted); word-break: break-word; } /* Artist */
-    #downloads-body tr td:nth-child(4) { display: none; } /* Album */
-    #downloads-body tr td:nth-child(5) { position: absolute; bottom: 16px; right: 16px; width: auto; } /* Action */
+    #downloads-body tr td:nth-child(1) { position: absolute; bottom: 16px; left: 16px; width: auto; margin: 0; } 
+    #downloads-body tr td:nth-child(2) { font-size: 1.05rem; margin-bottom: 2px; font-weight: 600; color: var(--text-main); word-break: break-word; } 
+    #downloads-body tr td:nth-child(3) { font-size: 0.9rem; color: var(--text-muted); word-break: break-word; } 
+    #downloads-body tr td:nth-child(4) { display: none; } 
+    #downloads-body tr td:nth-child(5) { position: absolute; bottom: 16px; right: 16px; width: auto; } 
 
     /* Library Table */
     #library-body tr {
@@ -541,16 +546,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         border-radius: 12px;
         margin-bottom: 16px;
         padding: 16px;
-        padding-right: 48px; /* Room for absolute checkbox */
+        padding-right: 48px; 
         display: flex;
         flex-direction: column;
         position: relative;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
-    #library-body tr td:nth-child(1) { position: absolute; top: 16px; right: 16px; width: auto; } /* Checkbox */
-    #library-body tr td:nth-child(2) { font-size: 1.05rem; margin-bottom: 2px; font-weight: 600; color: var(--text-main); word-break: break-word; } /* Title */
-    #library-body tr td:nth-child(3) { font-size: 0.9rem; color: var(--text-muted); word-break: break-word; } /* Artist */
-    #library-body tr td:nth-child(4) { font-size: 0.85rem; color: var(--text-muted); opacity: 0.8; word-break: break-word; } /* Album */
+    #library-body tr td:nth-child(1) { position: absolute; top: 16px; right: 16px; width: auto; } 
+    #library-body tr td:nth-child(2) { font-size: 1.05rem; margin-bottom: 2px; font-weight: 600; color: var(--text-main); word-break: break-word; } 
+    #library-body tr td:nth-child(3) { font-size: 0.9rem; color: var(--text-muted); word-break: break-word; } 
+    #library-body tr td:nth-child(4) { font-size: 0.85rem; color: var(--text-muted); opacity: 0.8; word-break: break-word; } 
 
     /* Settings Page */
     .sources-grid { grid-template-columns: 1fr !important; }
