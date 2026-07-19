@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends
+import os
+from fastapi.responses import FileResponse
+from app.core.config import get_settings
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.schemas.comparison import PlaylistComparisonResponse
@@ -16,6 +20,8 @@ router = APIRouter(
     prefix="/api/playlists",
     tags=["Playlists"],
 )
+
+settings = get_settings()
 
 
 class PlaylistDownloadRequest(BaseModel):
@@ -49,4 +55,27 @@ def download(
     return download_playlist(
         db=db,
         url=request.url,
+    )
+
+
+@router.get("/{playlist_id}/download")
+def download_m3u(playlist_id: int, db: Session = Depends(get_db)):
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+        
+    # Generate the expected path (matching your export logic)
+    playlist_dir = Path(settings.music_path) / "Playlists"
+    safe_name = playlist.name
+    for char in '<>:"/\\|?*':
+        safe_name = safe_name.replace(char, "_")
+    file_path = playlist_dir / f"{safe_name}.m3u"
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="M3U file not found on disk")
+        
+    return FileResponse(
+        path=file_path, 
+        filename=f"{safe_name}.m3u", 
+        media_type="application/vnd.apple.mpegurl"
     )
