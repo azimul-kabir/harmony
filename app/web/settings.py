@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings  # <-- Added import
 from app.database.session import get_db
 from app.services import settings_service
 from app.web.templates import templates, template_context
@@ -20,6 +21,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         template_context(
             request=request, 
             page="settings",
-            downloads=downloads
+            downloads=downloads,
+            settings=get_settings()  # <-- Passed to the template
         ),
     )
