@@ -1,11 +1,19 @@
 from sqlalchemy.orm import Session
+
 from app.core.logging import logger
 from app.database.models import SyncSource, Task
 from app.domain.task import TaskType
 from app.domain.track import Track
 from app.services.download_queue import _can_enqueue, enqueue_track
 from app.services.playlist import import_playlist
-from app.services.task_service import create_task, _finish_if_complete, start_task, set_current_item, _fail_task
+from app.services.playlist_manager import sync_database_playlist, export_m3u
+from app.services.task_service import (
+    create_task,
+    _finish_if_complete,
+    start_task,
+    set_current_item,
+    _fail_task,
+)
 
 def sync_playlist(
     db: Session,
@@ -20,61 +28,68 @@ def sync_playlist(
         spotify_url=source.spotify_url,
         source_id=source.id,
         task_type=TaskType.PLAYLIST_SYNC,
-        total_items=1, # Temporary placeholder to avoid division by zero in UI
+        total_items=1,
     )
     start_task(db=db, task=task)
     set_current_item(db=db, task=task, item="Scraping playlist data (this takes a while)...")
-
+    
     try:
         # 2. Run the heavy SpotDL process
-        playlist = import_playlist(source.spotify_url)
+        domain_playlist = import_playlist(source.spotify_url)
         
         # 3. Update the names now that we have real data
         if source.name == "Fetching Playlist Data...":
-            source.name = playlist.name
+            source.name = domain_playlist.name
             
-        task.name = playlist.name
-        task.total_items = len(playlist.tracks)
+        task.name = domain_playlist.name
+        task.total_items = len(domain_playlist.tracks)
         
         db.commit()
         db.refresh(source)
         db.refresh(task)
+        
+        logger.info("Playlist '{}' contains {} tracks.", domain_playlist.name, len(domain_playlist.tracks))
+        
+        # 4. Update the Playlist Database with the latest Spotify structure
+        db_playlist = sync_database_playlist(db, source, domain_playlist)
+        
+        # 5. Export M3U immediately, passing the freshly scraped domains tracks to fix historic library duplicates
+        export_m3u(db, db_playlist, domain_tracks=domain_playlist.tracks)
 
-        logger.info("Playlist '{}' contains {} tracks.", playlist.name, len(playlist.tracks))
-
-        if not playlist.tracks:
-            logger.warning("Playlist '{}' is empty.", playlist.name)
+        if not domain_playlist.tracks:
+            logger.warning("Playlist '{}' is empty.", domain_playlist.name)
             _finish_if_complete(db=db, task=task)
             return task
-
+            
+        # 6. Check duplicates and queue missing tracks
         queueable_tracks: list[Track] = []
         skipped_count = 0
-
-        for track in playlist.tracks:
+        
+        for track in domain_playlist.tracks:
             if _can_enqueue(db=db, track=track):
                 queueable_tracks.append(track)
             else:
                 skipped_count += 1
-
+                
         if skipped_count > 0:
             task.skipped_items = skipped_count
             db.commit()
             db.refresh(task)
-
+            
         set_current_item(db=db, task=task, item="Queueing tracks...")
-
+        
         for track in queueable_tracks:
             enqueue_track(
                 db=db,
                 track=track,
                 task_id=task.id,
             )
-
+            
         if not queueable_tracks:
             _finish_if_complete(db=db, task=task)
-
+            
         return task
-
+        
     except Exception as e:
         logger.exception("Failed to sync playlist")
         set_current_item(db=db, task=task, item=f"Error: {str(e)}")

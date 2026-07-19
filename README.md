@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <strong>A self-hosted music downloader and library manager for Spotify.</strong><br>
-  Automatically download, organize, and synchronize your music library with a modern web interface.
+  <strong>A self-hosted Spotify music downloader, playlist synchronizer, and library manager.</strong><br>
+  Automatically download, organize, synchronize, and export your music library for Navidrome and other media servers.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.1.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.2.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -19,36 +19,23 @@
 
 ---
 
-Harmony is a self-hosted music downloader and library manager that automatically downloads, organizes, and synchronizes your Spotify music collection. Built for Docker, home servers, and NAS devices, Harmony combines an automated download pipeline with a responsive web interface to maintain a continuously synchronized local music library.
+Harmony is a self-hosted music downloader and library manager that automatically downloads, organizes, synchronizes, and maintains your Spotify music collection.
 
-> **Current Version:** **v1.1.0**
+Built with **FastAPI**, **Docker**, **SpotDL**, and **SQLite**, Harmony is designed for home servers and NAS devices. It now serves as the **single source of truth** for your playlists, automatically generating standard `.m3u` playlists compatible with **Navidrome**, **Plex**, **Jellyfin**, and other media servers.
 
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Download Pipeline](#download-pipeline)
-- [Technology Stack](#technology-stack)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Directory Structure](#directory-structure)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
+> **Current Version:** **v1.2.0**
 
 ---
 
 # Features
 
-## Downloads
+## Spotify Downloads
 
 - Download Spotify tracks
 - Download Spotify albums
 - Download Spotify playlists
-- Background download queue
 - Multi-worker concurrent downloads
+- Background download queue
 - Automatic retry support
 - Download staging pipeline
 - SpotDL integration
@@ -59,13 +46,60 @@ Harmony is a self-hosted music downloader and library manager that automatically
 
 ## Playlist Synchronization
 
+Harmony keeps your Spotify playlists synchronized locally while preserving playlist membership and ordering.
+
+### Features
+
 - Save Spotify playlists as Sync Sources
-- One-click synchronization
+- One-click playlist synchronization
 - Detect newly added tracks
 - Download only missing songs
 - Skip existing library content
+- Preserve Spotify playlist order
 - Automatic duplicate detection
-- Task-based synchronization workflow
+- Snapshot ID tracking for efficient future synchronizations
+
+---
+
+## Native Playlist Management
+
+Harmony now maintains its own playlist database.
+
+Unlike traditional downloaders, Harmony remembers which songs belong to which playlists without duplicating music files.
+
+### Features
+
+- Native playlist database
+- Track playlist membership
+- Preserve Spotify ordering
+- Track last synchronization time
+- Real-time playlist updates
+- Playlist statistics
+- Playlist browser
+- Automatic playlist rebuilding
+
+---
+
+## Automatic M3U Export
+
+Harmony automatically exports every synchronized playlist as a standard `.m3u` playlist.
+
+Compatible with:
+
+- Navidrome
+- Jellyfin
+- Plex
+- Kodi
+- VLC
+- Any player supporting M3U playlists
+
+Features include:
+
+- Relative paths
+- Automatic regeneration
+- Real-time updates during downloads
+- Automatic export after synchronization
+- Dedicated `/Playlists` folder
 
 ---
 
@@ -82,6 +116,21 @@ Harmony is a self-hosted music downloader and library manager that automatically
 
 ---
 
+## Smart Library Matching
+
+Harmony automatically links songs downloaded before playlist support existed.
+
+If a matching Spotify ID cannot be found, Harmony intelligently searches the library using:
+
+- Track title
+- Artist
+- Album
+- Existing metadata
+
+Successfully matched tracks are permanently linked, allowing historical downloads to appear in playlists without requiring them to be downloaded again.
+
+---
+
 ## Modern Web Interface
 
 ### Dashboard
@@ -95,34 +144,46 @@ Harmony is a self-hosted music downloader and library manager that automatically
 
 - Live download queue
 - Worker status
-- Real-time progress updates
+- Real-time progress
 - Download history
 
 ### Sources
 
-- Manage playlist sync sources
+- Spotify playlist sources
 - One-click synchronization
 - Automatic update detection
+
+### Playlists
+
+New in **v1.2.0**
+
+- Browse synchronized playlists
+- Track counts
+- Last sync time
+- Export status
+- Mobile-friendly cards
+- Real-time updates
 
 ### Library
 
 - Browse downloaded music
 - Search library
-- Batch delete
+- Batch deletion
 - Metadata overview
 
 ### Settings
 
-- Configure download workers
-- Library paths
+- Download workers
 - Spotify credentials
-- Application preferences
+- Library paths
+- Playlist export settings
+- Application configuration
 
 ---
 
 ## Mobile Experience
 
-Harmony is designed with a mobile-first interface.
+Harmony is designed mobile-first.
 
 Features include:
 
@@ -132,52 +193,50 @@ Features include:
 - Floating Quick Add button
 - Persistent download status bar
 - Skeleton loading animations
-- Light & Dark Mode
-- Automatic OS theme detection
+- Automatic Light & Dark Mode
+- Native-feeling navigation
 
 ---
 
-# Screenshots
+# Download & Sync Pipeline
 
-> Screenshots coming soon.
-
-```
-Dashboard
-Downloads
-Library
-Sources
-Settings
-```
-
----
-
-# Download Pipeline
-
-Harmony uses a safe multi-stage processing pipeline to ensure downloaded files are verified before entering your music library.
+Harmony uses a safe multi-stage pipeline.
 
 ```text
-Spotify
-    │
-    ▼
-Download Queue
-    │
-    ▼
+Spotify Playlist
+        │
+        ▼
+Fetch Metadata
+        │
+        ▼
+Update Harmony Playlist Database
+        │
+        ▼
+Generate / Update M3U Playlist
+        │
+        ▼
+Queue Missing Downloads
+        │
+        ▼
 Download Workers
-    │
-    ▼
+        │
+        ▼
 Staging Folder
-    │
-    ▼
+        │
+        ▼
 Import Engine
-    │
-    ▼
+        │
+        ▼
 Music Library
-    │
-    ▼
-SQLite Database
+        │
+        ▼
+Automatic Playlist Rebuild
+        │
+        ▼
+Navidrome / Plex / Jellyfin
 ```
 
-Downloads are never written directly into your library. Every file is first downloaded into a staging directory, verified, organized, and only then imported into the final music collection.
+Downloads are never written directly into the music library. Every file is verified, organized, imported, and immediately reflected in the exported playlist.
 
 ---
 
@@ -214,41 +273,34 @@ Downloads are never written directly into your library. Every file is first down
 
 # Installation
 
-## Clone the repository
+Clone the repository.
 
 ```bash
 git clone https://github.com/azimul-kabir/harmony.git
+
 cd harmony
 ```
 
----
-
-## Create an environment file
+Create your environment file.
 
 ```bash
 cp .env.example .env.local
 ```
 
----
-
-## Configure Spotify credentials
+Configure Spotify credentials.
 
 ```env
 SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret
 ```
 
----
-
-## Build and start Harmony
+Build and start Harmony.
 
 ```bash
 docker compose up -d --build
 ```
 
----
-
-## Open Harmony
+Open Harmony.
 
 ```
 http://localhost:8080
@@ -256,54 +308,38 @@ http://localhost:8080
 
 ---
 
-# Configuration
-
-Example directory structure:
-
-```text
-/music
-/staging
-/database
-/config
-```
-
-Typical Docker volume mapping:
-
-| Container | Host |
-|------------|------|
-| /music | Music Library |
-| /staging | Temporary Downloads |
-| /config | Configuration |
-| /database | SQLite Database |
-
----
-
 # Directory Structure
 
 ```text
-app/
-├── api/
-├── core/
-├── database/
-├── models/
-├── services/
-├── static/
-│   ├── css/
-│   └── js/
-├── templates/
-├── workers/
-└── main.py
+Music/
+├── Albums/
+├── Singles/
+├── Playlists/
+│   ├── Road Trip.m3u
+│   ├── Chill Mix.m3u
+│   └── Workout.m3u
+└── Harmony Database
 ```
 
 ---
 
 # Why Harmony?
 
-Harmony automates the entire process of building and maintaining a local music collection.
+Harmony is more than a Spotify downloader.
 
-Instead of manually downloading songs, organizing folders, checking duplicates, and updating playlists, Harmony continuously handles everything in the background.
+It continuously synchronizes Spotify playlists, manages your local music library, and automatically exports standard playlists for your media server.
 
-Designed for always-on servers, Harmony works especially well on Docker hosts and Synology NAS devices.
+Harmony acts as the **single source of truth** between Spotify and your local music ecosystem.
+
+Spotify → Harmony → Navidrome
+
+No duplicate music.
+
+No manual playlist management.
+
+No broken playlists.
+
+Everything stays synchronized automatically.
 
 ---
 
@@ -311,34 +347,18 @@ Designed for always-on servers, Harmony works especially well on Docker hosts an
 
 ## Planned Features
 
-- [ ] Scheduled playlist synchronization
-- [ ] Advanced library search
-- [ ] Smart collections
-- [ ] Metadata editor
-- [ ] Playlist management
-- [ ] Better album artwork handling
-- [ ] Additional music providers
-- [ ] REST API improvements
-- [ ] User authentication
-- [ ] Multi-user support
-- [ ] Plugin architecture
-- [ ] Performance optimizations
-
----
-
-# Development
-
-Run Harmony locally:
-
-```bash
-python -m venv .venv
-
-source .venv/bin/activate
-
-pip install -r requirements.txt
-
-uvicorn app.main:app --reload
-```
+- Scheduled synchronization
+- Smart playlists
+- Manual playlists
+- Advanced library search
+- Metadata editor
+- Multiple music providers
+- Lyrics support
+- REST API enhancements
+- User authentication
+- Multi-user support
+- Plugin architecture
+- Performance optimizations
 
 ---
 
@@ -346,18 +366,18 @@ uvicorn app.main:app --reload
 
 Contributions are welcome.
 
-If you have ideas for improvements or discover a bug, feel free to open an issue or submit a pull request.
+If you have ideas, discover a bug, or would like to improve Harmony, feel free to open an issue or submit a pull request.
 
 ---
 
 # License
 
-This project is licensed under the MIT License.
+Harmony is licensed under the MIT License.
 
 See the `LICENSE` file for details.
 
 ---
 
 <p align="center">
-Made with ❤️ for self-hosted music enthusiasts.
+Built for self-hosted music enthusiasts.
 </p>
