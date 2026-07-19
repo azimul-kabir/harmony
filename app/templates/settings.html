@@ -26,12 +26,12 @@
             <form class="settings-form" data-category="downloads">
                 <div class="form-group" style="margin-bottom: 20px;">
                     <label style="display: block; font-weight: 600; margin-bottom: 8px;">Maximum Workers</label>
-                    <input type="number" name="download_workers" class="form-control" style="padding: 10px; width: 100px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <input type="number" name="download_workers" class="form-control" value="{{ downloads.download_workers }}" style="padding: 10px; width: 100px; border-radius: 6px; border: 1px solid var(--border-color);">
                 </div>
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
                 <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
-                        <input type="checkbox" name="retry_failed" style="width: 18px; height: 18px;"> Retry Failed Downloads
+                        <input type="checkbox" name="retry_failed" style="width: 18px; height: 18px;" {% if downloads.retry_failed %}checked{% endif %}> Retry Failed Downloads
                     </label>
                 </div>
                 <div style="margin-top: 32px;">
