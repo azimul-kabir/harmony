@@ -6,6 +6,23 @@ The format is based on **Keep a Changelog**, and this project follows **Semantic
 
 ---
 
+## v1.2.0 - 2026-07-19
+This release introduces a major architectural shift, making Harmony the single source of truth for your playlists. It natively bridges the gap with Navidrome (and other media servers) through fully automated `.m3u` playlist generation.
+
+### Added
+- **Native Playlist Database:** Harmony now natively tracks Spotify playlists and track positions in the database without duplicating audio files.
+- **Automatic M3U Export:** Playlists are instantly exported as standard `.m3u` files using relative paths to a dedicated `/Playlists` folder. Navidrome, Plex, and Jellyfin can now automatically mirror Harmony's playlists.
+- **Playlists UI:** Added a new dedicated "Playlists" tab to the sidebar. Users can view synced playlists, track counts, last sync timestamps, and M3U export statuses as mobile-friendly cards.
+- **Self-Healing Indexer:** Added a text-based fallback matcher. Historic tracks downloaded before Harmony's database existed are now automatically identified by Title/Artist, added to the `.m3u` file, and permanently linked to their Spotify IDs.
+- **Snapshot ID Tracking:** Harmony now stores the Spotify `snapshot_id` to prepare for future delta-sync optimizations, heavily reducing API calls.
+
+### Changed
+- **Sync Source Workflow:** Playlist synchronization now updates the internal database and writes the `.m3u` file *before* queuing missing tracks, ensuring the playlist file exists immediately.
+- **Real-Time Playlist Updates:** Download workers now trigger an automatic M3U rebuild the exact second a missing track finishes downloading. Your Navidrome playlists will update in real-time as the queue processes. 
+- **Navigation:** Inserted the Playlists UI tab seamlessly between the "Sources" and "Library" tabs on both desktop and mobile layouts.
+
+---
+
 ## [1.1.0] - 2026-07-18
 
 ### Added
