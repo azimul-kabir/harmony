@@ -9,36 +9,21 @@ from app.services import settings_service
 templates = Jinja2Templates(directory="app/templates")
 
 def format_tz(value, tz_str="UTC", fmt="%b %d, %H:%M"):
-    """Jinja2 filter to convert UTC datetimes to the user's timezone."""
-    if not value:
-        return "Never"
-    
-    # If the database returned a string, parse it into a datetime object
+    if not value: return "Never"
     if isinstance(value, str):
-        try:
-            value = datetime.fromisoformat(value)
-        except ValueError:
-            return value
-            
-    # Ensure the datetime is UTC-aware
+        try: value = datetime.fromisoformat(value)
+        except ValueError: return value
     if value.tzinfo is None:
         value = value.replace(tzinfo=ZoneInfo("UTC"))
-        
-    # Safely fall back to UTC if the setting is blank or invalid
-    try:
-        target_tz = ZoneInfo(tz_str if tz_str else "UTC")
-    except Exception:
-        target_tz = ZoneInfo("UTC")
+    try: target_tz = ZoneInfo(tz_str if tz_str else "UTC")
+    except Exception: target_tz = ZoneInfo("UTC")
         
     return value.astimezone(target_tz).strftime(fmt)
 
-# Register the custom filter so HTML files can use it
 templates.env.filters["format_tz"] = format_tz
-
 settings = get_settings()
 
 def template_context(**kwargs):
-    # Open a local database session just for template context injection
     db = SessionLocal()
     try:
         appearance = settings_service.get_settings_by_category(db, "appearance")
@@ -46,11 +31,24 @@ def template_context(**kwargs):
     finally:
         db.close()
 
+    # Convert UI settings into Python date formats
+    df = general.get("date_format", "DD/MM/YYYY") if general else "DD/MM/YYYY"
+    tf = general.get("time_format", "12h") if general else "12h"
+    
+    date_str = "%d/%m/%Y"
+    if df == "MM/DD/YYYY": date_str = "%m/%d/%Y"
+    elif df == "YYYY-MM-DD": date_str = "%Y-%m-%d"
+    elif df == "MMM DD, YYYY": date_str = "%b %d, %Y"
+    
+    time_str = "%I:%M %p" if tf == "12h" else "%H:%M"
+    datetime_fmt = f"{date_str} {time_str}"
+
     return {
         "app_name": settings.app_name,
         "version": settings.app_version,
         "page": "",
         "appearance": appearance,
-        "general": general,  # <-- Now EVERY page knows your timezone setting!
+        "general": general,
+        "datetime_fmt": datetime_fmt, # Passed to the templates!
         **kwargs,
     }
