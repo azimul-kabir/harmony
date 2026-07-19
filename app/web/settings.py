@@ -14,6 +14,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     settings_service.initialize_defaults(db)
     
     # 2. Fetch the current settings to populate the form
+    general = settings_service.get_settings_by_category(db, "general")
     downloads = settings_service.get_settings_by_category(db, "downloads")
     playlists = settings_service.get_settings_by_category(db, "playlists")
     appearance = settings_service.get_settings_by_category(db, "appearance")
@@ -23,6 +24,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         template_context(
             request=request, 
             page="settings",
+            general=general,
             downloads=downloads,
             playlists=playlists,
             appearance=appearance,
