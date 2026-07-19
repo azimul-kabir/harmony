@@ -25,19 +25,24 @@ function renderSources(sources) {
         // Format Date
         let formattedDate = 'Never';
         if (source.last_synced_at) {
-            // Append 'Z' to tell JS this is a UTC time from the database
             const dateObj = new Date(source.last_synced_at + "Z");
             
-            // Format the date using the global timezone variable we injected
-            formattedDate = dateObj.toLocaleString("en-US", {
+            // Map saved database settings to native browser locales
+            let locale = "en-GB"; // Defaults to DD/MM/YYYY
+            if (window.USER_DATE_FORMAT === "MM/DD/YYYY") locale = "en-US";
+            else if (window.USER_DATE_FORMAT === "YYYY-MM-DD") locale = "en-CA";
+            
+            const options = {
                 timeZone: window.USER_TIMEZONE,
-                month: "numeric", 
-                day: "numeric", 
-                year: "2-digit",
-                hour: "numeric", 
-                minute: "2-digit", 
-                hour12: true
-            });
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: window.USER_TIME_FORMAT === "12h"
+            };
+            
+            formattedDate = dateObj.toLocaleString(locale, options);
         }
 
         // Evaluate Task State
