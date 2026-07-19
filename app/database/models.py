@@ -365,3 +365,35 @@ class SyncSource(Base):
         nullable=False,
         default=datetime.utcnow,
     )
+
+class Playlist(Base):
+    __tablename__ = "playlists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    spotify_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    spotify_snapshot_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    owner: Mapped[str | None] = mapped_column(String, nullable=True)
+    track_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tracks: Mapped[list["PlaylistTrack"]] = relationship(
+        back_populates="playlist", 
+        cascade="all, delete-orphan", 
+        order_by="PlaylistTrack.position"
+    )
+
+class PlaylistTrack(Base):
+    __tablename__ = "playlist_tracks"
+
+    playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), primary_key=True)
+    # We map via Spotify ID so tracks can be added to playlists BEFORE the download finishes
+    spotify_track_id: Mapped[str] = mapped_column(String, primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    playlist: Mapped["Playlist"] = relationship(back_populates="tracks")
