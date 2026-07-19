@@ -9,6 +9,8 @@ from app.domain.playlist import Playlist
 from app.domain.track import Track
 from app.mappers.spotdl import spotdl_song_to_track
 from app.schemas.spotdl import SpotDLSong
+from app.services import settings_service
+from app.database.session import SessionLocal
 
 class SpotDLClient:
     def __init__(self) -> None:
@@ -59,6 +61,14 @@ class SpotDLClient:
         track: Track,
         output_dir: Path,
     ) -> Path:
+        # Fetch current quality setting from database
+        db = SessionLocal()
+        try:
+            downloads_settings = settings_service.get_settings_by_category(db, "downloads")
+            quality = downloads_settings.get("audio_quality", "320k")
+        finally:
+            db.close()
+
         # Define the queries as tuples: (query_string, use_loose_matching_flag)
         queries_to_try = []
         if track.spotify_url:
@@ -79,10 +89,9 @@ class SpotDLClient:
                         query,
                         "--audio",
                         *self._audio_providers(),
-                        "--output",
-                        output_template,
-                        "--threads",
-                        "1", 
+                        "--bitrate", quality,
+                        "--output", output_template,
+                        "--threads", "1", 
                     ]
                     
                     # Inject the override flag for the fallback attempt
