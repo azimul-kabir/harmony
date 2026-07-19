@@ -50,23 +50,23 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
     settings = get_settings()
     playlist_dir = Path(settings.music_path) / "Playlists"
     playlist_dir.mkdir(parents=True, exist_ok=True)
-    
+
     safe_name = playlist.name
         for char in '<>:"/\\|?*':
             safe_name = safe_name.replace(char, "_")
-    
+
     file_path = playlist_dir / f"{safe_name}.m3u"
-    
+
     # 1. Map current local downloads via strict ID lookup
     track_ids = [pt.spotify_track_id for pt in playlist.tracks]
     songs = db.query(Song).filter(Song.spotify_track_id.in_(track_ids)).all()
     song_id_map = {s.spotify_track_id: s for s in songs}
-    
+
     # 2. Map downloading/queued jobs
     from app.database.models import DownloadJob
     jobs = db.query(DownloadJob).filter(DownloadJob.spotify_track_id.in_(track_ids)).all()
     job_map = {j.spotify_track_id: j for j in jobs}
-    
+
     # 3. Map freshly scraped domain metadata if provided
     domain_map = {t.spotify_track_id: t for t in domain_tracks} if domain_tracks else {}
 
