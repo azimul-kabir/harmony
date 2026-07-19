@@ -25,26 +25,45 @@ function renderSources(sources) {
         // Format Date
         let formattedDate = 'Never';
         if (source.last_synced_at) {
-            const dateObj = new Date(source.last_synced_at + "Z");
-            
-            // Map saved database settings to native browser locales
-            let locale = "en-GB"; // Defaults to DD/MM/YYYY
-            if (window.USER_DATE_FORMAT === "MM/DD/YYYY") locale = "en-US";
-            else if (window.USER_DATE_FORMAT === "YYYY-MM-DD") locale = "en-CA";
-            
-            const options = {
-                timeZone: window.USER_TIMEZONE,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: window.USER_TIME_FORMAT === "12h"
-            };
-            
-            formattedDate = dateObj.toLocaleString(locale, options);
+            try {
+                // Ensure the string ends in 'Z' to indicate it is a UTC timestamp from the database
+                let dateStr = source.last_synced_at;
+                if (!dateStr.endsWith("Z") && !dateStr.includes("+")) {
+                    dateStr += "Z";
+                }
+                const dateObj = new Date(dateStr);
+                
+                // Map saved database settings to native browser locales
+                let locale = "en-GB"; // Defaults to DD/MM/YYYY
+                if (window.USER_DATE_FORMAT === "MM/DD/YYYY") locale = "en-US";
+                else if (window.USER_DATE_FORMAT === "YYYY-MM-DD") locale = "en-CA";
+                
+                // Strict fallback so Javascript never crashes on an empty or invalid timezone
+                let safeTz = window.USER_TIMEZONE;
+                if (!safeTz || safeTz === "None" || safeTz.trim() === "") {
+                    safeTz = "UTC";
+                }
+                
+                const options = {
+                    timeZone: safeTz,
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: window.USER_TIME_FORMAT === "12h"
+                };
+                
+                formattedDate = dateObj.toLocaleString(locale, options);
+            } catch (e) {
+                // Log the error to console but keep the rest of the page functional
+                console.error("Date formatting failed for source:", e);
+                formattedDate = "Date Error";
+            }
         }
 
+        const lastSync = formattedDate;
+        
         // Evaluate Task State
         let taskHtml = "";
         let isTaskActive = false;
