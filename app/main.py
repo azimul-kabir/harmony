@@ -1,4 +1,5 @@
 import threading
+from app.web.settings import router as settings_page_router
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -65,6 +66,7 @@ app.mount(
 app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
+app.include_router(settings_page_router)  # The /settings HTML Web page (app/web/settings.py)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(library_page_router)
