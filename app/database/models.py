@@ -407,3 +407,43 @@ class AppSetting(Base):
     type: Mapped[str] = mapped_column(String, default="string")  # string, int, boolean
     category: Mapped[str] = mapped_column(String, index=True, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Inside app/database/models.py
+
+class Song(Base):
+    __tablename__ = "songs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    artist: Mapped[str] = mapped_column(String, nullable=True)
+    album: Mapped[str] = mapped_column(String, nullable=True)
+    album_artist: Mapped[str] = mapped_column(String, nullable=True)
+    genre: Mapped[str] = mapped_column(String, nullable=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=True)
+    duration: Mapped[float] = mapped_column(Float, nullable=True)
+    path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    spotify_track_id: Mapped[str] = mapped_column(String, nullable=True, index=True)
+    
+    # NEW: Store the album artwork URL
+    cover_url: Mapped[str] = mapped_column(String, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class DownloadJob(Base):
+    __tablename__ = "download_jobs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    spotify_track_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    artist: Mapped[str] = mapped_column(String, nullable=True)
+    album: Mapped[str] = mapped_column(String, nullable=True)
+    album_artist: Mapped[str] = mapped_column(String, nullable=True)
+    track: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # NEW: Store the album artwork URL for the dashboard queue
+    cover_url: Mapped[str] = mapped_column(String, nullable=True)
+    
+    status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
+    error_message: Mapped[str] = mapped_column(String, nullable=True)
+    source_url: Mapped[str] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
