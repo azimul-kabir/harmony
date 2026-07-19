@@ -10,10 +10,14 @@ INVALID_CHARS = '<>:"/\\|?*'
 
 def _safe(value: str) -> str:
     value = value.strip()
-
-    for ch in INVALID_CHARS:
-        value = value.replace(ch, "_")
-
+    # Only replace characters that are strictly illegal in Windows/Linux file paths
+    # We leave Unicode characters (like বাংলা) alone!
+    invalid_map = {
+        '<': '_', '>': '_', ':': '_', '"': '_', 
+        '/': '_', '\\': '_', '|': '_', '?': '_', '*': '_'
+    }
+    for char, replacement in invalid_map.items():
+        value = value.replace(char, replacement)
     return value
 
 
