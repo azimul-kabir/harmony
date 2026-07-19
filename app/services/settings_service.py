@@ -5,6 +5,7 @@ DEFAULT_SETTINGS = [
     {"key": "timezone", "value": "Asia/Dhaka", "type": "string", "category": "general"},
     {"key": "date_format", "value": "DD/MM/YYYY", "type": "string", "category": "general"},
     {"key": "time_format", "value": "12h", "type": "string", "category": "general"},
+    {"key": "audio_quality", "value": "128k", "type": "string", "category": "downloads"},
     {"key": "download_workers", "value": "4", "type": "int", "category": "downloads"},
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
