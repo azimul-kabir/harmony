@@ -32,8 +32,13 @@
             </div>
         </div>
         
-        <div class="source-actions" style="margin-top: 16px;">
-            <button class="btn-secondary" disabled style="background: transparent;">Manage Tracks (Coming Soon)</button>
+        <div class="source-actions" style="margin-top: 16px; display: flex; gap: 8px;">
+            <button class="btn-secondary" disabled style="background: transparent;">Manage Tracks</button>
+            
+            <!-- NEW: Download Button -->
+            <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
+                ⬇ Download .m3u
+            </a>
         </div>
     </div>
     {% endfor %}
