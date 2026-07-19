@@ -53,5 +53,9 @@
 {% endblock %} 
 
 {% block scripts %} 
+<script>
+    // Pass the user's timezone from the database to Javascript
+    window.USER_TIMEZONE = "{{ general.timezone if general else 'UTC' }}";
+</script>
 <script src="/static/js/sources.js"></script> 
 {% endblock %}
