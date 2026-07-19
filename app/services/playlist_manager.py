@@ -51,7 +51,10 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
     playlist_dir = Path(settings.music_path) / "Playlists"
     playlist_dir.mkdir(parents=True, exist_ok=True)
     
-    safe_name = "".join([c if c.isalnum() or c in " -_" else "_" for c in playlist.name])
+    safe_name = playlist.name
+        for char in '<>:"/\\|?*':
+            safe_name = safe_name.replace(char, "_")
+    
     file_path = playlist_dir / f"{safe_name}.m3u"
     
     # 1. Map current local downloads via strict ID lookup
