@@ -25,7 +25,8 @@
             </div>
             <div style="display: flex; justify-content: space-between;">
                 <strong>Last Sync:</strong> 
-                <span>{{ p.last_synced_at.strftime('%b %d, %H:%M') if p.last_synced_at else 'Never' }}</span>
+                <!-- Applied the format_tz filter here -->
+                <span>{{ p.last_synced_at | format_tz(general.timezone, '%b %d, %H:%M') if p.last_synced_at else 'Never' }}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
                 <strong>M3U Status:</strong> <span style="color: var(--success); font-weight: 600;">✓ Exported</span>
