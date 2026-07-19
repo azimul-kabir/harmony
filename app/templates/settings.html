@@ -61,6 +61,14 @@
             <h2 style="margin-top: 0; margin-bottom: 24px;">Downloads</h2>
             <form class="settings-form" data-category="downloads">
                 <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Audio Quality</label>
+                    <select name="audio_quality" class="form-control responsive-input">
+                        <option value="320k" {% if downloads.audio_quality == '320k' %}selected{% endif %}>320kbps (Best)</option>
+                        <option value="256k" {% if downloads.audio_quality == '256k' %}selected{% endif %}>256kbps</option>
+                        <option value="128k" {% if downloads.audio_quality == '128k' %}selected{% endif %}>128kbps (Smallest)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
                     <label style="display: block; font-weight: 600; margin-bottom: 8px;">Maximum Workers</label>
                     <input type="number" name="download_workers" class="form-control responsive-input-small" value="{{ downloads.download_workers }}">
                     <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Number of concurrent song downloads allowed.</p>
