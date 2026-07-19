@@ -42,7 +42,7 @@
 
 {% block scripts %} 
 <script>
-    // Safely use .get() so it never prints an empty string if the key is missing
+    // Safely use .get() so it never crashes if the 'general' key is missing
     window.USER_TIMEZONE = "{{ general.get('timezone', 'UTC') if general else 'UTC' }}";
     window.USER_DATE_FORMAT = "{{ general.get('date_format', 'DD/MM/YYYY') if general else 'DD/MM/YYYY' }}";
     window.USER_TIME_FORMAT = "{{ general.get('time_format', '12h') if general else '12h' }}";
