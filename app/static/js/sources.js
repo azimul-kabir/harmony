@@ -23,10 +23,21 @@ function renderSources(sources) {
         let card = document.getElementById(`source-card-${source.id}`);
         
         // Format Date
-        let lastSync = "Never";
+        let formattedDate = 'Never';
         if (source.last_synced_at) {
-            const date = new Date(source.last_synced_at);
-            if (!isNaN(date)) lastSync = date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+            // Append 'Z' to tell JS this is a UTC time from the database
+            const dateObj = new Date(source.last_synced_at + "Z");
+            
+            // Format the date using the global timezone variable we injected
+            formattedDate = dateObj.toLocaleString("en-US", {
+                timeZone: window.USER_TIMEZONE,
+                month: "numeric", 
+                day: "numeric", 
+                year: "2-digit",
+                hour: "numeric", 
+                minute: "2-digit", 
+                hour12: true
+            });
         }
 
         // Evaluate Task State
