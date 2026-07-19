@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, UTC
 
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -397,3 +398,12 @@ class PlaylistTrack(Base):
     added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     playlist: Mapped["Playlist"] = relationship(back_populates="tracks")
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+    type: Mapped[str] = mapped_column(String, default="string")  # string, int, boolean
+    category: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

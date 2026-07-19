@@ -37,21 +37,15 @@
             <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
         </div>
     </div>
-    
-    <div class="skeleton-card">
-        <div style="display: flex; justify-content: space-between;">
-            <div class="skeleton skeleton-text title" style="width: 50%;"></div>
-            <div class="skeleton skeleton-text" style="width: 60px; height: 24px; border-radius: 999px;"></div>
-        </div>
-        <div class="skeleton skeleton-text" style="height: 60px; border-radius: 8px;"></div>
-        <div style="display: flex; gap: 8px; margin-top: auto;">
-            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
-            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
-        </div>
-    </div>
 </div>
 {% endblock %} 
 
 {% block scripts %} 
-<script src="/static/js/sources.js"></script> 
+<script>
+    // Safely use .get() so it never crashes if the 'general' key is missing
+    window.USER_TIMEZONE = "{{ general.get('timezone', 'UTC') if general else 'UTC' }}";
+    window.USER_DATE_FORMAT = "{{ general.get('date_format', 'DD/MM/YYYY') if general else 'DD/MM/YYYY' }}";
+    window.USER_TIME_FORMAT = "{{ general.get('time_format', '12h') if general else '12h' }}";
+</script>
+<script src="/static/js/sources.js?v={{ version }}"></script> 
 {% endblock %}

@@ -1,125 +1,337 @@
-{% extends "base.html" %} 
-{% block title %}Settings{% endblock %} 
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
 
-{% block content %} 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+{% block content %}
+<div class="settings-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
     <h1 style="margin: 0;">Settings</h1>
-    <span class="badge badge-running" style="font-size: 0.9rem; padding: 6px 12px;">Read-Only (Configured via .env)</span>
 </div>
 
-<div class="sources-grid" style="grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));">
+<div class="settings-container">
+    <!-- Sidebar Navigation -->
+    <div class="settings-sidebar">
+        <div class="settings-tabs" id="settings-tabs">
+            <button class="settings-tab active" data-target="general">General</button>
+            <button class="settings-tab" data-target="downloads">Downloads</button>
+            <button class="settings-tab" data-target="playlists">Playlists</button>
+            <button class="settings-tab" data-target="appearance">Appearance</button>
+            <button class="settings-tab" data-target="system">System</button>
+        </div>
+    </div>
+
+    <!-- Content Area -->
+    <div class="settings-content">
+        
+        <!-- General Tab -->
+        <div class="settings-section active" id="tab-general">
+            <h2 style="margin-top: 0; margin-bottom: 24px;">General</h2>
+            <form class="settings-form" data-category="general">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Timezone</label>
+                    <select name="timezone" class="form-control responsive-input">
+                        <option value="UTC" {% if general.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+                        <option value="Asia/Dhaka" {% if general.timezone == 'Asia/Dhaka' %}selected{% endif %}>Asia/Dhaka (GMT+6)</option>
+                        <option value="America/New_York" {% if general.timezone == 'America/New_York' %}selected{% endif %}>America/New_York (EST)</option>
+                        <option value="Europe/London" {% if general.timezone == 'Europe/London' %}selected{% endif %}>Europe/London (GMT)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Date Format</label>
+                    <select name="date_format" class="form-control responsive-input">
+                        <option value="DD/MM/YYYY" {% if general.date_format == 'DD/MM/YYYY' %}selected{% endif %}>DD/MM/YYYY (31/12/2026)</option>
+                        <option value="MM/DD/YYYY" {% if general.date_format == 'MM/DD/YYYY' %}selected{% endif %}>MM/DD/YYYY (12/31/2026)</option>
+                        <option value="YYYY-MM-DD" {% if general.date_format == 'YYYY-MM-DD' %}selected{% endif %}>YYYY-MM-DD (2026-12-31)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Time Format</label>
+                    <select name="time_format" class="form-control responsive-input">
+                        <option value="12h" {% if general.time_format == '12h' %}selected{% endif %}>12-Hour (02:30 PM)</option>
+                        <option value="24h" {% if general.time_format == '24h' %}selected{% endif %}>24-Hour (14:30)</option>
+                    </select>
+                </div>
+                <div style="margin-top: 32px;">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
+                </div>
+            </form>
+        </div>
+
+        <!-- Downloads Tab -->
+        <div class="settings-section" id="tab-downloads" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 24px;">Downloads</h2>
+            <form class="settings-form" data-category="downloads">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Audio Quality</label>
+                    <select name="audio_quality" class="form-control responsive-input">
+                        <option value="320k" {% if downloads.audio_quality == '320k' %}selected{% endif %}>320kbps (Best)</option>
+                        <option value="256k" {% if downloads.audio_quality == '256k' %}selected{% endif %}>256kbps</option>
+                        <option value="128k" {% if downloads.audio_quality == '128k' %}selected{% endif %}>128kbps (Smallest)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Maximum Workers</label>
+                    <input type="number" name="download_workers" class="form-control responsive-input-small" value="{{ downloads.download_workers }}">
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Number of concurrent song downloads allowed.</p>
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="retry_failed" style="width: 18px; height: 18px;" {% if downloads.retry_failed %}checked{% endif %}> 
+                        Retry Failed Downloads
+                    </label>
+                </div>
+                <div style="margin-top: 32px;">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
+                </div>
+            </form>
+        </div>
+
+        <!-- Playlists Tab -->
+        <div class="settings-section" id="tab-playlists" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 24px;">Playlists</h2>
+            <form class="settings-form" data-category="playlists">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="playlist_sync_enabled" style="width: 18px; height: 18px;" {% if playlists.playlist_sync_enabled %}checked{% endif %}> 
+                        Enable Playlist Sync
+                    </label>
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">M3U Export Folder</label>
+                    <input type="text" name="m3u_export_folder" class="form-control responsive-input" value="{{ playlists.m3u_export_folder }}">
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">The directory inside your library where .m3u files are saved.</p>
+                </div>
+                <div style="margin-top: 32px;">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
+                </div>
+            </form>
+        </div>
+
+        <!-- Appearance Tab -->
+        <div class="settings-section" id="tab-appearance" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 24px;">Appearance</h2>
+            <form class="settings-form" data-category="appearance">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Application Theme</label>
+                    <select name="theme" class="form-control responsive-input">
+                        <option value="auto" {% if appearance.theme == 'auto' %}selected{% endif %}>OS Default (Auto)</option>
+                        <option value="dark" {% if appearance.theme == 'dark' %}selected{% endif %}>Dark Mode</option>
+                        <option value="light" {% if appearance.theme == 'light' %}selected{% endif %}>Light Mode</option>
+                    </select>
+                </div>
+                <div style="margin-top: 32px;">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
+                </div>
+            </form>
+        </div>
+
+        <!-- System Tab (Legacy Env variables) -->
+        <div class="settings-section" id="tab-system" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 8px;">System Configuration</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">These variables are loaded from your <code>.env</code> file and require a container restart to modify.</p>
+            
+            <div class="system-grid">
+                <div class="system-card">
+                    <div class="system-card-title">App Version</div>
+                    <div class="system-card-value">{{ settings.app_version }}</div>
+                </div>
+                <div class="system-card">
+                    <div class="system-card-title">Music Path</div>
+                    <div class="system-card-value">{{ settings.music_path }}</div>
+                </div>
+                <div class="system-card">
+                    <div class="system-card-title">Download Path</div>
+                    <div class="system-card-value">{{ settings.download_path }}</div>
+                </div>
+                <div class="system-card">
+                    <div class="system-card-title">Staging Path</div>
+                    <div class="system-card-value">{{ settings.staging_path }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Base Container Styles */
+    .settings-container {
+        display: flex;
+        min-height: 60vh;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
     
-    <!-- General & Paths -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">📁 Storage Paths</h3>
-        </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Library Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.music_path }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Download Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.download_path }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Staging Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.staging_path }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Failed Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.failed_path }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    .settings-sidebar {
+        width: 250px;
+        border-right: 1px solid var(--border-color);
+        background: var(--bg-surface);
+    }
+    
+    .settings-content {
+        flex: 1;
+        padding: 32px;
+        background: var(--bg-surface-alt);
+    }
 
-    <!-- Download Engine -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">⚡ Download Engine</h3>
-        </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Max Workers</td>
-                    <td style="color: #555;">{{ settings.max_parallel_downloads }} concurrent threads</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Audio Providers</td>
-                    <td style="color: #555;">{{ settings.audio_providers }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">SpotDL Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.spotdl_path }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    /* Tab Styles */
+    .settings-tab {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 14px 24px;
+        background: transparent;
+        border: none;
+        border-left: 3px solid transparent;
+        font-size: 1rem;
+        color: var(--text-main);
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .settings-tab:hover { background: var(--bg-surface-hover); }
+    .settings-tab.active { 
+        border-left-color: var(--primary); 
+        background: var(--bg-surface-hover); 
+        font-weight: 600; 
+        color: var(--primary); 
+    }
 
-    <!-- Spotify API -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">🎧 Spotify Metadata</h3>
-        </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Client ID</td>
-                    <td>
-                        {% if settings.spotify_client_id %}
-                            <span class="badge badge-completed">Configured</span>
-                        {% else %}
-                            <span class="badge badge-failed">Missing</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Client Secret</td>
-                    <td>
-                        {% if settings.spotify_client_secret %}
-                            <span class="badge badge-completed">Configured</span>
-                        {% else %}
-                            <span class="badge badge-failed">Missing</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Official API</td>
-                    <td style="color: #555;">{{ "Enabled" if settings.use_official_spotify_api else "Disabled (Fallback Mode)" }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    /* Input Styles */
+    .responsive-input {
+        padding: 10px;
+        width: 300px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-surface);
+        color: var(--text-main);
+    }
+    .responsive-input-small {
+        padding: 10px;
+        width: 100px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-surface);
+        color: var(--text-main);
+    }
 
-    <!-- System Info -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">⚙️ System Information</h3>
-        </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Harmony Version</td>
-                    <td style="color: #555;">v{{ settings.app_version }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Log Level</td>
-                    <td><span class="badge badge-queued">{{ settings.log_level }}</span></td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Database URL</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.database_url }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Internal Host</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.host }}:{{ settings.port }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    /* System Card Grid */
+    .system-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+    }
+    .system-card {
+        padding: 16px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+    .system-card-title {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-weight: bold;
+    }
+    .system-card-value {
+        font-family: monospace;
+        margin-top: 6px;
+        font-size: 0.95rem;
+        word-break: break-all;
+    }
 
-</div>
+    /* MOBILE RESPONSIVE QUERIES */
+    @media (max-width: 768px) {
+        .settings-container {
+            flex-direction: column;
+        }
+        .settings-sidebar {
+            width: 100%;
+            border-right: none;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .settings-tabs {
+            display: flex;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+        }
+        .settings-tabs::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+        .settings-tab {
+            border-left: none;
+            border-bottom: 3px solid transparent;
+            padding: 14px 20px;
+            text-align: center;
+        }
+        .settings-tab.active {
+            border-left-color: transparent;
+            border-bottom-color: var(--primary);
+        }
+        .settings-content {
+            padding: 20px;
+        }
+        .responsive-input {
+            width: 100%; /* Full width on mobile */
+        }
+        .system-grid {
+            grid-template-columns: 1fr; /* Stack system cards on mobile */
+        }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Tab switching logic
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
+            
+            e.target.classList.add('active');
+            document.getElementById('tab-' + e.target.dataset.target).style.display = 'block';
+        });
+    });
+
+    // Handle saving Forms asynchronously
+    document.querySelectorAll('.settings-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const category = form.dataset.category;
+            const data = {};
+            
+            new FormData(form).forEach((value, key) => { data[key] = value; });
+            form.querySelectorAll('input[type="checkbox"]').forEach(cb => { data[cb.name] = cb.checked; });
+
+            const res = await fetch(`/api/settings/${category}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if(res.ok) {
+                // Instantly apply theme shift without page reload
+                if(category === 'appearance' && data.theme) {
+                    if (data.theme === 'auto') {
+                        document.documentElement.removeAttribute('data-theme');
+                    } else {
+                        document.documentElement.setAttribute('data-theme', data.theme);
+                    }
+                }
+
+                const status = form.querySelector('.save-status');
+                status.style.display = 'inline';
+                setTimeout(() => status.style.display = 'none', 3000);
+            }
+        });
+    });
+</script>
 {% endblock %}

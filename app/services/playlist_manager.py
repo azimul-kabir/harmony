@@ -51,7 +51,11 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
     playlist_dir = Path(settings.music_path) / "Playlists"
     playlist_dir.mkdir(parents=True, exist_ok=True)
     
-    safe_name = "".join([c if c.isalnum() or c in " -_" else "_" for c in playlist.name])
+    # Clean the filename: remove only characters that are illegal in file systems
+    safe_name = playlist.name
+    for char in '<>:"/\\|?*':
+        safe_name = safe_name.replace(char, "_")
+        
     file_path = playlist_dir / f"{safe_name}.m3u"
     
     # 1. Map current local downloads via strict ID lookup
@@ -66,7 +70,7 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
     
     # 3. Map freshly scraped domain metadata if provided
     domain_map = {t.spotify_track_id: t for t in domain_tracks} if domain_tracks else {}
-
+    
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
@@ -82,58 +86,44 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
                 full_song_path = None
                 
                 if song:
-                    # Best Strategy: Strict database ID match found
                     artist = song.artist or "Unknown Artist"
                     title = song.title or "Unknown Title"
                     duration = int(song.duration) if song.duration else -1
                     full_song_path = Path(song.path)
                 else:
-                    # Secondary Strategy: Extract metadata from Domain object or Job
                     if dt:
                         title = dt.title
                         artist = dt.artist
                     elif job:
                         title = job.title
                         artist = job.artist
-
+                    
                     if title and title != "Unknown Title":
-                        # Looser text-based fallback: match mainly by title to avoid issues 
-                        # where ID3 tag artists differ slightly from Spotify official metadata.
-                        fallback_song = db.query(Song).filter(
-                            func.lower(Song.title) == title.lower()
-                        ).first()
-                        
+                        fallback_song = db.query(Song).filter(func.lower(Song.title) == title.lower()).first()
                         if fallback_song:
                             artist = fallback_song.artist or artist
                             title = fallback_song.title or title
                             duration = int(fallback_song.duration) if fallback_song.duration else -1
                             full_song_path = Path(fallback_song.path)
-                            
-                            # Self-healing: Update the DB so we don't need text fallback next time
                             if not fallback_song.spotify_track_id:
                                 fallback_song.spotify_track_id = pt.spotify_track_id
                                 db.commit()
-                                
                         elif job:
-                            # Placeholder for paths currently queueing down the worker pipeline
                             album_artist = _safe(job.album_artist or job.artist or "Unknown Artist")
                             album = _safe(job.album) if job.album else "Singles"
                             track_num = f"{job.track:02d} - " if job.track is not None else ""
                             filename = f"{track_num}{_safe(title)}.mp3"
                             full_song_path = Path(settings.music_path) / album_artist / album / filename
-                            
                         elif dt:
-                            # Ultimate Fallback: The song exists but has a weird name we couldn't match,
-                            # OR it was completely deleted. Predict the expected path using fresh Spotify data.
                             album_artist = _safe(dt.album_artist or dt.artist or "Unknown Artist")
                             album = _safe(dt.album) if dt.album else "Singles"
                             track_num = f"{dt.track:02d} - " if dt.track is not None else ""
                             filename = f"{track_num}{_safe(title)}.mp3"
                             full_song_path = Path(settings.music_path) / album_artist / album / filename
-                            
-                if not full_song_path:
-                    continue  # Should almost never happen now
                 
+                if not full_song_path:
+                    continue
+                    
                 try:
                     rel_path = os.path.relpath(full_song_path, playlist_dir)
                 except ValueError:
@@ -141,7 +131,7 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
                     
                 f.write(f"#EXTINF:{duration},{artist} - {title}\n")
                 f.write(f"{rel_path}\n")
-                
+        
         logger.info("Exported M3U playlist: {} with {} tracks mapped.", file_path.name, len(playlist.tracks))
     except Exception as e:
         logger.error("Failed to export M3U for {}: {}", playlist.name, e)

@@ -6,6 +6,103 @@ The format is based on **Keep a Changelog**, and this project follows **Semantic
 
 ---
 
+## [v1.3.0] - 2026-07-19
+
+This release focuses on usability, reliability, and playlist management improvements. Harmony introduces configurable audio quality, direct playlist downloads, improved Unicode support, and numerous backend refinements for a smoother synchronization experience.
+
+### ✨ Added
+
+- **Audio Quality Control**
+  - Added a configurable audio quality setting in **Settings → Downloads**.
+  - Users can now choose their preferred download bitrate:
+    - 128 kbps
+    - 256 kbps
+    - 320 kbps
+  - Harmony automatically passes the selected bitrate to SpotDL during downloads.
+
+- **Direct M3U Download**
+  - Added a **Download .m3u** button to every playlist card.
+  - Users can instantly download the generated playlist file directly from the browser.
+  - Added a dedicated API endpoint for serving exported playlist files.
+
+- **Improved Unicode Support**
+  - Playlist filenames now preserve Unicode characters instead of aggressively sanitizing names.
+  - Playlists containing Bengali, Japanese, Arabic, Chinese, and other non-Latin characters now display correctly in Navidrome and other compatible media servers.
+
+- **Improved Timezone Handling**
+  - Added robust client-side fallback logic for date and time formatting.
+  - Synchronization timestamps now display correctly even when browser timezone data is unavailable or delayed.
+
+---
+
+### 🔄 Changed
+
+- **Database Reliability**
+  - Updated the database session configuration to use absolute filesystem paths.
+  - Prevents accidental database recreation or data loss after Docker container restarts.
+
+- **Efficient UI Updates**
+  - Replaced full list re-rendering with a surgical DOM patching approach.
+  - Only modified playlist cards are updated, resulting in smoother real-time synchronization and reduced UI flicker.
+
+- **Playlist Filename Sanitization**
+  - Simplified filename sanitization to remove only operating system restricted characters.
+  - Language-specific characters are now preserved for cleaner playlist names.
+
+---
+
+### 🐛 Fixed
+
+- Fixed a `NameError` in the Playlist API caused by a missing playlist database model import.
+- Fixed an `IndentationError` in the playlist export logic that prevented M3U generation.
+- Fixed browser caching issues by versioning static JavaScript and CSS assets.
+- Improved playlist export reliability for libraries containing international filenames.
+- Fixed inconsistent timestamp rendering across browsers.
+
+---
+
+### ⚡ Performance
+
+- Faster playlist synchronization through incremental DOM updates.
+- Reduced unnecessary frontend rendering during Server-Sent Events (SSE).
+- Improved M3U generation performance and filename handling.
+- More reliable database initialization inside Docker environments.
+
+---
+
+### 🛠 Developer Improvements
+
+- Refactored playlist export logic for improved maintainability.
+- Improved database initialization and path resolution.
+- Cleaner frontend update architecture for future playlist enhancements.
+- Better cache management during frontend deployments.
+
+---
+
+## Upgrade Notes
+
+After upgrading to **v1.3.0**:
+
+- Hard refresh your browser (or clear the browser cache) to load the latest JavaScript and CSS assets.
+- Existing playlists will continue to function without migration.
+- Audio Quality defaults to the previous behavior until changed in **Settings → Downloads**.
+
+---
+
+## Looking Ahead
+
+The improvements in v1.3.0 provide the foundation for upcoming releases, including:
+
+- Editable application settings
+- Smart Library
+- Smart Playlists
+- Scheduled synchronization
+- Advanced library management
+- Metadata editing
+- Enhanced Navidrome integration
+
+---
+
 ## v1.2.0 - 2026-07-19
 This release introduces a major architectural shift, making Harmony the single source of truth for your playlists. It natively bridges the gap with Navidrome (and other media servers) through fully automated `.m3u` playlist generation.
 

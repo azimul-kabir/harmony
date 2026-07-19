@@ -25,15 +25,20 @@
             </div>
             <div style="display: flex; justify-content: space-between;">
                 <strong>Last Sync:</strong> 
-                <span>{{ p.last_synced_at.strftime('%b %d, %H:%M') if p.last_synced_at else 'Never' }}</span>
+                <span>{{ p.last_synced_at | format_tz(general.timezone, datetime_fmt) if p.last_synced_at else 'Never' }}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
                 <strong>M3U Status:</strong> <span style="color: var(--success); font-weight: 600;">✓ Exported</span>
             </div>
         </div>
         
-        <div class="source-actions" style="margin-top: 16px;">
-            <button class="btn-secondary" disabled style="background: transparent;">Manage Tracks (Coming Soon)</button>
+        <div class="source-actions" style="margin-top: 16px; display: flex; gap: 8px;">
+            <button class="btn-secondary" disabled style="background: transparent;">Manage Tracks</button>
+            
+            <!-- NEW: Download Button -->
+            <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
+                ⬇ Download .m3u
+            </a>
         </div>
     </div>
     {% endfor %}
