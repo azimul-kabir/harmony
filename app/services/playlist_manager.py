@@ -96,11 +96,11 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
                         title = job.title
                         artist = job.artist
 
-                    if title and artist and title != "Unknown Title":
-                        # Text-based fallback against the library to catch pre-existing music files
+                    if title and title != "Unknown Title":
+                        # Looser text-based fallback: match mainly by title to avoid issues 
+                        # where ID3 tag artists differ slightly from Spotify official metadata.
                         fallback_song = db.query(Song).filter(
-                            func.lower(Song.title) == title.lower(),
-                            func.lower(Song.artist) == artist.lower()
+                            func.lower(Song.title) == title.lower()
                         ).first()
                         
                         if fallback_song:
@@ -115,15 +115,24 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
                                 db.commit()
                                 
                         elif job:
-                            # Pure placeholder fallback for paths currently queueing down the worker pipeline
+                            # Placeholder for paths currently queueing down the worker pipeline
                             album_artist = _safe(job.album_artist or job.artist or "Unknown Artist")
                             album = _safe(job.album) if job.album else "Singles"
                             track_num = f"{job.track:02d} - " if job.track is not None else ""
                             filename = f"{track_num}{_safe(title)}.mp3"
                             full_song_path = Path(settings.music_path) / album_artist / album / filename
                             
+                        elif dt:
+                            # Ultimate Fallback: The song exists but has a weird name we couldn't match,
+                            # OR it was completely deleted. Predict the expected path using fresh Spotify data.
+                            album_artist = _safe(dt.album_artist or dt.artist or "Unknown Artist")
+                            album = _safe(dt.album) if dt.album else "Singles"
+                            track_num = f"{dt.track:02d} - " if dt.track is not None else ""
+                            filename = f"{track_num}{_safe(title)}.mp3"
+                            full_song_path = Path(settings.music_path) / album_artist / album / filename
+                            
                 if not full_song_path:
-                    continue  # Skip track only if absolutely zero matching metrics are met
+                    continue  # Should almost never happen now
                 
                 try:
                     rel_path = os.path.relpath(full_song_path, playlist_dir)
@@ -133,7 +142,7 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
                 f.write(f"#EXTINF:{duration},{artist} - {title}\n")
                 f.write(f"{rel_path}\n")
                 
-        logger.info("Exported M3U playlist: {} with fallback index matching.", file_path.name)
+        logger.info("Exported M3U playlist: {} with {} tracks mapped.", file_path.name, len(playlist.tracks))
     except Exception as e:
         logger.error("Failed to export M3U for {}: {}", playlist.name, e)
 
