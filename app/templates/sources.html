@@ -24,16 +24,28 @@
     </form>
 </div>
 
-<div id="sources" class="sources-grid"></div>
+<div id="sources" class="sources-grid">
+    <!-- Skeleton Loading State -->
+    <div class="skeleton-card">
+        <div style="display: flex; justify-content: space-between;">
+            <div class="skeleton skeleton-text title"></div>
+            <div class="skeleton skeleton-text" style="width: 60px; height: 24px; border-radius: 999px;"></div>
+        </div>
+        <div class="skeleton skeleton-text" style="height: 60px; border-radius: 8px;"></div>
+        <div style="display: flex; gap: 8px; margin-top: auto;">
+            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
+            <div class="skeleton skeleton-text" style="height: 36px; border-radius: 6px; flex: 1;"></div>
+        </div>
+    </div>
+</div>
 {% endblock %} 
 
 {% block scripts %} 
 <script>
-    // Pass ALL user settings directly to Javascript
-    window.USER_TIMEZONE = "{{ general.timezone if general else 'UTC' }}";
-    window.USER_DATE_FORMAT = "{{ general.date_format if general else 'DD/MM/YYYY' }}";
-    window.USER_TIME_FORMAT = "{{ general.time_format if general else '12h' }}";
+    // Safely use .get() so it never prints an empty string if the key is missing
+    window.USER_TIMEZONE = "{{ general.get('timezone', 'UTC') if general else 'UTC' }}";
+    window.USER_DATE_FORMAT = "{{ general.get('date_format', 'DD/MM/YYYY') if general else 'DD/MM/YYYY' }}";
+    window.USER_TIME_FORMAT = "{{ general.get('time_format', '12h') if general else '12h' }}";
 </script>
-<!-- The ?v={{ version }} forces your phone to download the newest Javascript file -->
 <script src="/static/js/sources.js?v={{ version }}"></script> 
 {% endblock %}
