@@ -1,125 +1,108 @@
-{% extends "base.html" %} 
-{% block title %}Settings{% endblock %} 
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
 
-{% block content %} 
+{% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
     <h1 style="margin: 0;">Settings</h1>
-    <span class="badge badge-running" style="font-size: 0.9rem; padding: 6px 12px;">Read-Only (Configured via .env)</span>
 </div>
 
-<div class="sources-grid" style="grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));">
-    
-    <!-- General & Paths -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">📁 Storage Paths</h3>
+<div class="panel" style="padding: 0; display: flex; min-height: 60vh;">
+    <!-- Sidebar Navigation -->
+    <div style="width: 250px; border-right: 1px solid var(--border-color); padding: 24px 0;">
+        <div class="settings-tabs" id="settings-tabs">
+            <button class="settings-tab active" data-target="downloads">Downloads</button>
+            <button class="settings-tab" data-target="playlists">Playlists</button>
+            <button class="settings-tab" data-target="appearance">Appearance</button>
+            <button class="settings-tab" data-target="system">System (Read-Only)</button>
         </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Library Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.music_path }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Download Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.download_path }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Staging Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.staging_path }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Failed Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.failed_path }}</td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 
-    <!-- Download Engine -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">⚡ Download Engine</h3>
+    <!-- Content Area -->
+    <div style="flex: 1; padding: 32px; background: var(--bg-surface-alt);">
+        
+        <!-- Downloads Tab -->
+        <div class="settings-section active" id="tab-downloads">
+            <h2 style="margin-top: 0;">Downloads</h2>
+            <form class="settings-form" data-category="downloads">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Maximum Workers</label>
+                    <input type="number" name="download_workers" class="form-control" style="padding: 10px; width: 100px; border-radius: 6px; border: 1px solid var(--border-color);">
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="retry_failed" style="width: 18px; height: 18px;"> Retry Failed Downloads
+                    </label>
+                </div>
+                <div style="margin-top: 32px;">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <span class="save-status" style="margin-left: 12px; color: var(--success); display: none;">✓ Saved</span>
+                </div>
+            </form>
         </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Max Workers</td>
-                    <td style="color: #555;">{{ settings.max_parallel_downloads }} concurrent threads</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Audio Providers</td>
-                    <td style="color: #555;">{{ settings.audio_providers }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">SpotDL Path</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.spotdl_path }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
 
-    <!-- Spotify API -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">🎧 Spotify Metadata</h3>
+        <!-- System Tab (Legacy Env variables) -->
+        <div class="settings-section" id="tab-system" style="display: none;">
+            <h2 style="margin-top: 0;">System Configuration</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">These variables are loaded from your <code>.env</code> file and require a container restart to modify.</p>
+            
+            <div class="system-grid" style="display: grid; gap: 16px; margin-top: 24px;">
+                <div style="padding: 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Music Path</div>
+                    <div style="font-family: monospace; margin-top: 4px;">{{ settings.music_path }}</div>
+                </div>
+                <!-- Add other env variables here -->
+            </div>
         </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Client ID</td>
-                    <td>
-                        {% if settings.spotify_client_id %}
-                            <span class="badge badge-completed">Configured</span>
-                        {% else %}
-                            <span class="badge badge-failed">Missing</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Client Secret</td>
-                    <td>
-                        {% if settings.spotify_client_secret %}
-                            <span class="badge badge-completed">Configured</span>
-                        {% else %}
-                            <span class="badge badge-failed">Missing</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Official API</td>
-                    <td style="color: #555;">{{ "Enabled" if settings.use_official_spotify_api else "Disabled (Fallback Mode)" }}</td>
-                </tr>
-            </tbody>
-        </table>
     </div>
-
-    <!-- System Info -->
-    <div class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #eee;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: #222;">⚙️ System Information</h3>
-        </div>
-        <table class="table command-table" style="margin: 0; box-shadow: none;">
-            <tbody>
-                <tr>
-                    <td style="width: 140px; font-weight: 600; padding-left: 24px;">Harmony Version</td>
-                    <td style="color: #555;">v{{ settings.app_version }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Log Level</td>
-                    <td><span class="badge badge-queued">{{ settings.log_level }}</span></td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Database URL</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.database_url }}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; padding-left: 24px;">Internal Host</td>
-                    <td style="color: #555; font-family: monospace;">{{ settings.host }}:{{ settings.port }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
 </div>
+
+<style>
+    .settings-tab {
+        display: block; width: 100%; text-align: left; padding: 12px 24px;
+        background: transparent; border: none; border-left: 3px solid transparent;
+        font-size: 1rem; color: var(--text-main); cursor: pointer; font-weight: 500;
+    }
+    .settings-tab:hover { background: var(--bg-surface-hover); }
+    .settings-tab.active { border-left-color: var(--primary); background: var(--bg-surface-hover); font-weight: 600; color: var(--primary); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Tab switching logic
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
+            
+            e.target.classList.add('active');
+            document.getElementById('tab-' + e.target.dataset.target).style.display = 'block';
+        });
+    });
+
+    // Handle saving Forms asynchronously
+    document.querySelectorAll('.settings-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const category = form.dataset.category;
+            const data = {};
+            
+            new FormData(form).forEach((value, key) => { data[key] = value; });
+            form.querySelectorAll('input[type="checkbox"]').forEach(cb => { data[cb.name] = cb.checked; });
+
+            const res = await fetch(`/api/settings/${category}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if(res.ok) {
+                const status = form.querySelector('.save-status');
+                status.style.display = 'inline';
+                setTimeout(() => status.style.display = 'none', 3000);
+            }
+        });
+    });
+</script>
 {% endblock %}
