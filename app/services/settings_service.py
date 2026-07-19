@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.database.models import AppSetting
 
 DEFAULT_SETTINGS = [
+    {"key": "timezone", "value": "Asia/Dhaka", "type": "string", "category": "general"},
     {"key": "download_workers", "value": "4", "type": "int", "category": "downloads"},
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
