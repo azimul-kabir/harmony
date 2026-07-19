@@ -28,7 +28,7 @@ def sync_playlist(
         spotify_url=source.spotify_url,
         source_id=source.id,
         task_type=TaskType.PLAYLIST_SYNC,
-        total_items=1, # Temporary placeholder to avoid division by zero in UI
+        total_items=1,
     )
     start_task(db=db, task=task)
     set_current_item(db=db, task=task, item="Scraping playlist data (this takes a while)...")
@@ -53,8 +53,8 @@ def sync_playlist(
         # 4. Update the Playlist Database with the latest Spotify structure
         db_playlist = sync_database_playlist(db, source, domain_playlist)
         
-        # 5. Export M3U immediately (includes already-owned tracks)
-        export_m3u(db, db_playlist)
+        # 5. Export M3U immediately, passing the freshly scraped domains tracks to fix historic library duplicates
+        export_m3u(db, db_playlist, domain_tracks=domain_playlist.tracks)
 
         if not domain_playlist.tracks:
             logger.warning("Playlist '{}' is empty.", domain_playlist.name)
