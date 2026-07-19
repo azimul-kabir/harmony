@@ -45,7 +45,7 @@ def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: Dom
     db.refresh(playlist)
     return playlist
 
-def export_m3u(db: Session, playlist: Playlist) -> None:
+def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> None:
     """Generates an M3U file, tracking down existing library songs via ID or text matching."""
     settings = get_settings()
     playlist_dir = Path(settings.music_path) / "Playlists"
@@ -64,6 +64,9 @@ def export_m3u(db: Session, playlist: Playlist) -> None:
     jobs = db.query(DownloadJob).filter(DownloadJob.spotify_track_id.in_(track_ids)).all()
     job_map = {j.spotify_track_id: j for j in jobs}
     
+    # 3. Map freshly scraped domain metadata if provided
+    domain_map = {t.spotify_track_id: t for t in domain_tracks} if domain_tracks else {}
+
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
@@ -71,13 +74,13 @@ def export_m3u(db: Session, playlist: Playlist) -> None:
             for pt in playlist.tracks:
                 song = song_id_map.get(pt.spotify_track_id)
                 job = job_map.get(pt.spotify_track_id)
+                dt = domain_map.get(pt.spotify_track_id)
                 
                 duration = -1
                 artist = "Unknown Artist"
                 title = "Unknown Title"
                 full_song_path = None
                 
-                # Dynamic matching strategies
                 if song:
                     # Best Strategy: Strict database ID match found
                     artist = song.artist or "Unknown Artist"
@@ -85,39 +88,43 @@ def export_m3u(db: Session, playlist: Playlist) -> None:
                     duration = int(song.duration) if song.duration else -1
                     full_song_path = Path(song.path)
                 else:
-                    # Secondary Strategy: Look up track metadata via the job history mapping
-                    if job:
-                        artist = job.artist or "Unknown Artist"
-                        title = job.title or "Unknown Title"
-                    else:
-                        # Third Strategy: If there's no job history (historical skip), check domain mapping via DB context
-                        # We try to infer metadata using title/artist match from songs table
-                        artist = "Unknown Artist"
-                        title = "Unknown Title"
-                    
-                    # Try text-based fallback against the library to catch pre-existing music files
-                    fallback_song = db.query(Song).filter(
-                        func.lower(Song.title) == title.lower(),
-                        func.lower(Song.artist) == artist.lower()
-                    ).first()
-                    
-                    if fallback_song:
-                        artist = fallback_song.artist or artist
-                        title = fallback_song.title or title
-                        duration = int(fallback_song.duration) if fallback_song.duration else -1
-                        full_song_path = Path(fallback_song.path)
+                    # Secondary Strategy: Extract metadata from Domain object or Job
+                    if dt:
+                        title = dt.title
+                        artist = dt.artist
                     elif job:
-                        # Pure placeholder fallback for paths currently queueing down the worker pipeline
-                        album_artist = _safe(job.album_artist or job.artist or "Unknown Artist")
-                        album = _safe(job.album) if job.album else "Singles"
-                        track_num = f"{job.track:02d} - " if job.track is not None else ""
-                        filename = f"{track_num}{_safe(title)}.mp3"
-                        full_song_path = Path(settings.music_path) / album_artist / album / filename
+                        title = job.title
+                        artist = job.artist
+
+                    if title and artist and title != "Unknown Title":
+                        # Text-based fallback against the library to catch pre-existing music files
+                        fallback_song = db.query(Song).filter(
+                            func.lower(Song.title) == title.lower(),
+                            func.lower(Song.artist) == artist.lower()
+                        ).first()
                         
+                        if fallback_song:
+                            artist = fallback_song.artist or artist
+                            title = fallback_song.title or title
+                            duration = int(fallback_song.duration) if fallback_song.duration else -1
+                            full_song_path = Path(fallback_song.path)
+                            
+                            # Self-healing: Update the DB so we don't need text fallback next time
+                            if not fallback_song.spotify_track_id:
+                                fallback_song.spotify_track_id = pt.spotify_track_id
+                                db.commit()
+                                
+                        elif job:
+                            # Pure placeholder fallback for paths currently queueing down the worker pipeline
+                            album_artist = _safe(job.album_artist or job.artist or "Unknown Artist")
+                            album = _safe(job.album) if job.album else "Singles"
+                            track_num = f"{job.track:02d} - " if job.track is not None else ""
+                            filename = f"{track_num}{_safe(title)}.mp3"
+                            full_song_path = Path(settings.music_path) / album_artist / album / filename
+                            
                 if not full_song_path:
                     continue  # Skip track only if absolutely zero matching metrics are met
                 
-                # Format down to relative structure
                 try:
                     rel_path = os.path.relpath(full_song_path, playlist_dir)
                 except ValueError:
