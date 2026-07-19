@@ -1,15 +1,14 @@
 import os
 from pathlib import Path
 from datetime import datetime, UTC
-
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
-from app.services.library_paths import _safe  # Reuses your track name cleaning utility
+from app.services.library_paths import _safe
 
 def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: DomainPlaylist) -> Playlist:
     """Updates the database with the latest Spotify playlist structure."""
@@ -47,21 +46,20 @@ def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: Dom
     return playlist
 
 def export_m3u(db: Session, playlist: Playlist) -> None:
-    """Generates an M3U file using relative paths, mapping both downloaded and queuing tracks."""
+    """Generates an M3U file, tracking down existing library songs via ID or text matching."""
     settings = get_settings()
     playlist_dir = Path(settings.music_path) / "Playlists"
     playlist_dir.mkdir(parents=True, exist_ok=True)
     
-    # Clean filename to prevent filesystem compilation drops
     safe_name = "".join([c if c.isalnum() or c in " -_" else "_" for c in playlist.name])
     file_path = playlist_dir / f"{safe_name}.m3u"
     
-    # Fetch all locally downloaded songs that belong in this playlist
+    # 1. Map current local downloads via strict ID lookup
     track_ids = [pt.spotify_track_id for pt in playlist.tracks]
     songs = db.query(Song).filter(Song.spotify_track_id.in_(track_ids)).all()
-    song_map = {s.spotify_track_id: s for s in songs}
+    song_id_map = {s.spotify_track_id: s for s in songs}
     
-    # Fetch the actual track structures from the Download Jobs to generate fallback names
+    # 2. Map downloading/queued jobs
     from app.database.models import DownloadJob
     jobs = db.query(DownloadJob).filter(DownloadJob.spotify_track_id.in_(track_ids)).all()
     job_map = {j.spotify_track_id: j for j in jobs}
@@ -69,30 +67,57 @@ def export_m3u(db: Session, playlist: Playlist) -> None:
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
+            
             for pt in playlist.tracks:
-                song = song_map.get(pt.spotify_track_id)
+                song = song_id_map.get(pt.spotify_track_id)
                 job = job_map.get(pt.spotify_track_id)
                 
-                # Determine metadata properties
                 duration = -1
+                artist = "Unknown Artist"
+                title = "Unknown Title"
+                full_song_path = None
+                
+                # Dynamic matching strategies
                 if song:
+                    # Best Strategy: Strict database ID match found
                     artist = song.artist or "Unknown Artist"
                     title = song.title or "Unknown Title"
                     duration = int(song.duration) if song.duration else -1
                     full_song_path = Path(song.path)
-                elif job:
-                    artist = job.artist or "Unknown Artist"
-                    title = job.title or "Unknown Title"
-                    # Calculate future track layout path while it's still queueing
-                    album_artist = _safe(job.album_artist or job.artist or "Unknown Artist")
-                    album = _safe(job.album) if job.album else "Singles"
-                    track_num = f"{job.track:02d} - " if job.track is not None else ""
-                    filename = f"{track_num}{_safe(title)}.mp3"
-                    full_song_path = Path(settings.music_path) / album_artist / album / filename
                 else:
-                    continue  # Skip fallback if absolutely no track context exists
+                    # Secondary Strategy: Look up track metadata via the job history mapping
+                    if job:
+                        artist = job.artist or "Unknown Artist"
+                        title = job.title or "Unknown Title"
+                    else:
+                        # Third Strategy: If there's no job history (historical skip), check domain mapping via DB context
+                        # We try to infer metadata using title/artist match from songs table
+                        artist = "Unknown Artist"
+                        title = "Unknown Title"
+                    
+                    # Try text-based fallback against the library to catch pre-existing music files
+                    fallback_song = db.query(Song).filter(
+                        func.lower(Song.title) == title.lower(),
+                        func.lower(Song.artist) == artist.lower()
+                    ).first()
+                    
+                    if fallback_song:
+                        artist = fallback_song.artist or artist
+                        title = fallback_song.title or title
+                        duration = int(fallback_song.duration) if fallback_song.duration else -1
+                        full_song_path = Path(fallback_song.path)
+                    elif job:
+                        # Pure placeholder fallback for paths currently queueing down the worker pipeline
+                        album_artist = _safe(job.album_artist or job.artist or "Unknown Artist")
+                        album = _safe(job.album) if job.album else "Singles"
+                        track_num = f"{job.track:02d} - " if job.track is not None else ""
+                        filename = f"{track_num}{_safe(title)}.mp3"
+                        full_song_path = Path(settings.music_path) / album_artist / album / filename
+                        
+                if not full_song_path:
+                    continue  # Skip track only if absolutely zero matching metrics are met
                 
-                # Convert path to standard relative structure anchored in the Playlists directory
+                # Format down to relative structure
                 try:
                     rel_path = os.path.relpath(full_song_path, playlist_dir)
                 except ValueError:
@@ -101,11 +126,11 @@ def export_m3u(db: Session, playlist: Playlist) -> None:
                 f.write(f"#EXTINF:{duration},{artist} - {title}\n")
                 f.write(f"{rel_path}\n")
                 
-        logger.info("Exported M3U playlist: {} with {} tracks mapped.", file_path.name, len(playlist.tracks))
+        logger.info("Exported M3U playlist: {} with fallback index matching.", file_path.name)
     except Exception as e:
         logger.error("Failed to export M3U for {}: {}", playlist.name, e)
 
 def export_all_m3us(db: Session) -> None:
-    """Utility to regenerate all playlists (Triggered after a download finishes)"""
+    """Utility to regenerate all playlists"""
     for p in db.query(Playlist).all():
         export_m3u(db, p)
