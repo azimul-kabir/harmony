@@ -25,6 +25,7 @@ def create_job(
         album=track.album,
         album_artist=track.album_artist,
         track=track.track,
+        cover_url=track.cover_url,
         disc=track.disc,
         year=track.year,
         isrc=track.isrc,
