@@ -60,6 +60,8 @@ def clear_history(db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success"}
 
+# Inside app/api/downloads.py, update the stream_downloads_data function payload:
+
 @router.get("/stream")
 async def stream_downloads_data(request: Request):
     """Server-Sent Events endpoint for real-time download history updates."""
@@ -67,16 +69,15 @@ async def stream_downloads_data(request: Request):
         while True:
             if await request.is_disconnected():
                 break
-            
+                        
             db = SessionLocal()
             try:
-                # Limit to the 100 most recent jobs to prevent memory/DOM overflow
                 jobs = db.execute(
                     select(DownloadJob)
                     .order_by(DownloadJob.id.desc())
                     .limit(100)
                 ).scalars().all()
-                
+                                
                 payload = [
                     {
                         "id": job.id,
@@ -84,15 +85,15 @@ async def stream_downloads_data(request: Request):
                         "title": job.title,
                         "artist": job.artist,
                         "album": job.album,
-                        "spotify_url": job.spotify_url
+                        "spotify_url": job.spotify_url,
+                        "cover_url": job.cover_url  # <-- NEW: Expose the artwork
                     }
                     for job in jobs
                 ]
-                
+                                
                 yield f"data: {json.dumps(payload)}\n\n"
             finally:
                 db.close()
-            
+                        
             await asyncio.sleep(2)
-
     return StreamingResponse(event_generator(), media_type="text/event-stream")
