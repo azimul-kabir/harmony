@@ -676,3 +676,43 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         width: 100% !important;
     }
 }
+
+/* --- Perfect Square Artwork Styling --- */
+#view-albums .source-card img,
+#view-albums .source-card div[style*="height"] {
+    width: 100% !important;
+    aspect-ratio: 1 / 1 !important;
+    height: auto !important;
+    object-fit: cover !important;
+    border-radius: 8px !important;
+}
+
+#view-artists .source-card img,
+#view-artists .source-card div[style*="width: 50px"] {
+    width: 60px !important;
+    height: 60px !important;
+    aspect-ratio: 1 / 1 !important;
+    object-fit: cover !important;
+    border-radius: 50% !important; /* Circular for artists */
+    flex-shrink: 0 !important;
+}
+
+/* Song list cover thumbnails */
+#view-songs table img {
+    width: 42px !important;
+    height: 42px !important;
+    aspect-ratio: 1 / 1 !important;
+    object-fit: cover !important;
+    border-radius: 6px !important;
+    flex-shrink: 0 !important;
+}
+
+@media (max-width: 768px) {
+    /* Ensure Album artwork cards remain responsive and square on mobile */
+    #view-albums .source-card img,
+    #view-albums .source-card div[style*="height"] {
+        width: 100% !important;
+        height: auto !important;
+        aspect-ratio: 1 / 1 !important;
+    }
+}
