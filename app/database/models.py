@@ -47,6 +47,10 @@ class Song(Base):
     last_indexed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     metadata_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     artwork_status: Mapped[str] = mapped_column(String, nullable=False, default="missing")
+    artwork_id: Mapped[int | None] = mapped_column(
+        ForeignKey("artwork.id"), nullable=True, index=True
+    )
+    artwork: Mapped["Artwork | None"] = relationship()
     availability_status: Mapped[str] = mapped_column(
         String,
         nullable=False,
@@ -67,6 +71,26 @@ class Song(Base):
         index=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Artwork(Base):
+    __tablename__ = "artwork"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    checksum: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    cache_path: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String, nullable=False)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    provider_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    original_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 class Task(Base):
     __tablename__ = "tasks"

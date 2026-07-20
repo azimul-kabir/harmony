@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.5.3
+> Version: 1.6.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -442,19 +442,47 @@ Filename
 
 # Artwork
 
-Artwork priority
+Artwork is a reusable, content-addressed resource. The `artwork` table owns one
+row per unique image and Songs reference it through nullable `songs.artwork_id`.
+The checksum is a SHA-256 digest of the image bytes and is unique, so identical
+embedded or folder images share one database row and one cached file.
+
+Cached files live below the configured `ARTWORK_CACHE_PATH` in checksum-prefix
+directories. Cache paths are internal implementation details and are never
+returned to API clients. The public immutable URL is
+`/api/artwork/{id}/file`. Cache writes are atomic; a database record whose file
+was lost is repaired from the next locally detected copy.
+
+Artwork resolution runs as part of Library indexing and uses this priority:
 
 1 Embedded artwork
 
-2 Cached artwork
+2 Existing associated cache
 
 3 Folder artwork
 
-4 Future providers
+4 Future providers (not fetched by the foundation)
 
 - Spotify
 
 - Cover Art Archive
+
+Supported folder filenames are `cover`, `folder`, `front`, and `album` with
+JPEG, PNG, or WebP extensions. Embedded images are read through Mutagen from
+ID3 APIC, MP4 `covr`, and FLAC picture blocks. Remote `cover_url` values remain
+compatible metadata but are never downloaded by `ArtworkService`.
+
+Artwork API:
+
+- `GET /api/artwork` lists resource metadata with offset/limit pagination.
+- `GET /api/artwork/{id}` returns one resource's metadata and public URL.
+- `GET /api/artwork/{id}/file` serves immutable cached bytes.
+
+The model reserves `provider`, `provider_id`, and `original_url` for future
+Spotify and Cover Art Archive provenance. Manual replacement will create or
+reuse a content-addressed resource and change an association; it must never
+overwrite shared bytes in place. Remote-provider ingestion and manual upload
+endpoints are intentionally outside this foundation.
 
 ---
 
@@ -634,6 +662,9 @@ albums
 songs
 
 artwork
+
+Current `artwork` fields: id, checksum, cache_path, source, mime_type, width,
+height, file_size, provider, provider_id, original_url, created_at, updated_at.
 
 playlists
 

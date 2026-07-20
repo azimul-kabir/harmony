@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:////database/harmony.db"
 
     music_path: str = "/music"
+    artwork_cache_path: str = "/database/artwork"
 
     download_path: str = "/downloads"
     staging_path: str = "/downloads/staging"

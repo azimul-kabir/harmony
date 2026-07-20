@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
 from app.database.models import Playlist, PlaylistTrack, Song
+from app.services.artwork import artwork_url, serialize_artwork
 from app.services.library_service import index_library_file, rescan_library
 from app.services.library_events import library_events
 
@@ -72,7 +73,9 @@ def _serialize_song(song: Song, playlist_sources: list[dict] | None = None) -> d
         "sample_rate": song.sample_rate,
         "file_size": song.file_size,
         "artwork_status": song.artwork_status,
-        "cover_url": song.cover_url,
+        "artwork_id": song.artwork_id,
+        "artwork": serialize_artwork(song.artwork) if song.artwork else None,
+        "cover_url": artwork_url(song.artwork_id) or song.cover_url,
         "date_added": song.created_at,
         "recently_added": bool(
             song.created_at and song.created_at >= recently_added_cutoff
@@ -177,8 +180,9 @@ def list_albums(db: Session = Depends(get_db)):
         db.query(
             Song.album,
             Song.album_artist,
-            Song.artist,
-            Song.cover_url,
+            func.max(Song.artist).label("artist"),
+            func.max(Song.cover_url).label("cover_url"),
+            func.max(Song.artwork_id).label("artwork_id"),
             func.count(Song.id).label("track_count"),
             func.sum(Song.duration).label("total_duration")
         )
@@ -192,7 +196,7 @@ def list_albums(db: Session = Depends(get_db)):
         {
             "album": a.album or "Unknown Album",
             "artist": a.album_artist or a.artist or "Unknown Artist",
-            "cover_url": a.cover_url,
+            "cover_url": artwork_url(a.artwork_id) or a.cover_url,
             "track_count": a.track_count,
             "total_duration": round(a.total_duration / 60, 1) if a.total_duration else 0
         }
@@ -208,7 +212,8 @@ def list_artists(db: Session = Depends(get_db)):
             Song.artist,
             func.count(Song.id).label("song_count"),
             func.count(func.distinct(Song.album)).label("album_count"),
-            func.max(Song.cover_url).label("cover_url")
+            func.max(Song.cover_url).label("cover_url"),
+            func.max(Song.artwork_id).label("artwork_id"),
         )
         .filter(Song.availability_status == "available")
         .group_by(Song.artist)
@@ -221,7 +226,7 @@ def list_artists(db: Session = Depends(get_db)):
             "artist": art.artist or "Unknown Artist",
             "song_count": art.song_count,
             "album_count": art.album_count,
-            "cover_url": art.cover_url
+            "cover_url": artwork_url(art.artwork_id) or art.cover_url
         }
         for art in artists_query
     ]

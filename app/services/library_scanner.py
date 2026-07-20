@@ -11,10 +11,12 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.crud import UpsertStatus, upsert_song
 from app.database.models import Song
+from app.services.artwork import ArtworkService, artwork_url
 from app.services.metadata import read_metadata
 from app.services.tags import SUPPORTED_EXTENSIONS
 
 settings = get_settings()
+artwork_service = ArtworkService()
 
 
 @dataclass(slots=True)
@@ -94,7 +96,18 @@ def index_file(
         }
     )
 
-    if cover_url:
+    try:
+        artwork = artwork_service.resolve_for_song(db, path, existing_song=song)
+    except Exception:
+        artwork = None
+        logger.exception("Failed to resolve local artwork for {}", path)
+
+    if artwork is not None:
+        metadata["artwork_id"] = artwork.id
+        metadata["artwork_status"] = artwork.source
+        metadata["cover_url"] = artwork_url(artwork.id)
+
+    if cover_url and artwork is None:
         metadata["cover_url"] = cover_url
         if metadata["artwork_status"] == "missing":
             metadata["artwork_status"] = "remote"
@@ -102,6 +115,7 @@ def index_file(
         song is not None
         and song.cover_url
         and metadata["artwork_status"] == "missing"
+        and artwork is None
     ):
         metadata["artwork_status"] = "remote"
 

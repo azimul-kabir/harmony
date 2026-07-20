@@ -35,4 +35,18 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "availability_status",
         "download_source",
         "musicbrainz_recording_id",
+        "artwork_id",
     } <= columns
+    assert "artwork" in inspect(engine).get_table_names()
+    artwork_columns = {
+        column["name"] for column in inspect(engine).get_columns("artwork")
+    }
+    assert {
+        "checksum",
+        "cache_path",
+        "source",
+        "mime_type",
+        "provider",
+        "provider_id",
+        "original_url",
+    } <= artwork_columns

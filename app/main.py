@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import downloads, library
+from app.api.artwork import router as artwork_router
 from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
 from app.api.playlist import router as playlist_router
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
     Path(settings.staging_path).mkdir(parents=True, exist_ok=True)
     Path(settings.failed_path).mkdir(parents=True, exist_ok=True)
     Path(settings.music_path).mkdir(parents=True, exist_ok=True)
+    Path(settings.artwork_cache_path).mkdir(parents=True, exist_ok=True)
     init_db()
     
     logger.info("Starting Harmony...")
@@ -84,6 +86,7 @@ app.include_router(settings_router)
 app.include_router(settings_page_router)  # The /settings HTML Web page (app/web/settings.py)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
+app.include_router(artwork_router)
 app.include_router(library_page_router)
 app.include_router(downloads.router)
 app.include_router(sources_page_router)
