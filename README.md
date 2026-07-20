@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <strong>A self-hosted Spotify music downloader, playlist synchronizer, and library manager.</strong><br>
-  Download, organize, synchronize, and automatically manage your music collection with seamless integration for Navidrome and other media servers.
+  <strong>Your Music. Your Way.</strong><br>
+  A self-hosted music management platform that downloads, synchronizes, organizes, and manages your Spotify library for Navidrome and other media servers.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.3.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.4.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -21,11 +21,11 @@
 
 ## Overview
 
-Harmony is a modern self-hosted music management platform that automatically downloads music from Spotify, organizes your library, synchronizes playlists, and exports standard `.m3u` playlists for media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
+Harmony is a modern self-hosted music management platform that bridges Spotify with your local music library.
 
-Unlike traditional downloaders, Harmony maintains its own playlist database and acts as the **single source of truth** between Spotify and your local music collection.
+It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-> **Current Version:** **v1.3.0**
+Current Version: **v1.4.0**
 
 ---
 
@@ -33,70 +33,92 @@ Unlike traditional downloaders, Harmony maintains its own playlist database and 
 
 ## 🎵 Spotify Downloads
 
-- Download Spotify tracks
-- Download Spotify albums
-- Download Spotify playlists
-- Background download queue
+- Download tracks, albums, and playlists
 - Multi-worker concurrent downloads
 - Automatic retry support
 - Live download progress
+- Configurable audio quality (128 / 256 / 320 kbps)
 - SpotDL integration
-- Download staging pipeline
+- Background download queue
 - Automatic library import
 
 ---
 
-## 🎚 Configurable Audio Quality (New in v1.3.0)
+## 🎼 Playlist Management
 
-Harmony now allows selecting your preferred download quality directly from the Settings page.
-
-Supported bitrates:
-
-- 128 kbps
-- 256 kbps
-- 320 kbps
-
-The selected quality is automatically passed to SpotDL for every download.
-
----
-
-## 🎼 Native Playlist Management
-
-Harmony stores Spotify playlists inside its own database.
-
-Playlist information includes:
-
-- Spotify Playlist ID
-- Playlist name
-- Track membership
-- Playlist order
-- Last synchronization
-- Snapshot ID
-- Export status
-
-No duplicate music files are created.
-
----
-
-## 🔄 Playlist Synchronization
-
-Harmony automatically keeps your playlists synchronized.
+Harmony maintains Spotify playlists inside its own database.
 
 Features include:
 
 - Save Spotify playlists as Sources
 - One-click synchronization
-- Download only missing songs
+- Snapshot tracking
 - Preserve playlist order
 - Automatic duplicate detection
-- Snapshot ID tracking
-- Incremental synchronization foundation
+- Download only missing songs
+- Automatic M3U generation
+- Direct `.m3u` downloads from the web interface
+
+---
+
+## 📚 Modern Library Manager
+
+Harmony now includes a complete library browser.
+
+### Songs View
+
+- Album artwork
+- Artist
+- Album
+- Track selection
+- Search
+- Sorting
+- Pagination
+
+### Albums View
+
+- Album artwork grid
+- Track count
+- Album duration
+- Click to view album tracks
+
+### Artists View
+
+- Artist cards
+- Song counts
+- Album counts
+- Click to browse artist collection
+
+---
+
+## 🔍 Powerful Library Search
+
+Search instantly across:
+
+- Song titles
+- Artists
+- Albums
+- Genres
+- Filenames
+
+---
+
+## ↕ Advanced Sorting
+
+Sort your library by:
+
+- Artist
+- Song Name
+- Album
+- Newest Added
+- Duration
+- Year
 
 ---
 
 ## 📂 Automatic M3U Export
 
-Harmony automatically exports every playlist as a standard `.m3u` playlist.
+Harmony automatically exports playlists in standard `.m3u` format.
 
 Compatible with:
 
@@ -107,53 +129,12 @@ Compatible with:
 - VLC
 - Any M3U-compatible player
 
-Features include:
+Features:
 
 - Relative paths
+- Unicode filenames
 - Automatic regeneration
-- Real-time updates
-- Dedicated `/Playlists` folder
-- Unicode filename support
-
----
-
-## 📥 Direct Playlist Download (New in v1.3.0)
-
-Every playlist now includes a **Download .m3u** button.
-
-Users can instantly download the generated playlist file directly from the browser without accessing the server filesystem.
-
----
-
-## 🧠 Smart Library Matching
-
-Harmony intelligently links historical downloads to Spotify tracks.
-
-If a Spotify ID cannot be found, Harmony automatically searches using:
-
-- Title
-- Artist
-- Album
-- Existing metadata
-
-Matched songs are permanently linked and immediately become part of their playlists.
-
----
-
-## 📚 Library Management
-
-Harmony automatically manages your music library.
-
-Features include:
-
-- Automatic organization
-- Album & Singles folders
-- Metadata import
-- Duplicate detection
-- Safe staging folder
-- Library rescan
-- Batch deletion
-- Automatic playlist rebuilding
+- Dedicated Playlists folder
 
 ---
 
@@ -161,115 +142,70 @@ Features include:
 
 Harmony fully supports international filenames.
 
-Playlists and exported `.m3u` files correctly preserve characters from languages such as:
-
-- Bengali
-- Japanese
-- Chinese
-- Korean
-- Arabic
-- Cyrillic
-- Greek
-- Hindi
+Playlists and music containing Bengali, Japanese, Arabic, Chinese, Korean, Cyrillic, Greek, Hindi, and many other languages are preserved correctly throughout the application.
 
 ---
 
-## ⚡ Modern Web Interface
+## ⚙ Settings
 
-### Dashboard
+Current configurable settings include:
 
-- Download statistics
-- Active worker monitoring
-- Queue overview
-- System activity
-
-### Downloads
-
-- Live download queue
-- Worker status
-- Download progress
-- Download history
-
-### Sources
-
-- Spotify playlist sources
-- One-click synchronization
-- Live synchronization status
-
-### Playlists
-
-- Playlist browser
-- Playlist statistics
-- Track counts
-- Last synchronization
-- Export status
-- Download M3U button
-- Mobile-friendly cards
-
-### Library
-
-- Browse downloaded music
-- Search library
-- Batch deletion
-- Metadata overview
-
-### Settings
-
+- Download audio quality
 - Storage paths
 - Download engine
-- Audio quality selection
 - Spotify configuration
-- Playlist settings
 - System information
+
+Additional runtime settings are planned for future releases.
 
 ---
 
-## 📱 Mobile First
+## 📱 Mobile Friendly
 
-Harmony is designed for both desktop and mobile devices.
+Harmony is designed for desktop and mobile devices.
 
 Features include:
 
 - Responsive layouts
-- Mobile navigation
-- Floating Quick Add button
-- Persistent download status bar
 - Touch-friendly controls
-- Skeleton loading
-- Automatic Light/Dark mode support
+- Optimized album grids
+- Responsive artist cards
+- Mobile typography improvements
+- Smooth scrolling
+- Pagination optimized for smaller screens
 
 ---
 
 # Download Pipeline
 
 ```text
-Spotify Playlist
-        │
-        ▼
+Spotify
+    │
+    ▼
 Fetch Metadata
-        │
-        ▼
+    │
+    ▼
 Update Playlist Database
-        │
-        ▼
-Generate M3U Playlist
-        │
-        ▼
-Queue Missing Downloads
-        │
-        ▼
-Download Workers
-        │
-        ▼
+    │
+    ▼
+Generate M3U Playlists
+    │
+    ▼
+Queue Missing Songs
+    │
+    ▼
+Multi-worker Downloads
+    │
+    ▼
 Staging Folder
-        │
-        ▼
+    │
+    ▼
 Library Import
-        │
-        ▼
-Automatic Playlist Rebuild
-        │
-        ▼
+    │
+    ▼
+Rebuild Playlists
+    │
+    ▼
 Navidrome / Jellyfin / Plex
 ```
 
@@ -277,25 +213,25 @@ Navidrome / Jellyfin / Plex
 
 # Technology Stack
 
-## Backend
+### Backend
 
 - Python 3.12
 - FastAPI
 - SQLAlchemy
 - SpotDL
 
-## Frontend
+### Frontend
 
 - HTML5
 - CSS3
 - Vanilla JavaScript
 - Server-Sent Events (SSE)
 
-## Database
+### Database
 
 - SQLite
 
-## Deployment
+### Deployment
 
 - Docker
 - Docker Compose
@@ -315,7 +251,7 @@ git clone https://github.com/azimul-kabir/harmony.git
 cd harmony
 ```
 
-Copy the environment file.
+Create your local environment.
 
 ```bash
 cp .env.example .env.local
@@ -334,7 +270,7 @@ Start Harmony.
 docker compose up -d --build
 ```
 
-Open your browser.
+Open:
 
 ```
 http://localhost:8080
@@ -349,8 +285,8 @@ Music/
 ├── Albums/
 ├── Singles/
 ├── Playlists/
-│   ├── Road Trip.m3u
 │   ├── Chill Mix.m3u
+│   ├── Road Trip.m3u
 │   └── Workout.m3u
 └── Harmony Database
 ```
@@ -361,83 +297,104 @@ Music/
 
 Harmony is more than a Spotify downloader.
 
-It continuously synchronizes Spotify playlists, automatically downloads missing tracks, manages your music library, and exports playlists for your favorite media server.
-
-Harmony acts as the bridge between streaming services and your self-hosted music collection.
+It continuously synchronizes Spotify playlists, downloads only missing tracks, organizes your music collection, exports playlists, and provides a modern interface for browsing your entire library.
 
 ```text
 Spotify
     │
     ▼
  Harmony
-    │
-    ├── Music Library
     ├── Playlist Database
+    ├── Music Library
+    ├── Library Manager
     └── M3U Export
              │
              ▼
  Navidrome / Jellyfin / Plex
 ```
 
-No duplicate music.
-
-No manual playlist management.
+No duplicate downloads.
 
 No broken playlists.
 
-Everything stays synchronized automatically.
+No manual playlist maintenance.
+
+Just a synchronized self-hosted music library.
 
 ---
 
 # Roadmap
 
-### v1.4
+## v1.5
+
+### Settings & Automation
 
 - Editable application settings
-- Smart Library foundation
-- Playlist automation
 - Scheduled synchronization
+- Backup & restore
+- Import/export settings
 
-### v1.5
+---
 
-- Smart Playlists
-- Custom tags
+## v1.6
+
+### Library Intelligence
+
+- Library Health dashboard
+- Metadata editor
+- Duplicate finder
+- Artwork manager
+- Advanced search improvements
+
+---
+
+## v1.7
+
+### Smart Library
+
 - Favorites
 - Ratings
-- Notes
+- Tags
+- Smart Playlists
+- Collections
 
-### v1.6
+---
 
-- Metadata editor
-- Artwork manager
-- Duplicate finder
-- Library Health dashboard
-
-### Future
+## Future
 
 - Apple Music support
 - YouTube Music support
 - Deezer support
+- Multiple music providers
 - Multi-user support
 - Plugin system
-- REST API enhancements
-- PWA support
-- Lyrics
-- Advanced search
+- REST API
+- Progressive Web App (PWA)
+- Lyrics support
 
 ---
 
 # Screenshots
 
-Coming soon.
+| Dashboard | Downloads |
+|-----------|-----------|
+| Coming Soon | Coming Soon |
+
+| Sources | Playlists |
+|----------|-----------|
+| Coming Soon | Coming Soon |
+
+| Library | Settings |
+|----------|----------|
+| Coming Soon | Coming Soon |
 
 ---
 
 # Contributing
 
-Contributions are welcome!
+Contributions, bug reports, feature requests, and pull requests are always welcome.
 
-If you have suggestions, ideas, or bug reports, feel free to open an issue or submit a pull request.
+If you have ideas to improve Harmony, feel free to open an issue or start a discussion.
 
 ---
 
@@ -445,10 +402,10 @@ If you have suggestions, ideas, or bug reports, feel free to open an issue or su
 
 Harmony is licensed under the MIT License.
 
-See the `LICENSE` file for details.
+See the **LICENSE** file for details.
 
 ---
 
 <p align="center">
-Built for self-hosted music enthusiasts.
+Made with ❤️ for self-hosted music enthusiasts.
 </p>

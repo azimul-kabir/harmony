@@ -15,4 +15,5 @@ def spotdl_song_to_track(song: SpotDLSong) -> Track:
         isrc=song.isrc or None,
         spotify_track_id=song.song_id,
         spotify_url=song.url,
+        cover_url=song.cover_url,
     )

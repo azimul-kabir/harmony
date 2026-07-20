@@ -44,6 +44,8 @@ def dashboard_activity(db: Session = Depends(get_db)):
         for job in jobs
     ]
 
+# Inside app/api/dashboard.py, update the stream_dashboard_data function:
+
 @router.get("/stream")
 async def stream_dashboard_data(request: Request):
     """Server-Sent Events endpoint for real-time dashboard updates."""
@@ -54,16 +56,14 @@ async def stream_dashboard_data(request: Request):
                 
             db = SessionLocal()
             try:
-                # 1. Get Stats
                 stats = get_dashboard_stats(db)
                 
-                # 2. Get Recent Activity
                 jobs = db.execute(
                     select(DownloadJob).order_by(DownloadJob.id.desc()).limit(10)
                 ).scalars().all()
-                activity = [{"status": j.status, "title": j.title, "artist": j.artist} for j in jobs]
+                # NEW: Add cover_url
+                activity = [{"status": j.status, "title": j.title, "artist": j.artist, "cover_url": j.cover_url} for j in jobs]
                 
-                # 3. Get Active Tasks (High-level batches like Playlists)
                 tasks = db.execute(
                     select(Task)
                     .where(Task.status.in_((TaskStatus.QUEUED.value, TaskStatus.RUNNING.value, TaskStatus.PAUSED.value)))
@@ -81,13 +81,13 @@ async def stream_dashboard_data(request: Request):
                     "type": t.task_type
                 } for t in tasks]
 
-                # 4. Get Active Workers (The actual multithreaded jobs running right now)
                 running_jobs = db.execute(
                     select(DownloadJob)
                     .where(DownloadJob.status == JobStatus.RUNNING.value)
                     .order_by(DownloadJob.started_at)
                 ).scalars().all()
-                workers = [{"title": j.title, "artist": j.artist} for j in running_jobs]
+                # NEW: Add cover_url
+                workers = [{"title": j.title, "artist": j.artist, "cover_url": j.cover_url} for j in running_jobs]
                 
                 payload = {
                     "stats": stats,
@@ -102,5 +102,4 @@ async def stream_dashboard_data(request: Request):
                 db.close()
                 
             await asyncio.sleep(2)
-
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -96,6 +96,8 @@ function renderFilteredDownloads() {
         return;
     }
 
+// Inside app/static/js/downloads.js, update the tbody.innerHTML map logic inside renderFilteredDownloads():
+
     tbody.innerHTML = filtered.map(job => {
         const status = (job.status || '').toUpperCase();
         const isFailed = status === 'FAILED' || status === 'CANCELLED';
@@ -106,16 +108,26 @@ function renderFilteredDownloads() {
         }
 
         const actionHtml = isFailed 
-            ? `<button class="btn-retry" onclick="retryJob('${job.spotify_url}')">↻ Retry</button>` 
+            ? `<button class="btn-retry" onclick="retryJob('${job.spotify_url}')">  Retry</button>` 
             : ``;
+
+        // NEW: Artwork HTML Generation
+        const coverImg = job.cover_url
+            ? `<img src="${job.cover_url}" alt="Cover" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`
+            : `<div style="width: 40px; height: 40px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
 
         return `
             <tr>
-                <td style="padding-left: 24px;">${statusHtml}</td>
-                <td style="font-weight: 600; color: var(--text-main);">${job.title ?? ""}</td>
-                <td style="color: var(--text-muted);">${job.artist ?? ""}</td>
-                <td style="color: var(--text-muted);">${job.album ?? ""}</td>
-                <td style="text-align: right; padding-right: 24px;">${actionHtml}</td>
+                <td style="padding-left: 24px; vertical-align: middle;">${statusHtml}</td>
+                <td style="font-weight: 600; color: var(--text-main);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        ${coverImg}
+                        <span style="font-size: 1.05rem;">${job.title ?? ""}</span>
+                    </div>
+                </td>
+                <td style="color: var(--text-muted); vertical-align: middle;">${job.artist ?? ""}</td>
+                <td style="color: var(--text-muted); vertical-align: middle;">${job.album ?? ""}</td>
+                <td style="text-align: right; padding-right: 24px; vertical-align: middle;">${actionHtml}</td>
             </tr>
         `;
     }).join("");

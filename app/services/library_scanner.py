@@ -39,6 +39,7 @@ def scan_library(
 def scan_file(
     db: Session,
     file: Path,
+    cover_url: str | None = None,  # <-- NEW: Accept the cover URL from the worker
 ):
     tags = read_tags(file)
 
@@ -60,6 +61,10 @@ def scan_file(
     song.album = tags.get("album")
     song.album_artist = tags.get("album_artist")
     song.genre = tags.get("genre")
+
+    # NEW: Save the cover URL if provided
+    if cover_url:
+        song.cover_url = cover_url
 
     song.file_size = stat.st_size
     song.modified_time = int(stat.st_mtime)
