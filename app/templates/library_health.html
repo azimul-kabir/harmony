@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Library Health · Harmony{% endblock %}
+
+{% block content %}
+<section class="health-page" aria-labelledby="health-title">
+    <header class="library-hero health-hero">
+        <div>
+            <a class="health-back" href="/library">← Library</a>
+            <span class="library-eyebrow">Library Health</span>
+            <h1 id="health-title">Keep your library in tune</h1>
+            <p>Monitor index completeness and run safe maintenance without blocking the Library.</p>
+        </div>
+        <div class="health-score" id="health-score-ring" aria-label="Library health score">
+            <strong id="health-score">—</strong><span>Health score</span>
+        </div>
+    </header>
+
+    <div id="health-error" class="library-error" hidden></div>
+    <section class="health-metrics" aria-label="Library health metrics">
+        <article><span>Songs</span><strong id="health-songs">—</strong></article>
+        <article><span>Albums</span><strong id="health-albums">—</strong></article>
+        <article><span>Artists</span><strong id="health-artists">—</strong></article>
+        <article><span>Storage</span><strong id="health-storage">—</strong></article>
+        <article class="health-attention"><span>Missing artwork</span><strong id="health-artwork">—</strong></article>
+        <article class="health-attention"><span>Missing metadata</span><strong id="health-metadata">—</strong></article>
+        <article class="health-placeholder"><span>Duplicates</span><strong id="health-duplicates">Coming soon</strong></article>
+        <article><span>Library last updated</span><strong id="health-updated">—</strong></article>
+    </section>
+
+    <section class="health-workspace">
+        <div class="health-checks">
+            <div class="health-section-heading">
+                <div><span class="library-eyebrow">Extensible checks</span><h2>Health checks</h2></div>
+                <small>Repair and duplicate engines will appear here automatically.</small>
+            </div>
+            <div id="health-check-list" class="health-check-list"></div>
+        </div>
+
+        <aside class="health-actions" aria-labelledby="health-actions-title">
+            <div class="health-section-heading">
+                <div><span class="library-eyebrow">Maintenance</span><h2 id="health-actions-title">Actions</h2></div>
+            </div>
+            <button type="button" data-health-action="refresh"><strong>Refresh Library</strong><span>Find new files and reconcile missing tracks.</span></button>
+            <button type="button" data-health-action="rebuild"><strong>Rebuild Index</strong><span>Re-read all metadata and rebuild search.</span></button>
+            <button type="button" data-health-action="verify"><strong>Verify Files</strong><span>Check every indexed path without scanning folders.</span></button>
+            <button type="button" class="health-destructive" data-health-action="clear_artwork"><strong>Clear Artwork Cache</strong><span>Remove cached resources; indexing can recreate them.</span></button>
+        </aside>
+    </section>
+
+    <section id="health-task" class="health-task" hidden aria-live="polite">
+        <div><strong id="health-task-name">Maintenance</strong><span id="health-task-count">0 of 0</span></div>
+        <progress id="health-task-progress" max="100" value="0"></progress>
+        <p id="health-task-current">Queued…</p>
+        <div>
+            <button id="health-task-cancel" class="btn-secondary" type="button">Cancel</button>
+            <button id="health-task-dismiss" class="btn-secondary" type="button" hidden>Dismiss</button>
+        </div>
+    </section>
+</section>
+
+<dialog id="health-confirm" class="library-bulk-dialog">
+    <form method="dialog">
+        <span class="library-eyebrow">Confirm maintenance</span>
+        <h2 id="health-confirm-title">Run action?</h2>
+        <p id="health-confirm-message"></p>
+        <div class="library-bulk-dialog-actions">
+            <button class="btn-secondary" value="cancel">Cancel</button>
+            <button id="health-confirm-run" class="btn-primary" value="default">Run</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/library_health.js"></script>{% endblock %}

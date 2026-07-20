@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.11.0
+> Version: 1.12.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -891,3 +891,39 @@ API surface:
 - `GET /api/library/bulk/{task_id}` returns aggregate progress and item results.
 - `POST /api/library/bulk/{task_id}/cancel` requests cooperative cancellation.
 - `GET /api/library/bulk/{task_id}/export` streams a completed ZIP export.
+
+---
+
+# Library Health
+
+`LibraryHealthService` provides a reusable, index-only health snapshot. It
+combines the existing analytics aggregates with registered health checks for
+artwork completeness, metadata completeness, and future duplicate detection.
+The duplicate check is explicitly unavailable until a detector exists; clients
+must not treat the placeholder as a zero-duplicate result.
+
+The Health Score is a bounded 0–100 completeness indicator. Missing metadata,
+missing artwork, and missing files currently contribute weighted penalties.
+New checks such as metadata confidence, duplicate groups, and repair history
+must be added to the service's check registry and score policy, not hard-coded
+in the web page. `GET /api/library/health` exposes this stable snapshot shape.
+
+Maintenance actions reuse Harmony Tasks with the `library_maintenance` type and
+run in a supervised background worker:
+
+- Refresh Library performs an incremental scan and missing-file reconciliation.
+- Rebuild Index forces metadata extraction and rebuilds the FTS projection.
+- Verify Files checks indexed paths directly without discovering new files.
+- Clear Artwork Cache removes content-addressed files and associations; later
+  metadata refreshes can populate them again.
+
+Tasks recover from interrupted `running` state as `queued`, report standard
+aggregate progress, and publish `library.health.updated` after completion. API:
+
+- `POST /api/library/health/actions/{action}` queues maintenance.
+- `GET /api/library/health/tasks/{task_id}` reports progress.
+- `POST /api/library/health/tasks/{task_id}/cancel` requests cancellation.
+
+The `/library/health` dashboard consumes only these APIs. Future metadata repair
+and duplicate detection should register checks and actions behind the same
+service/API boundaries, preserving the dashboard layout.
