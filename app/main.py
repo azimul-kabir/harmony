@@ -26,6 +26,7 @@ from app.web.playlists import router as playlists_page_router
 from app.web.sources import router as sources_page_router
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
+from app.workers.sync_worker import start_sync_worker
 
 settings = get_settings()
 
@@ -48,6 +49,8 @@ async def lifespan(app: FastAPI):
             name=f"download-worker-{i + 1}",
         ).start()
         
+    start_sync_worker()
+
     logger.info("Harmony started")
     yield
     logger.info("Harmony stopped")

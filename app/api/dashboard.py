@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.models import DownloadJob, Task
 from app.database.session import get_db, SessionLocal
 from app.services.dashboard import get_dashboard_stats
+from app.services.sync_checker import check_sync_status
 from app.domain.task import TaskStatus
 from app.domain.download import JobStatus
 from app.core.config import get_settings
@@ -89,12 +90,16 @@ async def stream_dashboard_data(request: Request):
                 # NEW: Add cover_url
                 workers = [{"title": j.title, "artist": j.artist, "cover_url": j.cover_url} for j in running_jobs]
                 
+                from app.services.sync_checker import check_sync_status_async
+                navidrome_health = await check_sync_status_async(db)
+
                 payload = {
                     "stats": stats,
                     "activity": activity,
                     "tasks": active_tasks,
                     "workers": workers,
-                    "max_workers": settings.max_parallel_downloads
+                    "max_workers": settings.max_parallel_downloads,
+                    "navidrome": navidrome_health
                 }
                 
                 yield f"data: {json.dumps(payload)}\n\n"

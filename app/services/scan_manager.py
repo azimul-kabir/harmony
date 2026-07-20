@@ -9,20 +9,23 @@ from app.database.models import ScanHistory
 
 class ScanManager:
     def __init__(self):
+        import threading
         self.last_activity_time = 0
         self.scan_pending = False
         self.debounce_seconds = 15
         self.task_running = False
+        self._lock = threading.Lock()
 
     def mark_pending(self):
         """Called whenever a download worker finishes importing a track."""
-        self.last_activity_time = time.time()
-        self.scan_pending = True
+        with self._lock:
+            self.last_activity_time = time.time()
+            self.scan_pending = True
 
-        if not self.task_running:
-            self.task_running = True
-            import threading
-            threading.Thread(target=self._debounce_loop, daemon=True).start()
+            if not self.task_running:
+                self.task_running = True
+                import threading
+                threading.Thread(target=self._debounce_loop, daemon=True).start()
 
     def _debounce_loop(self):
         logger.info("Scan debounce loop started.")

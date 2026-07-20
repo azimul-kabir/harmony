@@ -24,9 +24,72 @@ document.addEventListener("DOMContentLoaded", () => {
 function renderStats(stats) {
     if (!stats) return;
     document.getElementById("card-songs").textContent = stats.songs;
-    document.getElementById("card-downloads").textContent = stats.downloads;
-    document.getElementById("card-sources").textContent = stats.sources;
-    document.getElementById("card-failed").textContent = stats.failed;
+    document.getElementById("card-artists").textContent = stats.artists;
+    document.getElementById("card-albums").textContent = stats.albums;
+    document.getElementById("card-storage").textContent = `${stats.storage.used_gb} GB`;
+
+    // Update Storage Bar
+    const labels = document.getElementById("storage-labels");
+    const bar = document.getElementById("storage-bar");
+    if(labels && bar) {
+        labels.textContent = `${stats.storage.used_gb} GB / ${stats.storage.total_gb} GB`;
+        const pct = stats.storage.total_gb ? (stats.storage.used_gb / stats.storage.total_gb) * 100 : 0;
+        bar.style.width = `${pct}%`;
+    }
+}
+
+function renderNavidromeHealth(nd) {
+    if(!nd) return;
+
+    const badge = document.getElementById("nd-health-badge");
+    const details = document.getElementById("nd-health-details");
+    const syncStatus = document.getElementById("nd-sync-status");
+    const btnRescan = document.getElementById("btn-manual-rescan");
+
+    if(!badge || !details || !syncStatus) return;
+
+    if(!nd.connected) {
+        badge.style.background = "var(--text-muted)";
+        details.textContent = "Not configured";
+        syncStatus.textContent = "Offline";
+        syncStatus.style.color = "var(--text-muted)";
+        btnRescan.style.display = 'none';
+        return;
+    }
+
+    if(nd.online) {
+        badge.style.background = "var(--success)";
+        details.innerHTML = `Online • ${nd.latency}ms latency<br>${nd.is_scanning ? '<span style="color:var(--primary);">Scanning...</span>' : 'Idle'}`;
+
+        if (nd.delta > 0) {
+            syncStatus.textContent = `${nd.delta} Missing Tracks`;
+            syncStatus.style.color = "var(--warning, #eab308)";
+            btnRescan.style.display = 'inline-block';
+        } else {
+            syncStatus.textContent = "✓ Synced";
+            syncStatus.style.color = "var(--success)";
+            btnRescan.style.display = 'none';
+        }
+    } else {
+        badge.style.background = "var(--error)";
+        details.textContent = "Offline or unreachable";
+        syncStatus.textContent = "Disconnected";
+        syncStatus.style.color = "var(--error)";
+        btnRescan.style.display = 'none';
+    }
+
+    btnRescan.onclick = async () => {
+        btnRescan.disabled = true;
+        btnRescan.textContent = "Scanning...";
+        try {
+            await fetch('/api/navidrome/scan', { method: 'POST' });
+        } finally {
+            setTimeout(() => {
+                btnRescan.disabled = false;
+                btnRescan.textContent = "Force Rescan";
+            }, 2000);
+        }
+    }
 }
 
 // Inside app/static/js/dashboard.js, update renderWorkers() and renderActivity():
@@ -258,6 +321,7 @@ function connectSSE() {
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
         renderStats(data.stats);
+        renderNavidromeHealth(data.navidrome);
         renderWorkers(data.workers || [], data.max_workers || 4); // NEW: Render workers
         renderActivity(data.activity);
         renderTasks(data.tasks);

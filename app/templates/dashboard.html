@@ -36,21 +36,49 @@
             <p id="card-songs">{{ stats.songs }}</p>
         </div>
         <div class="dashboard-card">
-            <h3>Total Downloads</h3>
-            <p id="card-downloads">{{ stats.downloads }}</p>
+            <h3>Artists</h3>
+            <p id="card-artists">{{ stats.artists }}</p>
         </div>
         <div class="dashboard-card">
-            <h3>Sources</h3>
-            <p id="card-sources">{{ stats.sources }}</p>
+            <h3>Albums</h3>
+            <p id="card-albums">{{ stats.albums }}</p>
         </div>
         <div class="dashboard-card">
-            <h3>Failed Jobs</h3>
-            <p id="card-failed">{{ stats.failed }}</p>
+            <h3>Storage Used</h3>
+            <p id="card-storage">{{ stats.storage.used_gb }} GB</p>
+        </div>
+    </section>
+
+    <!-- Storage Bar -->
+    <section class="panel" style="margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 1rem;">Music Storage</h3>
+            <span style="font-size: 0.85rem; color: var(--text-muted);" id="storage-labels">
+                {{ stats.storage.used_gb }} GB / {{ stats.storage.total_gb }} GB
+            </span>
+        </div>
+        <div style="width: 100%; height: 8px; background: var(--bg-surface-alt); border-radius: 4px; overflow: hidden;">
+            <div id="storage-bar" style="height: 100%; width: {{ (stats.storage.used_gb / stats.storage.total_gb * 100) if stats.storage.total_gb else 0 }}%; background: var(--primary);"></div>
+        </div>
+    </section>
+
+    <!-- Navidrome Health -->
+    <section class="panel" style="margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div id="nd-health-badge" style="width: 12px; height: 12px; border-radius: 50%; background: var(--error);"></div>
+            <div>
+                <h3 style="margin: 0; font-size: 1rem;">Navidrome Status</h3>
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;" id="nd-health-details">Connecting...</div>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div id="nd-sync-status" style="font-weight: 600; font-size: 0.95rem;">Checking Sync...</div>
+            <button id="btn-manual-rescan" class="btn-secondary" style="margin-top: 8px; padding: 4px 8px; font-size: 0.8rem; display: none;">Force Rescan</button>
         </div>
     </section>
 
     <!-- NEW: Download Workers -->
-    <section class="panel" style="padding: 0; overflow: hidden;">
+    <section class="panel" style="padding: 0; overflow: hidden; margin-bottom: 24px;">
         <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Download Workers</h3>
             <span id="worker-count-badge" class="badge badge-queued" style="font-size: 0.8rem;">0 Active</span>

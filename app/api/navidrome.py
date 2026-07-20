@@ -88,6 +88,11 @@ def get_status(db: Session = Depends(get_db)):
         "is_scanning": is_scanning
     }
 
+@router.get("/health")
+def get_health(db: Session = Depends(get_db)):
+    from app.services.sync_checker import check_sync_status
+    return check_sync_status(db)
+
 @router.post("/autodiscover")
 def autodiscover():
     common_urls = [
