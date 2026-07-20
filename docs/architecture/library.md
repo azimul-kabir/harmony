@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.10.0
+> Version: 1.11.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -857,3 +857,37 @@ Responsibilities
 Harmony prepares the perfect music library.
 
 Applications like Navidrome provide playback.
+
+---
+
+# Bulk Operations
+
+Library bulk operations are durable asynchronous Tasks. `tasks` is the parent
+progress record and `bulk_operation_items` stores the status, original path,
+result path, and error for every selected song. This keeps progress and partial
+failures inspectable without coupling the Library UI to worker threads.
+
+Supported operations are delete, move, rename, metadata refresh, artwork cache
+refresh, and ZIP export. All operations resolve songs through the Library Index.
+UI routes never perform filesystem mutations.
+
+The Library bulk worker:
+
+- Processes one task in the background and checks cancellation between items.
+- Continues after item-level failures and records each error independently.
+- Recovers `running` tasks and items as `queued` after process restarts.
+- Uses paths constrained to the configured music root and never overwrites a
+  destination collision.
+- Preserves the internal song ID when moving or renaming files.
+- Publishes the existing Library events after index-changing operations.
+
+Exports are written beneath `<download_path>/exports` and exposed through an
+authenticated-ready API boundary. Export creation reads files only in the
+worker; search and normal Library reads remain index-only.
+
+API surface:
+
+- `POST /api/library/bulk` creates a task from an operation, song IDs, and options.
+- `GET /api/library/bulk/{task_id}` returns aggregate progress and item results.
+- `POST /api/library/bulk/{task_id}/cancel` requests cooperative cancellation.
+- `GET /api/library/bulk/{task_id}/export` streams a completed ZIP export.

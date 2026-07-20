@@ -71,3 +71,8 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "ix_songs_codec",
         "ix_songs_bitrate",
     } <= song_indexes
+    assert "bulk_operation_items" in inspect(engine).get_table_names()
+    task_columns = {
+        column["name"] for column in inspect(engine).get_columns("tasks")
+    }
+    assert {"operation_payload", "output_path"} <= task_columns

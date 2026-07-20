@@ -88,6 +88,25 @@ class ArtworkService:
         )
         return artwork
 
+    def refresh_for_song(self, db: Session, song: Song) -> Artwork | None:
+        """Re-read local artwork sources, repairing the cache when necessary."""
+        path = Path(song.path)
+        candidate = self._embedded_candidate(path)
+        if candidate is None:
+            candidate = self._folder_candidate(path.parent)
+
+        artwork = self.cache(db, candidate) if candidate is not None else None
+        if artwork is None and song.artwork is not None:
+            cached = Path(song.artwork.cache_path)
+            if cached.is_file():
+                artwork = song.artwork
+
+        song.artwork = artwork
+        song.artwork_id = artwork.id if artwork else None
+        song.artwork_status = artwork.source if artwork else "missing"
+        song.cover_url = artwork_url(artwork.id) if artwork else None
+        return artwork
+
     def _write_cache(self, path: Path, data: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.is_file():

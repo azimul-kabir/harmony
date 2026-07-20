@@ -6,6 +6,7 @@ class TaskType(StrEnum):
     ALBUM_DOWNLOAD = "album_download"
     PLAYLIST_DOWNLOAD = "playlist_download"
     PLAYLIST_SYNC = "playlist_sync"
+    LIBRARY_BULK = "library_bulk"
 
 
 class TaskStatus(StrEnum):

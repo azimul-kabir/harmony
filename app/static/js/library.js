@@ -38,6 +38,9 @@ const libraryState = {
     searchRequest: 0,
     pages: { songs: 1, albums: 1, artists: 1 },
     pageSize: 24,
+    selectedSongs: new Set(),
+    bulkTaskId: null,
+    bulkPollTimer: null,
 };
 
 let searchTimer = null;
@@ -407,7 +410,8 @@ function renderSongs() {
         body.innerHTML = emptyTable("No songs match this view.");
     } else {
         body.innerHTML = page.items.map((song) => `
-            <tr>
+            <tr class="${libraryState.selectedSongs.has(song.id) ? "is-selected" : ""}">
+                <td class="library-select-cell" data-label="Select"><input type="checkbox" data-select-song="${song.id}" aria-label="Select ${escapeAttribute(song.title || song.filename)}" ${libraryState.selectedSongs.has(song.id) ? "checked" : ""}></td>
                 <td data-label="Title">
                     <div class="library-song-title">
                         ${artwork(song.cover_url, "library-song-artwork")}
@@ -424,6 +428,16 @@ function renderSongs() {
             </tr>
         `).join("");
     }
+
+    body.querySelectorAll("[data-select-song]").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+            const songId = Number(checkbox.dataset.selectSong);
+            checkbox.checked ? libraryState.selectedSongs.add(songId) : libraryState.selectedSongs.delete(songId);
+            checkbox.closest("tr").classList.toggle("is-selected", checkbox.checked);
+            updateBulkSelection(page.items);
+        });
+    });
+    updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
 }
@@ -604,7 +618,7 @@ function pluralizeLabel(count, noun) {
 }
 
 function emptyTable(message) {
-    return `<tr><td colspan="5"><div class="library-empty">${icons.music}<strong>${escapeHtml(message)}</strong></div></td></tr>`;
+    return `<tr><td colspan="6"><div class="library-empty">${icons.music}<strong>${escapeHtml(message)}</strong></div></td></tr>`;
 }
 
 function emptyGrid(message) {
@@ -621,8 +635,193 @@ function escapeAttribute(value) {
     return escapeHtml(value).replace(/'/g, "&#39;");
 }
 
+const bulkActions = {
+    delete: {
+        title: "Delete selected songs?",
+        message: "This permanently removes the selected audio files. Their Library records remain available for missing-file detection.",
+        confirm: "Delete files",
+    },
+    move: {
+        title: "Move selected songs?",
+        message: "Each song keeps its filename and Library identity.",
+        confirm: "Move songs",
+        label: "Destination folder",
+        placeholder: "Organized/Favorites",
+        help: "Enter a folder relative to Harmony's music folder.",
+    },
+    rename: {
+        title: "Rename selected songs?",
+        message: "Harmony applies the pattern separately to every selected song.",
+        confirm: "Rename songs",
+        label: "Filename pattern",
+        placeholder: "{track} - {title}{ext}",
+        value: "{track} - {title}{ext}",
+        help: "Available: {artist}, {album}, {title}, {track}, {disc}, {filename}, {ext}.",
+    },
+    refresh_metadata: {
+        title: "Refresh metadata?",
+        message: "Harmony will re-read tags and technical audio properties from every selected file.",
+        confirm: "Refresh metadata",
+    },
+    refresh_artwork: {
+        title: "Refresh artwork cache?",
+        message: "Harmony will re-read embedded and folder artwork and repair local cache associations.",
+        confirm: "Refresh artwork",
+    },
+    export: {
+        title: "Export selected songs?",
+        message: "Harmony will create a ZIP archive in the background and provide a download when it is ready.",
+        confirm: "Create export",
+    },
+};
+
+function currentSongPage() {
+    return pageItems(libraryState.filteredSongs, "songs").items;
+}
+
+function updateBulkSelection(pageSongs = currentSongPage()) {
+    const count = libraryState.selectedSongs.size;
+    document.getElementById("library-selected-count").textContent = count.toLocaleString();
+    document.getElementById("library-bulk-toolbar").hidden = count === 0;
+    const selectedOnPage = pageSongs.filter((song) => libraryState.selectedSongs.has(song.id)).length;
+    const selectPage = document.getElementById("library-select-page");
+    selectPage.checked = pageSongs.length > 0 && selectedOnPage === pageSongs.length;
+    selectPage.indeterminate = selectedOnPage > 0 && selectedOnPage < pageSongs.length;
+}
+
+function clearBulkSelection() {
+    libraryState.selectedSongs.clear();
+    renderSongs();
+}
+
+function showBulkDialog(operation) {
+    const action = bulkActions[operation];
+    const dialog = document.getElementById("library-bulk-dialog");
+    const optionWrap = document.getElementById("library-bulk-option-wrap");
+    const option = document.getElementById("library-bulk-option");
+    dialog.dataset.operation = operation;
+    document.getElementById("library-bulk-dialog-title").textContent = action.title;
+    document.getElementById("library-bulk-dialog-message").textContent =
+        `${action.message} ${pluralize(libraryState.selectedSongs.size, "song")} selected.`;
+    document.getElementById("library-bulk-confirm").textContent = action.confirm;
+    document.getElementById("library-bulk-confirm").classList.toggle("library-danger-button", operation === "delete");
+    optionWrap.hidden = !action.label;
+    if (action.label) {
+        document.getElementById("library-bulk-option-label").textContent = action.label;
+        document.getElementById("library-bulk-option-help").textContent = action.help || "";
+        option.placeholder = action.placeholder || "";
+        option.value = action.value || "";
+        option.required = true;
+    } else {
+        option.required = false;
+        option.value = "";
+    }
+    dialog.showModal();
+    if (action.label) option.focus();
+}
+
+async function startBulkOperation(operation, optionValue) {
+    const options = {};
+    if (operation === "move") options.destination = optionValue;
+    if (operation === "rename") options.pattern = optionValue;
+    const response = await fetch("/api/library/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operation, song_ids: [...libraryState.selectedSongs], options }),
+    });
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || `Request failed: ${response.status}`);
+    }
+    const task = await response.json();
+    libraryState.bulkTaskId = task.id;
+    renderBulkProgress(task);
+    pollBulkTask();
+}
+
+async function pollBulkTask() {
+    clearTimeout(libraryState.bulkPollTimer);
+    if (!libraryState.bulkTaskId) return;
+    try {
+        const task = await fetchJson(`/api/library/bulk/${libraryState.bulkTaskId}`);
+        renderBulkProgress(task);
+        if (["completed", "failed", "cancelled"].includes(task.status)) {
+            libraryState.selectedSongs.clear();
+            await loadLibraryData({ preserveState: true });
+            await loadAnalytics();
+            return;
+        }
+        libraryState.bulkPollTimer = setTimeout(pollBulkTask, 700);
+    } catch (error) {
+        document.getElementById("library-bulk-progress-detail").textContent =
+            "Progress is temporarily unavailable. Retrying…";
+        libraryState.bulkPollTimer = setTimeout(pollBulkTask, 1500);
+    }
+}
+
+function renderBulkProgress(task) {
+    const panel = document.getElementById("library-bulk-progress");
+    const terminal = ["completed", "failed", "cancelled"].includes(task.status);
+    panel.hidden = false;
+    document.getElementById("library-bulk-progress-title").textContent = task.name;
+    document.getElementById("library-bulk-progress-count").textContent = `${task.processed} of ${task.total}`;
+    document.getElementById("library-bulk-progress-bar").value = task.progress;
+    const detail = terminal
+        ? `${task.completed} completed · ${task.failed} failed · ${task.skipped} cancelled`
+        : task.current ? `Processing ${task.current}` : "Queued for background processing…";
+    document.getElementById("library-bulk-progress-detail").textContent = detail;
+    document.getElementById("library-bulk-cancel").hidden = terminal;
+    document.getElementById("library-bulk-dismiss").hidden = !terminal;
+    const download = document.getElementById("library-bulk-download");
+    download.hidden = !terminal || !task.download_url;
+    if (task.download_url) download.href = task.download_url;
+}
+
 document.querySelectorAll(".library-tab").forEach((tab) => {
     tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+
+document.getElementById("library-select-page").addEventListener("change", (event) => {
+    currentSongPage().forEach((song) => {
+        event.target.checked ? libraryState.selectedSongs.add(song.id) : libraryState.selectedSongs.delete(song.id);
+    });
+    renderSongs();
+});
+
+document.getElementById("library-clear-selection").addEventListener("click", clearBulkSelection);
+document.querySelectorAll("[data-bulk-action]").forEach((button) => {
+    button.addEventListener("click", () => showBulkDialog(button.dataset.bulkAction));
+});
+
+document.getElementById("library-bulk-confirm").addEventListener("click", async (event) => {
+    event.preventDefault();
+    const dialog = document.getElementById("library-bulk-dialog");
+    const option = document.getElementById("library-bulk-option");
+    if (option.required && !option.value.trim()) {
+        option.reportValidity();
+        return;
+    }
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+        await startBulkOperation(dialog.dataset.operation, option.value.trim());
+        dialog.close();
+    } catch (error) {
+        document.getElementById("library-bulk-dialog-message").textContent = error.message;
+    } finally {
+        button.disabled = false;
+    }
+});
+
+document.getElementById("library-bulk-cancel").addEventListener("click", async () => {
+    if (!libraryState.bulkTaskId) return;
+    await fetch(`/api/library/bulk/${libraryState.bulkTaskId}/cancel`, { method: "POST" });
+    pollBulkTask();
+});
+
+document.getElementById("library-bulk-dismiss").addEventListener("click", () => {
+    document.getElementById("library-bulk-progress").hidden = true;
+    libraryState.bulkTaskId = null;
 });
 
 document.getElementById("library-search").addEventListener("input", (event) => {

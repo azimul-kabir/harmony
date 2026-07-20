@@ -132,10 +132,36 @@
         <div id="library-error" class="library-error" hidden></div>
 
         <section id="view-songs" class="library-view" role="tabpanel">
+            <div id="library-bulk-toolbar" class="library-bulk-toolbar" hidden>
+                <strong><span id="library-selected-count">0</span> selected</strong>
+                <div class="library-bulk-actions">
+                    <button type="button" data-bulk-action="move">Move</button>
+                    <button type="button" data-bulk-action="rename">Rename</button>
+                    <button type="button" data-bulk-action="refresh_metadata">Refresh metadata</button>
+                    <button type="button" data-bulk-action="refresh_artwork">Refresh artwork</button>
+                    <button type="button" data-bulk-action="export">Export</button>
+                    <button type="button" class="library-bulk-delete" data-bulk-action="delete">Delete</button>
+                    <button id="library-clear-selection" type="button" class="btn-secondary">Clear</button>
+                </div>
+            </div>
+            <div id="library-bulk-progress" class="library-bulk-progress" hidden aria-live="polite">
+                <div class="library-bulk-progress-heading">
+                    <strong id="library-bulk-progress-title">Working…</strong>
+                    <span id="library-bulk-progress-count">0 of 0</span>
+                </div>
+                <progress id="library-bulk-progress-bar" value="0" max="100"></progress>
+                <p id="library-bulk-progress-detail"></p>
+                <div class="library-bulk-progress-actions">
+                    <a id="library-bulk-download" class="btn-primary" href="#" hidden>Download export</a>
+                    <button id="library-bulk-cancel" class="btn-secondary" type="button">Cancel</button>
+                    <button id="library-bulk-dismiss" class="btn-secondary" type="button" hidden>Dismiss</button>
+                </div>
+            </div>
             <div class="library-table-wrap">
                 <table class="library-songs-table">
                     <thead>
                         <tr>
+                            <th class="library-select-cell"><input id="library-select-page" type="checkbox" aria-label="Select songs on this page"></th>
                             <th>Title</th>
                             <th>Artist</th>
                             <th>Album</th>
@@ -170,6 +196,25 @@
         </section>
     </div>
 </section>
+
+<dialog id="library-bulk-dialog" class="library-bulk-dialog">
+    <form method="dialog">
+        <div class="library-bulk-dialog-copy">
+            <span class="library-eyebrow">Bulk operation</span>
+            <h2 id="library-bulk-dialog-title">Confirm action</h2>
+            <p id="library-bulk-dialog-message"></p>
+        </div>
+        <label id="library-bulk-option-wrap" hidden>
+            <span id="library-bulk-option-label"></span>
+            <input id="library-bulk-option" type="text">
+            <small id="library-bulk-option-help"></small>
+        </label>
+        <div class="library-bulk-dialog-actions">
+            <button class="btn-secondary" value="cancel">Cancel</button>
+            <button id="library-bulk-confirm" class="btn-primary" value="default">Confirm</button>
+        </div>
+    </form>
+</dialog>
 {% endblock %}
 
 {% block scripts %}

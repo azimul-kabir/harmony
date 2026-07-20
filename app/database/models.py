@@ -109,7 +109,30 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    operation_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_path: Mapped[str | None] = mapped_column(String, nullable=True)
     jobs = relationship("DownloadJob", back_populates="task")
+    bulk_items = relationship(
+        "BulkOperationItem",
+        back_populates="task",
+        cascade="all, delete-orphan",
+    )
+
+
+class BulkOperationItem(Base):
+    __tablename__ = "bulk_operation_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False, index=True)
+    song_id: Mapped[int | None] = mapped_column(ForeignKey("songs.id"), nullable=True, index=True)
+    original_path: Mapped[str] = mapped_column(String, nullable=False)
+    result_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="queued", index=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    task: Mapped["Task"] = relationship(back_populates="bulk_items")
+    song: Mapped["Song | None"] = relationship()
 
 class DownloadJob(Base):
     __tablename__ = "download_jobs"

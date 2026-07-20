@@ -11,6 +11,7 @@ from app.api import downloads, library
 from app.api.artwork import router as artwork_router
 from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
+from app.api.library_bulk import router as library_bulk_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
 from app.api.sync_sources import router as sync_sources_router
@@ -21,6 +22,7 @@ from app.database.init_db import init_db
 from app.database.session import SessionLocal
 from app.services.dashboard import get_dashboard_stats
 from app.services.library_watcher import LibraryWatcher
+from app.services.library_bulk import library_bulk_worker
 from app.web.downloads import router as downloads_page_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
@@ -38,6 +40,7 @@ async def lifespan(app: FastAPI):
     Path(settings.music_path).mkdir(parents=True, exist_ok=True)
     Path(settings.artwork_cache_path).mkdir(parents=True, exist_ok=True)
     init_db()
+    library_bulk_worker.start()
     
     logger.info("Starting Harmony...")
     logger.info(
@@ -64,6 +67,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        library_bulk_worker.stop()
         if library_watcher is not None:
             library_watcher.stop()
         logger.info("Harmony stopped")
@@ -86,6 +90,7 @@ app.include_router(settings_router)
 app.include_router(settings_page_router)  # The /settings HTML Web page (app/web/settings.py)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
+app.include_router(library_bulk_router)
 app.include_router(artwork_router)
 app.include_router(library_page_router)
 app.include_router(downloads.router)
