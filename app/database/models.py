@@ -38,11 +38,34 @@ class Song(Base):
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     genre: Mapped[str | None] = mapped_column(String, nullable=True)
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    codec: Mapped[str | None] = mapped_column(String, nullable=True)
+    sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     modified_time: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_modified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_indexed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    metadata_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    artwork_status: Mapped[str] = mapped_column(String, nullable=False, default="missing")
+    availability_status: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="available",
+        index=True,
+    )
+    download_source: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="filesystem",
+    )
     
     # Album artwork URL
     cover_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    musicbrainz_recording_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class Task(Base):

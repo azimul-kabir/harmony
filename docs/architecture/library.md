@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
-> Version: 1.5.0
-> Status: Draft
-> Last Updated: YYYY-MM-DD
+> Version: 1.5.1
+> Status: Implemented Foundation
+> Last Updated: 2026-07-21
 
 ---
 
@@ -337,6 +337,31 @@ Navidrome Sync
 # Library Index
 
 The Library Index is the source of truth.
+
+The persistent index is the `songs` table. One row represents one managed
+audio file and keeps a stable internal ID even when the file becomes missing.
+Downloaded files must be indexed through `LibraryService`; download workers,
+API routes, and future integrations must not maintain parallel song records.
+
+In addition to descriptive metadata, each indexed file stores technical audio
+properties, artwork status, availability, filesystem timestamps, metadata hash,
+download source, Spotify/MusicBrainz/ISRC identifiers, and indexing timestamps.
+Playlist sources are resolved from the persistent `playlists` and
+`playlist_tracks` index using the Spotify track ID. This avoids duplicating
+playlist membership on each song row while still exposing it in Library APIs.
+
+Incremental indexing compares file size and modified time before parsing tags.
+Unchanged files are skipped. Re-indexing forces tag extraction and compares the
+metadata hash. Files absent during reconciliation are marked `missing`, not
+deleted, so history, source relationships, and internal IDs remain stable.
+
+Library maintenance API:
+
+- `GET /api/library/songs/{id}` returns one complete index record.
+- `GET /api/library/missing` returns retained missing-file records.
+- `POST /api/library/index` incrementally indexes one file.
+- `POST /api/library/rescan` reconciles the managed library.
+- `POST /api/library/reindex` forces a complete metadata rebuild.
 
 Never scan the filesystem unless:
 
