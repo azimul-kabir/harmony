@@ -155,7 +155,10 @@
             </form>
 
             <div style="margin-top: 40px;">
-                <h3 style="margin-top: 0; margin-bottom: 16px;">Library Scan History</h3>
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <h3 style="margin-top: 0; margin-bottom: 16px;">Library Scan History</h3>
+                    <span id="scan-live-status" style="font-weight: bold; font-size: 0.9rem; color: var(--text-muted);">Idle</span>
+                </div>
                 <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
                     <ul id="scan-history-list" style="list-style: none; padding: 0; margin: 0;">
                         <li>Loading history...</li>
@@ -436,14 +439,28 @@
 
     async function loadScanHistory() {
         const list = document.getElementById('scan-history-list');
+        const liveStatus = document.getElementById('scan-live-status');
         const res = await fetch('/api/navidrome/scans/history');
         if(res.ok) {
             const data = await res.json();
-            if(data.length === 0) {
+
+            // Update live status
+            if(data.running) {
+                liveStatus.innerText = "In Progress...";
+                liveStatus.style.color = "var(--primary)";
+            } else if(data.pending) {
+                liveStatus.innerText = "Pending (Debouncing)...";
+                liveStatus.style.color = "var(--warning, #eab308)";
+            } else {
+                liveStatus.innerText = "Idle";
+                liveStatus.style.color = "var(--text-muted)";
+            }
+
+            if(data.history.length === 0) {
                 list.innerHTML = '<li>No recent scans.</li>';
                 return;
             }
-            list.innerHTML = data.map(s => {
+            list.innerHTML = data.history.map(s => {
                 const date = new Date(s.created_at).toLocaleString();
                 const color = s.status === 'success' ? 'var(--success)' : 'var(--error)';
                 return `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color);">
@@ -456,5 +473,12 @@
 
     // Load history when tab is clicked
     document.querySelector('.settings-tab[data-target="navidrome"]').addEventListener('click', loadScanHistory);
+
+    // Poll for status if tab is active
+    setInterval(() => {
+        if(document.getElementById('tab-navidrome').style.display === 'block') {
+            loadScanHistory();
+        }
+    }, 3000);
 </script>
 {% endblock %}

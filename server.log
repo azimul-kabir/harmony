@@ -1,0 +1,28 @@
+INFO:     Started server process [574675]
+INFO:     Waiting for application startup.
+2026-07-20 14:42:26.704 | INFO     | app.main:lifespan:39 - Starting Harmony...
+2026-07-20 14:42:26.705 | INFO     | app.main:lifespan:40 - Starting 4 download workers...
+2026-07-20 14:42:26.705 | INFO     | app.workers.download_worker:worker_loop:31 - download-worker-1 started.
+2026-07-20 14:42:26.708 | INFO     | app.workers.download_worker:worker_loop:31 - download-worker-2 started.
+2026-07-20 14:42:26.715 | INFO     | app.workers.download_worker:worker_loop:31 - download-worker-3 started.
+2026-07-20 14:42:26.715 | INFO     | app.workers.download_worker:worker_loop:31 - download-worker-4 started.
+2026-07-20 14:42:26.741 | INFO     | app.main:lifespan:51 - Harmony started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:37194 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37194 - "GET /css/app.css?v=0.7.0-alpha HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37202 - "GET /js/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37212 - "GET /js/dashboard.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37194 - "GET /api/dashboard/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37202 - "GET /api/dashboard/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37212 - "POST /api/navidrome/autodiscover HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36050 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36050 - "GET /css/app.css?v=0.7.0-alpha HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36056 - "GET /js/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36050 - "GET /api/dashboard/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36056 - "GET /api/navidrome/scans/history HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-07-20 14:44:03.456 | INFO     | app.main:lifespan:53 - Harmony stopped
+INFO:     Application shutdown complete.
+INFO:     Finished server process [574675]

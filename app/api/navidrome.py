@@ -152,5 +152,10 @@ def trigger_scan(db: Session = Depends(get_db)):
 
 @router.get("/scans/history")
 def get_scan_history(db: Session = Depends(get_db)):
+    from app.services.scan_manager import scan_manager
     scans = db.query(ScanHistory).order_by(ScanHistory.created_at.desc()).limit(10).all()
-    return [{"id": s.id, "trigger_type": s.trigger_type, "status": s.status, "tracks_found": s.tracks_found, "details": s.details, "error_message": s.error_message, "created_at": s.created_at.isoformat()} for s in scans]
+    return {
+        "pending": scan_manager.scan_pending,
+        "running": scan_manager.task_running,
+        "history": [{"id": s.id, "trigger_type": s.trigger_type, "status": s.status, "tracks_found": s.tracks_found, "details": s.details, "error_message": s.error_message, "created_at": s.created_at.isoformat()} for s in scans]
+    }
