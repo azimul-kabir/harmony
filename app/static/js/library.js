@@ -1,8 +1,13 @@
 let allSongs = [];
 let filteredSongs = [];
 let allAlbums = [];
+let filteredAlbums = [];
 let allArtists = [];
-let currentPage = 1;
+let filteredArtists = [];
+
+let currentSongPage = 1;
+let currentAlbumPage = 1;
+let currentArtistPage = 1;
 const itemsPerPage = 50;
 let searchTimeout = null;
 let currentView = 'songs';
@@ -10,20 +15,24 @@ let currentSort = 'artist';
 
 async function loadLibraryData() {
     try {
-        // Fetch songs with current sorting parameter
         const resSongs = await fetch(`/api/library/songs?sort_by=${currentSort}`);
         if (!resSongs.ok) throw new Error("Failed to fetch songs");
         allSongs = await resSongs.json();
         filteredSongs = allSongs;
 
-        // Fetch albums and artists for alternative views
         const [resAlbums, resArtists] = await Promise.all([
             fetch("/api/library/albums"),
             fetch("/api/library/artists")
         ]);
         
-        if (resAlbums.ok) allAlbums = await resAlbums.json();
-        if (resArtists.ok) allArtists = await resArtists.json();
+        if (resAlbums.ok) {
+            allAlbums = await resAlbums.json();
+            filteredAlbums = allAlbums;
+        }
+        if (resArtists.ok) {
+            allArtists = await resArtists.json();
+            filteredArtists = allArtists;
+        }
 
         renderActiveView();
     } catch (e) {
@@ -39,18 +48,55 @@ async function loadLibraryData() {
 }
 
 function renderActiveView() {
+    // Show/hide respective pagination blocks if needed
     if (currentView === 'songs') {
         renderSongsPage();
+        setPaginationVisibility(true, false, false);
     } else if (currentView === 'albums') {
-        renderAlbumsGrid();
+        renderAlbumsPage();
+        setPaginationVisibility(false, true, false);
     } else if (currentView === 'artists') {
-        renderArtistsGrid();
+        renderArtistsPage();
+        setPaginationVisibility(false, false, true);
     }
+}
+
+function setPaginationVisibility(songsVis, albumsVis, artistsVis) {
+    document.getElementById("pagination-songs").style.display = songsVis ? "flex" : "none";
+    
+    let albumPag = document.getElementById("pagination-albums");
+    if (!albumPag && albumsVis) {
+        createPaginationContainer("pagination-albums", changeAlbumPage);
+    }
+    if (albumPag) albumPag.style.display = albumsVis ? "flex" : "none";
+
+    let artistPag = document.getElementById("pagination-artists");
+    if (!artistPag && artistsVis) {
+        createPaginationContainer("pagination-artists", changeArtistPage);
+    }
+    if (artistPag) artistPag.style.display = artistsVis ? "flex" : "none";
+}
+
+function createPaginationContainer(id, callback) {
+    const parent = document.querySelector("#view-" + id.replace("pagination-", ""));
+    const div = document.createElement("div");
+    div.id = id;
+    div.className = "pagination-controls";
+    div.style = "border-radius: 0 0 16px 16px; background: var(--bg-surface-alt); margin-top: 16px; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;";
+    div.innerHTML = `
+        <button class="btn-secondary prev-btn" disabled>Previous</button>
+        <span class="page-info" style="font-weight: 600; color: var(--text-muted);">Page 1</span>
+        <button class="btn-secondary next-btn" disabled>Next</button>
+    `;
+    parent.appendChild(div);
+
+    div.querySelector(".prev-btn").onclick = () => callback(-1);
+    div.querySelector(".next-btn").onclick = () => callback(1);
 }
 
 function renderSongsPage() {
     const tbody = document.getElementById("library-body");
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const startIndex = (currentSongPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const paginatedItems = filteredSongs.slice(startIndex, endIndex);
 
@@ -89,23 +135,28 @@ function renderSongsPage() {
         }).join("");
     }
 
-    updatePaginationUI();
+    updateSongsPaginationUI();
     const selectAll = document.getElementById("select-all");
     if(selectAll) selectAll.checked = false;
     document.getElementById("delete-selected").disabled = true;
 }
 
-function renderAlbumsGrid() {
+function renderAlbumsPage() {
     const grid = document.getElementById("albums-grid");
-    if (!allAlbums.length) {
-        grid.innerHTML = `<p class="empty-state" style="grid-column: 1/-1; padding: 40px;">No albums found.</p>`;
+    const startIndex = (currentAlbumPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedItems = filteredAlbums.slice(startIndex, endIndex);
+
+    if (paginatedItems.length === 0) {
+        grid.innerHTML = `<p class="empty-state" style="grid-column: 1/-1; padding: 40px;">No albums found matching your criteria.</p>`;
+        updateGenericPaginationUI("pagination-albums", currentAlbumPage, filteredAlbums.length);
         return;
     }
 
-    grid.innerHTML = allAlbums.map(album => {
+    grid.innerHTML = paginatedItems.map(album => {
         const coverImg = album.cover_url
-            ? `<img src="${album.cover_url}" alt="Cover" style="width: 100%; height: 180px; border-radius: 8px; object-fit: cover; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">`
-            : `<div style="width: 100%; height: 180px; border-radius: 8px; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
+            ? `<img src="${album.cover_url}" alt="Cover" style="width: 100%; height: 160px; border-radius: 8px; object-fit: cover; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">`
+            : `<div style="width: 100%; height: 160px; border-radius: 8px; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
 
         return `
             <div class="source-card" style="cursor: pointer;" onclick="filterByAlbum('${encodeURIComponent(album.album)}')">
@@ -119,19 +170,26 @@ function renderAlbumsGrid() {
             </div>
         `;
     }).join("");
+
+    updateGenericPaginationUI("pagination-albums", currentAlbumPage, filteredAlbums.length);
 }
 
-function renderArtistsGrid() {
+function renderArtistsPage() {
     const grid = document.getElementById("artists-grid");
-    if (!allArtists.length) {
-        grid.innerHTML = `<p class="empty-state" style="grid-column: 1/-1; padding: 40px;">No artists found.</p>`;
+    const startIndex = (currentArtistPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedItems = filteredArtists.slice(startIndex, endIndex);
+
+    if (paginatedItems.length === 0) {
+        grid.innerHTML = `<p class="empty-state" style="grid-column: 1/-1; padding: 40px;">No artists found matching your criteria.</p>`;
+        updateGenericPaginationUI("pagination-artists", currentArtistPage, filteredArtists.length);
         return;
     }
 
-    grid.innerHTML = allArtists.map(artist => {
+    grid.innerHTML = paginatedItems.map(artist => {
         const coverImg = artist.cover_url
-            ? `<img src="${artist.cover_url}" alt="Cover" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">`
-            : `<div style="width: 70px; height: 70px; border-radius: 50%; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>`;
+            ? `<img src="${artist.cover_url}" alt="Cover" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">`
+            : `<div style="width: 60px; height: 60px; border-radius: 50%; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>`;
 
         return `
             <div class="source-card" style="flex-direction: row; align-items: center; gap: 16px; cursor: pointer;" onclick="filterByArtist('${encodeURIComponent(artist.artist)}')">
@@ -143,6 +201,42 @@ function renderArtistsGrid() {
             </div>
         `;
     }).join("");
+
+    updateGenericPaginationUI("pagination-artists", currentArtistPage, filteredArtists.length);
+}
+
+function updateSongsPaginationUI() {
+    const totalPages = Math.ceil(filteredSongs.length / itemsPerPage) || 1;
+    document.getElementById("page-info").textContent = `Page ${currentSongPage} of ${totalPages} (${filteredSongs.length} total tracks)`;
+    document.getElementById("btn-prev").disabled = currentSongPage === 1;
+    document.getElementById("btn-next").disabled = currentSongPage === totalPages;
+}
+
+function updateGenericPaginationUI(containerId, page, totalLength) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(totalLength / itemsPerPage) || 1;
+    container.querySelector(".page-info").textContent = `Page ${page} of ${totalPages} (${totalLength} items)`;
+    container.querySelector(".prev-btn").disabled = page === 1;
+    container.querySelector(".next-btn").disabled = page === totalPages;
+}
+
+function changeAlbumPage(direction) {
+    const totalPages = Math.ceil(filteredAlbums.length / itemsPerPage) || 1;
+    currentAlbumPage += direction;
+    if (currentAlbumPage < 1) currentAlbumPage = 1;
+    if (currentAlbumPage > totalPages) currentAlbumPage = totalPages;
+    renderAlbumsPage();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function changeArtistPage(direction) {
+    const totalPages = Math.ceil(filteredArtists.length / itemsPerPage) || 1;
+    currentArtistPage += direction;
+    if (currentArtistPage < 1) currentArtistPage = 1;
+    if (currentArtistPage > totalPages) currentArtistPage = totalPages;
+    renderArtistsPage();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function filterByAlbum(albumName) {
@@ -156,8 +250,8 @@ function filterByAlbum(albumName) {
     const decoded = decodeURIComponent(albumName);
     document.getElementById("library-search").value = decoded;
     filteredSongs = allSongs.filter(s => (s.album || "").toLowerCase() === decoded.toLowerCase());
-    currentPage = 1;
-    renderSongsPage();
+    currentSongPage = 1;
+    renderActiveView();
 }
 
 function filterByArtist(artistName) {
@@ -171,15 +265,8 @@ function filterByArtist(artistName) {
     const decoded = decodeURIComponent(artistName);
     document.getElementById("library-search").value = decoded;
     filteredSongs = allSongs.filter(s => (s.artist || "").toLowerCase() === decoded.toLowerCase());
-    currentPage = 1;
-    renderSongsPage();
-}
-
-function updatePaginationUI() {
-    const totalPages = Math.ceil(filteredSongs.length / itemsPerPage) || 1;
-    document.getElementById("page-info").textContent = `Page ${currentPage} of ${totalPages} (${filteredSongs.length} total tracks)`;
-    document.getElementById("btn-prev").disabled = currentPage === 1;
-    document.getElementById("btn-next").disabled = currentPage === totalPages;
+    currentSongPage = 1;
+    renderActiveView();
 }
 
 // View Tab Switching Logic
@@ -203,10 +290,10 @@ document.getElementById("library-sort")?.addEventListener("change", async (e) =>
     await loadLibraryData();
 });
 
-// Pagination Event Listeners
+// Pagination Event Listeners for Songs
 document.getElementById("btn-prev")?.addEventListener("click", () => {
-    if (currentPage > 1) {
-        currentPage--;
+    if (currentSongPage > 1) {
+        currentSongPage--;
         renderSongsPage();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -214,20 +301,22 @@ document.getElementById("btn-prev")?.addEventListener("click", () => {
 
 document.getElementById("btn-next")?.addEventListener("click", () => {
     const totalPages = Math.ceil(filteredSongs.length / itemsPerPage);
-    if (currentPage < totalPages) {
-        currentPage++;
+    if (currentSongPage < totalPages) {
+        currentSongPage++;
         renderSongsPage();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 });
 
-// Debounced Search functionality across multiple fields
+// Global Unified Search Logic across Songs, Albums, and Artists
 document.getElementById("library-search")?.addEventListener("input", (e) => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         const q = e.target.value.toLowerCase().trim();
         if (!q) {
             filteredSongs = allSongs;
+            filteredAlbums = allAlbums;
+            filteredArtists = allArtists;
         } else {
             filteredSongs = allSongs.filter(s => 
                 (s.title || "").toLowerCase().includes(q) || 
@@ -236,9 +325,18 @@ document.getElementById("library-search")?.addEventListener("input", (e) => {
                 (s.genre || "").toLowerCase().includes(q) ||
                 (s.filename || "").toLowerCase().includes(q)
             );
+            filteredAlbums = allAlbums.filter(a => 
+                (a.album || "").toLowerCase().includes(q) ||
+                (a.artist || "").toLowerCase().includes(q)
+            );
+            filteredArtists = allArtists.filter(art => 
+                (art.artist || "").toLowerCase().includes(q)
+            );
         }
-        currentPage = 1;
-        renderSongsPage();
+        currentSongPage = 1;
+        currentAlbumPage = 1;
+        currentArtistPage = 1;
+        renderActiveView();
     }, 250);
 });
 
