@@ -653,66 +653,54 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     }
 }
 
-/* --- Fix Library Grid & Card Overflow on Mobile --- */
-@media (max-width: 768px) {
-    .sources-grid {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 12px !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-    }
-
-    .sources-grid .source-card {
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        margin: 0 !important;
-    }
-
-    #view-albums .sources-grid .source-card img,
-    #view-albums .sources-grid .source-card div[style*="height"] {
-        height: 140px !important;
-        width: 100% !important;
-    }
+/* --- Compact Grid for Albums (Fits more cards horizontally) --- */
+#view-albums .sources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
 }
 
-/* --- Perfect Square Artwork Styling --- */
+/* --- Perfect Square Artwork for Albums --- */
 #view-albums .source-card img,
 #view-albums .source-card div[style*="height"] {
     width: 100% !important;
-    aspect-ratio: 1 / 1 !important;
-    height: auto !important;
+    height: auto !important; /* Strips out any forced inline height */
+    aspect-ratio: 1 / 1 !important; /* Enforces a perfect square */
     object-fit: cover !important;
     border-radius: 8px !important;
 }
 
-#view-artists .source-card img,
-#view-artists .source-card div[style*="width: 50px"] {
-    width: 60px !important;
-    height: 60px !important;
-    aspect-ratio: 1 / 1 !important;
-    object-fit: cover !important;
-    border-radius: 50% !important; /* Circular for artists */
-    flex-shrink: 0 !important;
-}
-
-/* Song list cover thumbnails */
-#view-songs table img {
-    width: 42px !important;
-    height: 42px !important;
-    aspect-ratio: 1 / 1 !important;
-    object-fit: cover !important;
-    border-radius: 6px !important;
-    flex-shrink: 0 !important;
-}
-
+/* --- Mobile Library Grid Enhancements --- */
 @media (max-width: 768px) {
-    /* Ensure Album artwork cards remain responsive and square on mobile */
-    #view-albums .source-card img,
-    #view-albums .source-card div[style*="height"] {
-        width: 100% !important;
-        height: auto !important;
-        aspect-ratio: 1 / 1 !important;
+    /* Create a 2-column grid for Albums on mobile so they aren't massive */
+    #view-albums .sources-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+    }
+
+    /* Artists stay as a 1-column list because they use a horizontal row layout */
+    #view-artists .sources-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* Reduce padding inside mobile album cards to save space */
+    #view-albums .source-card {
+        padding: 12px !important;
+    }
+
+    /* Scale down the font sizes for the compact 2-column mobile view */
+    #view-albums .source-card h3 {
+        font-size: 0.95rem !important;
+    }
+
+    /* Stack the meta info (Tracks / Mins) neatly on small screens */
+    #view-albums .source-meta {
+        padding: 6px !important;
+        font-size: 0.75rem !important;
+        flex-direction: column !important;
+        gap: 4px;
     }
 }
