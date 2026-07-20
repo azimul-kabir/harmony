@@ -7,6 +7,11 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.database.models import Playlist, PlaylistTrack, Song
+from app.services.library_filters import (
+    LibraryFilters,
+    raw_filter_clauses,
+    raw_sort_clause,
+)
 
 
 SEARCH_FIELDS = (
@@ -38,16 +43,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS library_search USING fts5(
 """
 
 
-@dataclass(frozen=True, slots=True)
-class SearchFilters:
-    artist: str | None = None
-    album: str | None = None
-    genre: str | None = None
-    playlist_id: int | None = None
-    year: int | None = None
-    min_bitrate: int | None = None
-    max_bitrate: int | None = None
-    include_missing: bool = False
+SearchFilters = LibraryFilters
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +124,7 @@ class LibrarySearchService:
         query: str,
         *,
         filters: SearchFilters | None = None,
+        sort_by: str = "relevance",
         limit: int = 50,
         offset: int = 0,
     ) -> SearchPage:
@@ -137,34 +134,9 @@ class LibrarySearchService:
             return SearchPage(song_ids=[], total=0)
 
         filters = filters or SearchFilters()
-        clauses = ["library_search MATCH :query"]
-        parameters: dict[str, object] = {"query": expression}
-
-        if not filters.include_missing:
-            clauses.append("songs.availability_status = 'available'")
-        for field in ("artist", "album", "genre"):
-            value = getattr(filters, field)
-            if value:
-                clauses.append(f"lower(songs.{field}) = lower(:{field})")
-                parameters[field] = value
-        if filters.year is not None:
-            clauses.append("songs.year = :year")
-            parameters["year"] = filters.year
-        if filters.min_bitrate is not None:
-            clauses.append("songs.bitrate >= :min_bitrate")
-            parameters["min_bitrate"] = filters.min_bitrate
-        if filters.max_bitrate is not None:
-            clauses.append("songs.bitrate <= :max_bitrate")
-            parameters["max_bitrate"] = filters.max_bitrate
-        if filters.playlist_id is not None:
-            clauses.append(
-                """EXISTS (
-                    SELECT 1 FROM playlist_tracks
-                    WHERE playlist_tracks.playlist_id = :playlist_id
-                    AND playlist_tracks.spotify_track_id = songs.spotify_track_id
-                )"""
-            )
-            parameters["playlist_id"] = filters.playlist_id
+        filter_clauses, filter_parameters = raw_filter_clauses(filters)
+        clauses = ["library_search MATCH :query", *filter_clauses]
+        parameters: dict[str, object] = {"query": expression, **filter_parameters}
 
         where = " AND ".join(clauses)
         total = db.execute(
@@ -181,7 +153,7 @@ class LibrarySearchService:
                 f"""SELECT songs.id FROM library_search
                 JOIN songs ON songs.id = library_search.song_id
                 WHERE {where}
-                ORDER BY bm25(library_search), songs.artist, songs.album, songs.track
+                ORDER BY {raw_sort_clause(sort_by, relevance_default=True)}
                 LIMIT :limit OFFSET :offset"""
             ),
             {**parameters, "limit": limit, "offset": offset},

@@ -14,6 +14,11 @@ from app.services.artwork import artwork_url, serialize_artwork
 from app.services.library_service import index_library_file, rescan_library
 from app.services.library_events import library_events
 from app.services.library_search import SearchFilters, library_search
+from app.services.library_filters import (
+    LibraryFilters,
+    apply_song_filters,
+    apply_song_sort,
+)
 
 router = APIRouter(
     prefix="/api/library",
@@ -95,32 +100,41 @@ def _serialize_song(song: Song, playlist_sources: list[dict] | None = None) -> d
 def list_songs(
     db: Session = Depends(get_db),
     sort_by: str = "artist",
+    artist: str | None = None,
+    album: str | None = None,
     genre: str | None = None,
+    codec: str | None = None,
+    playlist_id: int | None = Query(default=None, ge=1),
+    year: int | None = Query(default=None, ge=0),
+    min_bitrate: int | None = Query(default=None, ge=0),
+    max_bitrate: int | None = Query(default=None, ge=0),
+    downloaded_today: bool = False,
+    recently_added: bool = False,
+    missing_artwork: bool = False,
+    missing_metadata: bool = False,
     include_missing: bool = False,
 ):
-    query = db.query(Song)
-
-    if not include_missing:
-        query = query.filter(Song.availability_status == "available")
-    
-    if genre:
-        query = query.filter(func.lower(Song.genre) == genre.lower())
-        
-    # Safe Sorting logic
-    if sort_by == "title":
-        query = query.order_by(Song.title.asc())
-    elif sort_by == "album":
-        query = query.order_by(Song.album.asc(), Song.track.asc())
-    elif sort_by == "newest":
-        query = query.order_by(Song.created_at.desc())
-    elif sort_by == "duration":
-        query = query.order_by(Song.duration.desc())
-    elif sort_by == "year":
-        query = query.order_by(Song.year.desc())
-    else:
-        query = query.order_by(Song.artist.asc(), Song.album.asc(), Song.track.asc())
-
-    songs = query.all()
+    filters = LibraryFilters(
+        artist=artist,
+        album=album,
+        genre=genre,
+        codec=codec,
+        playlist_id=playlist_id,
+        year=year,
+        min_bitrate=min_bitrate,
+        max_bitrate=max_bitrate,
+        downloaded_today=downloaded_today,
+        recently_added=recently_added,
+        missing_artwork=missing_artwork,
+        missing_metadata=missing_metadata,
+        include_missing=include_missing,
+    )
+    normalized_sort = "recently_added" if sort_by == "newest" else sort_by
+    query = apply_song_sort(
+        apply_song_filters(select(Song), filters),
+        normalized_sort,
+    )
+    songs = db.scalars(query).all()
     source_map = _playlist_sources(
         db,
         {song.spotify_track_id for song in songs if song.spotify_track_id},
@@ -138,11 +152,17 @@ def search_library(
     artist: str | None = None,
     album: str | None = None,
     genre: str | None = None,
+    codec: str | None = None,
     playlist_id: int | None = Query(default=None, ge=1),
     year: int | None = Query(default=None, ge=0),
     min_bitrate: int | None = Query(default=None, ge=0),
     max_bitrate: int | None = Query(default=None, ge=0),
+    downloaded_today: bool = False,
+    recently_added: bool = False,
+    missing_artwork: bool = False,
+    missing_metadata: bool = False,
     include_missing: bool = False,
+    sort_by: str = "relevance",
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
@@ -153,12 +173,18 @@ def search_library(
             artist=artist,
             album=album,
             genre=genre,
+            codec=codec,
             playlist_id=playlist_id,
             year=year,
             min_bitrate=min_bitrate,
             max_bitrate=max_bitrate,
+            downloaded_today=downloaded_today,
+            recently_added=recently_added,
+            missing_artwork=missing_artwork,
+            missing_metadata=missing_metadata,
             include_missing=include_missing,
         ),
+        sort_by=sort_by,
         limit=limit,
         offset=offset,
     )
@@ -182,12 +208,45 @@ def search_library(
             "artist": artist,
             "album": album,
             "genre": genre,
+            "codec": codec,
             "playlist_id": playlist_id,
             "year": year,
             "min_bitrate": min_bitrate,
             "max_bitrate": max_bitrate,
+            "downloaded_today": downloaded_today,
+            "recently_added": recently_added,
+            "missing_artwork": missing_artwork,
+            "missing_metadata": missing_metadata,
             "include_missing": include_missing,
         },
+    }
+
+
+@router.get("/filter-options")
+def library_filter_options(db: Session = Depends(get_db)):
+    available = Song.availability_status == "available"
+
+    def values(column):
+        return list(
+            db.scalars(
+                select(column)
+                .where(available, column.is_not(None), column != "")
+                .distinct()
+                .order_by(func.lower(column))
+            ).all()
+        )
+
+    return {
+        "artists": values(Song.artist),
+        "albums": values(Song.album),
+        "genres": values(Song.genre),
+        "codecs": values(Song.codec),
+        "bitrate_ranges": [
+            {"id": "lossless", "label": "Lossless / 900+ kbps", "min": 900000, "max": None},
+            {"id": "high", "label": "320+ kbps", "min": 320000, "max": None},
+            {"id": "standard", "label": "192–319 kbps", "min": 192000, "max": 319999},
+            {"id": "compact", "label": "Up to 191 kbps", "min": None, "max": 191999},
+        ],
     }
 
 

@@ -66,3 +66,8 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "musicbrainz_id",
         "isrc",
     } <= search_columns
+    song_indexes = {index["name"] for index in inspect(engine).get_indexes("songs")}
+    assert {
+        "ix_songs_codec",
+        "ix_songs_bitrate",
+    } <= song_indexes

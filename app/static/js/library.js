@@ -1,14 +1,36 @@
+const LIBRARY_PREFERENCES_KEY = "harmony.library.preferences.v1";
+const DEFAULT_BITRATE_RANGES = {
+    lossless: { min: 900000, max: null },
+    high: { min: 320000, max: null },
+    standard: { min: 192000, max: 319999 },
+    compact: { min: null, max: 191999 },
+};
+const savedPreferences = readLibraryPreferences();
+
 const libraryState = {
     songs: [],
     albums: [],
     artists: [],
     collections: [],
+    filterOptions: null,
     filteredSongs: [],
     filteredAlbums: [],
     filteredArtists: [],
     filteredCollections: [],
     view: "songs",
-    sort: "artist",
+    sort: savedPreferences.sort || "artist",
+    filters: {
+        artist: savedPreferences.filters?.artist || "",
+        album: savedPreferences.filters?.album || "",
+        genre: savedPreferences.filters?.genre || "",
+        codec: savedPreferences.filters?.codec || "",
+        bitrate: savedPreferences.filters?.bitrate || "",
+        downloaded_today: Boolean(savedPreferences.filters?.downloaded_today),
+        recently_added: Boolean(savedPreferences.filters?.recently_added),
+        missing_artwork: Boolean(savedPreferences.filters?.missing_artwork),
+        missing_metadata: Boolean(savedPreferences.filters?.missing_metadata),
+    },
+    filterPanelOpen: Boolean(savedPreferences.filterPanelOpen),
     query: "",
     collectionFilter: null,
     searchTotal: 0,
@@ -35,6 +57,176 @@ async function fetchJson(url) {
     return response.json();
 }
 
+function readLibraryPreferences() {
+    try {
+        return JSON.parse(localStorage.getItem(LIBRARY_PREFERENCES_KEY) || "{}") || {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveLibraryPreferences() {
+    try {
+        localStorage.setItem(LIBRARY_PREFERENCES_KEY, JSON.stringify({
+            sort: libraryState.sort,
+            filters: libraryState.filters,
+            filterPanelOpen: libraryState.filterPanelOpen,
+        }));
+    } catch (error) {
+        console.warn("Library preferences could not be saved.", error);
+    }
+}
+
+function libraryRequestParams({ query = null, limit = null } = {}) {
+    const params = new URLSearchParams({ sort_by: libraryState.sort });
+    if (query) params.set("q", query);
+    if (limit) params.set("limit", String(limit));
+    ["artist", "album", "genre", "codec"].forEach((field) => {
+        if (libraryState.filters[field]) params.set(field, libraryState.filters[field]);
+    });
+    const bitrate = libraryState.filterOptions?.bitrate_ranges?.find(
+        (range) => range.id === libraryState.filters.bitrate) ||
+        DEFAULT_BITRATE_RANGES[libraryState.filters.bitrate];
+    if (bitrate?.min != null) params.set("min_bitrate", String(bitrate.min));
+    if (bitrate?.max != null) params.set("max_bitrate", String(bitrate.max));
+    ["downloaded_today", "recently_added", "missing_artwork", "missing_metadata"].forEach((field) => {
+        if (libraryState.filters[field]) params.set(field, "true");
+    });
+    return params.toString();
+}
+
+function projectSongs(songs) {
+    const albumMap = new Map();
+    const artistMap = new Map();
+    songs.forEach((song) => {
+        const album = song.album || "Unknown Album";
+        const artist = song.album_artist || song.artist || "Unknown Artist";
+        const albumKey = `${artist}\u0000${album}`;
+        const albumItem = albumMap.get(albumKey) || {
+            album,
+            artist,
+            cover_url: song.cover_url,
+            track_count: 0,
+            total_duration: 0,
+            sort_added: "",
+            sort_modified: "",
+            sort_bitrate: 0,
+            sort_year: 0,
+        };
+        albumItem.track_count += 1;
+        albumItem.total_duration += Number(song.duration || 0) / 60;
+        if (!albumItem.cover_url && song.cover_url) albumItem.cover_url = song.cover_url;
+        albumItem.sort_added = maxText(albumItem.sort_added, song.date_added);
+        albumItem.sort_modified = maxText(albumItem.sort_modified, song.last_modified);
+        albumItem.sort_bitrate = Math.max(albumItem.sort_bitrate, Number(song.bitrate || 0));
+        albumItem.sort_year = Math.max(albumItem.sort_year, Number(song.year || 0));
+        albumMap.set(albumKey, albumItem);
+
+        const songArtist = song.artist || "Unknown Artist";
+        const artistItem = artistMap.get(songArtist) || {
+            artist: songArtist,
+            song_count: 0,
+            albums: new Set(),
+            sort_added: "",
+            sort_modified: "",
+            sort_bitrate: 0,
+            sort_duration: 0,
+            sort_year: 0,
+        };
+        artistItem.song_count += 1;
+        artistItem.albums.add(album);
+        artistItem.sort_added = maxText(artistItem.sort_added, song.date_added);
+        artistItem.sort_modified = maxText(artistItem.sort_modified, song.last_modified);
+        artistItem.sort_bitrate = Math.max(artistItem.sort_bitrate, Number(song.bitrate || 0));
+        artistItem.sort_duration = Math.max(artistItem.sort_duration, Number(song.duration || 0));
+        artistItem.sort_year = Math.max(artistItem.sort_year, Number(song.year || 0));
+        artistMap.set(songArtist, artistItem);
+    });
+    return {
+        albums: sortProjection(
+            [...albumMap.values()].map((album) => ({
+                ...album,
+                sort_duration: album.total_duration,
+                total_duration: Math.round(album.total_duration * 10) / 10,
+            })),
+            "album",
+        ),
+        artists: sortProjection(
+            [...artistMap.values()].map((artist) => ({
+                ...artist,
+                album_count: artist.albums.size,
+                albums: undefined,
+            })),
+            "artist",
+        ),
+    };
+}
+
+function maxText(current, value) {
+    const next = String(value || "");
+    return next > current ? next : current;
+}
+
+function sortProjection(items, type) {
+    const textField = type === "album" ? "album" : "artist";
+    if (libraryState.sort === "artist") {
+        return items.sort((a, b) => String(a.artist).localeCompare(String(b.artist)) ||
+            String(a[textField]).localeCompare(String(b[textField])));
+    }
+    if (["album", "title", "alphabetical"].includes(libraryState.sort)) {
+        return items.sort((a, b) => String(a[textField]).localeCompare(String(b[textField])));
+    }
+    const metric = {
+        recently_added: "sort_added",
+        recently_modified: "sort_modified",
+        bitrate: "sort_bitrate",
+        duration: "sort_duration",
+        year: "sort_year",
+    }[libraryState.sort];
+    return items.sort((a, b) => (b[metric] || 0) > (a[metric] || 0) ? 1 :
+        (b[metric] || 0) < (a[metric] || 0) ? -1 :
+            String(a[textField]).localeCompare(String(b[textField])));
+}
+
+function populateFilterOptions() {
+    const options = libraryState.filterOptions;
+    if (!options) return;
+    const fields = {
+        artist: [options.artists, "All artists"],
+        album: [options.albums, "All albums"],
+        genre: [options.genres, "All genres"],
+        codec: [options.codecs, "All codecs"],
+    };
+    Object.entries(fields).forEach(([field, [values, emptyLabel]]) => {
+        const select = document.getElementById(`filter-${field}`);
+        select.innerHTML = `<option value="">${emptyLabel}</option>` + values.map((value) =>
+            `<option value="${escapeAttribute(value)}">${escapeHtml(value)}</option>`).join("");
+    });
+    document.getElementById("filter-bitrate").innerHTML = '<option value="">Any bitrate</option>' +
+        options.bitrate_ranges.map((range) =>
+            `<option value="${escapeAttribute(range.id)}">${escapeHtml(range.label)}</option>`).join("");
+}
+
+function activeFilterCount() {
+    return Object.values(libraryState.filters).filter(Boolean).length;
+}
+
+function updateFilterControls() {
+    ["artist", "album", "genre", "codec", "bitrate"].forEach((field) => {
+        document.getElementById(`filter-${field}`).value = libraryState.filters[field];
+    });
+    ["downloaded_today", "recently_added", "missing_artwork", "missing_metadata"].forEach((field) => {
+        document.getElementById(`filter-${field.replaceAll("_", "-")}`).checked = libraryState.filters[field];
+    });
+    const count = activeFilterCount();
+    const badge = document.getElementById("library-filter-count");
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+    const panel = document.getElementById("library-filter-panel");
+    panel.hidden = !libraryState.filterPanelOpen;
+    document.getElementById("library-filter-toggle").setAttribute("aria-expanded", String(libraryState.filterPanelOpen));
+}
+
 async function loadLibraryData({ preserveState = false } = {}) {
     const loading = document.getElementById("library-loading");
     const errorBox = document.getElementById("library-error");
@@ -42,14 +234,16 @@ async function loadLibraryData({ preserveState = false } = {}) {
     errorBox.hidden = true;
 
     try {
-        const [songs, albums, artists, collections] = await Promise.all([
-            fetchJson(`/api/library/songs?sort_by=${encodeURIComponent(libraryState.sort)}`),
-            fetchJson("/api/library/albums"),
-            fetchJson("/api/library/artists"),
+        const [songs, collections, filterOptions] = await Promise.all([
+            fetchJson(`/api/library/songs?${libraryRequestParams()}`),
             fetchJson("/api/library/collections"),
+            libraryState.filterOptions || fetchJson("/api/library/filter-options"),
         ]);
 
-        Object.assign(libraryState, { songs, albums, artists, collections });
+        const { albums, artists } = projectSongs(songs);
+        Object.assign(libraryState, { songs, albums, artists, collections, filterOptions });
+        populateFilterOptions();
+        updateFilterControls();
         updateCounts();
         if (libraryState.query.trim()) {
             await performSearch();
@@ -98,15 +292,14 @@ async function performSearch() {
 
     status.textContent = "Searching the Library Index…";
     try {
-        const result = await fetchJson(`/api/library/search?q=${encodeURIComponent(query)}&limit=500`);
+        const result = await fetchJson(`/api/library/search?${libraryRequestParams({ query, limit: 500 })}`);
         if (request !== libraryState.searchRequest) return;
 
         libraryState.searchTotal = result.total;
         libraryState.filteredSongs = result.items.filter(songMatchesCollection);
-        const albums = new Set(result.items.map((song) => song.album || "Unknown Album"));
-        const artists = new Set(result.items.map((song) => song.artist || "Unknown Artist"));
-        libraryState.filteredAlbums = libraryState.albums.filter((album) => albums.has(album.album));
-        libraryState.filteredArtists = libraryState.artists.filter((artist) => artists.has(artist.artist));
+        const projections = projectSongs(result.items);
+        libraryState.filteredAlbums = projections.albums;
+        libraryState.filteredArtists = projections.artists;
         libraryState.filteredCollections = libraryState.collections.filter((collection) =>
             [collection.name, collection.description].some((value) =>
                 String(value || "").toLocaleLowerCase().includes(query.toLocaleLowerCase())));
@@ -390,6 +583,49 @@ document.getElementById("library-search").addEventListener("input", (event) => {
 document.getElementById("library-sort").addEventListener("change", (event) => {
     libraryState.sort = event.target.value;
     libraryState.pages.songs = 1;
+    saveLibraryPreferences();
+    loadLibraryData({ preserveState: true });
+});
+
+document.getElementById("library-filter-toggle").addEventListener("click", () => {
+    libraryState.filterPanelOpen = !libraryState.filterPanelOpen;
+    saveLibraryPreferences();
+    updateFilterControls();
+});
+
+["artist", "album", "genre", "codec", "bitrate"].forEach((field) => {
+    document.getElementById(`filter-${field}`).addEventListener("change", (event) => {
+        libraryState.filters[field] = event.target.value;
+        Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
+        saveLibraryPreferences();
+        loadLibraryData({ preserveState: true });
+    });
+});
+
+["downloaded_today", "recently_added", "missing_artwork", "missing_metadata"].forEach((field) => {
+    document.getElementById(`filter-${field.replaceAll("_", "-")}`).addEventListener("change", (event) => {
+        libraryState.filters[field] = event.target.checked;
+        Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
+        saveLibraryPreferences();
+        loadLibraryData({ preserveState: true });
+    });
+});
+
+document.getElementById("clear-library-filters").addEventListener("click", () => {
+    Object.assign(libraryState.filters, {
+        artist: "",
+        album: "",
+        genre: "",
+        codec: "",
+        bitrate: "",
+        downloaded_today: false,
+        recently_added: false,
+        missing_artwork: false,
+        missing_metadata: false,
+    });
+    Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
+    saveLibraryPreferences();
+    updateFilterControls();
     loadLibraryData({ preserveState: true });
 });
 
@@ -425,6 +661,8 @@ function connectLibraryEvents() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("library-sort").value = libraryState.sort;
+    updateFilterControls();
     loadLibraryData();
     connectLibraryEvents();
 });

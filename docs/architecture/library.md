@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.7.0
+> Version: 1.8.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -466,6 +466,34 @@ Search API:
 The web Library search box queries this API with a debounce and projects the
 ranked Song matches into the Songs, Albums, and Artists views. Collection names
 remain locally filtered UI navigation rather than FTS content.
+
+## Sorting and Filtering
+
+Library listing and FTS search share the immutable `LibraryFilters` query model.
+All supplied filters use AND semantics and execute against indexed database
+columns; the UI never filters by reading tags or walking the filesystem.
+
+Supported sorts are Artist, Album, Title, Recently Added, Recently Modified,
+Bitrate, Duration, Year, and Alphabetical. Sort keys are allow-listed and use
+stable secondary ordering. Supported filters are Artist, Album, Genre, Codec,
+Bitrate range, Downloaded Today, Recently Added, Missing Artwork, and Missing
+Metadata. Search additionally retains the Playlist, Year, and missing-file
+filters exposed by the first FTS API.
+
+`GET /api/library/filter-options` returns the distinct metadata values and
+standard bitrate bands used to build filter controls. `GET /api/library/songs`
+and `GET /api/library/search` accept the same composable filter parameters.
+Downloaded Today uses `songs.created_at` since that is the Library Index's date
+added; Recently Added is the rolling seven-day window used elsewhere.
+
+Sort and filter preferences are stored in browser local storage under a
+versioned Harmony key. Preferences are presentation state, not shared Library
+domain data, and therefore do not require a database table or migration.
+
+Single-column and selective composite indexes cover availability, artist,
+album, title, genre, codec, bitrate, year, date added, and last modified. This
+keeps common filter/sort plans efficient without duplicating canonical Song
+metadata.
 
 ---
 

@@ -54,17 +54,40 @@
                     <span id="collection-filter-name"></span>
                     <span aria-hidden="true">×</span>
                 </button>
+                <button id="library-filter-toggle" class="btn-secondary library-filter-toggle" type="button" aria-expanded="false" aria-controls="library-filter-panel">
+                    Filters <span id="library-filter-count" class="library-filter-count" hidden>0</span>
+                </button>
                 <label class="library-sort-label" for="library-sort">Sort</label>
                 <select id="library-sort" class="library-sort">
                     <option value="artist">Artist</option>
-                    <option value="title">Song name</option>
                     <option value="album">Album</option>
-                    <option value="newest">Newest added</option>
+                    <option value="title">Title</option>
+                    <option value="recently_added">Recently Added</option>
+                    <option value="recently_modified">Recently Modified</option>
+                    <option value="bitrate">Bitrate</option>
                     <option value="duration">Duration</option>
                     <option value="year">Year</option>
+                    <option value="alphabetical">Alphabetical</option>
                 </select>
             </div>
         </div>
+
+        <section id="library-filter-panel" class="library-filter-panel" aria-label="Library filters" hidden>
+            <div class="library-filter-fields">
+                <label>Artist<select id="filter-artist"><option value="">All artists</option></select></label>
+                <label>Album<select id="filter-album"><option value="">All albums</option></select></label>
+                <label>Genre<select id="filter-genre"><option value="">All genres</option></select></label>
+                <label>Codec<select id="filter-codec"><option value="">All codecs</option></select></label>
+                <label>Bitrate<select id="filter-bitrate"><option value="">Any bitrate</option></select></label>
+            </div>
+            <div class="library-filter-flags">
+                <label><input id="filter-downloaded-today" type="checkbox"> Downloaded Today</label>
+                <label><input id="filter-recently-added" type="checkbox"> Recently Added</label>
+                <label><input id="filter-missing-artwork" type="checkbox"> Missing Artwork</label>
+                <label><input id="filter-missing-metadata" type="checkbox"> Missing Metadata</label>
+                <button id="clear-library-filters" class="btn-secondary" type="button">Clear filters</button>
+            </div>
+        </section>
 
         <div id="library-loading" class="library-loading" aria-live="polite">
             <span class="spinner"></span> Loading Library Index…
