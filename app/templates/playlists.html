@@ -39,6 +39,12 @@
             <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
                 ⬇ Download .m3u
             </a>
+
+            {% if p.navidrome_link %}
+            <a href="{{ p.navidrome_link }}" target="_blank" rel="noopener" class="btn-primary" style="text-decoration: none;">
+                View in Navidrome
+            </a>
+            {% endif %}
         </div>
     </div>
     {% endfor %}

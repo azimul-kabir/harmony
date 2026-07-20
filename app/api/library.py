@@ -5,6 +5,7 @@ from sqlalchemy import func
 from app.database.session import SessionLocal, get_db
 from app.database.models import Song
 from app.services.library_scanner import scan_library
+from app.services.navidrome_client import get_song_link, get_album_link, get_artist_link
 
 router = APIRouter(
     prefix="/api/library",
@@ -49,7 +50,8 @@ def list_songs(
             "duration": s.duration,
             "filename": s.filename,
             "path": s.path,
-            "cover_url": s.cover_url
+            "cover_url": s.cover_url,
+            "navidrome_link": get_song_link(db, s.title, s.artist) if s.title and s.artist else None
         }
         for s in songs
     ]
@@ -78,7 +80,8 @@ def list_albums(db: Session = Depends(get_db)):
             "artist": a.album_artist or a.artist or "Unknown Artist",
             "cover_url": a.cover_url,
             "track_count": a.track_count,
-            "total_duration": round(a.total_duration / 60, 1) if a.total_duration else 0
+            "total_duration": round(a.total_duration / 60, 1) if a.total_duration else 0,
+            "navidrome_link": get_album_link(db, a.album) if a.album else None
         }
         for a in albums_query
     ]
@@ -104,7 +107,8 @@ def list_artists(db: Session = Depends(get_db)):
             "artist": art.artist or "Unknown Artist",
             "song_count": art.song_count,
             "album_count": art.album_count,
-            "cover_url": art.cover_url
+            "cover_url": art.cover_url,
+            "navidrome_link": get_artist_link(db, art.artist) if art.artist else None
         }
         for art in artists_query
     ]

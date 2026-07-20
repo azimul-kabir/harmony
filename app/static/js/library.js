@@ -88,6 +88,9 @@ function renderSongsPage() {
                 </td>
                 <td style="color: var(--text-muted); vertical-align: middle;">${s.artist || 'Unknown Artist'}</td>
                 <td style="color: var(--text-muted); vertical-align: middle;">${s.album || 'Unknown Album'}</td>
+                <td style="vertical-align: middle; text-align: center; width: 40px;">
+                    ${s.navidrome_link ? `<a href="${s.navidrome_link}" target="_blank" rel="noopener" style="color: var(--text-muted);" title="Open in Navidrome"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>` : ''}
+                </td>
             </tr>
             `;
         }).join("");
@@ -112,6 +115,8 @@ function renderAlbumsPage() {
                 ? `<img src="${album.cover_url}" alt="Cover" style="width: 100%; height: 150px; border-radius: 8px; object-fit: cover; margin-bottom: 12px;">`
                 : `<div style="width: 100%; height: 150px; border-radius: 8px; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
 
+            const naviAction = album.navidrome_link ? `<a href="${album.navidrome_link}" target="_blank" rel="noopener" class="btn-secondary" style="display: block; text-align: center; margin-top: 12px; text-decoration: none; padding: 6px;" onclick="event.stopPropagation()">Open in Navidrome</a>` : '';
+
             return `
                 <div class="source-card" style="cursor: pointer;" onclick="filterByAlbum('${encodeURIComponent(album.album)}')">
                     ${coverImg}
@@ -121,6 +126,7 @@ function renderAlbumsPage() {
                         <span>${album.track_count} Tracks</span>
                         <span>${album.total_duration} mins</span>
                     </div>
+                    ${naviAction}
                 </div>
             `;
         }).join("");
@@ -142,8 +148,10 @@ function renderArtistsPage() {
     } else {
         grid.innerHTML = paginatedItems.map(artist => {
             const coverImg = artist.cover_url
-                ? `<img src="${artist.cover_url}" alt="Cover" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">`
-                : `<div style="width: 50px; height: 50px; border-radius: 50%; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; color: var(--text-muted);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>`;
+                ? `<img src="${artist.cover_url}" alt="Cover" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0;">`
+                : `<div style="width: 50px; height: 50px; border-radius: 50%; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>`;
+
+            const naviAction = artist.navidrome_link ? `<a href="${artist.navidrome_link}" target="_blank" rel="noopener" style="color: var(--primary); text-decoration: none; padding: 4px;" title="Open in Navidrome" onclick="event.stopPropagation()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>` : '';
 
             return `
                 <div class="source-card" style="flex-direction: row; align-items: center; gap: 12px; cursor: pointer;" onclick="filterByArtist('${encodeURIComponent(artist.artist)}')">
@@ -152,6 +160,7 @@ function renderArtistsPage() {
                         <h3 style="margin: 0 0 2px 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${artist.artist}</h3>
                         <div style="color: var(--text-muted); font-size: 0.8rem;">${artist.song_count} Songs • ${artist.album_count} Albums</div>
                     </div>
+                    ${naviAction}
                 </div>
             `;
         }).join("");
