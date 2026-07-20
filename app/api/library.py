@@ -20,6 +20,7 @@ from app.services.library_filters import (
     apply_song_sort,
 )
 from app.services.collections import collection_engine
+from app.services.library_analytics import library_analytics
 
 router = APIRouter(
     prefix="/api/library",
@@ -31,6 +32,11 @@ class IndexFileRequest(BaseModel):
     path: str
     force: bool = False
     download_source: str | None = None
+
+
+@router.get("/analytics")
+def get_library_analytics(db: Session = Depends(get_db)):
+    return library_analytics.calculate(db)
 
 
 def _playlist_sources(db: Session, spotify_track_ids: set[str]) -> dict[str, list[dict]]:

@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.9.0
+> Version: 1.10.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -632,25 +632,36 @@ Custom Rules
 
 # Analytics
 
-Analytics use the Library Index.
+Library Analytics use available records in the Library Index exclusively.
+They never inspect files, parse tags, or walk the filesystem.
 
-Never calculate directly from the filesystem.
+`LibraryAnalyticsService` returns one reusable structured snapshot. A single
+aggregate query calculates Songs, Artists, Genres, Storage Used, Average
+Bitrate, Average Duration, and Recently Added. Album count and the three album
+insights use grouped SQL subqueries with indexed ordering and `LIMIT 1`; Song
+rows are never materialized in application memory.
 
-Examples
+Definitions:
 
-Song Count
+- Albums count distinct non-empty album/album-artist groups.
+- Storage Used is the sum of indexed file sizes.
+- Average Bitrate and Average Duration ignore unknown values.
+- Largest Album is the album with the most available Songs, using storage and
+  name as stable tie-breakers.
+- Newest Album and Oldest Album use indexed release year and ignore albums with
+  no year.
+- Recently Added is the rolling seven-day count shared with Smart Collections.
 
-Album Count
+`GET /api/library/analytics` exposes the analytics snapshot for dashboards and
+future integrations. The Library page loads it independently from song/filter
+queries and refreshes it after rescans and Library watcher events. Analytics
+therefore remain global when a user narrows the current Library view.
 
-Artist Count
+Composite indexes on availability/album/album-artist and
+availability/year/album support grouped album insights for large libraries.
 
-Genre Count
-
-Storage
-
-Average Bitrate
-
-Health Score
+Future metrics such as Health Score should be added to this service and API,
+not recomputed in UI code.
 
 ---
 

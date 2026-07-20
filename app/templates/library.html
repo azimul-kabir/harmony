@@ -19,6 +19,43 @@
         </button>
     </header>
 
+    <section class="library-analytics" aria-labelledby="library-analytics-title">
+        <div class="library-analytics-heading">
+            <div>
+                <span class="library-eyebrow">Library analytics</span>
+                <h2 id="library-analytics-title">At a glance</h2>
+            </div>
+            <span id="analytics-updated" class="library-analytics-updated" aria-live="polite"></span>
+        </div>
+        <div class="library-analytics-grid">
+            <article><strong id="analytics-songs">—</strong><span>Songs</span></article>
+            <article><strong id="analytics-albums">—</strong><span>Albums</span></article>
+            <article><strong id="analytics-artists">—</strong><span>Artists</span></article>
+            <article><strong id="analytics-genres">—</strong><span>Genres</span></article>
+            <article><strong id="analytics-storage">—</strong><span>Storage used</span></article>
+            <article><strong id="analytics-bitrate">—</strong><span>Average bitrate</span></article>
+            <article><strong id="analytics-duration">—</strong><span>Average duration</span></article>
+            <article><strong id="analytics-recent">—</strong><span>Recently added</span></article>
+        </div>
+        <div class="library-album-insights">
+            <article>
+                <span>Largest album</span>
+                <strong id="analytics-largest-name">—</strong>
+                <small id="analytics-largest-detail">No album data</small>
+            </article>
+            <article>
+                <span>Newest album</span>
+                <strong id="analytics-newest-name">—</strong>
+                <small id="analytics-newest-detail">No release year</small>
+            </article>
+            <article>
+                <span>Oldest album</span>
+                <strong id="analytics-oldest-name">—</strong>
+                <small id="analytics-oldest-detail">No release year</small>
+            </article>
+        </div>
+    </section>
+
     <nav class="library-tabs" id="library-view-tabs" aria-label="Library sections" role="tablist">
         <button class="library-tab active" type="button" role="tab" aria-selected="true" data-view="songs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>

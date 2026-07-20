@@ -27,7 +27,7 @@ class Song(Base):
     path: Mapped[str] = mapped_column(String, unique=True, index=True)
     filename: Mapped[str] = mapped_column(String)
     artist: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
-    album_artist: Mapped[str | None] = mapped_column(String, nullable=True)
+    album_artist: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     album: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     spotify_track_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True, index=True)

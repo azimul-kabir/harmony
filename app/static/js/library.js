@@ -13,6 +13,7 @@ const libraryState = {
     artists: [],
     collections: [],
     filterOptions: null,
+    analytics: null,
     filteredSongs: [],
     filteredAlbums: [],
     filteredArtists: [],
@@ -59,6 +60,55 @@ async function fetchJson(url) {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);
     return response.json();
+}
+
+async function loadAnalytics() {
+    try {
+        libraryState.analytics = await fetchJson("/api/library/analytics");
+        renderAnalytics(libraryState.analytics);
+    } catch (error) {
+        console.error("Library analytics error:", error);
+        document.getElementById("analytics-updated").textContent = "Analytics unavailable";
+    }
+}
+
+function renderAnalytics(analytics) {
+    const values = {
+        songs: Number(analytics.songs || 0).toLocaleString(),
+        albums: Number(analytics.albums || 0).toLocaleString(),
+        artists: Number(analytics.artists || 0).toLocaleString(),
+        genres: Number(analytics.genres || 0).toLocaleString(),
+        storage: formatBytes(analytics.storage_bytes),
+        bitrate: formatBitrate(analytics.average_bitrate),
+        duration: formatDuration(analytics.average_duration),
+        recent: Number(analytics.recently_added || 0).toLocaleString(),
+    };
+    Object.entries(values).forEach(([key, value]) => {
+        document.getElementById(`analytics-${key}`).textContent = value;
+    });
+    renderAlbumInsight("largest", analytics.largest_album, (album) =>
+        `${album.artist} · ${pluralize(album.song_count, "song")} · ${formatBytes(album.storage_bytes)}`);
+    renderAlbumInsight("newest", analytics.newest_album, (album) =>
+        `${album.artist} · ${album.year || "Year unknown"}`);
+    renderAlbumInsight("oldest", analytics.oldest_album, (album) =>
+        `${album.artist} · ${album.year || "Year unknown"}`);
+    document.getElementById("analytics-updated").textContent = "Live from the Library Index";
+}
+
+function renderAlbumInsight(key, album, detail) {
+    document.getElementById(`analytics-${key}-name`).textContent = album?.name || "—";
+    document.getElementById(`analytics-${key}-detail`).textContent = album
+        ? detail(album)
+        : "No album data";
+}
+
+function formatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (value <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const unit = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+    const scaled = value / (1024 ** unit);
+    return `${scaled >= 100 || unit === 0 ? Math.round(scaled) : scaled.toFixed(1)} ${units[unit]}`;
 }
 
 function readLibraryPreferences() {
@@ -650,6 +700,7 @@ document.getElementById("btn-rescan").addEventListener("click", async (event) =>
         const response = await fetch("/api/library/rescan", { method: "POST" });
         if (!response.ok) throw new Error("Rescan failed");
         await loadLibraryData({ preserveState: true });
+        await loadAnalytics();
     } catch (error) {
         document.getElementById("library-error").textContent = "The library rescan failed. Check Harmony logs for details.";
         document.getElementById("library-error").hidden = false;
@@ -666,6 +717,7 @@ function connectLibraryEvents() {
         events.addEventListener(type, () => {
             clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => loadLibraryData({ preserveState: true }), 500);
+            setTimeout(loadAnalytics, 550);
         });
     });
 }
@@ -674,5 +726,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("library-sort").value = libraryState.sort;
     updateFilterControls();
     loadLibraryData();
+    loadAnalytics();
     connectLibraryEvents();
 });
