@@ -10,7 +10,14 @@ DEFAULT_SETTINGS = [
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
     {"key": "m3u_export_folder", "value": "/music/Playlists", "type": "string", "category": "playlists"},
-    {"key": "theme", "value": "auto", "type": "string", "category": "appearance"}
+    {"key": "theme", "value": "auto", "type": "string", "category": "appearance"},
+    {"key": "navidrome_enabled", "value": "false", "type": "boolean", "category": "navidrome"},
+    {"key": "navidrome_url", "value": "http://navidrome:4533", "type": "string", "category": "navidrome"},
+    {"key": "navidrome_username", "value": "admin", "type": "string", "category": "navidrome"},
+    {"key": "navidrome_token", "value": "", "type": "string", "category": "navidrome"},
+    {"key": "navidrome_salt", "value": "", "type": "string", "category": "navidrome"},
+    {"key": "navidrome_connected", "value": "false", "type": "boolean", "category": "navidrome"},
+    {"key": "last_scan_timestamp", "value": "", "type": "string", "category": "navidrome"}
 ]
 
 def initialize_defaults(db: Session):

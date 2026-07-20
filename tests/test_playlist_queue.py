@@ -28,7 +28,7 @@ def test_enqueue_playlist_uses_playlist_importer(monkeypatch):
             ],
         )
 
-    def fake_enqueue_track(db, track):
+    def fake_enqueue_track(db, track, task_id=None):
         created_jobs.append(track.spotify_url)
         return QueueResult(
             job_id=len(created_jobs),
@@ -39,7 +39,7 @@ def test_enqueue_playlist_uses_playlist_importer(monkeypatch):
     monkeypatch.setattr(download_queue, "enqueue_track", fake_enqueue_track)
 
     results = download_queue.enqueue_playlist(
-        db=object(),
+        db=__import__("unittest.mock").mock.MagicMock(scalar=__import__("unittest.mock").mock.MagicMock(return_value=None)),
         spotify_url=playlist_url,
     )
 

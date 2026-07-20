@@ -140,3 +140,14 @@ class AppSetting(Base):
     type: Mapped[str] = mapped_column(String, default="string")
     category: Mapped[str] = mapped_column(String, index=True, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ScanHistory(Base):
+    __tablename__ = "scan_history"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trigger_type: Mapped[str] = mapped_column(String, nullable=False) # 'automatic', 'manual', 'scheduled'
+    status: Mapped[str] = mapped_column(String, nullable=False) # 'success', 'failed', 'in_progress'
+    tracks_found: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

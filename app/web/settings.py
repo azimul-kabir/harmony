@@ -18,6 +18,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     downloads = settings_service.get_settings_by_category(db, "downloads")
     playlists = settings_service.get_settings_by_category(db, "playlists")
     appearance = settings_service.get_settings_by_category(db, "appearance")
+    navidrome = settings_service.get_settings_by_category(db, "navidrome")
     
     return templates.TemplateResponse(
         "settings.html",
@@ -28,6 +29,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
             downloads=downloads,
             playlists=playlists,
             appearance=appearance,
+            navidrome=navidrome,
             settings=get_settings()
         ),
     )

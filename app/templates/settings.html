@@ -14,6 +14,7 @@
             <button class="settings-tab" data-target="downloads">Downloads</button>
             <button class="settings-tab" data-target="playlists">Playlists</button>
             <button class="settings-tab" data-target="appearance">Appearance</button>
+            <button class="settings-tab" data-target="navidrome">Music Server</button>
             <button class="settings-tab" data-target="system">System</button>
         </div>
     </div>
@@ -127,6 +128,40 @@
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
             </form>
+        </div>
+
+        <!-- Navidrome Tab -->
+        <div class="settings-section" id="tab-navidrome" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 24px;">Music Server (Navidrome)</h2>
+            <form class="settings-form" data-category="navidrome" id="navidrome-form">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Navidrome URL</label>
+                    <input type="text" name="navidrome_url" class="form-control responsive-input" value="{{ navidrome.navidrome_url }}" placeholder="http://navidrome:4533">
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Username</label>
+                    <input type="text" name="navidrome_username" class="form-control responsive-input" value="{{ navidrome.navidrome_username }}">
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Password</label>
+                    <input type="password" id="navidrome_password" class="form-control responsive-input" placeholder="Enter password to test/save" autocomplete="new-password">
+                </div>
+                <div style="margin-top: 32px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary" id="btn-test-navidrome">Test Connection</button>
+                    <button type="button" class="btn-primary" id="btn-save-navidrome">Save Connection</button>
+                    <button type="button" class="btn-secondary" id="btn-scan-navidrome">Scan Library</button>
+                    <span id="navidrome-status" style="margin-left: 12px; font-weight: bold; align-self: center;"></span>
+                </div>
+            </form>
+
+            <div style="margin-top: 40px;">
+                <h3 style="margin-top: 0; margin-bottom: 16px;">Library Scan History</h3>
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+                    <ul id="scan-history-list" style="list-style: none; padding: 0; margin: 0;">
+                        <li>Loading history...</li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
         <!-- System Tab (Legacy Env variables) -->
@@ -303,6 +338,7 @@
 
     // Handle saving Forms asynchronously
     document.querySelectorAll('.settings-form').forEach(form => {
+        if(form.id === 'navidrome-form') return; // Handled separately
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const category = form.dataset.category;
@@ -333,5 +369,92 @@
             }
         });
     });
+
+    const statusSpan = document.getElementById('navidrome-status');
+    const urlInput = document.querySelector('input[name="navidrome_url"]');
+    const userInput = document.querySelector('input[name="navidrome_username"]');
+    const passInput = document.getElementById('navidrome_password');
+
+    document.getElementById('btn-test-navidrome').addEventListener('click', async () => {
+        statusSpan.style.color = "var(--text-main)";
+        statusSpan.innerText = "Testing...";
+        const res = await fetch('/api/navidrome/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                url: urlInput.value,
+                username: userInput.value,
+                password: passInput.value
+            })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            statusSpan.style.color = "var(--success)";
+            statusSpan.innerText = `🟢 Connected (v${data.version}, ${data.song_count} songs)`;
+        } else {
+            statusSpan.style.color = "var(--error)";
+            statusSpan.innerText = `🔴 Failed: ${data.detail || 'Unknown error'}`;
+        }
+    });
+
+    document.getElementById('btn-save-navidrome').addEventListener('click', async () => {
+        statusSpan.style.color = "var(--text-main)";
+        statusSpan.innerText = "Saving...";
+        const res = await fetch('/api/navidrome/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                url: urlInput.value,
+                username: userInput.value,
+                password: passInput.value
+            })
+        });
+        if(res.ok) {
+            statusSpan.style.color = "var(--success)";
+            statusSpan.innerText = `✓ Saved successfully`;
+        } else {
+            const data = await res.json();
+            statusSpan.style.color = "var(--error)";
+            statusSpan.innerText = `🔴 Failed to save: ${data.detail || 'Unknown error'}`;
+        }
+    });
+
+    document.getElementById('btn-scan-navidrome').addEventListener('click', async () => {
+        statusSpan.style.color = "var(--text-main)";
+        statusSpan.innerText = "Triggering scan...";
+        const res = await fetch('/api/navidrome/scan', { method: 'POST' });
+        if(res.ok) {
+            statusSpan.style.color = "var(--success)";
+            statusSpan.innerText = `✓ Scan triggered`;
+            loadScanHistory();
+        } else {
+            const data = await res.json();
+            statusSpan.style.color = "var(--error)";
+            statusSpan.innerText = `🔴 Scan failed: ${data.detail || 'Unknown error'}`;
+        }
+    });
+
+    async function loadScanHistory() {
+        const list = document.getElementById('scan-history-list');
+        const res = await fetch('/api/navidrome/scans/history');
+        if(res.ok) {
+            const data = await res.json();
+            if(data.length === 0) {
+                list.innerHTML = '<li>No recent scans.</li>';
+                return;
+            }
+            list.innerHTML = data.map(s => {
+                const date = new Date(s.created_at).toLocaleString();
+                const color = s.status === 'success' ? 'var(--success)' : 'var(--error)';
+                return `<li style="padding: 8px 0; border-bottom: 1px solid var(--border-color);">
+                    <strong>${date}</strong> - ${s.trigger_type} scan - <span style="color: ${color}">${s.status}</span>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">${s.details || s.error_message || ''}</div>
+                </li>`;
+            }).join('');
+        }
+    }
+
+    // Load history when tab is clicked
+    document.querySelector('.settings-tab[data-target="navidrome"]').addEventListener('click', loadScanHistory);
 </script>
 {% endblock %}

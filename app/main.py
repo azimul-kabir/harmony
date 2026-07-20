@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import downloads, library
 from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
+from app.api.navidrome import router as navidrome_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
 from app.api.sync_sources import router as sync_sources_router
@@ -75,18 +76,23 @@ app.include_router(sources_page_router)
 app.include_router(playlists_page_router)  # <-- Added the new Playlists route
 app.include_router(playlist_router)
 app.include_router(sync_sources_router)
+app.include_router(navidrome_router)
 
 @app.get("/")
 def home(request: Request):
     db = SessionLocal()
     try:
         stats = get_dashboard_stats(db)
+        from app.services.settings_service import get_settings_by_category
+        navidrome_settings = get_settings_by_category(db, "navidrome")
+
         return templates.TemplateResponse(
             "dashboard.html",
             template_context(
                 request=request,
                 stats=stats,
                 page="dashboard",
+                navidrome_connected=navidrome_settings.get("navidrome_connected", False)
             ),
         )
     finally:

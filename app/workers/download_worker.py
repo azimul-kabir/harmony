@@ -18,6 +18,7 @@ from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
 from app.services.library_manager import import_downloaded_track
 from app.services.playlist_manager import export_all_m3us
+from app.services.scan_manager import scan_manager
 from app.services.task_service import (
     increment_completed,
     increment_failed,
@@ -148,6 +149,9 @@ def process_job(
         # Auto-Export M3U so Navidrome immediately sees the newly imported track
         export_all_m3us(db)
         
+        # Mark Navidrome scan as pending (debounced)
+        scan_manager.mark_pending()
+
     except DuplicateTrackError as ex:
         logger.info(
             "Skipping duplicate: {}",

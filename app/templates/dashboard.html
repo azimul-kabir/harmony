@@ -4,6 +4,30 @@
 {% block content %} 
 <h1>Dashboard</h1> 
 
+{% if not navidrome_connected %}
+<div id="navidrome-wizard" class="panel" style="margin-bottom: 24px; background: var(--bg-surface); border: 2px solid var(--primary); padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+            <h2 style="margin-top: 0; margin-bottom: 12px;">Welcome to Harmony!</h2>
+            <p style="margin-bottom: 16px; color: var(--text-main);">Would you like to connect a Navidrome server? This enables automatic library rescans when new music is downloaded.</p>
+
+            <div id="wizard-discovery-status" style="margin-bottom: 16px; font-weight: bold; color: var(--text-muted);">
+                Searching for Navidrome on common Docker ports...
+            </div>
+
+            <form id="wizard-form" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <input type="text" id="wiz-url" class="form-control" placeholder="URL (e.g. http://navidrome:4533)" style="width: 250px;">
+                <input type="text" id="wiz-user" class="form-control" placeholder="Username" style="width: 150px;">
+                <input type="password" id="wiz-pass" class="form-control" placeholder="Password" style="width: 150px;">
+                <button type="submit" class="btn-primary">Connect</button>
+                <button type="button" class="btn-secondary" id="wiz-skip">Skip for now</button>
+            </form>
+            <div id="wiz-error" style="color: var(--error); margin-top: 12px; display: none;"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="dashboard-grid">
     <!-- Top Row: Overview Cards -->
     <section class="overview-cards">
@@ -69,4 +93,65 @@
 
 {% block scripts %} 
 <script src="/static/js/dashboard.js"></script> 
+{% if not navidrome_connected %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Auto discover
+        const statusEl = document.getElementById('wizard-discovery-status');
+        const urlInput = document.getElementById('wiz-url');
+
+        try {
+            const res = await fetch('/api/navidrome/autodiscover', { method: 'POST' });
+            if(res.ok) {
+                const data = await res.json();
+                if(data.urls && data.urls.length > 0) {
+                    statusEl.innerText = `Found Navidrome at: ${data.urls[0]}`;
+                    statusEl.style.color = "var(--success)";
+                    urlInput.value = data.urls[0];
+                } else {
+                    statusEl.innerText = "Could not auto-discover Navidrome. Please enter URL manually.";
+                }
+            }
+        } catch(e) {
+            statusEl.innerText = "Auto-discovery failed.";
+        }
+
+        // Handle form
+        document.getElementById('wizard-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.innerText = "Connecting...";
+            btn.disabled = true;
+
+            const url = document.getElementById('wiz-url').value;
+            const username = document.getElementById('wiz-user').value;
+            const password = document.getElementById('wiz-pass').value;
+            const errEl = document.getElementById('wiz-error');
+
+            errEl.style.display = 'none';
+
+            const res = await fetch('/api/navidrome/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ url, username, password })
+            });
+
+            if(res.ok) {
+                document.getElementById('navidrome-wizard').style.display = 'none';
+            } else {
+                const data = await res.json();
+                errEl.innerText = `Failed: ${data.detail || 'Unknown error'}`;
+                errEl.style.display = 'block';
+                btn.innerText = "Connect";
+                btn.disabled = false;
+            }
+        });
+
+        // Handle skip
+        document.getElementById('wiz-skip').addEventListener('click', () => {
+            document.getElementById('navidrome-wizard').style.display = 'none';
+        });
+    });
+</script>
+{% endif %}
 {% endblock %}
