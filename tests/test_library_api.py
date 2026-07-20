@@ -55,9 +55,13 @@ def test_collections_are_generated_from_available_library_songs():
         collections = {item["id"]: item for item in list_collections(db)}
 
         assert collections["recently-added"]["song_count"] == 1
-        assert collections["high-bitrate"]["song_count"] == 1
+        assert collections["highest-bitrate"]["song_count"] == 1
         assert collections["missing-artwork"]["song_count"] == 1
         assert collections["missing-metadata"]["song_count"] == 0
+        assert collections["recently-downloaded"]["song_count"] == 0
+        assert collections["recently-modified"]["song_count"] == 0
+        assert collections["large-albums"]["song_count"] == 0
+        assert collections["favorites"]["song_count"] == 0
 
 
 def test_song_response_marks_recently_added_tracks():

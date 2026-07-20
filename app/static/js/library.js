@@ -32,7 +32,7 @@ const libraryState = {
     },
     filterPanelOpen: Boolean(savedPreferences.filterPanelOpen),
     query: "",
-    collectionFilter: null,
+    collectionId: null,
     searchTotal: 0,
     searchRequest: 0,
     pages: { songs: 1, albums: 1, artists: 1 },
@@ -49,6 +49,10 @@ const icons = {
     quality: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 18V9"></path><path d="M10 18V5"></path><path d="M16 18v-7"></path><path d="M22 18V3"></path></svg>`,
     artwork: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-5-5L5 21"></path></svg>`,
     metadata: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h7"></path><circle cx="18" cy="16" r="3"></circle><path d="m20.2 18.2 1.8 1.8"></path></svg>`,
+    download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>`,
+    modified: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 8v5l3 2"></path><path d="M3.05 11a9 9 0 1 1 .5 4"></path><path d="M3 16v-5h5"></path></svg>`,
+    album: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="2"></circle></svg>`,
+    favorite: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></svg>`,
 };
 
 async function fetchJson(url) {
@@ -234,12 +238,16 @@ async function loadLibraryData({ preserveState = false } = {}) {
     errorBox.hidden = true;
 
     try {
-        const [songs, collections, filterOptions] = await Promise.all([
-            fetchJson(`/api/library/songs?${libraryRequestParams()}`),
+        const songEndpoint = libraryState.collectionId
+            ? `/api/library/collections/${encodeURIComponent(libraryState.collectionId)}/songs`
+            : "/api/library/songs";
+        const [songResult, collections, filterOptions] = await Promise.all([
+            fetchJson(`${songEndpoint}?${libraryRequestParams()}`),
             fetchJson("/api/library/collections"),
             libraryState.filterOptions || fetchJson("/api/library/filter-options"),
         ]);
 
+        const songs = Array.isArray(songResult) ? songResult : songResult.items;
         const { albums, artists } = projectSongs(songs);
         Object.assign(libraryState, { songs, albums, artists, collections, filterOptions });
         populateFilterOptions();
@@ -320,13 +328,7 @@ async function performSearch() {
 }
 
 function songMatchesCollection(song) {
-    switch (libraryState.collectionFilter) {
-        case "recently_added": return Boolean(song.recently_added);
-        case "high_bitrate": return Number(song.bitrate || 0) >= 320000;
-        case "missing_artwork": return song.artwork_status === "missing";
-        case "missing_metadata": return !song.title || !song.artist || !song.album;
-        default: return true;
-    }
+    return true;
 }
 
 function updateCounts() {
@@ -422,16 +424,20 @@ function renderArtists() {
 function renderCollections() {
     const grid = document.getElementById("collections-grid");
     const collectionIcons = {
-        "recently-added": icons.recent,
-        "high-bitrate": icons.quality,
-        "missing-artwork": icons.artwork,
-        "missing-metadata": icons.metadata,
+        recent: icons.recent,
+        download: icons.download,
+        quality: icons.quality,
+        artwork: icons.artwork,
+        metadata: icons.metadata,
+        modified: icons.modified,
+        album: icons.album,
+        favorite: icons.favorite,
     };
 
     grid.innerHTML = libraryState.filteredCollections.length
         ? libraryState.filteredCollections.map((collection) => `
-            <button class="library-collection-card tone-${escapeAttribute(collection.tone)}" type="button" data-collection="${escapeAttribute(collection.filter)}" data-name="${escapeAttribute(collection.name)}">
-                <span class="library-collection-icon">${collectionIcons[collection.id] || icons.music}</span>
+            <button class="library-collection-card tone-${escapeAttribute(collection.tone)}" type="button" data-collection="${escapeAttribute(collection.id)}" data-name="${escapeAttribute(collection.name)}" ${collection.placeholder ? "disabled" : ""}>
+                <span class="library-collection-icon">${collectionIcons[collection.icon] || icons.music}</span>
                 <span class="library-collection-copy">
                     <small>Smart collection</small>
                     <strong>${escapeHtml(collection.name)}</strong>
@@ -439,7 +445,7 @@ function renderCollections() {
                 </span>
                 <span class="library-collection-count">
                     <b>${Number(collection.song_count || 0).toLocaleString()}</b>
-                    <small>${pluralizeLabel(collection.song_count, "song")}</small>
+                    <small>${collection.placeholder ? "Coming soon" : pluralizeLabel(collection.song_count, "song")}</small>
                 </span>
             </button>
         `).join("")
@@ -491,7 +497,6 @@ function switchView(view) {
 }
 
 function showSongsFor(field, value) {
-    libraryState.collectionFilter = null;
     libraryState.query = value || "";
     document.getElementById("library-search").value = libraryState.query;
     applyFilters();
@@ -504,24 +509,23 @@ function showSongsFor(field, value) {
     switchView("songs");
 }
 
-function applyCollection(filter, name) {
-    libraryState.collectionFilter = filter;
+async function applyCollection(collectionId, name) {
+    libraryState.collectionId = collectionId;
     libraryState.query = "";
     document.getElementById("library-search").value = "";
     const chip = document.getElementById("clear-collection");
     document.getElementById("collection-filter-name").textContent = name;
     chip.hidden = false;
     libraryState.pages.songs = 1;
-    applyFilters();
     switchView("songs");
+    await loadLibraryData({ preserveState: true });
 }
 
-function clearCollection() {
-    libraryState.collectionFilter = null;
+async function clearCollection() {
+    libraryState.collectionId = null;
     document.getElementById("clear-collection").hidden = true;
     libraryState.pages.songs = 1;
-    applyFilters();
-    renderActiveView();
+    await loadLibraryData({ preserveState: true });
 }
 
 function artwork(url, className) {
@@ -573,10 +577,16 @@ document.querySelectorAll(".library-tab").forEach((tab) => {
 
 document.getElementById("library-search").addEventListener("input", (event) => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
+    searchTimer = setTimeout(async () => {
         libraryState.query = event.target.value;
         Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
-        performSearch();
+        if (libraryState.collectionId !== null) {
+            libraryState.collectionId = null;
+            document.getElementById("clear-collection").hidden = true;
+            await loadLibraryData({ preserveState: true });
+        } else {
+            performSearch();
+        }
     }, 180);
 });
 

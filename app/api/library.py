@@ -19,6 +19,7 @@ from app.services.library_filters import (
     apply_song_filters,
     apply_song_sort,
 )
+from app.services.collections import collection_engine
 
 router = APIRouter(
     prefix="/api/library",
@@ -361,72 +362,67 @@ def list_artists(db: Session = Depends(get_db)):
 
 @router.get("/collections")
 def list_collections(db: Session = Depends(get_db)):
-    available = Song.availability_status == "available"
-    recently_added_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+    return collection_engine.summaries(db)
 
-    recently_added = db.scalar(
-        select(func.count()).select_from(Song).where(
-            available,
-            Song.created_at >= recently_added_cutoff,
-        )
-    ) or 0
-    high_bitrate = db.scalar(
-        select(func.count()).select_from(Song).where(
-            available,
-            Song.bitrate >= 320000,
-        )
-    ) or 0
-    missing_artwork = db.scalar(
-        select(func.count()).select_from(Song).where(
-            available,
-            Song.artwork_status == "missing",
-        )
-    ) or 0
-    missing_metadata = db.scalar(
-        select(func.count()).select_from(Song).where(
-            available,
-            (
-                Song.title.is_(None)
-                | Song.artist.is_(None)
-                | Song.album.is_(None)
-            ),
-        )
-    ) or 0
 
-    return [
-        {
-            "id": "recently-added",
-            "name": "Recently Added",
-            "description": "Music indexed during the last seven days.",
-            "song_count": recently_added,
-            "filter": "recently_added",
-            "tone": "blue",
-        },
-        {
-            "id": "high-bitrate",
-            "name": "High Bitrate",
-            "description": "Tracks indexed at 320 kbps or higher.",
-            "song_count": high_bitrate,
-            "filter": "high_bitrate",
-            "tone": "violet",
-        },
-        {
-            "id": "missing-artwork",
-            "name": "Missing Artwork",
-            "description": "Albums that still need a cover image.",
-            "song_count": missing_artwork,
-            "filter": "missing_artwork",
-            "tone": "amber",
-        },
-        {
-            "id": "missing-metadata",
-            "name": "Missing Metadata",
-            "description": "Tracks missing a title, artist, or album.",
-            "song_count": missing_metadata,
-            "filter": "missing_metadata",
-            "tone": "rose",
-        },
-    ]
+@router.get("/collections/{collection_id}")
+def get_collection(collection_id: str, db: Session = Depends(get_db)):
+    definition = collection_engine.get(collection_id)
+    if definition is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return definition.to_dict(song_count=collection_engine.count(db, collection_id))
+
+
+@router.get("/collections/{collection_id}/songs")
+def get_collection_songs(
+    collection_id: str,
+    db: Session = Depends(get_db),
+    sort_by: str = "artist",
+    artist: str | None = None,
+    album: str | None = None,
+    genre: str | None = None,
+    codec: str | None = None,
+    min_bitrate: int | None = Query(default=None, ge=0),
+    max_bitrate: int | None = Query(default=None, ge=0),
+    downloaded_today: bool = False,
+    recently_added: bool = False,
+    missing_artwork: bool = False,
+    missing_metadata: bool = False,
+):
+    definition = collection_engine.get(collection_id)
+    if definition is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    filters = LibraryFilters(
+        artist=artist,
+        album=album,
+        genre=genre,
+        codec=codec,
+        min_bitrate=min_bitrate,
+        max_bitrate=max_bitrate,
+        downloaded_today=downloaded_today,
+        recently_added=recently_added,
+        missing_artwork=missing_artwork,
+        missing_metadata=missing_metadata,
+    )
+    songs = db.scalars(
+        collection_engine.statement(
+            collection_id,
+            filters=filters,
+            sort_by=sort_by,
+        )
+    ).all()
+    source_map = _playlist_sources(
+        db,
+        {song.spotify_track_id for song in songs if song.spotify_track_id},
+    )
+    return {
+        "collection": definition.to_dict(song_count=len(songs)),
+        "items": [
+            _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
+            for song in songs
+        ],
+        "total": len(songs),
+    }
 
 
 @router.get("/genres")

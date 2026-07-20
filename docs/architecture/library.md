@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.8.0
+> Version: 1.9.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -573,20 +573,42 @@ Last Updated
 
 # Smart Collections
 
-Collections are generated.
+Smart Collections are generated live from the Library Index. Users never
+manually edit their membership, and no collection-item rows duplicate Song
+state. Counts and contents therefore update automatically after normal index or
+watcher transactions without a refresh job or filesystem scan.
 
-Users never manually edit them.
+`CollectionEngine` owns an ordered registry of immutable
+`CollectionDefinition` values. Each definition contains presentation metadata
+and a serializable `CollectionRule` or nested `RuleGroup`. The rule compiler
+currently supports equality, inequality, rolling date windows, missing values,
+dynamic maximum values, album song-count thresholds, AND/OR groups, and
+placeholders. This registry/compiler boundary is the extension point for future
+stored custom rules; UI routes must not implement collection predicates.
 
-The Library API currently exposes foundation collections at
-`GET /api/library/collections`. Counts are calculated exclusively from
-available records in the Library Index. The Library web page presents Songs,
-Albums, Artists, and Collections as separate views; none of these views scan or
-query the filesystem. Selecting a generated collection filters the indexed
-Songs projection.
+Initial collections:
 
-The initial generated collections are Recently Added (seven days), High
-Bitrate (320 kbps or higher), Missing Artwork, and Missing Metadata. These are
-query-backed views and do not introduce duplicated collection state.
+- Recently Added: date added within seven days.
+- Recently Downloaded: date added within seven days and download source is not
+  `filesystem`.
+- Highest Bitrate: tracks matching the current maximum available bitrate.
+- Missing Artwork: artwork status is missing.
+- Missing Metadata: title, artist, or album is empty.
+- Recently Modified: filesystem modification time within seven days.
+- Large Albums: albums containing at least ten available indexed songs.
+- Favorites: a zero-item placeholder until a favorite signal is introduced.
+
+Collection API:
+
+- `GET /api/library/collections` returns definitions and live counts.
+- `GET /api/library/collections/{id}` returns one definition, rule, and count.
+- `GET /api/library/collections/{id}/songs` returns live indexed Song records
+  and composes with the standard Library sort and filter parameters.
+
+The Library web page renders every registered collection and loads its contents
+through the collection API. It never reimplements rules in JavaScript. Selecting
+a collection projects its Songs into the existing Songs, Albums, and Artists
+views while preserving the current user filters and sort.
 
 Examples
 

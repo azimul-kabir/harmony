@@ -1253,6 +1253,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     border-color: color-mix(in srgb, var(--collection-color) 45%, var(--border-color));
 }
 
+.library-collection-card:disabled {
+    cursor: default;
+    opacity: 0.72;
+}
+
+.library-collection-card:disabled:hover {
+    transform: none;
+}
+
 .library-collection-card.tone-violet { --collection-color: #7950f2; }
 .library-collection-card.tone-amber { --collection-color: #e67700; }
 .library-collection-card.tone-rose { --collection-color: #d6336c; }
