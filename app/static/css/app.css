@@ -613,3 +613,42 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         white-space: normal;
     }
 }
+
+/* --- Mobile Library Grid & Layout Fixes --- */
+@media (max-width: 768px) {
+    /* Force Albums and Artists grids to single-column stacking on mobile */
+    #view-albums .sources-grid,
+    #view-artists .sources-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+
+    /* Prevent Album cards from stretching off-screen */
+    #view-albums .source-card {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    /* Fix image sizing inside album cards on mobile */
+    #view-albums .source-card img,
+    #view-albums .source-card div[style*="height: 180px"] {
+        height: 140px !important;
+        width: 100% !important;
+    }
+
+    /* Make search bar and sort controls stack nicely inside the library panel */
+    .panel .filters-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+
+    .panel .filters-bar input#library-search {
+        width: 100% !important;
+    }
+
+    .panel .filters-bar select#library-sort {
+        width: 100% !important;
+    }
+}
