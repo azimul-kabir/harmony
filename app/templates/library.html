@@ -1,99 +1,114 @@
 {% extends "base.html" %}
 
-{% block title %}Library Manager{% endblock %}
+{% block title %}Library · Harmony{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
-    <h1 style="margin: 0;">Local Library</h1>
-    <button id="btn-rescan" class="btn-secondary" style="padding: 10px 16px; font-weight: 600; background: var(--bg-surface);">
-          Rescan Library
-    </button>
-</div>
-
-<!-- View Mode Tabs -->
-<div class="filter-tabs" id="library-view-tabs" style="margin-bottom: 20px; border-bottom: 1px solid var(--border-color);">
-    <button class="filter-tab active" data-view="songs">Songs</button>
-    <button class="filter-tab" data-view="albums">Albums</button>
-    <button class="filter-tab" data-view="artists">Artists</button>
-</div>
-
-<div class="panel" style="padding: 0;">
-    <div class="filters-bar" style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <input 
-            type="text" 
-            id="library-search" 
-            class="search-input" 
-            placeholder="Search by title, artist, or album..." 
-            style="width: 320px;"
-            autocomplete="off"
-        >
-        
-        <div style="display: flex; gap: 12px; align-items: center;">
-            <!-- Sorting Dropdown -->
-            <select id="library-sort" class="form-control" style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-input); background: var(--bg-surface); color: var(--text-main); font-size: 0.9rem;">
-                <option value="artist">Sort by Artist</option>
-                <option value="title">Sort by Song Name</option>
-                <option value="album">Sort by Album</option>
-                <option value="newest">Newest Added</option>
-                <option value="duration">Duration</option>
-                <option value="year">Year</option>
-            </select>
-
-            <button id="delete-selected" class="btn-danger" disabled>Delete Selected</button>
+<section class="library-page" aria-labelledby="library-title">
+    <header class="library-hero">
+        <div>
+            <span class="library-eyebrow">Library Index</span>
+            <h1 id="library-title">Your music, organized</h1>
+            <p>Browse every track Harmony has indexed across albums, artists, and collections.</p>
         </div>
+        <button id="btn-rescan" class="btn-secondary library-rescan" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.34 5.66"></path>
+                <path d="M20 4v7h-7"></path>
+            </svg>
+            <span>Rescan Library</span>
+        </button>
+    </header>
+
+    <nav class="library-tabs" id="library-view-tabs" aria-label="Library sections" role="tablist">
+        <button class="library-tab active" type="button" role="tab" aria-selected="true" data-view="songs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            <span>Songs</span>
+            <span class="library-tab-count" id="songs-count">—</span>
+        </button>
+        <button class="library-tab" type="button" role="tab" aria-selected="false" data-view="albums">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+            <span>Albums</span>
+            <span class="library-tab-count" id="albums-count">—</span>
+        </button>
+        <button class="library-tab" type="button" role="tab" aria-selected="false" data-view="artists">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path></svg>
+            <span>Artists</span>
+            <span class="library-tab-count" id="artists-count">—</span>
+        </button>
+        <button class="library-tab" type="button" role="tab" aria-selected="false" data-view="collections">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+            <span>Collections</span>
+            <span class="library-tab-count" id="collections-count">—</span>
+        </button>
+    </nav>
+
+    <div class="library-panel">
+        <div class="library-toolbar">
+            <label class="library-search" for="library-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                <input id="library-search" type="search" placeholder="Search your library" autocomplete="off">
+            </label>
+            <div class="library-toolbar-actions">
+                <button id="clear-collection" class="library-filter-chip" type="button" hidden>
+                    <span id="collection-filter-name"></span>
+                    <span aria-hidden="true">×</span>
+                </button>
+                <label class="library-sort-label" for="library-sort">Sort</label>
+                <select id="library-sort" class="library-sort">
+                    <option value="artist">Artist</option>
+                    <option value="title">Song name</option>
+                    <option value="album">Album</option>
+                    <option value="newest">Newest added</option>
+                    <option value="duration">Duration</option>
+                    <option value="year">Year</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="library-loading" class="library-loading" aria-live="polite">
+            <span class="spinner"></span> Loading Library Index…
+        </div>
+        <div id="library-error" class="library-error" hidden></div>
+
+        <section id="view-songs" class="library-view" role="tabpanel">
+            <div class="library-table-wrap">
+                <table class="library-songs-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Album</th>
+                            <th>Duration</th>
+                            <th>Bitrate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="library-body"></tbody>
+                </table>
+            </div>
+            <div id="pagination-songs" class="library-pagination"></div>
+        </section>
+
+        <section id="view-albums" class="library-view" role="tabpanel" hidden>
+            <div id="albums-grid" class="library-albums-grid"></div>
+            <div id="pagination-albums" class="library-pagination"></div>
+        </section>
+
+        <section id="view-artists" class="library-view" role="tabpanel" hidden>
+            <div id="artists-grid" class="library-artists-grid"></div>
+            <div id="pagination-artists" class="library-pagination"></div>
+        </section>
+
+        <section id="view-collections" class="library-view" role="tabpanel" hidden>
+            <div class="library-section-intro">
+                <div>
+                    <h2>Smart collections</h2>
+                    <p>Automatic views generated from the Library Index.</p>
+                </div>
+            </div>
+            <div id="collections-grid" class="library-collections-grid"></div>
+        </section>
     </div>
-         
-    <!-- SONGS VIEW CONTAINER -->
-    <div id="view-songs" class="library-view-container">
-        <div class="table-responsive">
-            <table class="table command-table" style="border-radius: 0; box-shadow: none; margin: 0;">
-                <thead>
-                    <tr>
-                        <th style="width: 40px; padding-left: 24px;">
-                            <input type="checkbox" id="select-all" style="cursor: pointer;">
-                        </th>
-                        <th>Title</th>
-                        <th>Artist</th>
-                        <th>Album</th>
-                    </tr>
-                </thead>
-                <tbody id="library-body">
-                    <tr>
-                        <td colspan="4" style="padding: 0;">
-                            <div class="skeleton-row">
-                                <div class="skeleton-avatar skeleton" style="width:24px; height:24px; border-radius:4px;"></div>
-                                <div class="skeleton-row-content">
-                                    <div class="skeleton skeleton-text title"></div>
-                                    <div class="skeleton skeleton-text short"></div>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <!-- Pagination Controls -->
-        <div class="pagination-controls" style="border-radius: 0 0 16px 16px; background: var(--bg-surface-alt); margin-top: 0; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
-            <button id="btn-prev" class="btn-secondary" disabled>Previous</button>
-            <span id="page-info" style="font-weight: 600; color: var(--text-muted);">Page 1</span>
-            <button id="btn-next" class="btn-secondary" disabled>Next</button>
-        </div>
-    </div>
-
-    <!-- ALBUMS VIEW CONTAINER -->
-    <div id="view-albums" class="library-view-container" style="display: none; padding: 24px;">
-        <div id="albums-grid" class="sources-grid">
-            <p class="empty-state">Loading albums...</p>
-        </div>
-    </div>
-
-    <!-- ARTISTS VIEW CONTAINER -->
-    <div id="view-artists" class="library-view-container" style="display: none; padding: 24px;">
-        <div id="artists-grid" class="sources-grid">
-            <p class="empty-state">Loading artists...</p>
-        </div>
-    </div>
-</div>
+</section>
 {% endblock %}
 
 {% block scripts %}

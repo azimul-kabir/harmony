@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.5.2
+> Version: 1.5.3
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -491,6 +491,17 @@ Last Updated
 Collections are generated.
 
 Users never manually edit them.
+
+The Library API currently exposes foundation collections at
+`GET /api/library/collections`. Counts are calculated exclusively from
+available records in the Library Index. The Library web page presents Songs,
+Albums, Artists, and Collections as separate views; none of these views scan or
+query the filesystem. Selecting a generated collection filters the indexed
+Songs projection.
+
+The initial generated collections are Recently Added (seven days), High
+Bitrate (320 kbps or higher), Missing Artwork, and Missing Metadata. These are
+query-backed views and do not introduce duplicated collection state.
 
 Examples
 

@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import UTC, datetime, timedelta
 from queue import Empty
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -49,6 +50,7 @@ def _playlist_sources(db: Session, spotify_track_ids: set[str]) -> dict[str, lis
 
 
 def _serialize_song(song: Song, playlist_sources: list[dict] | None = None) -> dict:
+    recently_added_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
     return {
         "id": song.id,
         "path": song.path,
@@ -72,6 +74,9 @@ def _serialize_song(song: Song, playlist_sources: list[dict] | None = None) -> d
         "artwork_status": song.artwork_status,
         "cover_url": song.cover_url,
         "date_added": song.created_at,
+        "recently_added": bool(
+            song.created_at and song.created_at >= recently_added_cutoff
+        ),
         "last_modified": song.last_modified,
         "last_indexed_at": song.last_indexed_at,
         "availability_status": song.availability_status,
@@ -219,6 +224,76 @@ def list_artists(db: Session = Depends(get_db)):
             "cover_url": art.cover_url
         }
         for art in artists_query
+    ]
+
+
+@router.get("/collections")
+def list_collections(db: Session = Depends(get_db)):
+    available = Song.availability_status == "available"
+    recently_added_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+
+    recently_added = db.scalar(
+        select(func.count()).select_from(Song).where(
+            available,
+            Song.created_at >= recently_added_cutoff,
+        )
+    ) or 0
+    high_bitrate = db.scalar(
+        select(func.count()).select_from(Song).where(
+            available,
+            Song.bitrate >= 320000,
+        )
+    ) or 0
+    missing_artwork = db.scalar(
+        select(func.count()).select_from(Song).where(
+            available,
+            Song.artwork_status == "missing",
+        )
+    ) or 0
+    missing_metadata = db.scalar(
+        select(func.count()).select_from(Song).where(
+            available,
+            (
+                Song.title.is_(None)
+                | Song.artist.is_(None)
+                | Song.album.is_(None)
+            ),
+        )
+    ) or 0
+
+    return [
+        {
+            "id": "recently-added",
+            "name": "Recently Added",
+            "description": "Music indexed during the last seven days.",
+            "song_count": recently_added,
+            "filter": "recently_added",
+            "tone": "blue",
+        },
+        {
+            "id": "high-bitrate",
+            "name": "High Bitrate",
+            "description": "Tracks indexed at 320 kbps or higher.",
+            "song_count": high_bitrate,
+            "filter": "high_bitrate",
+            "tone": "violet",
+        },
+        {
+            "id": "missing-artwork",
+            "name": "Missing Artwork",
+            "description": "Albums that still need a cover image.",
+            "song_count": missing_artwork,
+            "filter": "missing_artwork",
+            "tone": "amber",
+        },
+        {
+            "id": "missing-metadata",
+            "name": "Missing Metadata",
+            "description": "Tracks missing a title, artist, or album.",
+            "song_count": missing_metadata,
+            "filter": "missing_metadata",
+            "tone": "rose",
+        },
     ]
 
 

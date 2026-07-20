@@ -1,278 +1,383 @@
-let allSongs = [];
-let filteredSongs = [];
-let allAlbums = [];
-let filteredAlbums = [];
-let allArtists = [];
-let filteredArtists = [];
+const libraryState = {
+    songs: [],
+    albums: [],
+    artists: [],
+    collections: [],
+    filteredSongs: [],
+    filteredAlbums: [],
+    filteredArtists: [],
+    filteredCollections: [],
+    view: "songs",
+    sort: "artist",
+    query: "",
+    collectionFilter: null,
+    pages: { songs: 1, albums: 1, artists: 1 },
+    pageSize: 24,
+};
 
-let currentSongPage = 1;
-let currentAlbumPage = 1;
-let currentArtistPage = 1;
-const itemsPerPage = 30; // Optimized for mobile scrolling performance
-let searchTimeout = null;
-let currentView = 'songs';
-let currentSort = 'artist';
+let searchTimer = null;
+let refreshTimer = null;
 
-async function loadLibraryData() {
+const icons = {
+    music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
+    artist: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`,
+    recent: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>`,
+    quality: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 18V9"></path><path d="M10 18V5"></path><path d="M16 18v-7"></path><path d="M22 18V3"></path></svg>`,
+    artwork: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-5-5L5 21"></path></svg>`,
+    metadata: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h10"></path><path d="M4 18h7"></path><circle cx="18" cy="16" r="3"></circle><path d="m20.2 18.2 1.8 1.8"></path></svg>`,
+};
+
+async function fetchJson(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    return response.json();
+}
+
+async function loadLibraryData({ preserveState = false } = {}) {
+    const loading = document.getElementById("library-loading");
+    const errorBox = document.getElementById("library-error");
+    if (!preserveState) loading.hidden = false;
+    errorBox.hidden = true;
+
     try {
-        const resSongs = await fetch(`/api/library/songs?sort_by=${currentSort}`);
-        if (!resSongs.ok) throw new Error("Failed to fetch songs");
-        allSongs = await resSongs.json();
-        filteredSongs = allSongs;
-
-        const [resAlbums, resArtists] = await Promise.all([
-            fetch("/api/library/albums"),
-            fetch("/api/library/artists")
+        const [songs, albums, artists, collections] = await Promise.all([
+            fetchJson(`/api/library/songs?sort_by=${encodeURIComponent(libraryState.sort)}`),
+            fetchJson("/api/library/albums"),
+            fetchJson("/api/library/artists"),
+            fetchJson("/api/library/collections"),
         ]);
-        
-        if (resAlbums.ok) {
-            allAlbums = await resAlbums.json();
-            filteredAlbums = allAlbums;
-        }
-        if (resArtists.ok) {
-            allArtists = await resArtists.json();
-            filteredArtists = allArtists;
-        }
 
+        Object.assign(libraryState, { songs, albums, artists, collections });
+        applyFilters();
+        updateCounts();
         renderActiveView();
-    } catch (e) {
-        console.error("Library load error:", e);
-        document.getElementById("library-body").innerHTML = `
-            <tr>
-                <td colspan="4" class="text-center empty-state" style="padding: 40px; color: var(--danger);">
-                    Failed to load library data.
-                </td>
-            </tr>
-        `;
+    } catch (error) {
+        console.error("Library load error:", error);
+        errorBox.textContent = "Harmony could not load the Library Index. Try again in a moment.";
+        errorBox.hidden = false;
+    } finally {
+        loading.hidden = true;
     }
+}
+
+function applyFilters() {
+    const query = libraryState.query.toLocaleLowerCase().trim();
+    let songs = libraryState.songs.filter(songMatchesCollection);
+
+    if (query) {
+        songs = songs.filter((song) => [song.title, song.artist, song.album, song.filename]
+            .some((value) => String(value || "").toLocaleLowerCase().includes(query)));
+    }
+
+    libraryState.filteredSongs = songs;
+    libraryState.filteredAlbums = libraryState.albums.filter((album) => !query ||
+        [album.album, album.artist].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
+    libraryState.filteredArtists = libraryState.artists.filter((artist) => !query ||
+        String(artist.artist || "").toLocaleLowerCase().includes(query));
+    libraryState.filteredCollections = libraryState.collections.filter((collection) => !query ||
+        [collection.name, collection.description].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
+}
+
+function songMatchesCollection(song) {
+    switch (libraryState.collectionFilter) {
+        case "recently_added": return Boolean(song.recently_added);
+        case "high_bitrate": return Number(song.bitrate || 0) >= 320000;
+        case "missing_artwork": return song.artwork_status === "missing";
+        case "missing_metadata": return !song.title || !song.artist || !song.album;
+        default: return true;
+    }
+}
+
+function updateCounts() {
+    document.getElementById("songs-count").textContent = libraryState.songs.length.toLocaleString();
+    document.getElementById("albums-count").textContent = libraryState.albums.length.toLocaleString();
+    document.getElementById("artists-count").textContent = libraryState.artists.length.toLocaleString();
+    document.getElementById("collections-count").textContent = libraryState.collections.length.toLocaleString();
 }
 
 function renderActiveView() {
-    document.getElementById('view-songs').style.display = currentView === 'songs' ? 'block' : 'none';
-    document.getElementById('view-albums').style.display = currentView === 'albums' ? 'block' : 'none';
-    document.getElementById('view-artists').style.display = currentView === 'artists' ? 'block' : 'none';
+    document.querySelectorAll(".library-view").forEach((view) => {
+        view.hidden = view.id !== `view-${libraryState.view}`;
+    });
 
-    if (currentView === 'songs') {
-        renderSongsPage();
-    } else if (currentView === 'albums') {
-        renderAlbumsPage();
-    } else if (currentView === 'artists') {
-        renderArtistsPage();
-    }
+    if (libraryState.view === "songs") renderSongs();
+    if (libraryState.view === "albums") renderAlbums();
+    if (libraryState.view === "artists") renderArtists();
+    if (libraryState.view === "collections") renderCollections();
 }
 
-function renderSongsPage() {
-    const tbody = document.getElementById("library-body");
-    const startIndex = (currentSongPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedItems = filteredSongs.slice(startIndex, endIndex);
+function renderSongs() {
+    const page = pageItems(libraryState.filteredSongs, "songs");
+    const body = document.getElementById("library-body");
 
-    if (paginatedItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center empty-state" style="padding: 40px;">No tracks found.</td></tr>`;
+    if (!page.items.length) {
+        body.innerHTML = emptyTable("No songs match this view.");
     } else {
-        tbody.innerHTML = paginatedItems.map(s => {
-            const coverImg = s.cover_url
-                ? `<img src="${s.cover_url}" alt="Cover" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0;">`
-                : `<div style="width: 40px; height: 40px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
-
-            return `
+        body.innerHTML = page.items.map((song) => `
             <tr>
-                <td style="padding-left: 24px; vertical-align: middle;">
-                    <input type="checkbox" class="song-check" data-id="${s.id}" style="cursor: pointer;">
-                </td>
-                <td style="font-weight: 600; color: var(--text-main);">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        ${coverImg}
-                        <span>${s.title || 'Unknown Title'}</span>
+                <td data-label="Title">
+                    <div class="library-song-title">
+                        ${artwork(song.cover_url, "library-song-artwork")}
+                        <div class="library-song-copy">
+                            <strong>${escapeHtml(song.title || "Unknown title")}</strong>
+                            ${song.recently_added ? `<span class="library-recent-badge">Recently Added</span>` : ""}
+                        </div>
                     </div>
                 </td>
-                <td style="color: var(--text-muted); vertical-align: middle;">${s.artist || 'Unknown Artist'}</td>
-                <td style="color: var(--text-muted); vertical-align: middle;">${s.album || 'Unknown Album'}</td>
+                <td data-label="Artist">${escapeHtml(song.artist || "Unknown artist")}</td>
+                <td data-label="Album">${escapeHtml(song.album || "Unknown album")}</td>
+                <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
+                <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
             </tr>
-            `;
-        }).join("");
+        `).join("");
     }
-    const totalPages = Math.ceil(filteredSongs.length / itemsPerPage) || 1;
-    document.getElementById("page-info").textContent = `Page ${currentSongPage} of ${totalPages} (${filteredSongs.length} tracks)`;
-    document.getElementById("btn-prev").disabled = currentSongPage === 1;
-    document.getElementById("btn-next").disabled = currentSongPage === totalPages;
+
+    renderPagination("pagination-songs", page, "songs", renderSongs);
 }
 
-function renderAlbumsPage() {
+function renderAlbums() {
+    const page = pageItems(libraryState.filteredAlbums, "albums");
     const grid = document.getElementById("albums-grid");
-    const startIndex = (currentAlbumPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedItems = filteredAlbums.slice(startIndex, endIndex);
 
-    if (paginatedItems.length === 0) {
-        grid.innerHTML = `<p class="empty-state" style="grid-column: 1/-1; padding: 40px;">No albums found.</p>`;
-    } else {
-        grid.innerHTML = paginatedItems.map(album => {
-            const coverImg = album.cover_url
-                ? `<img src="${album.cover_url}" alt="Cover" style="width: 100%; height: 150px; border-radius: 8px; object-fit: cover; margin-bottom: 12px;">`
-                : `<div style="width: 100%; height: 150px; border-radius: 8px; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
+    grid.innerHTML = page.items.length ? page.items.map((album) => `
+        <button class="library-album-card" type="button" data-album="${escapeAttribute(album.album)}">
+            ${artwork(album.cover_url, "library-album-artwork")}
+            <span class="library-album-copy">
+                <strong title="${escapeAttribute(album.album)}">${escapeHtml(album.album || "Unknown album")}</strong>
+                <span>${escapeHtml(album.artist || "Unknown artist")}</span>
+                <small>${pluralize(album.track_count, "song")}</small>
+            </span>
+        </button>
+    `).join("") : emptyGrid("No albums match your search.");
 
-            return `
-                <div class="source-card" style="cursor: pointer;" onclick="filterByAlbum('${encodeURIComponent(album.album)}')">
-                    ${coverImg}
-                    <h3 style="margin: 0 0 4px 0; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${album.album}</h3>
-                    <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 8px;">${album.artist}</div>
-                    <div class="source-meta" style="display: flex; justify-content: space-between; font-size: 0.8rem; padding: 6px 10px;">
-                        <span>${album.track_count} Tracks</span>
-                        <span>${album.total_duration} mins</span>
-                    </div>
-                </div>
-            `;
-        }).join("");
-    }
-    updateGenericPagination("pagination-albums", currentAlbumPage, filteredAlbums.length, (dir) => {
-        currentAlbumPage += dir;
-        renderAlbumsPage();
+    grid.querySelectorAll("[data-album]").forEach((card) => {
+        card.addEventListener("click", () => showSongsFor("album", card.dataset.album));
     });
+    renderPagination("pagination-albums", page, "albums", renderAlbums);
 }
 
-function renderArtistsPage() {
+function renderArtists() {
+    const page = pageItems(libraryState.filteredArtists, "artists");
     const grid = document.getElementById("artists-grid");
-    const startIndex = (currentArtistPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedItems = filteredArtists.slice(startIndex, endIndex);
 
-    if (paginatedItems.length === 0) {
-        grid.innerHTML = `<p class="empty-state" style="grid-column: 1/-1; padding: 40px;">No artists found.</p>`;
+    grid.innerHTML = page.items.length ? page.items.map((artist) => `
+        <button class="library-artist-card" type="button" data-artist="${escapeAttribute(artist.artist)}">
+            <span class="library-artist-avatar">${icons.artist}</span>
+            <span class="library-artist-copy">
+                <strong>${escapeHtml(artist.artist || "Unknown artist")}</strong>
+                <span><b>${Number(artist.album_count || 0).toLocaleString()}</b> ${pluralizeLabel(artist.album_count, "album")}</span>
+                <span><b>${Number(artist.song_count || 0).toLocaleString()}</b> ${pluralizeLabel(artist.song_count, "song")}</span>
+            </span>
+            <span class="library-card-arrow" aria-hidden="true">›</span>
+        </button>
+    `).join("") : emptyGrid("No artists match your search.");
+
+    grid.querySelectorAll("[data-artist]").forEach((card) => {
+        card.addEventListener("click", () => showSongsFor("artist", card.dataset.artist));
+    });
+    renderPagination("pagination-artists", page, "artists", renderArtists);
+}
+
+function renderCollections() {
+    const grid = document.getElementById("collections-grid");
+    const collectionIcons = {
+        "recently-added": icons.recent,
+        "high-bitrate": icons.quality,
+        "missing-artwork": icons.artwork,
+        "missing-metadata": icons.metadata,
+    };
+
+    grid.innerHTML = libraryState.filteredCollections.length
+        ? libraryState.filteredCollections.map((collection) => `
+            <button class="library-collection-card tone-${escapeAttribute(collection.tone)}" type="button" data-collection="${escapeAttribute(collection.filter)}" data-name="${escapeAttribute(collection.name)}">
+                <span class="library-collection-icon">${collectionIcons[collection.id] || icons.music}</span>
+                <span class="library-collection-copy">
+                    <small>Smart collection</small>
+                    <strong>${escapeHtml(collection.name)}</strong>
+                    <span>${escapeHtml(collection.description)}</span>
+                </span>
+                <span class="library-collection-count">
+                    <b>${Number(collection.song_count || 0).toLocaleString()}</b>
+                    <small>${pluralizeLabel(collection.song_count, "song")}</small>
+                </span>
+            </button>
+        `).join("")
+        : emptyGrid("No collections match your search.");
+
+    grid.querySelectorAll("[data-collection]").forEach((card) => {
+        card.addEventListener("click", () => applyCollection(card.dataset.collection, card.dataset.name));
+    });
+}
+
+function pageItems(items, key) {
+    const totalPages = Math.max(1, Math.ceil(items.length / libraryState.pageSize));
+    libraryState.pages[key] = Math.min(libraryState.pages[key], totalPages);
+    const page = libraryState.pages[key];
+    const start = (page - 1) * libraryState.pageSize;
+    return { items: items.slice(start, start + libraryState.pageSize), page, totalPages, totalItems: items.length };
+}
+
+function renderPagination(containerId, page, key, render) {
+    const container = document.getElementById(containerId);
+    if (page.totalItems <= libraryState.pageSize) {
+        container.innerHTML = page.totalItems ? `<span>${page.totalItems.toLocaleString()} items</span>` : "";
+        return;
+    }
+
+    container.innerHTML = `
+        <button class="btn-secondary" type="button" data-direction="previous" ${page.page === 1 ? "disabled" : ""}>Previous</button>
+        <span>Page <b>${page.page}</b> of ${page.totalPages} · ${page.totalItems.toLocaleString()} items</span>
+        <button class="btn-secondary" type="button" data-direction="next" ${page.page === page.totalPages ? "disabled" : ""}>Next</button>
+    `;
+    container.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+            libraryState.pages[key] += button.dataset.direction === "next" ? 1 : -1;
+            render();
+            document.querySelector(".library-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    });
+}
+
+function switchView(view) {
+    libraryState.view = view;
+    document.querySelectorAll(".library-tab").forEach((tab) => {
+        const active = tab.dataset.view === view;
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", String(active));
+    });
+    document.getElementById("library-sort").disabled = view === "collections";
+    renderActiveView();
+}
+
+function showSongsFor(field, value) {
+    libraryState.collectionFilter = null;
+    libraryState.query = value || "";
+    document.getElementById("library-search").value = libraryState.query;
+    applyFilters();
+    if (field === "album") {
+        libraryState.filteredSongs = libraryState.songs.filter((song) => (song.album || "") === value);
     } else {
-        grid.innerHTML = paginatedItems.map(artist => {
-            const coverImg = artist.cover_url
-                ? `<img src="${artist.cover_url}" alt="Cover" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">`
-                : `<div style="width: 50px; height: 50px; border-radius: 50%; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; color: var(--text-muted);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>`;
-
-            return `
-                <div class="source-card" style="flex-direction: row; align-items: center; gap: 12px; cursor: pointer;" onclick="filterByArtist('${encodeURIComponent(artist.artist)}')">
-                    ${coverImg}
-                    <div style="min-width: 0; flex: 1;">
-                        <h3 style="margin: 0 0 2px 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${artist.artist}</h3>
-                        <div style="color: var(--text-muted); font-size: 0.8rem;">${artist.song_count} Songs • ${artist.album_count} Albums</div>
-                    </div>
-                </div>
-            `;
-        }).join("");
+        libraryState.filteredSongs = libraryState.songs.filter((song) => (song.artist || "") === value);
     }
-    updateGenericPagination("pagination-artists", currentArtistPage, filteredArtists.length, (dir) => {
-        currentArtistPage += dir;
-        renderArtistsPage();
-    });
+    libraryState.pages.songs = 1;
+    switchView("songs");
 }
 
-function updateGenericPagination(containerId, page, totalLength, callback) {
-    let container = document.getElementById(containerId);
-    if (!container) {
-        const parent = document.getElementById(containerId === 'pagination-albums' ? 'view-albums' : 'view-artists');
-        container = document.createElement("div");
-        container.id = containerId;
-        container.className = "pagination-controls";
-        container.style = "border-radius: 0 0 16px 16px; background: var(--bg-surface-alt); margin-top: 16px; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;";
-        container.innerHTML = `
-            <button class="btn-secondary prev-btn">Previous</button>
-            <span class="page-info" style="font-weight: 600; color: var(--text-muted);">Page 1</span>
-            <button class="btn-secondary next-btn">Next</button>
-        `;
-        parent.appendChild(container);
-    }
-    const totalPages = Math.ceil(totalLength / itemsPerPage) || 1;
-    container.querySelector(".page-info").textContent = `Page ${page} of ${totalPages} (${totalLength} items)`;
-    
-    const prevBtn = container.querySelector(".prev-btn");
-    const nextBtn = container.querySelector(".next-btn");
-    
-    prevBtn.disabled = page === 1;
-    nextBtn.disabled = page === totalPages;
-    
-    prevBtn.onclick = () => { if (page > 1) { callback(-1); window.scrollTo({top:0, behavior:'smooth'}); } };
-    nextBtn.onclick = () => { if (page < totalPages) { callback(1); window.scrollTo({top:0, behavior:'smooth'}); } };
+function applyCollection(filter, name) {
+    libraryState.collectionFilter = filter;
+    libraryState.query = "";
+    document.getElementById("library-search").value = "";
+    const chip = document.getElementById("clear-collection");
+    document.getElementById("collection-filter-name").textContent = name;
+    chip.hidden = false;
+    libraryState.pages.songs = 1;
+    applyFilters();
+    switchView("songs");
 }
 
-function filterByAlbum(albumName) {
-    currentView = 'songs';
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector('[data-view="songs"]').classList.add('active');
-    const decoded = decodeURIComponent(albumName);
-    document.getElementById("library-search").value = decoded;
-    filteredSongs = allSongs.filter(s => (s.album || "").toLowerCase() === decoded.toLowerCase());
-    currentSongPage = 1;
+function clearCollection() {
+    libraryState.collectionFilter = null;
+    document.getElementById("clear-collection").hidden = true;
+    libraryState.pages.songs = 1;
+    applyFilters();
     renderActiveView();
 }
 
-function filterByArtist(artistName) {
-    currentView = 'songs';
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector('[data-view="songs"]').classList.add('active');
-    const decoded = decodeURIComponent(artistName);
-    document.getElementById("library-search").value = decoded;
-    filteredSongs = allSongs.filter(s => (s.artist || "").toLowerCase() === decoded.toLowerCase());
-    currentSongPage = 1;
-    renderActiveView();
+function artwork(url, className) {
+    if (url) return `<img class="${className}" src="${escapeAttribute(url)}" alt="" loading="lazy">`;
+    return `<span class="${className} library-artwork-placeholder">${icons.music}</span>`;
 }
 
-// Tab Switching
-document.querySelectorAll("#library-view-tabs .filter-tab").forEach(tab => {
-    tab.addEventListener("click", (e) => {
-        document.querySelectorAll("#library-view-tabs .filter-tab").forEach(t => t.classList.remove('active'));
-        e.target.classList.add('active');
-        currentView = e.target.dataset.view;
+function formatDuration(seconds) {
+    if (!Number.isFinite(Number(seconds))) return "—";
+    const total = Math.round(Number(seconds));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function formatBitrate(bitrate) {
+    if (!Number.isFinite(Number(bitrate)) || Number(bitrate) <= 0) return "—";
+    return `${Math.round(Number(bitrate) / 1000)} kbps`;
+}
+
+function pluralize(count, noun) {
+    const value = Number(count || 0);
+    return `${value.toLocaleString()} ${pluralizeLabel(value, noun)}`;
+}
+
+function pluralizeLabel(count, noun) {
+    return Number(count || 0) === 1 ? noun : `${noun}s`;
+}
+
+function emptyTable(message) {
+    return `<tr><td colspan="5"><div class="library-empty">${icons.music}<strong>${escapeHtml(message)}</strong></div></td></tr>`;
+}
+
+function emptyGrid(message) {
+    return `<div class="library-empty">${icons.music}<strong>${escapeHtml(message)}</strong></div>`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"]/g, (character) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;",
+    })[character]);
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replace(/'/g, "&#39;");
+}
+
+document.querySelectorAll(".library-tab").forEach((tab) => {
+    tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+
+document.getElementById("library-search").addEventListener("input", (event) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        libraryState.query = event.target.value;
+        Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
+        applyFilters();
         renderActiveView();
+    }, 180);
+});
+
+document.getElementById("library-sort").addEventListener("change", (event) => {
+    libraryState.sort = event.target.value;
+    libraryState.pages.songs = 1;
+    loadLibraryData({ preserveState: true });
+});
+
+document.getElementById("clear-collection").addEventListener("click", clearCollection);
+
+document.getElementById("btn-rescan").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `<span class="spinner"></span><span>Rescanning…</span>`;
+    try {
+        const response = await fetch("/api/library/rescan", { method: "POST" });
+        if (!response.ok) throw new Error("Rescan failed");
+        await loadLibraryData({ preserveState: true });
+    } catch (error) {
+        document.getElementById("library-error").textContent = "The library rescan failed. Check Harmony logs for details.";
+        document.getElementById("library-error").hidden = false;
+    } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+    }
+});
+
+function connectLibraryEvents() {
+    if (!("EventSource" in window)) return;
+    const events = new EventSource("/api/library/events");
+    ["library.track.added", "library.track.updated", "library.track.missing", "library.track.renamed"].forEach((type) => {
+        events.addEventListener(type, () => {
+            clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => loadLibraryData({ preserveState: true }), 500);
+        });
     });
-});
+}
 
-// Sort Handler
-document.getElementById("library-sort")?.addEventListener("change", async (e) => {
-    currentSort = e.target.value;
-    await loadLibraryData();
+document.addEventListener("DOMContentLoaded", () => {
+    loadLibraryData();
+    connectLibraryEvents();
 });
-
-// Song Pagination
-document.getElementById("btn-prev")?.addEventListener("click", () => {
-    if (currentSongPage > 1) { currentSongPage--; renderSongsPage(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-});
-document.getElementById("btn-next")?.addEventListener("click", () => {
-    const totalPages = Math.ceil(filteredSongs.length / itemsPerPage);
-    if (currentSongPage < totalPages) { currentSongPage++; renderSongsPage(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-});
-
-// Unified Search
-document.getElementById("library-search")?.addEventListener("input", (e) => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        const q = e.target.value.toLowerCase().trim();
-        if (!q) {
-            filteredSongs = allSongs;
-            filteredAlbums = allAlbums;
-            filteredArtists = allArtists;
-        } else {
-            filteredSongs = allSongs.filter(s => 
-                (s.title || "").toLowerCase().includes(q) || 
-                (s.artist || "").toLowerCase().includes(q) ||
-                (s.album || "").toLowerCase().includes(q)
-            );
-            filteredAlbums = allAlbums.filter(a => 
-                (a.album || "").toLowerCase().includes(q) ||
-                (a.artist || "").toLowerCase().includes(q)
-            );
-            filteredArtists = allArtists.filter(art => 
-                (art.artist || "").toLowerCase().includes(q)
-            );
-        }
-        currentSongPage = 1;
-        currentAlbumPage = 1;
-        currentArtistPage = 1;
-        renderActiveView();
-    }, 250);
-});
-
-// Rescan & Deletion handlers remain standard
-document.getElementById("btn-rescan")?.addEventListener("click", async (e) => {
-    const btn = e.target;
-    btn.disabled = true;
-    try { await fetch("/api/library/rescan", { method: "POST" }); } 
-    finally { setTimeout(() => { btn.disabled = false; loadLibraryData(); }, 1000); }
-});
-
-document.addEventListener("DOMContentLoaded", loadLibraryData);
