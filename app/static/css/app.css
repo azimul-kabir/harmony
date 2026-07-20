@@ -851,6 +851,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     backdrop-filter: blur(12px);
 }
 
+.library-search-status {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    min-height: 1em;
+    white-space: nowrap;
+}
+
 .library-search {
     display: flex;
     align-items: center;

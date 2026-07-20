@@ -12,6 +12,7 @@ from app.core.logging import logger
 from app.database.crud import UpsertStatus, upsert_song
 from app.database.models import Song
 from app.services.artwork import ArtworkService, artwork_url
+from app.services.library_search import library_search
 from app.services.metadata import read_metadata
 from app.services.tags import SUPPORTED_EXTENSIONS
 
@@ -129,6 +130,8 @@ def index_file(
     previous_size = song.file_size if song is not None else None
     previous_availability = song.availability_status if song is not None else None
     upsert_status, song = upsert_song(db, metadata, commit=False)
+    db.flush()
+    library_search.index_song(db, song.id)
 
     if commit:
         db.commit()

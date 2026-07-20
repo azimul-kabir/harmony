@@ -50,3 +50,19 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "provider_id",
         "original_url",
     } <= artwork_columns
+    assert "library_search" in inspect(engine).get_table_names()
+    search_columns = {
+        column["name"] for column in inspect(engine).get_columns("library_search")
+    }
+    assert {
+        "song_id",
+        "title",
+        "artist",
+        "album",
+        "genre",
+        "playlist",
+        "filename",
+        "spotify_id",
+        "musicbrainz_id",
+        "isrc",
+    } <= search_columns

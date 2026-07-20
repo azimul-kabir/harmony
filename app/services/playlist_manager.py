@@ -9,6 +9,7 @@ from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
 from app.services.library_paths import _safe
+from app.services.library_search import library_search
 
 def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: DomainPlaylist) -> Playlist:
     """Updates the database with the latest Spotify playlist structure."""
@@ -29,11 +30,19 @@ def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: Dom
     db.commit()
     db.refresh(playlist)
 
-    # Rebuild playlist track mapping cleanly
+    # Rebuild playlist track mapping cleanly and refresh only affected search rows.
+    previous_track_ids = set(
+        db.scalars(
+            select(PlaylistTrack.spotify_track_id).where(
+                PlaylistTrack.playlist_id == playlist.id
+            )
+        ).all()
+    )
     db.query(PlaylistTrack).where(PlaylistTrack.playlist_id == playlist.id).delete()
-    
+    current_track_ids: set[str] = set()
     for idx, track in enumerate(domain_playlist.tracks):
         if track.spotify_track_id:
+            current_track_ids.add(track.spotify_track_id)
             pt = PlaylistTrack(
                 playlist_id=playlist.id, 
                 spotify_track_id=track.spotify_track_id, 
@@ -41,6 +50,8 @@ def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: Dom
             )
             db.add(pt)
             
+    db.flush()
+    library_search.index_spotify_tracks(db, previous_track_ids | current_track_ids)
     db.commit()
     db.refresh(playlist)
     return playlist

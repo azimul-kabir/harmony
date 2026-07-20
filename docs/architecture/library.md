@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.6.0
+> Version: 1.7.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -418,6 +418,23 @@ Search operates only on the Library Index.
 
 Never search the filesystem.
 
+Harmony's first indexed search engine uses SQLite FTS5. `library_search` is a
+derived projection keyed by the stable Song ID; API results are always hydrated
+from canonical `songs`, `playlists`, and `playlist_tracks` records. The search
+projection contains no file paths and search execution performs no filesystem
+access.
+
+The FTS tokenizer is Unicode-aware, removes diacritics, and supports prefix
+matching across multiple terms. Results are ordered by BM25 relevance, then by
+stable Library metadata. Missing-file rows remain searchable only when the
+caller explicitly enables `include_missing`.
+
+The projection is maintained transactionally when a Song is indexed or
+re-indexed. Playlist synchronization refreshes only Songs associated with the
+changed playlist track IDs. The Alembic migration backfills existing libraries.
+`POST /api/library/search/rebuild` is an explicit repair operation; normal
+search and watcher activity never initiate a filesystem scan or full rebuild.
+
 Supported search fields
 
 Title
@@ -437,6 +454,18 @@ MusicBrainz ID
 ISRC
 
 Filename
+
+Search API:
+
+- `GET /api/library/search?q=...` returns ranked, paginated Song records.
+- Optional filters: artist, album, genre, playlist_id, year, min_bitrate,
+  max_bitrate, and include_missing.
+- `POST /api/library/search/rebuild` rebuilds the projection from database
+  records only.
+
+The web Library search box queries this API with a debounce and projects the
+ranked Song matches into the Songs, Albums, and Artists views. Collection names
+remain locally filtered UI navigation rather than FTS content.
 
 ---
 

@@ -3,7 +3,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from queue import Empty
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.database.models import Playlist, PlaylistTrack, Song
 from app.services.artwork import artwork_url, serialize_artwork
 from app.services.library_service import index_library_file, rescan_library
 from app.services.library_events import library_events
+from app.services.library_search import SearchFilters, library_search
 
 router = APIRouter(
     prefix="/api/library",
@@ -128,6 +129,73 @@ def list_songs(
         _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
         for song in songs
     ]
+
+
+@router.get("/search")
+def search_library(
+    q: str = Query(min_length=1, max_length=200),
+    db: Session = Depends(get_db),
+    artist: str | None = None,
+    album: str | None = None,
+    genre: str | None = None,
+    playlist_id: int | None = Query(default=None, ge=1),
+    year: int | None = Query(default=None, ge=0),
+    min_bitrate: int | None = Query(default=None, ge=0),
+    max_bitrate: int | None = Query(default=None, ge=0),
+    include_missing: bool = False,
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    page = library_search.search(
+        db,
+        q,
+        filters=SearchFilters(
+            artist=artist,
+            album=album,
+            genre=genre,
+            playlist_id=playlist_id,
+            year=year,
+            min_bitrate=min_bitrate,
+            max_bitrate=max_bitrate,
+            include_missing=include_missing,
+        ),
+        limit=limit,
+        offset=offset,
+    )
+    songs = db.scalars(select(Song).where(Song.id.in_(page.song_ids))).all()
+    songs_by_id = {song.id: song for song in songs}
+    ordered = [songs_by_id[song_id] for song_id in page.song_ids if song_id in songs_by_id]
+    source_map = _playlist_sources(
+        db,
+        {song.spotify_track_id for song in ordered if song.spotify_track_id},
+    )
+    return {
+        "query": q,
+        "items": [
+            _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
+            for song in ordered
+        ],
+        "total": page.total,
+        "limit": limit,
+        "offset": offset,
+        "filters": {
+            "artist": artist,
+            "album": album,
+            "genre": genre,
+            "playlist_id": playlist_id,
+            "year": year,
+            "min_bitrate": min_bitrate,
+            "max_bitrate": max_bitrate,
+            "include_missing": include_missing,
+        },
+    }
+
+
+@router.post("/search/rebuild")
+def rebuild_search(db: Session = Depends(get_db)):
+    indexed = library_search.rebuild(db)
+    db.commit()
+    return {"status": "ok", "indexed": indexed}
 
 
 @router.get("/events")
@@ -357,6 +425,8 @@ def delete_song(song_id: int, db: Session = Depends(get_db)):
             except OSError:
                 pass
         db.delete(song)
+        db.commit()
+        library_search.index_song(db, song_id)
         db.commit()
     return {"status": "success"}
 

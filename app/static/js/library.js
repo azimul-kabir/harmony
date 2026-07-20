@@ -11,6 +11,8 @@ const libraryState = {
     sort: "artist",
     query: "",
     collectionFilter: null,
+    searchTotal: 0,
+    searchRequest: 0,
     pages: { songs: 1, albums: 1, artists: 1 },
     pageSize: 24,
 };
@@ -48,9 +50,13 @@ async function loadLibraryData({ preserveState = false } = {}) {
         ]);
 
         Object.assign(libraryState, { songs, albums, artists, collections });
-        applyFilters();
         updateCounts();
-        renderActiveView();
+        if (libraryState.query.trim()) {
+            await performSearch();
+        } else {
+            applyFilters();
+            renderActiveView();
+        }
     } catch (error) {
         console.error("Library load error:", error);
         errorBox.textContent = "Harmony could not load the Library Index. Try again in a moment.";
@@ -76,6 +82,48 @@ function applyFilters() {
         String(artist.artist || "").toLocaleLowerCase().includes(query));
     libraryState.filteredCollections = libraryState.collections.filter((collection) => !query ||
         [collection.name, collection.description].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
+}
+
+async function performSearch() {
+    const query = libraryState.query.trim();
+    const status = document.getElementById("library-search-status");
+    const request = ++libraryState.searchRequest;
+    if (!query) {
+        libraryState.searchTotal = 0;
+        status.textContent = "";
+        applyFilters();
+        renderActiveView();
+        return;
+    }
+
+    status.textContent = "Searching the Library Index…";
+    try {
+        const result = await fetchJson(`/api/library/search?q=${encodeURIComponent(query)}&limit=500`);
+        if (request !== libraryState.searchRequest) return;
+
+        libraryState.searchTotal = result.total;
+        libraryState.filteredSongs = result.items.filter(songMatchesCollection);
+        const albums = new Set(result.items.map((song) => song.album || "Unknown Album"));
+        const artists = new Set(result.items.map((song) => song.artist || "Unknown Artist"));
+        libraryState.filteredAlbums = libraryState.albums.filter((album) => albums.has(album.album));
+        libraryState.filteredArtists = libraryState.artists.filter((artist) => artists.has(artist.artist));
+        libraryState.filteredCollections = libraryState.collections.filter((collection) =>
+            [collection.name, collection.description].some((value) =>
+                String(value || "").toLocaleLowerCase().includes(query.toLocaleLowerCase())));
+
+        const shown = result.items.length;
+        status.textContent = result.total > shown
+            ? `${result.total.toLocaleString()} matches · showing first ${shown.toLocaleString()}`
+            : `${result.total.toLocaleString()} ${result.total === 1 ? "match" : "matches"}`;
+        renderActiveView();
+    } catch (error) {
+        if (request !== libraryState.searchRequest) return;
+        console.error("Library search error:", error);
+        status.textContent = "Search unavailable";
+        const errorBox = document.getElementById("library-error");
+        errorBox.textContent = "Harmony could not search the Library Index. Try again in a moment.";
+        errorBox.hidden = false;
+    }
 }
 
 function songMatchesCollection(song) {
@@ -335,8 +383,7 @@ document.getElementById("library-search").addEventListener("input", (event) => {
     searchTimer = setTimeout(() => {
         libraryState.query = event.target.value;
         Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
-        applyFilters();
-        renderActiveView();
+        performSearch();
     }, 180);
 });
 

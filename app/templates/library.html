@@ -46,8 +46,9 @@
         <div class="library-toolbar">
             <label class="library-search" for="library-search">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-                <input id="library-search" type="search" placeholder="Search your library" autocomplete="off">
+                <input id="library-search" type="search" placeholder="Search songs, artists, albums, playlists…" autocomplete="off" aria-describedby="library-search-status">
             </label>
+            <span id="library-search-status" class="library-search-status" aria-live="polite"></span>
             <div class="library-toolbar-actions">
                 <button id="clear-collection" class="library-filter-chip" type="button" hidden>
                     <span id="collection-filter-name"></span>
