@@ -32,16 +32,16 @@
             </div>
         </div>
         
-        <div class="source-actions" style="margin-top: 16px; display: flex; gap: 8px;">
-            <button class="btn-secondary" disabled style="background: transparent;">Manage Tracks</button>
+        <div class="source-actions" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px;">
+            <button class="btn-secondary" disabled style="background: transparent; flex: 1; text-align: center;">Manage Tracks</button>
             
             <!-- NEW: Download Button -->
-            <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
+            <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary); flex: 1; text-align: center; white-space: nowrap;">
                 ⬇ Download .m3u
             </a>
 
             {% if p.navidrome_link %}
-            <a href="{{ p.navidrome_link }}" target="_blank" rel="noopener" class="btn-primary" style="text-decoration: none;">
+            <a href="{{ p.navidrome_link }}" target="_blank" rel="noopener" class="btn-primary" style="text-decoration: none; flex: 1 1 100%; text-align: center; padding: 8px 12px; margin-top: 4px;">
                 View in Navidrome
             </a>
             {% endif %}

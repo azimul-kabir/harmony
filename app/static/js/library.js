@@ -112,8 +112,8 @@ function renderAlbumsPage() {
     } else {
         grid.innerHTML = paginatedItems.map(album => {
             const coverImg = album.cover_url
-                ? `<img src="${album.cover_url}" alt="Cover" style="width: 100%; height: 150px; border-radius: 8px; object-fit: cover; margin-bottom: 12px;">`
-                : `<div style="width: 100%; height: 150px; border-radius: 8px; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
+                ? `<img src="${album.cover_url}" alt="Cover" style="width: 100%; aspect-ratio: 1/1; border-radius: 8px; object-fit: cover; margin-bottom: 12px;">`
+                : `<div style="width: 100%; aspect-ratio: 1/1; border-radius: 8px; background: var(--bg-surface-alt); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
 
             const naviAction = album.navidrome_link ? `<a href="${album.navidrome_link}" target="_blank" rel="noopener" class="btn-secondary" style="display: block; text-align: center; margin-top: 12px; text-decoration: none; padding: 6px;" onclick="event.stopPropagation()">Open in Navidrome</a>` : '';
 
