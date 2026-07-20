@@ -14,7 +14,7 @@ router = APIRouter(
 @router.get("/songs")
 def list_songs(
     db: Session = Depends(get_db),
-    sort_by: str = Query("artist", regex="^(artist|title|album|newest|duration|year)$"),
+    sort_by: str = "artist",
     genre: str | None = None,
 ):
     query = db.query(Song)
@@ -22,7 +22,7 @@ def list_songs(
     if genre:
         query = query.filter(func.lower(Song.genre) == genre.lower())
         
-    # Sorting logic
+    # Safe Sorting logic
     if sort_by == "title":
         query = query.order_by(Song.title.asc())
     elif sort_by == "album":
@@ -33,7 +33,7 @@ def list_songs(
         query = query.order_by(Song.duration.desc())
     elif sort_by == "year":
         query = query.order_by(Song.year.desc())
-    else:  # default artist sort
+    else:
         query = query.order_by(Song.artist.asc(), Song.album.asc(), Song.track.asc())
 
     songs = query.all()
