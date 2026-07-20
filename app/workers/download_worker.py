@@ -100,16 +100,23 @@ def process_job(
     
     output_file = None
     try:
+        # Build the Track domain object, carrying the cover_url and extended metadata forward
         track = Track(
             title=job.title,
             artist=job.artist,
-            spotify_url=job.spotify_url,
+            album=job.album,
+            album_artist=job.album_artist,
+            track=job.track,
+            cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
+            spotify_track_id=job.spotify_track_id, 
+            spotify_url=job.source_url, 
         )
         output_file = download_track(track)
         
         library_file = import_downloaded_track(
             db=db,
             downloaded_file=output_file,
+            cover_url=job.cover_url,  # <-- NEW: Pass to library import manager
         )
         job.output_file = str(library_file)
         job.error = None
