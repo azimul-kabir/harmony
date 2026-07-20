@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+import os
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import logger
+from app.core.time import utcnow_naive
 from app.database.crud import UpsertStatus, upsert_song
 from app.database.models import Song
 from app.services.artwork import ArtworkService, artwork_url
@@ -44,10 +46,11 @@ class ScanResult:
 def iter_music_files(root: Path):
     if not root.exists():
         return
-
-    for path in root.rglob("*"):
-        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
-            yield path
+    for directory, _, filenames in os.walk(root, followlinks=False):
+        base = Path(directory)
+        for filename in filenames:
+            if Path(filename).suffix.lower() in SUPPORTED_EXTENSIONS:
+                yield base / filename
 
 
 def index_file(
@@ -66,7 +69,7 @@ def index_file(
     if not path.is_file() or path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         if song is not None:
             song.availability_status = "missing"
-            song.last_indexed_at = datetime.now(UTC).replace(tzinfo=None)
+            song.last_indexed_at = utcnow_naive()
             if commit:
                 db.commit()
             return IndexResult(path=path_string, status="missing", song_id=song.id)
@@ -92,7 +95,7 @@ def index_file(
             "last_modified": datetime.fromtimestamp(stat.st_mtime, UTC).replace(
                 tzinfo=None
             ),
-            "last_indexed_at": datetime.now(UTC).replace(tzinfo=None),
+            "last_indexed_at": utcnow_naive(),
             "availability_status": "available",
         }
     )
@@ -175,19 +178,30 @@ def scan_library(
             result.failed += 1
             logger.exception("Failed to index {}", file)
 
-    existing = db.scalars(select(Song)).all()
-    now = datetime.now(UTC).replace(tzinfo=None)
-    for song in existing:
+    now = utcnow_naive()
+    missing_ids: list[int] = []
+    existing = db.execute(
+        select(Song.id, Song.path, Song.availability_status)
+        .execution_options(yield_per=1000)
+    )
+    for song_id, path, availability_status in existing:
         try:
-            song_path = Path(song.path).resolve()
+            song_path = Path(path).resolve()
             managed = song_path.is_relative_to(library_root)
         except (OSError, ValueError):
             managed = False
 
-        if managed and str(song_path) not in found and song.availability_status != "missing":
-            song.availability_status = "missing"
-            song.last_indexed_at = now
-            result.missing += 1
+        if managed and str(song_path) not in found and availability_status != "missing":
+            missing_ids.append(song_id)
+
+    for start in range(0, len(missing_ids), 500):
+        batch = missing_ids[start:start + 500]
+        db.execute(
+            update(Song)
+            .where(Song.id.in_(batch))
+            .values(availability_status="missing", last_indexed_at=now)
+        )
+    result.missing = len(missing_ids)
 
     db.commit()
     logger.info("Library indexing complete: {}", result.to_dict())

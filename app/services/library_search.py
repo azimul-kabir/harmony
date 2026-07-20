@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.database.models import Playlist, PlaylistTrack, Song
+from app.database.models import Song
 from app.services.library_filters import (
     LibraryFilters,
     raw_filter_clauses,
@@ -25,6 +25,7 @@ SEARCH_FIELDS = (
     "musicbrainz_id",
     "isrc",
 )
+SQLITE_PARAMETER_BATCH = 500
 
 CREATE_SEARCH_INDEX = """
 CREATE VIRTUAL TABLE IF NOT EXISTS library_search USING fts5(
@@ -60,63 +61,83 @@ class LibrarySearchService:
 
     def index_song(self, db: Session, song_id: int) -> None:
         self.ensure_schema(db)
-        song = db.get(Song, song_id)
-        db.execute(
-            text("DELETE FROM library_search WHERE song_id = :song_id"),
-            {"song_id": song_id},
-        )
-        if song is None:
-            return
-
-        playlists = db.scalars(
-            select(Playlist.name)
-            .join(PlaylistTrack, PlaylistTrack.playlist_id == Playlist.id)
-            .where(PlaylistTrack.spotify_track_id == song.spotify_track_id)
-            .order_by(Playlist.name)
-        ).all() if song.spotify_track_id else []
-
-        db.execute(
-            text(
-                """
-                INSERT INTO library_search (
-                    song_id, title, artist, album, genre, playlist, filename,
-                    spotify_id, musicbrainz_id, isrc
-                ) VALUES (
-                    :song_id, :title, :artist, :album, :genre, :playlist,
-                    :filename, :spotify_id, :musicbrainz_id, :isrc
-                )
-                """
-            ),
-            {
-                "song_id": song.id,
-                "title": song.title or "",
-                "artist": song.artist or "",
-                "album": song.album or "",
-                "genre": song.genre or "",
-                "playlist": " ".join(playlists),
-                "filename": song.filename or "",
-                "spotify_id": song.spotify_track_id or "",
-                "musicbrainz_id": song.musicbrainz_recording_id or "",
-                "isrc": song.isrc or "",
-            },
-        )
+        self._replace_projection(db, [song_id])
 
     def index_spotify_tracks(self, db: Session, spotify_track_ids: set[str]) -> None:
         if not spotify_track_ids:
             return
-        song_ids = db.scalars(
-            select(Song.id).where(Song.spotify_track_id.in_(spotify_track_ids))
-        ).all()
-        for song_id in song_ids:
-            self.index_song(db, song_id)
+        track_ids = tuple(spotify_track_ids)
+        for start in range(0, len(track_ids), SQLITE_PARAMETER_BATCH):
+            batch = track_ids[start:start + SQLITE_PARAMETER_BATCH]
+            song_ids = tuple(db.scalars(
+                select(Song.id).where(Song.spotify_track_id.in_(batch))
+            ))
+            self._replace_projection(db, song_ids)
 
     def rebuild(self, db: Session) -> int:
         self.ensure_schema(db)
         db.execute(text("DELETE FROM library_search"))
-        song_ids = db.scalars(select(Song.id).order_by(Song.id)).all()
-        for song_id in song_ids:
-            self.index_song(db, song_id)
-        return len(song_ids)
+        count = db.scalar(select(func.count(Song.id))) or 0
+        self._insert_projection(db)
+        return count
+
+    def _replace_projection(self, db: Session, song_ids: tuple[int, ...] | list[int]) -> None:
+        ids = tuple(song_ids)
+        if not ids:
+            return
+        for start in range(0, len(ids), SQLITE_PARAMETER_BATCH):
+            batch = ids[start:start + SQLITE_PARAMETER_BATCH]
+            placeholders = ", ".join(f":song_id_{index}" for index in range(len(batch)))
+            parameters = {f"song_id_{index}": song_id for index, song_id in enumerate(batch)}
+            db.execute(
+                text(f"DELETE FROM library_search WHERE song_id IN ({placeholders})"),
+                parameters,
+            )
+            self._insert_projection(
+                db,
+                where=f"WHERE songs.id IN ({placeholders})",
+                parameters=parameters,
+            )
+
+    def _insert_projection(
+        self,
+        db: Session,
+        *,
+        where: str = "",
+        parameters: dict[str, object] | None = None,
+    ) -> None:
+        db.execute(
+            text(
+                f"""
+                INSERT INTO library_search (
+                    song_id, title, artist, album, genre, playlist, filename,
+                    spotify_id, musicbrainz_id, isrc
+                )
+                SELECT
+                    songs.id,
+                    coalesce(songs.title, ''),
+                    coalesce(songs.artist, ''),
+                    coalesce(songs.album, ''),
+                    coalesce(songs.genre, ''),
+                    coalesce(playlist_sources.names, ''),
+                    coalesce(songs.filename, ''),
+                    coalesce(songs.spotify_track_id, ''),
+                    coalesce(songs.musicbrainz_recording_id, ''),
+                    coalesce(songs.isrc, '')
+                FROM songs
+                LEFT JOIN (
+                    SELECT playlist_tracks.spotify_track_id,
+                           group_concat(playlists.name, ' ') AS names
+                    FROM playlist_tracks
+                    JOIN playlists ON playlists.id = playlist_tracks.playlist_id
+                    GROUP BY playlist_tracks.spotify_track_id
+                ) AS playlist_sources
+                  ON playlist_sources.spotify_track_id = songs.spotify_track_id
+                {where}
+                """
+            ),
+            parameters or {},
+        )
 
     def search(
         self,

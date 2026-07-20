@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Literal
 
 from sqlalchemy import and_, false, func, or_, select
@@ -13,6 +13,7 @@ from app.services.library_filters import (
     apply_song_filters,
     apply_song_sort,
 )
+from app.core.time import utcnow_naive
 
 
 RuleOperator = Literal[
@@ -209,7 +210,7 @@ class CollectionEngine:
         if rule.operator == "missing":
             return or_(column.is_(None), column == "")
         if rule.operator == "within_days":
-            cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=int(rule.value))
+            cutoff = utcnow_naive() - timedelta(days=int(rule.value))
             return column >= cutoff
         if rule.operator == "maximum":
             candidate = aliased(Song)

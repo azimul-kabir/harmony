@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime
 from sqlalchemy import (
     Boolean,
     Column,
@@ -20,6 +20,7 @@ from app.domain.task import (
 )
 from app.database.base import Base
 from app.domain.download import JobStatus
+from app.core.time import utcnow_naive
 
 class Song(Base):
     __tablename__ = "songs"
@@ -70,7 +71,7 @@ class Song(Base):
         nullable=True,
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, index=True)
 
 
 class Artwork(Base):
@@ -87,9 +88,9 @@ class Artwork(Base):
     provider: Mapped[str | None] = mapped_column(String, nullable=True)
     provider_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     original_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow_naive, onupdate=utcnow_naive
     )
 
 class Task(Base):
@@ -106,7 +107,7 @@ class Task(Base):
     skipped_items: Mapped[int] = mapped_column(Integer, default=0)
     failed_items: Mapped[int] = mapped_column(Integer, default=0)
     current_item: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     operation_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -128,7 +129,7 @@ class BulkOperationItem(Base):
     result_path: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued", index=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     task: Mapped["Task"] = relationship(back_populates="bulk_items")
@@ -159,10 +160,10 @@ class DownloadJob(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
 
 class SyncSource(Base):
     __tablename__ = "sync_sources"
@@ -174,7 +175,7 @@ class SyncSource(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
 class Playlist(Base):
     __tablename__ = "playlists"
@@ -187,8 +188,8 @@ class Playlist(Base):
     owner: Mapped[str | None] = mapped_column(String, nullable=True)
     track_count: Mapped[int] = mapped_column(Integer, default=0)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
     tracks: Mapped[list["PlaylistTrack"]] = relationship(
         back_populates="playlist", 
         cascade="all, delete-orphan", 
@@ -200,7 +201,7 @@ class PlaylistTrack(Base):
     playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), primary_key=True)
     spotify_track_id: Mapped[str] = mapped_column(String, primary_key=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     playlist: Mapped["Playlist"] = relationship(back_populates="tracks")
 
 class AppSetting(Base):
@@ -209,4 +210,4 @@ class AppSetting(Base):
     value: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[str] = mapped_column(String, default="string")
     category: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)

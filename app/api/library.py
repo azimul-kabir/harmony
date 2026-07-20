@@ -1,6 +1,5 @@
 import os
 import json
-from datetime import UTC, datetime, timedelta
 from queue import Empty
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,8 +8,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
-from app.database.models import Playlist, PlaylistTrack, Song
-from app.services.artwork import artwork_url, serialize_artwork
+from app.database.models import Song
+from app.services.artwork import artwork_url
 from app.services.library_service import index_library_file, rescan_library
 from app.services.library_events import library_events
 from app.services.library_search import SearchFilters, library_search
@@ -21,6 +20,18 @@ from app.services.library_filters import (
 )
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
+from app.services.library_catalog import (
+    playlist_sources_for_tracks,
+    serialize_song,
+    serialize_song_page,
+    with_song_artwork,
+)
+from app.api.schemas.library import (
+    AlbumProjectionResponse,
+    ArtistProjectionResponse,
+    SearchPageResponse,
+    SongResponse,
+)
 
 router = APIRouter(
     prefix="/api/library",
@@ -34,76 +45,16 @@ class IndexFileRequest(BaseModel):
     download_source: str | None = None
 
 
-@router.get("/analytics")
+@router.get("/analytics", summary="Get Library analytics")
 def get_library_analytics(db: Session = Depends(get_db)):
     return library_analytics.calculate(db)
 
 
-def _playlist_sources(db: Session, spotify_track_ids: set[str]) -> dict[str, list[dict]]:
-    if not spotify_track_ids:
-        return {}
-
-    rows = db.execute(
-        select(
-            PlaylistTrack.spotify_track_id,
-            Playlist.id,
-            Playlist.name,
-            Playlist.spotify_id,
-        )
-        .join(Playlist, Playlist.id == PlaylistTrack.playlist_id)
-        .where(PlaylistTrack.spotify_track_id.in_(spotify_track_ids))
-        .order_by(Playlist.name)
-    ).all()
-
-    sources: dict[str, list[dict]] = {}
-    for spotify_track_id, playlist_id, name, spotify_id in rows:
-        sources.setdefault(spotify_track_id, []).append(
-            {"id": playlist_id, "name": name, "spotify_id": spotify_id}
-        )
-    return sources
+_playlist_sources = playlist_sources_for_tracks
+_serialize_song = serialize_song
 
 
-def _serialize_song(song: Song, playlist_sources: list[dict] | None = None) -> dict:
-    recently_added_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
-    return {
-        "id": song.id,
-        "path": song.path,
-        "filename": song.filename,
-        "artist": song.artist,
-        "album": song.album,
-        "album_artist": song.album_artist,
-        "title": song.title,
-        "track_number": song.track,
-        "disc_number": song.disc,
-        # Compatibility fields used by the current UI and API clients.
-        "track": song.track,
-        "disc": song.disc,
-        "genre": song.genre,
-        "year": song.year,
-        "duration": song.duration,
-        "bitrate": song.bitrate,
-        "codec": song.codec,
-        "sample_rate": song.sample_rate,
-        "file_size": song.file_size,
-        "artwork_status": song.artwork_status,
-        "artwork_id": song.artwork_id,
-        "artwork": serialize_artwork(song.artwork) if song.artwork else None,
-        "cover_url": artwork_url(song.artwork_id) or song.cover_url,
-        "date_added": song.created_at,
-        "recently_added": bool(
-            song.created_at and song.created_at >= recently_added_cutoff
-        ),
-        "last_modified": song.last_modified,
-        "last_indexed_at": song.last_indexed_at,
-        "availability_status": song.availability_status,
-        "spotify_track_id": song.spotify_track_id,
-        "musicbrainz_recording_id": song.musicbrainz_recording_id,
-        "isrc": song.isrc,
-        "download_source": song.download_source,
-        "playlist_sources": playlist_sources or [],
-    }
-
-@router.get("/songs")
+@router.get("/songs", response_model=list[SongResponse], summary="List indexed Songs")
 def list_songs(
     db: Session = Depends(get_db),
     sort_by: str = "artist",
@@ -120,6 +71,8 @@ def list_songs(
     missing_artwork: bool = False,
     missing_metadata: bool = False,
     include_missing: bool = False,
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ):
     filters = LibraryFilters(
         artist=artist,
@@ -137,22 +90,26 @@ def list_songs(
         include_missing=include_missing,
     )
     normalized_sort = "recently_added" if sort_by == "newest" else sort_by
-    query = apply_song_sort(
-        apply_song_filters(select(Song), filters),
-        normalized_sort,
+    query = with_song_artwork(
+        apply_song_sort(
+            apply_song_filters(select(Song), filters),
+            normalized_sort,
+        )
     )
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
     songs = db.scalars(query).all()
-    source_map = _playlist_sources(
-        db,
-        {song.spotify_track_id for song in songs if song.spotify_track_id},
-    )
-    return [
-        _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
-        for song in songs
-    ]
+    return serialize_song_page(db, songs)
 
 
-@router.get("/search")
+@router.get(
+    "/search",
+    response_model=SearchPageResponse,
+    summary="Search the Library Index",
+    description="Runs an FTS5 search without filesystem access and returns a bounded result page.",
+)
 def search_library(
     q: str = Query(min_length=1, max_length=200),
     db: Session = Depends(get_db),
@@ -195,19 +152,14 @@ def search_library(
         limit=limit,
         offset=offset,
     )
-    songs = db.scalars(select(Song).where(Song.id.in_(page.song_ids))).all()
+    songs = db.scalars(
+        with_song_artwork(select(Song).where(Song.id.in_(page.song_ids)))
+    ).all()
     songs_by_id = {song.id: song for song in songs}
     ordered = [songs_by_id[song_id] for song_id in page.song_ids if song_id in songs_by_id]
-    source_map = _playlist_sources(
-        db,
-        {song.spotify_track_id for song in ordered if song.spotify_track_id},
-    )
     return {
         "query": q,
-        "items": [
-            _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
-            for song in ordered
-        ],
+        "items": serialize_song_page(db, ordered),
         "total": page.total,
         "limit": limit,
         "offset": offset,
@@ -229,7 +181,7 @@ def search_library(
     }
 
 
-@router.get("/filter-options")
+@router.get("/filter-options", summary="List indexed filter values")
 def library_filter_options(db: Session = Depends(get_db)):
     available = Song.availability_status == "available"
 
@@ -257,14 +209,14 @@ def library_filter_options(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/search/rebuild")
+@router.post("/search/rebuild", summary="Rebuild the derived search projection")
 def rebuild_search(db: Session = Depends(get_db)):
     indexed = library_search.rebuild(db)
     db.commit()
     return {"status": "ok", "indexed": indexed}
 
 
-@router.get("/events")
+@router.get("/events", summary="Stream transient Library events")
 def stream_library_events():
     subscriber = library_events.subscribe()
 
@@ -294,37 +246,49 @@ def stream_library_events():
     )
 
 
-@router.get("/songs/{song_id}")
+@router.get("/songs/{song_id}", response_model=SongResponse, summary="Get one indexed Song")
 def get_song(song_id: int, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
     if song is None:
         raise HTTPException(status_code=404, detail="Song not found")
 
-    sources = _playlist_sources(
+    sources = playlist_sources_for_tracks(
         db,
         {song.spotify_track_id} if song.spotify_track_id else set(),
     )
-    return _serialize_song(song, sources.get(song.spotify_track_id or "", []))
+    return serialize_song(song, sources.get(song.spotify_track_id or "", []))
 
 
-@router.get("/albums")
-def list_albums(db: Session = Depends(get_db)):
+@router.get(
+    "/albums",
+    response_model=list[AlbumProjectionResponse],
+    summary="List indexed album projections",
+)
+def list_albums(
+    db: Session = Depends(get_db),
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
     """Group songs by album to power the Albums view mode."""
-    albums_query = (
-        db.query(
+    statement = (
+        select(
             Song.album,
             Song.album_artist,
             func.max(Song.artist).label("artist"),
             func.max(Song.cover_url).label("cover_url"),
             func.max(Song.artwork_id).label("artwork_id"),
             func.count(Song.id).label("track_count"),
-            func.sum(Song.duration).label("total_duration")
+            func.sum(Song.duration).label("total_duration"),
         )
-        .filter(Song.availability_status == "available")
+        .where(Song.availability_status == "available")
         .group_by(Song.album, Song.album_artist)
         .order_by(Song.album.asc())
-        .all()
     )
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    albums_query = db.execute(statement).all()
     
     return [
         {
@@ -332,46 +296,58 @@ def list_albums(db: Session = Depends(get_db)):
             "artist": a.album_artist or a.artist or "Unknown Artist",
             "cover_url": artwork_url(a.artwork_id) or a.cover_url,
             "track_count": a.track_count,
-            "total_duration": round(a.total_duration / 60, 1) if a.total_duration else 0
+            "total_duration": round(a.total_duration / 60, 1) if a.total_duration else 0,
         }
         for a in albums_query
     ]
 
 
-@router.get("/artists")
-def list_artists(db: Session = Depends(get_db)):
+@router.get(
+    "/artists",
+    response_model=list[ArtistProjectionResponse],
+    summary="List indexed artist projections",
+)
+def list_artists(
+    db: Session = Depends(get_db),
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
     """Group songs by artist to power the Artists view mode."""
-    artists_query = (
-        db.query(
+    statement = (
+        select(
             Song.artist,
             func.count(Song.id).label("song_count"),
             func.count(func.distinct(Song.album)).label("album_count"),
             func.max(Song.cover_url).label("cover_url"),
             func.max(Song.artwork_id).label("artwork_id"),
         )
-        .filter(Song.availability_status == "available")
+        .where(Song.availability_status == "available")
         .group_by(Song.artist)
         .order_by(Song.artist.asc())
-        .all()
     )
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    artists_query = db.execute(statement).all()
     
     return [
         {
             "artist": art.artist or "Unknown Artist",
             "song_count": art.song_count,
             "album_count": art.album_count,
-            "cover_url": artwork_url(art.artwork_id) or art.cover_url
+            "cover_url": artwork_url(art.artwork_id) or art.cover_url,
         }
         for art in artists_query
     ]
 
 
-@router.get("/collections")
+@router.get("/collections", summary="List Smart Collection definitions and counts")
 def list_collections(db: Session = Depends(get_db)):
     return collection_engine.summaries(db)
 
 
-@router.get("/collections/{collection_id}")
+@router.get("/collections/{collection_id}", summary="Get a Smart Collection definition")
 def get_collection(collection_id: str, db: Session = Depends(get_db)):
     definition = collection_engine.get(collection_id)
     if definition is None:
@@ -379,7 +355,7 @@ def get_collection(collection_id: str, db: Session = Depends(get_db)):
     return definition.to_dict(song_count=collection_engine.count(db, collection_id))
 
 
-@router.get("/collections/{collection_id}/songs")
+@router.get("/collections/{collection_id}/songs", summary="List Songs in a Smart Collection")
 def get_collection_songs(
     collection_id: str,
     db: Session = Depends(get_db),
@@ -394,6 +370,8 @@ def get_collection_songs(
     recently_added: bool = False,
     missing_artwork: bool = False,
     missing_metadata: bool = False,
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ):
     definition = collection_engine.get(collection_id)
     if definition is None:
@@ -410,53 +388,66 @@ def get_collection_songs(
         missing_artwork=missing_artwork,
         missing_metadata=missing_metadata,
     )
-    songs = db.scalars(
-        collection_engine.statement(
-            collection_id,
-            filters=filters,
-            sort_by=sort_by,
-        )
-    ).all()
-    source_map = _playlist_sources(
-        db,
-        {song.spotify_track_id for song in songs if song.spotify_track_id},
+    statement = collection_engine.statement(
+        collection_id,
+        filters=filters,
+        sort_by=sort_by,
     )
+    total = db.scalar(
+        select(func.count()).select_from(statement.order_by(None).subquery())
+    ) or 0
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    songs = db.scalars(with_song_artwork(statement)).all()
     return {
-        "collection": definition.to_dict(song_count=len(songs)),
-        "items": [
-            _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
-            for song in songs
-        ],
-        "total": len(songs),
+        "collection": definition.to_dict(song_count=total),
+        "items": serialize_song_page(db, songs),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 
-@router.get("/genres")
+@router.get("/genres", summary="List indexed genres")
 def list_genres(db: Session = Depends(get_db)):
     """Retrieve available genres for filtering."""
-    genres = (
-        db.query(Song.genre)
-        .filter(
-            Song.genre != None,
+    genres = db.scalars(
+        select(Song.genre)
+        .where(
+            Song.genre.is_not(None),
             Song.availability_status == "available",
         )
         .distinct()
-        .all()
-    )
-    return sorted([g[0] for g in genres if g[0]])
+    ).all()
+    return sorted(genre for genre in genres if genre)
 
 
-@router.get("/missing")
-def list_missing_files(db: Session = Depends(get_db)):
-    songs = db.scalars(
+@router.get(
+    "/missing",
+    response_model=list[SongResponse],
+    summary="List retained missing-file records",
+)
+def list_missing_files(
+    db: Session = Depends(get_db),
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
+    statement = (
         select(Song)
         .where(Song.availability_status == "missing")
         .order_by(Song.path)
-    ).all()
-    return [_serialize_song(song) for song in songs]
+    )
+    if offset:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+    songs = db.scalars(with_song_artwork(statement)).all()
+    return serialize_song_page(db, songs)
 
 
-@router.post("/index")
+@router.post("/index", summary="Incrementally index one managed file")
 def index_file(request: IndexFileRequest, db: Session = Depends(get_db)):
     try:
         result = index_library_file(
@@ -476,7 +467,7 @@ def index_file(request: IndexFileRequest, db: Session = Depends(get_db)):
     }
 
 
-@router.delete("/song/{song_id}")
+@router.delete("/song/{song_id}", summary="Delete one Song file")
 def delete_song(song_id: int, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
     if song:
@@ -492,7 +483,7 @@ def delete_song(song_id: int, db: Session = Depends(get_db)):
     return {"status": "success"}
 
 
-@router.post("/rescan")
+@router.post("/rescan", summary="Reconcile the configured music folder")
 def rescan(force: bool = False):
     db = SessionLocal()
     try:
@@ -502,7 +493,7 @@ def rescan(force: bool = False):
         db.close()
 
 
-@router.post("/reindex")
+@router.post("/reindex", summary="Force a complete Library re-index")
 def reindex():
     db = SessionLocal()
     try:

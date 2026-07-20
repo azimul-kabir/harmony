@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import threading
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import logger
+from app.core.time import utcnow_naive
 from app.database.models import Artwork, Song, Task
 from app.database.session import SessionLocal
+from app.database.pagination import iter_primary_keys
 from app.domain.task import TaskStatus, TaskType
 from app.services.library_analytics import library_analytics
 from app.services.library_events import library_events
 from app.services.library_scanner import index_file, scan_library
 from app.services.library_search import library_search
+from app.services.library_predicates import missing_metadata_expression
 from app.services.task_service import create_task
 
 
@@ -28,21 +30,13 @@ HEALTH_ACTIONS = {
 }
 
 
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
-
 class LibraryHealthService:
     """Index-only health metrics with stable extension points for future checks."""
 
     def calculate(self, db: Session) -> dict:
         analytics = library_analytics.calculate(db)
         available = Song.availability_status == "available"
-        missing_metadata_clause = or_(
-            Song.title.is_(None), Song.title == "",
-            Song.artist.is_(None), Song.artist == "",
-            Song.album.is_(None), Song.album == "",
-        )
+        missing_metadata_clause = missing_metadata_expression()
         row = db.execute(
             select(
                 func.coalesce(func.sum(
@@ -196,7 +190,7 @@ class LibraryMaintenanceWorker:
         task.failed_items = 0
         task.skipped_items = 0
         task.status = TaskStatus.RUNNING.value
-        task.started_at = task.started_at or utcnow()
+        task.started_at = task.started_at or utcnow_naive()
         db.commit()
         try:
             if action == "refresh":
@@ -228,16 +222,15 @@ class LibraryMaintenanceWorker:
             if task.status == TaskStatus.RUNNING.value:
                 task.status = TaskStatus.COMPLETED.value
         task.current_item = None
-        task.completed_at = utcnow()
+        task.completed_at = utcnow_naive()
         db.commit()
         library_events.publish("library.health.updated", action=action, task_id=task.id)
 
     def _verify(self, db: Session, task: Task) -> None:
-        song_ids = db.scalars(select(Song.id).order_by(Song.id)).all()
-        if not song_ids:
-            task.completed_items = task.total_items
-            return
+        song_ids = iter_primary_keys(db, Song)
+        processed_any = False
         for song_id in song_ids:
+            processed_any = True
             db.refresh(task)
             if task.status == TaskStatus.CANCELLED.value or self._stop.is_set():
                 if self._stop.is_set() and task.status != TaskStatus.CANCELLED.value:
@@ -257,10 +250,13 @@ class LibraryMaintenanceWorker:
                 task = db.get(Task, task.id)
                 task.failed_items += 1
             db.commit()
+        if not processed_any:
+            task.completed_items = task.total_items
 
     def _clear_artwork(self, db: Session, task: Task) -> None:
-        artwork_ids = db.scalars(select(Artwork.id).order_by(Artwork.id)).all()
-        for artwork_id in artwork_ids:
+        processed_any = False
+        for artwork_id in iter_primary_keys(db, Artwork):
+            processed_any = True
             db.refresh(task)
             if task.status == TaskStatus.CANCELLED.value or self._stop.is_set():
                 if self._stop.is_set() and task.status != TaskStatus.CANCELLED.value:
@@ -286,7 +282,7 @@ class LibraryMaintenanceWorker:
                 task = db.get(Task, task.id)
                 task.failed_items += 1
             db.commit()
-        if not artwork_ids:
+        if not processed_any:
             task.completed_items = task.total_items
 
 

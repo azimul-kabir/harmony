@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import base64
 from hashlib import sha256
+import os
 from pathlib import Path
 import struct
 
@@ -163,21 +164,22 @@ class ArtworkService:
         return None
 
     def _folder_candidate(self, directory: Path) -> ArtworkCandidate | None:
-        available = {
-            item.name.casefold(): item
-            for item in directory.iterdir()
-            if item.is_file()
+        expected = {
+            f"{stem}{extension}".casefold(): extension
+            for stem in FOLDER_ARTWORK_NAMES
+            for extension in IMAGE_EXTENSIONS
         }
-        for stem in FOLDER_ARTWORK_NAMES:
-            for extension in IMAGE_EXTENSIONS:
-                candidate = available.get(f"{stem}{extension}".casefold())
-                if candidate is not None:
-                    data = candidate.read_bytes()
-                    return ArtworkCandidate(
-                        data=data,
-                        mime_type=_sniff_mime(data, extension),
-                        source="folder",
-                    )
+        candidates: dict[str, Path] = {}
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                name = entry.name.casefold()
+                if name in expected and entry.is_file(follow_symlinks=False):
+                    candidates[name] = Path(entry.path)
+        for name, extension in expected.items():
+            candidate = candidates.get(name)
+            if candidate is not None:
+                data = candidate.read_bytes()
+                return ArtworkCandidate(data, _sniff_mime(data, extension), "folder")
         return None
 
 

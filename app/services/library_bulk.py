@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import re
@@ -13,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import logger
+from app.core.time import utcnow_naive
 from app.database.models import BulkOperationItem, Song, Task
 from app.database.session import SessionLocal
 from app.domain.task import TaskStatus, TaskType
@@ -32,10 +32,6 @@ OPERATIONS = {
 }
 TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled"}
 INVALID_FILENAME = re.compile(r"[\\/:*?\"<>|\x00-\x1f]")
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def create_bulk_task(
@@ -156,7 +152,7 @@ class LibraryBulkWorker:
         operation = payload.get("operation")
         options = payload.get("options") or {}
         task.status = TaskStatus.RUNNING.value
-        task.started_at = task.started_at or utcnow()
+        task.started_at = task.started_at or utcnow_naive()
         db.commit()
 
         archive: zipfile.ZipFile | None = None
@@ -186,7 +182,7 @@ class LibraryBulkWorker:
                     return
 
                 item.status = "running"
-                item.started_at = utcnow()
+                item.started_at = utcnow_naive()
                 task.current_item = Path(item.original_path).name
                 db.commit()
                 try:
@@ -201,7 +197,7 @@ class LibraryBulkWorker:
                     item.error = str(error)
                     task.failed_items += 1
                     logger.exception("Library bulk task {} failed for {}", task.id, item.original_path)
-                item.completed_at = utcnow()
+                item.completed_at = utcnow_naive()
                 db.commit()
         finally:
             if archive is not None:
@@ -212,7 +208,7 @@ class LibraryBulkWorker:
             self._cancel_remaining(db, task)
             return
         task.current_item = None
-        task.completed_at = utcnow()
+        task.completed_at = utcnow_naive()
         task.status = (
             TaskStatus.FAILED.value if task.failed_items else TaskStatus.COMPLETED.value
         )
@@ -231,7 +227,7 @@ class LibraryBulkWorker:
                 BulkOperationItem.status == "queued",
             )
         ).all()
-        now = utcnow()
+        now = utcnow_naive()
         for item in remaining:
             item.status = "cancelled"
             item.completed_at = now

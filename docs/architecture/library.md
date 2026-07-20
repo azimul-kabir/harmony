@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.12.0
+> Version: 1.13.0
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -105,22 +105,27 @@ Represents one audio file.
 Fields
 
 - id
+- path
+- filename
+- artist
+- album
+- album_artist
 - title
-- artist_id
-- album_id
 - track_number
 - disc_number
+- genre
+- year
 - duration
 - bitrate
 - codec
 - sample_rate
 - file_size
-- path
-- filename
 - date_added
 - last_modified
 - artwork_id
-- metadata_status
+- artwork_status
+- availability_status
+- download_source
 
 External IDs
 
@@ -152,44 +157,18 @@ Playlist References
 
 ## Album
 
-Fields
-
-- id
-- title
-- artist_id
-- year
-- genre
-- artwork_id
-
-External IDs
-
-- spotify_album_id
-- musicbrainz_release_id
-
-Contains
-
-Many Songs
+Album is currently a grouped read projection over canonical Song rows, keyed by
+album name and coalesced album artist. It is not a persistent table or identity.
+A future normalized Album entity must be introduced through an additive
+migration and preserve Song IDs and existing read contracts.
 
 ---
 
 ## Artist
 
-Fields
-
-- id
-- name
-- sort_name
-
-External IDs
-
-- spotify_artist_id
-- musicbrainz_artist_id
-
-Contains
-
-Many Albums
-
-Many Songs
+Artist is currently a grouped read projection over canonical Song rows. Future
+MusicBrainz artist identities and aliases belong in a normalized additive
+entity; provider-specific IDs must not become the Library's internal identity.
 
 ---
 
@@ -277,6 +256,23 @@ ImportService
 ```
 
 Each service should have a single responsibility.
+
+Current canonical boundaries:
+
+- `library_scanner`: filesystem discovery and canonical Song upsert.
+- `library_catalog`: typed read-model serialization, eager artwork loading, and
+  batched playlist provenance for APIs and future integrations.
+- `library_search`: transactional FTS projection maintenance and bounded search.
+- `library_filters`: composable query filters and stable sorting.
+- `library_predicates`: shared semantic SQL definitions such as missing metadata.
+- `collections`, `library_analytics`, and `library_health`: index-only projections.
+- `artwork`: content-addressed local artwork detection and storage.
+- `library_bulk` and `library_health`: task-backed filesystem orchestration.
+- `task_progress`: the shared durable-task API contract.
+
+`library_service`, `scanner`, and `library_manager` remain compatibility facades.
+New code must depend on the canonical services above rather than add another
+parallel scanner, serializer, path builder, or task response format.
 
 ---
 
@@ -805,6 +801,47 @@ Support
 10,000+ albums
 
 5,000+ artists
+
+## Large Library Query Policy
+
+The supported design target is at least 100,000 Songs. Services must therefore:
+
+- Use keyset or bounded offset pagination for background iteration and public
+  endpoints. List endpoints accept optional `limit` (maximum 1,000) and
+  `offset`; existing unbounded defaults remain only for client compatibility.
+- Never rebuild FTS one Song at a time. Rebuild uses one `INSERT ... SELECT`
+  projection with playlist names pre-aggregated once; incremental updates use
+  SQLite-safe batches of at most 500 identifiers.
+- Eager-load the to-one Artwork relationship and batch playlist provenance once
+  per bounded result page, avoiding serializer N+1 queries.
+- Stream scan reconciliation rows in bounded chunks. The discovery path set is
+  the only scan-wide in-memory structure and stores strings, not ORM entities.
+- Use keyset primary-key iteration for verification and cache maintenance so
+  worker memory does not grow with library size.
+- Avoid building full directory-entry maps during artwork discovery; retain only
+  the fixed set of supported candidate filenames.
+
+Automated coverage asserts that rebuilding 2,500 FTS rows uses a constant number
+of SQL statements. Performance-sensitive changes should preserve set-based
+plans and be profiled against a generated 100,000-row SQLite fixture.
+
+## API Contracts and Extension Compatibility
+
+FastAPI response models in `app/api/schemas/library.py` document task, bulk, and
+health contracts in OpenAPI. Every Library route has a stable summary; bounded
+search responses always expose total, limit, offset, filters, and hydrated Song
+read models. Internal filesystem paths remain present for backward compatibility
+but should be access-controlled before exposing Harmony outside a trusted host.
+
+External systems integrate through provider-neutral boundaries:
+
+- MusicBrainz and metadata repair write canonical fields through the index/upsert
+  service and store provider provenance separately when that schema is added.
+- YouTube Music is a download source value, never a Library identity.
+- Duplicate detection consumes stable Song read models and external identifiers
+  without changing search or collection ownership.
+- Navidrome consumes available indexed paths and events; it does not write Song
+  rows directly.
 
 ---
 

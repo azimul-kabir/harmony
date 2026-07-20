@@ -12,6 +12,8 @@ from app.database.session import get_db
 from app.domain.task import TaskStatus, TaskType
 from app.services.library_bulk import create_bulk_task
 from app.services.task_service import cancel_task
+from app.services.task_progress import get_typed_task, serialize_task_progress
+from app.api.schemas.library import BulkTaskResponse
 
 
 router = APIRouter(prefix="/api/library/bulk", tags=["library", "tasks"])
@@ -31,8 +33,8 @@ class BulkOperationRequest(BaseModel):
 
 
 def _get_bulk_task(db: Session, task_id: int) -> Task:
-    task = db.get(Task, task_id)
-    if task is None or task.task_type != TaskType.LIBRARY_BULK.value:
+    task = get_typed_task(db, task_id, TaskType.LIBRARY_BULK)
+    if task is None:
         raise HTTPException(status_code=404, detail="Bulk task not found")
     return task
 
@@ -43,22 +45,8 @@ def serialize_bulk_task(db: Session, task: Task) -> dict:
         .where(BulkOperationItem.task_id == task.id)
         .order_by(BulkOperationItem.id)
     ).all()
-    processed = task.completed_items + task.failed_items + task.skipped_items
     return {
-        "id": task.id,
-        "name": task.name,
-        "type": task.task_type,
-        "status": task.status,
-        "total": task.total_items,
-        "completed": task.completed_items,
-        "failed": task.failed_items,
-        "skipped": task.skipped_items,
-        "processed": processed,
-        "progress": round((processed / task.total_items) * 100, 1) if task.total_items else 100,
-        "current": task.current_item,
-        "created_at": task.created_at,
-        "started_at": task.started_at,
-        "completed_at": task.completed_at,
+        **serialize_task_progress(task),
         "download_url": f"/api/library/bulk/{task.id}/export" if task.output_path else None,
         "items": [
             {
@@ -74,7 +62,12 @@ def serialize_bulk_task(db: Session, task: Task) -> dict:
     }
 
 
-@router.post("")
+@router.post(
+    "",
+    response_model=BulkTaskResponse,
+    summary="Queue a Library bulk operation",
+    description="Creates a durable asynchronous task with one independently recoverable item per Song.",
+)
 def start_bulk_operation(request: BulkOperationRequest, db: Session = Depends(get_db)):
     try:
         task = create_bulk_task(
@@ -88,19 +81,19 @@ def start_bulk_operation(request: BulkOperationRequest, db: Session = Depends(ge
     return serialize_bulk_task(db, task)
 
 
-@router.get("/{task_id}")
+@router.get("/{task_id}", response_model=BulkTaskResponse, summary="Get bulk-operation progress")
 def get_bulk_operation(task_id: int, db: Session = Depends(get_db)):
     return serialize_bulk_task(db, _get_bulk_task(db, task_id))
 
 
-@router.post("/{task_id}/cancel")
+@router.post("/{task_id}/cancel", response_model=BulkTaskResponse, summary="Cancel a bulk operation")
 def cancel_bulk_operation(task_id: int, db: Session = Depends(get_db)):
     task = _get_bulk_task(db, task_id)
     cancel_task(db, task)
     return serialize_bulk_task(db, task)
 
 
-@router.get("/{task_id}/export")
+@router.get("/{task_id}/export", summary="Download a completed Library export")
 def download_bulk_export(task_id: int, db: Session = Depends(get_db)):
     task = _get_bulk_task(db, task_id)
     if task.status not in {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value}:

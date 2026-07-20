@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
 from app.api.library import search_library
@@ -115,3 +115,37 @@ def test_search_api_supports_structured_filters():
         assert response["total"] == 1
         assert response["items"][0]["id"] == first.id
         assert response["items"][0]["playlist_sources"][0]["name"] == "Night Drive"
+
+
+def test_search_rebuild_is_set_based_not_one_query_per_song():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add_all([
+            Song(
+                path=f"/music/scale-{index}.flac",
+                filename=f"scale-{index}.flac",
+                title=f"Scale {index}",
+                artist="Load Test",
+                album="Large Library",
+                availability_status="available",
+            )
+            for index in range(2500)
+        ])
+        db.commit()
+
+        statements = 0
+
+        def count_statement(*_):
+            nonlocal statements
+            statements += 1
+
+        event.listen(engine, "before_cursor_execute", count_statement)
+        try:
+            indexed = library_search.rebuild(db)
+        finally:
+            event.remove(engine, "before_cursor_execute", count_statement)
+
+        assert indexed == 2500
+        assert statements <= 5
+        assert library_search.search(db, "Scale 2499").total == 1

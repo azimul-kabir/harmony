@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, select
 
 from app.database.models import PlaylistTrack, Song
+from app.services.library_predicates import missing_metadata_expression
+from app.core.time import utcnow_naive
 
 
 RECENT_DAYS = 7
@@ -29,12 +31,11 @@ class LibraryFilters:
 
 
 def utc_day_start() -> datetime:
-    now = datetime.now(UTC)
-    return now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    return utcnow_naive().replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def recent_cutoff() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=RECENT_DAYS)
+    return utcnow_naive() - timedelta(days=RECENT_DAYS)
 
 
 def apply_song_filters(statement: Select, filters: LibraryFilters) -> Select:
@@ -59,13 +60,7 @@ def apply_song_filters(statement: Select, filters: LibraryFilters) -> Select:
     if filters.missing_artwork:
         statement = statement.where(Song.artwork_status == "missing")
     if filters.missing_metadata:
-        statement = statement.where(
-            or_(
-                Song.title.is_(None), Song.title == "",
-                Song.artist.is_(None), Song.artist == "",
-                Song.album.is_(None), Song.album == "",
-            )
-        )
+        statement = statement.where(missing_metadata_expression())
     if filters.playlist_id is not None:
         statement = statement.where(
             select(PlaylistTrack.spotify_track_id).where(
