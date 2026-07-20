@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["library"],
 )
 
-# --- Management: Deletions ---
+# Inside app/api/library.py, update the list_songs function:
 @router.get("/songs")
 def list_songs(db: Session = Depends(get_db)):
     songs = db.query(Song).all()
@@ -22,7 +22,8 @@ def list_songs(db: Session = Depends(get_db)):
             "artist": s.artist, 
             "album": s.album,
             "filename": s.filename,
-            "path": s.path
+            "path": s.path,
+            "cover_url": s.cover_url  # <-- NEW: Expose the artwork
         } 
         for s in songs
     ]
