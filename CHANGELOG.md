@@ -6,6 +6,32 @@ The format is based on **Keep a Changelog**, and this project follows **Semantic
 
 ---
 
+## [v1.4.0] - 2026-07-20
+
+This release significantly enhances Harmony's Library, transforming it into a modern music collection manager with multiple browsing modes, advanced search, flexible sorting, and an improved mobile experience.
+
+### Added
+
+- **Multiple Library Views:** Added **Songs**, **Albums**, and **Artists** tabs for browsing the library in different ways.
+- **Album View:** Introduced a visual album grid with artwork, track counts, durations, and click-to-filter functionality.
+- **Artist View:** Added artist cards displaying song and album counts with click-to-filter support.
+- **Advanced Sorting:** Added sorting by Artist, Song Name, Album, Newest Added, Duration, and Year.
+- **Unified Library Search:** Enhanced search to match song titles, artists, albums, genres, and filenames.
+- **Tab-Aware Pagination:** Added dedicated pagination for Songs, Albums, and Artists views for improved performance with large libraries.
+
+### Changed
+
+- **Responsive Layouts:** Redesigned library grids for improved desktop and mobile browsing.
+- **Mobile UI:** Improved typography and multi-line text wrapping for long artist and album names.
+- **Library Navigation:** Enhanced view switching while preserving search, sorting, and pagination state.
+
+### Performance
+
+- Optimized library rendering for smoother scrolling and faster page updates.
+- Improved pagination performance and reduced browser memory usage for large music collections.
+
+---
+
 ## [v1.3.0] - 2026-07-19
 
 This release focuses on usability, reliability, and playlist management improvements. Harmony introduces configurable audio quality, direct playlist downloads, improved Unicode support, and numerous backend refinements for a smoother synchronization experience.
