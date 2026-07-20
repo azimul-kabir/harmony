@@ -652,3 +652,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         width: 100% !important;
     }
 }
+
+/* --- Fix Library Grid & Card Overflow on Mobile --- */
+@media (max-width: 768px) {
+    .sources-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .sources-grid .source-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+    }
+
+    #view-albums .sources-grid .source-card img,
+    #view-albums .sources-grid .source-card div[style*="height"] {
+        height: 140px !important;
+        width: 100% !important;
+    }
+}
