@@ -36,6 +36,8 @@ async function loadLibrary() {
     }
 }
 
+// Inside app/static/js/library.js, replace your renderPage() function with this:
+
 function renderPage() {
     const tbody = document.getElementById("library-body");
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -51,24 +53,35 @@ function renderPage() {
             </tr>
         `;
     } else {
-        tbody.innerHTML = paginatedItems.map(s => `
+        tbody.innerHTML = paginatedItems.map(s => {
+            // NEW: Artwork HTML Generation
+            const coverImg = s.cover_url
+                ? `<img src="${s.cover_url}" alt="Cover" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`
+                : `<div style="width: 40px; height: 40px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
+
+            return `
             <tr>
-                <td style="padding-left: 24px;">
+                <td style="padding-left: 24px; vertical-align: middle;">
                     <input type="checkbox" class="song-check" data-id="${s.id}" style="cursor: pointer;">
                 </td>
                 <td style="font-weight: 600; color: var(--text-main);">
-                    ${s.title || 'Unknown Title'}
-                    ${!s.title && s.filename ? `<div style="font-size: 0.8rem; font-weight: normal; color: #dc3545; margin-top: 4px; word-break: break-all;">📁 ${s.filename}</div>` : ''}
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        ${coverImg}
+                        <div style="display: flex; flex-direction: column; justify-content: center;">
+                            <span style="font-size: 1.05rem;">${s.title || 'Unknown Title'}</span>
+                            ${!s.title && s.filename ? `<span style="font-size: 0.8rem; font-weight: normal; color: var(--danger); margin-top: 2px; word-break: break-all;">${s.filename}</span>` : ''}
+                        </div>
+                    </div>
                 </td>
-                <td style="color: var(--text-muted);">${s.artist || 'Unknown Artist'}</td>
-                <td style="color: var(--text-muted);">${s.album || 'Unknown Album'}</td>
+                <td style="color: var(--text-muted); vertical-align: middle;">${s.artist || 'Unknown Artist'}</td>
+                <td style="color: var(--text-muted); vertical-align: middle;">${s.album || 'Unknown Album'}</td>
             </tr>
-        `).join("");
+            `;
+        }).join("");
     }
 
     updatePaginationUI();
     
-    // Reset master checkbox state
     const selectAll = document.getElementById("select-all");
     if(selectAll) selectAll.checked = false;
     document.getElementById("delete-selected").disabled = true;
