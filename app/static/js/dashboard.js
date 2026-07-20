@@ -29,6 +29,8 @@ function renderStats(stats) {
     document.getElementById("card-failed").textContent = stats.failed;
 }
 
+// Inside app/static/js/dashboard.js, update renderWorkers() and renderActivity():
+
 function renderWorkers(workers, maxWorkers) {
     const container = document.getElementById("workers-grid");
     const badge = document.getElementById("worker-count-badge");
@@ -45,26 +47,34 @@ function renderWorkers(workers, maxWorkers) {
     }
 
     let html = "";
-    // Build a visual card for every allowed worker thread
     for (let i = 0; i < maxWorkers; i++) {
         if (i < workers.length) {
-            // Worker is actively downloading
             const worker = workers[i];
+            
+            // NEW: Artwork HTML Generation
+            const coverImg = worker.cover_url
+                ? `<img src="${worker.cover_url}" alt="Cover" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`
+                : `<div style="width: 48px; height: 48px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
+
             html += `
                 <div class="worker-card">
-                    <div class="worker-header">
+                    <div class="worker-header" style="margin-bottom: 12px;">
                         <span>Thread ${i + 1}</span>
                         <span class="worker-status active"><span class="spinner" style="width:10px;height:10px;border-width:2px;margin:0;"></span></span>
                     </div>
-                    <div class="worker-track" title="${worker.title ?? "Unknown"}">${worker.title ?? "Unknown Title"}</div>
-                    <div class="worker-artist" title="${worker.artist ?? "Unknown"}">${worker.artist ?? "Unknown Artist"}</div>
-                    <div class="task-progress-bar" style="margin-top:4px;">
+                    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
+                        ${coverImg}
+                        <div style="min-width: 0;">
+                            <div class="worker-track" title="${worker.title ?? "Unknown"}">${worker.title ?? "Unknown Title"}</div>
+                            <div class="worker-artist" title="${worker.artist ?? "Unknown"}">${worker.artist ?? "Unknown Artist"}</div>
+                        </div>
+                    </div>
+                    <div class="task-progress-bar" style="margin-top:auto;">
                         <div class="task-progress-fill worker-pulse"></div>
                     </div>
                 </div>
             `;
         } else {
-            // Worker is idle and waiting for a job
             html += `
                 <div class="worker-card idle">
                     <div class="worker-header">
@@ -77,7 +87,6 @@ function renderWorkers(workers, maxWorkers) {
             `;
         }
     }
-    
     container.innerHTML = html;
 }
 
@@ -92,23 +101,31 @@ function renderActivity(jobs) {
 
     container.innerHTML = jobs.map(job => {
         const status = (job.status ?? "").toUpperCase();
-        let icon = "⏳";
+        let icon = " ";
         let label = status;
 
         switch (status) {
-            case "COMPLETED": icon = "✓"; label = "Downloaded"; break;
-            case "FAILED": icon = "✕"; label = "Failed"; break;
-            case "RUNNING": icon = "⬇"; label = "Downloading"; break;
-            case "QUEUED": icon = "⏳"; label = "Queued"; break;
-            case "SKIPPED": icon = "⏭"; label = "Skipped"; break;
-            case "PAUSED": icon = "⏸"; label = "Paused"; break;
-            case "CANCELLED": icon = "🚫"; label = "Cancelled"; break;
+            case "COMPLETED": icon = " "; label = "Downloaded"; break;
+            case "FAILED": icon = " "; label = "Failed"; break;
+            case "RUNNING": icon = " "; label = "Downloading"; break;
+            case "QUEUED": icon = " "; label = "Queued"; break;
+            case "SKIPPED": icon = " "; label = "Skipped"; break;
+            case "PAUSED": icon = " "; label = "Paused"; break;
+            case "CANCELLED": icon = " "; label = "Cancelled"; break;
         }
+
+        // NEW: Artwork HTML Generation
+        const coverImg = job.cover_url
+            ? `<img src="${job.cover_url}" alt="Cover" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; margin-right: 12px;">`
+            : `<div style="width: 36px; height: 36px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
 
         return `
             <div class="activity-item">
                 <div class="activity-badge">${icon} ${label}</div>
-                <div class="activity-title" title="${job.title ?? "Unknown"}">${job.title ?? "Unknown Title"}</div>
+                <div style="display: flex; align-items: center; min-width: 0;">
+                    ${coverImg}
+                    <div class="activity-title" title="${job.title ?? "Unknown"}">${job.title ?? "Unknown Title"}</div>
+                </div>
                 <div class="activity-artist" title="${job.artist ?? "Unknown"}">${job.artist ?? "Unknown Artist"}</div>
             </div>
         `;
