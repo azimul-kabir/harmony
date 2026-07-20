@@ -1,78 +1,101 @@
-{% extends "base.html" %} 
-{% block title %}Library Manager{% endblock %} 
+{% extends "base.html" %}
 
-{% block content %} 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+{% block title %}Library Manager{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
     <h1 style="margin: 0;">Local Library</h1>
-    <button id="btn-rescan" class="btn-secondary" style="padding: 10px 16px; font-weight: 600; background: white;">
-        ↻ Rescan Library
+    <button id="btn-rescan" class="btn-secondary" style="padding: 10px 16px; font-weight: 600; background: var(--bg-surface);">
+          Rescan Library
     </button>
 </div>
 
+<!-- View Mode Tabs -->
+<div class="filter-tabs" id="library-view-tabs" style="margin-bottom: 20px; border-bottom: 1px solid var(--border-color);">
+    <button class="filter-tab active" data-view="songs">Songs</button>
+    <button class="filter-tab" data-view="albums">Albums</button>
+    <button class="filter-tab" data-view="artists">Artists</button>
+</div>
+
 <div class="panel" style="padding: 0;">
-    <div class="filters-bar" style="padding: 20px 24px; border-bottom: 1px solid #eee; margin-bottom: 0;">
+    <div class="filters-bar" style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <input 
             type="text" 
             id="library-search" 
             class="search-input" 
             placeholder="Search by title, artist, or album..." 
-            style="width: 350px;"
+            style="width: 320px;"
             autocomplete="off"
         >
-        <button id="delete-selected" class="btn-danger" disabled>Delete Selected</button>
+        
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <!-- Sorting Dropdown -->
+            <select id="library-sort" class="form-control" style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-input); background: var(--bg-surface); color: var(--text-main); font-size: 0.9rem;">
+                <option value="artist">Sort by Artist</option>
+                <option value="title">Sort by Song Name</option>
+                <option value="album">Sort by Album</option>
+                <option value="newest">Newest Added</option>
+                <option value="duration">Duration</option>
+                <option value="year">Year</option>
+            </select>
+
+            <button id="delete-selected" class="btn-danger" disabled>Delete Selected</button>
+        </div>
     </div>
-    
-    <div class="table-responsive">
-        <table class="table command-table" style="border-radius: 0; box-shadow: none; margin: 0;">
-            <thead>
-                <tr>
-                    <th style="width: 40px; padding-left: 24px;">
-                        <input type="checkbox" id="select-all" style="cursor: pointer;">
-                    </th>
-                    <th>Title</th>
-                    <th>Artist</th>
-                    <th>Album</th>
-                </tr>
-            </thead>
-            <tbody id="library-body">
-                <tr>
-                    <td colspan="4" style="padding: 0;">
-                        <div class="skeleton-row">
-                            <div class="skeleton-avatar skeleton" style="width:24px; height:24px; border-radius:4px;"></div>
-                            <div class="skeleton-row-content">
-                                <div class="skeleton skeleton-text title"></div>
-                                <div class="skeleton skeleton-text short"></div>
+         
+    <!-- SONGS VIEW CONTAINER -->
+    <div id="view-songs" class="library-view-container">
+        <div class="table-responsive">
+            <table class="table command-table" style="border-radius: 0; box-shadow: none; margin: 0;">
+                <thead>
+                    <tr>
+                        <th style="width: 40px; padding-left: 24px;">
+                            <input type="checkbox" id="select-all" style="cursor: pointer;">
+                        </th>
+                        <th>Title</th>
+                        <th>Artist</th>
+                        <th>Album</th>
+                    </tr>
+                </thead>
+                <tbody id="library-body">
+                    <tr>
+                        <td colspan="4" style="padding: 0;">
+                            <div class="skeleton-row">
+                                <div class="skeleton-avatar skeleton" style="width:24px; height:24px; border-radius:4px;"></div>
+                                <div class="skeleton-row-content">
+                                    <div class="skeleton skeleton-text title"></div>
+                                    <div class="skeleton skeleton-text short"></div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="skeleton-row">
-                            <div class="skeleton-avatar skeleton" style="width:24px; height:24px; border-radius:4px;"></div>
-                            <div class="skeleton-row-content">
-                                <div class="skeleton skeleton-text title" style="width:50%;"></div>
-                                <div class="skeleton skeleton-text short" style="width:30%;"></div>
-                            </div>
-                        </div>
-                        <div class="skeleton-row" style="border-bottom: none;">
-                            <div class="skeleton-avatar skeleton" style="width:24px; height:24px; border-radius:4px;"></div>
-                            <div class="skeleton-row-content">
-                                <div class="skeleton skeleton-text title" style="width:60%;"></div>
-                                <div class="skeleton skeleton-text short" style="width:45%;"></div>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Pagination Controls -->
+        <div class="pagination-controls" style="border-radius: 0 0 16px 16px; background: var(--bg-surface-alt); margin-top: 0; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+            <button id="btn-prev" class="btn-secondary" disabled>Previous</button>
+            <span id="page-info" style="font-weight: 600; color: var(--text-muted);">Page 1</span>
+            <button id="btn-next" class="btn-secondary" disabled>Next</button>
+        </div>
     </div>
 
-    <!-- Pagination Controls -->
-    <div class="pagination-controls" style="border-radius: 0 0 16px 16px; background: #fdfdfd; margin-top: 0; padding: 16px 24px;">
-        <button id="btn-prev" class="btn-secondary" disabled>Previous</button>
-        <span id="page-info" style="font-weight: 600; color: #555;">Page 1</span>
-        <button id="btn-next" class="btn-secondary" disabled>Next</button>
+    <!-- ALBUMS VIEW CONTAINER -->
+    <div id="view-albums" class="library-view-container" style="display: none; padding: 24px;">
+        <div id="albums-grid" class="sources-grid">
+            <p class="empty-state">Loading albums...</p>
+        </div>
+    </div>
+
+    <!-- ARTISTS VIEW CONTAINER -->
+    <div id="view-artists" class="library-view-container" style="display: none; padding: 24px;">
+        <div id="artists-grid" class="sources-grid">
+            <p class="empty-state">Loading artists...</p>
+        </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}
 
-{% block scripts %} 
-<script src="/static/js/library.js"></script> 
+{% block scripts %}
+<script src="/static/js/library.js"></script>
 {% endblock %}
