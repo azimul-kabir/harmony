@@ -19,6 +19,7 @@ from app.core.logging import logger
 from app.database.init_db import init_db
 from app.database.session import SessionLocal
 from app.services.dashboard import get_dashboard_stats
+from app.services.library_watcher import LibraryWatcher
 from app.web.downloads import router as downloads_page_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
     Path(settings.download_path).mkdir(parents=True, exist_ok=True)
     Path(settings.staging_path).mkdir(parents=True, exist_ok=True)
     Path(settings.failed_path).mkdir(parents=True, exist_ok=True)
+    Path(settings.music_path).mkdir(parents=True, exist_ok=True)
     init_db()
     
     logger.info("Starting Harmony...")
@@ -47,9 +49,22 @@ async def lifespan(app: FastAPI):
             name=f"download-worker-{i + 1}",
         ).start()
         
+    library_watcher = None
+    if settings.library_watcher_enabled:
+        library_watcher = LibraryWatcher(
+            root=settings.music_path,
+            debounce_seconds=settings.library_watcher_debounce_seconds,
+        )
+        library_watcher.start()
+        app.state.library_watcher = library_watcher
+
     logger.info("Harmony started")
-    yield
-    logger.info("Harmony stopped")
+    try:
+        yield
+    finally:
+        if library_watcher is not None:
+            library_watcher.stop()
+        logger.info("Harmony stopped")
 
 app = FastAPI(
     title=settings.app_name,

@@ -1,12 +1,16 @@
 import os
+import json
+from queue import Empty
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
 from app.database.models import Playlist, PlaylistTrack, Song
 from app.services.library_service import index_library_file, rescan_library
+from app.services.library_events import library_events
 
 router = APIRouter(
     prefix="/api/library",
@@ -116,6 +120,36 @@ def list_songs(
         _serialize_song(song, source_map.get(song.spotify_track_id or "", []))
         for song in songs
     ]
+
+
+@router.get("/events")
+def stream_library_events():
+    subscriber = library_events.subscribe()
+
+    def event_stream():
+        try:
+            while True:
+                try:
+                    event = subscriber.get(timeout=15)
+                    payload = json.dumps(event.to_dict(), ensure_ascii=False)
+                    yield (
+                        f"id: {event.id}\n"
+                        f"event: {event.type}\n"
+                        f"data: {payload}\n\n"
+                    )
+                except Empty:
+                    yield ": keep-alive\n\n"
+        finally:
+            library_events.unsubscribe(subscriber)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/songs/{song_id}")

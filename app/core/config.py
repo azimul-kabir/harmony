@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     max_parallel_downloads: int = 4
 
+    library_watcher_enabled: bool = True
+    library_watcher_debounce_seconds: float = 0.75
+
 
 @lru_cache
 def get_settings():

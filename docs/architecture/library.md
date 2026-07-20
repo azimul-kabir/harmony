@@ -1,6 +1,6 @@
 # Harmony Library Architecture
 
-> Version: 1.5.1
+> Version: 1.5.2
 > Status: Implemented Foundation
 > Last Updated: 2026-07-21
 
@@ -375,19 +375,40 @@ Normal operation should use incremental updates.
 
 # File Watcher
 
-The watcher monitors:
+`LibraryWatcher` runs as a supervised background service for the configured
+music root. It uses native filesystem notifications through Watchdog and does
+not perform periodic full-directory scans.
 
-New files
+Supported changes:
 
-Deleted files
+- New audio files are incrementally indexed after a short debounce period.
+- Deleted audio files are retained in the index and marked `missing`.
+- Modified files are forcibly re-read so tag-only changes are detected even
+  when file size or timestamp granularity would otherwise hide the change.
+- Renamed and moved files update the existing row before re-indexing, preserving
+  the stable internal song ID.
 
-Modified files
+Filesystem tools often emit several notifications while a file is being
+written. Events are coalesced per path and failed indexing operations are
+retried with bounded backoff. A supervisor restarts the native observer if it
+stops unexpectedly. Failures and recoveries use the standard Harmony logger.
 
-Renamed files
+The watcher publishes transient domain events through `LibraryEventBroker`:
 
-The watcher updates the Library Index.
+- `library.track.added`
+- `library.track.updated`
+- `library.track.missing`
+- `library.track.renamed`
+- `library.index.error`
+- `library.watcher.error`
+- `library.watcher.recovered`
 
-No full rescans.
+Consumers can subscribe using `GET /api/library/events`, an SSE endpoint. These
+events are notifications, not persistent state; reconnecting consumers must
+query the Library Index to reconcile their view.
+
+No full rescans are initiated by the watcher. Manual rescan and re-index
+operations remain explicit integrity tools.
 
 ---
 
