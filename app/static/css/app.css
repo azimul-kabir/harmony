@@ -704,3 +704,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         gap: 4px;
     }
 }
+
+/* --- Fix Artist Name Text Cutting on Mobile --- */
+@media (max-width: 768px) {
+    #view-artists .source-card h3 {
+        white-space: normal !important; /* Allow text to wrap onto multiple lines */
+        word-break: break-word !important; /* Break long strings cleanly */
+        font-size: 0.95rem !important;
+        line-height: 1.3 !important;
+    }
+}
+
