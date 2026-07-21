@@ -2,7 +2,7 @@ from datetime import datetime
 
 from app.database.models import Song
 from app.database.session import SessionLocal
-from app.services.library_health import library_health
+from app.services.library_health import LibraryMaintenanceWorker, library_health
 
 
 def test_health_snapshot_reports_completeness_and_future_duplicates():
@@ -61,3 +61,21 @@ def test_health_action_uses_durable_task_system():
         assert persisted.status == "queued"
         assert persisted.operation_payload == '{"action": "refresh"}'
         assert persisted.total_items == 1
+
+
+def test_rebuild_task_keeps_completed_progress_after_index_scan_commits(monkeypatch):
+    def scan_and_commit(db, *_args, **_kwargs):
+        # scan_library commits the index transaction, which expires ORM state.
+        db.commit()
+
+    monkeypatch.setattr("app.services.library_health.scan_library", scan_and_commit)
+    monkeypatch.setattr("app.services.library_health.library_search.rebuild", lambda _db: 0)
+
+    with SessionLocal() as db:
+        task = library_health.create_action(db, "rebuild")
+
+        LibraryMaintenanceWorker().process_task(db, task)
+        persisted = db.get(type(task), task.id)
+
+        assert persisted.status == "completed"
+        assert persisted.completed_items == persisted.total_items == 1
