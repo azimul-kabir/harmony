@@ -19,10 +19,14 @@ ENV DENO_INSTALL=/root/.deno
 
 ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 
-COPY requirements.txt .
+# `pyproject.toml` is the canonical dependency manifest.  Install the
+# application distribution so production images include the mandatory
+# filesystem watcher dependency.
+COPY pyproject.toml README.md ./
+COPY app ./app
 
 RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir .
 
 COPY . .
 

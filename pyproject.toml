@@ -6,8 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 dependencies = [
-    "fastapi>=0.116.1",
-    "uvicorn[standard]>=0.35.0",
+    # SpotDL 4.5 declares FastAPI >=0.103,<0.104. Keep this constraint in the
+    # canonical manifest so pip can resolve the production image in one pass.
+    "fastapi>=0.103,<0.104",
+    # SpotDL 4.5 also requires Uvicorn >=0.23.2,<0.24.
+    "uvicorn[standard]>=0.23.2,<0.24",
     "jinja2>=3.1.6",
     "sqlalchemy>=2.0.43",
     "alembic>=1.16",
@@ -17,11 +20,21 @@ dependencies = [
     "loguru>=0.7.3",
     "mutagen>=1.47",
     "watchdog>=6.0",
-    "spotdl>=4.5",
+    # Pin the current SpotDL release to avoid resolver backtracking across
+    # older 4.5.x metadata candidates during image builds.
+    "spotdl==4.5.2",
     "spotipy>=2.25.0",
     "yt-dlp>=2025.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
