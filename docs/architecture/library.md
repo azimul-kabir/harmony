@@ -375,6 +375,13 @@ Normal operation should use incremental updates.
 music root. It uses native filesystem notifications through Watchdog and does
 not perform periodic full-directory scans.
 
+Watchdog is a required Harmony runtime dependency, declared in
+`pyproject.toml`; the watcher is enabled by default. Production and test
+environments must install Harmony from that manifest (use
+`python -m pip install -e ".[dev]"` before running the test suite). A missing
+Watchdog installation is a deployment dependency error and must be corrected
+rather than bypassing watcher coverage.
+
 Supported changes:
 
 - New audio files are incrementally indexed after a short debounce period.
