@@ -20,7 +20,9 @@ dependencies = [
     "loguru>=0.7.3",
     "mutagen>=1.47",
     "watchdog>=6.0",
-    "spotdl>=4.5",
+    # Pin the current SpotDL release to avoid resolver backtracking across
+    # older 4.5.x metadata candidates during image builds.
+    "spotdl==4.5.2",
     "spotipy>=2.25.0",
     "yt-dlp>=2025.1.1",
 ]
