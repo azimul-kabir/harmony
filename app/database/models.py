@@ -117,12 +117,32 @@ class Task(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     operation_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     output_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    cancellation_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    initiated_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    resource_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    resumable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    recovery_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
     jobs = relationship("DownloadJob", back_populates="task")
     bulk_items = relationship(
         "BulkOperationItem",
         back_populates="task",
         cascade="all, delete-orphan",
     )
+    item_failures = relationship("TaskItemFailure", back_populates="task", cascade="all, delete-orphan")
+
+
+class TaskItemFailure(Base):
+    """Bounded, user-safe diagnostics for a task item."""
+    __tablename__ = "task_item_failures"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False, index=True)
+    item_description: Mapped[str] = mapped_column(String(500), nullable=False)
+    error_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)
+    task: Mapped["Task"] = relationship(back_populates="item_failures")
 
 
 class BulkOperationItem(Base):

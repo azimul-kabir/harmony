@@ -33,4 +33,9 @@ def serialize_task_progress(task: Task) -> dict[str, Any]:
         "created_at": task.created_at,
         "started_at": task.started_at,
         "completed_at": task.completed_at,
+        "error_summary": task.error_summary,
+        "error_code": task.error_code,
+        "cancellation_requested_at": task.cancellation_requested_at,
+        "initiated_by": task.initiated_by,
+        "resumable": task.resumable,
     }

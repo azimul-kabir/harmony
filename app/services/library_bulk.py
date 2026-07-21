@@ -19,7 +19,7 @@ from app.domain.task import TaskStatus, TaskType
 from app.services.artwork import ArtworkService
 from app.services.library_events import library_events
 from app.services.library_scanner import index_file
-from app.services.task_service import create_task
+from app.services.task_service import create_task, record_item_failure
 
 
 OPERATIONS = {
@@ -56,7 +56,8 @@ def create_bulk_task(
         spotify_url=f"library://bulk/{operation}",
         task_type=TaskType.LIBRARY_BULK,
         total_items=len(songs),
-            operation_payload=json.dumps({"operation": operation, "options": options or {}}),
+        operation_payload=json.dumps({"operation": operation, "options": options or {}}),
+        resource_key="library-files",
         commit=False,
     )
     for song_id in unique_ids:
@@ -139,7 +140,7 @@ class LibraryBulkWorker:
                 Task.task_type == TaskType.LIBRARY_BULK.value,
                 Task.status == TaskStatus.RUNNING.value,
             )
-            .values(status=TaskStatus.QUEUED.value, current_item=None)
+            .values(status=TaskStatus.INTERRUPTED.value, current_item=None, completed_at=utcnow_naive())
         )
         db.execute(
             update(BulkOperationItem)
@@ -176,8 +177,11 @@ class LibraryBulkWorker:
             ).all()
             for item in items:
                 db.refresh(task)
-                if task.status == TaskStatus.CANCELLED.value or self._stop.is_set():
+                if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
                     self._cancel_remaining(db, task)
+                    task.status = TaskStatus.CANCELLED.value
+                    task.completed_at = utcnow_naive()
+                    db.commit()
                     return
                 if task.status == TaskStatus.PAUSED.value:
                     return
@@ -201,6 +205,7 @@ class LibraryBulkWorker:
                     item.status = "failed"
                     item.error = str(error)
                     task.failed_items += 1
+                    record_item_failure(db, task, Path(item.original_path).name, "FILE_OPERATION_FAILED", str(error))
                     logger.exception("Library bulk task {} failed for {}", task.id, item.original_path)
                 item.completed_at = utcnow_naive()
                 db.commit()
@@ -214,9 +219,7 @@ class LibraryBulkWorker:
             return
         task.current_item = None
         task.completed_at = utcnow_naive()
-        task.status = (
-            TaskStatus.FAILED.value if task.failed_items else TaskStatus.COMPLETED.value
-        )
+        task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items else TaskStatus.COMPLETED.value
         db.commit()
         logger.info(
             "Library bulk task {} finished: {} completed, {} failed",

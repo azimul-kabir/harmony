@@ -270,6 +270,27 @@ Current canonical boundaries:
 - `library_bulk` and `library_health`: task-backed filesystem orchestration.
 - `task_progress`: the shared durable-task API contract.
 
+## Persistent Library Jobs and Activity
+
+Library-changing work uses the existing durable `tasks` table; it is not a
+second queue.  Library maintenance and bulk tasks add a resource key, safe
+error summary/code, cancellation timestamp, initiator, resumability and
+restart metadata. `task_item_failures` retains only the newest 100 concise,
+structured failures per job (no tokens, secrets, paths outside the managed
+library, or raw exception traces).
+
+Jobs move through `queued`, `running`, `cancelling`, `cancelled`, `completed`,
+`completed_with_errors`, `failed`, and `interrupted`. Cancellation is
+cooperative between items; a process restart marks non-resumable running
+library jobs interrupted rather than guessing that filesystem changes are safe
+to repeat. Resource keys reserve `library-files` while queued or active, so
+maintenance and bulk file operations cannot modify the same library together.
+
+Stable job APIs are `GET /api/tasks/jobs/active`, `/recent`, `/{id}`, and
+`/{id}/failures?offset=&limit=`, `POST /api/tasks/jobs/{id}/cancel`, plus
+`GET /api/tasks/library-activity`. Existing maintenance and bulk endpoints
+remain compatible and return the legacy progress shape.
+
 `library_service`, `scanner`, and `library_manager` remain compatibility facades.
 New code must depend on the canonical services above rather than add another
 parallel scanner, serializer, path builder, or task response format.
