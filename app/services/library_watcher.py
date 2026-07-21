@@ -265,6 +265,11 @@ class LibraryWatcher:
                     return
 
     def _apply(self, event: PendingFileEvent) -> None:
+            if not self._is_managed(event.source) or (
+            event.destination is not None and not self._is_managed(event.destination)
+        ):
+            logger.warning("Ignoring watcher event outside music root: {}", event.source)
+            return
         db = SessionLocal()
         try:
             if event.kind == "moved":
@@ -289,6 +294,10 @@ class LibraryWatcher:
             )
         finally:
             db.close()
+
+    def _is_managed(self, path: str) -> bool:
+        candidate = Path(path).resolve()
+        return candidate == self.root or candidate.is_relative_to(self.root)
 
     def _apply_move(self, db, event: PendingFileEvent) -> None:
         assert event.destination is not None
