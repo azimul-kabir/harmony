@@ -14,6 +14,8 @@ def create_task(
     task_type: TaskType,
     total_items: int,
     source_id: int | None = None,
+    operation_payload: str | None = None,
+    commit: bool = True,
 ) -> Task:
     task = Task(
         name=name,
@@ -26,8 +28,12 @@ def create_task(
         skipped_items=0,
         failed_items=0,
         current_item=None,
+        operation_payload=operation_payload,
     )
     db.add(task)
+    if not commit:
+        db.flush()
+        return task
     db.commit()
     db.refresh(task)
     return task
