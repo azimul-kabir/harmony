@@ -106,6 +106,34 @@ def test_scan_marks_missing_files_without_deleting_index(tmp_path, monkeypatch):
         assert song.availability_status == "missing"
 
 
+def test_scan_commits_each_file_to_release_sqlite_writer(tmp_path, monkeypatch):
+    for name in ("one.mp3", "two.mp3"):
+        (tmp_path / name).write_bytes(b"audio")
+
+    monkeypatch.setattr(
+        library_scanner,
+        "index_file",
+        lambda db, file, **kwargs: library_scanner.IndexResult(
+            path=str(file), status="unchanged"
+        ),
+    )
+
+    with _session() as db:
+        commits = 0
+        real_commit = db.commit
+
+        def counting_commit():
+            nonlocal commits
+            commits += 1
+            real_commit()
+
+        monkeypatch.setattr(db, "commit", counting_commit)
+        result = library_scanner.scan_library(db, tmp_path, force=True)
+
+        assert result.discovered == 2
+        assert commits >= 3  # once per file, then missing-file reconciliation
+
+
 def test_index_library_file_rejects_paths_outside_configured_music_root(tmp_path, monkeypatch):
     music = tmp_path / "music"
     music.mkdir()

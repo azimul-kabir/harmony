@@ -173,8 +173,13 @@ def scan_library(
         try:
             with db.begin_nested():
                 indexed = index_file(db, file, force=force, commit=False)
+            # A rebuild can run for many minutes. Keep each file as the atomic
+            # reconciliation unit so SQLite's single writer is released between
+            # files for download workers and other short-lived writes.
+            db.commit()
             setattr(result, indexed.status, getattr(result, indexed.status) + 1)
         except Exception:
+            db.rollback()
             result.failed += 1
             logger.exception("Failed to index {}", file)
 

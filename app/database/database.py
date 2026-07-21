@@ -9,6 +9,7 @@ engine = create_engine(
     settings.database_url,
     echo=False,
     future=True,
+    connect_args={"timeout": 30} if settings.database_url.startswith("sqlite") else {},
 )
 
 SessionLocal = sessionmaker(
