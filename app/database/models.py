@@ -71,7 +71,12 @@ class Song(Base):
         nullable=True,
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=utcnow_naive,
+        index=True,
+    )
 
 
 class Artwork(Base):
