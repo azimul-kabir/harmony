@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database.base import Base
 from app.database.models import Song
 from app.services import library_scanner
+from app.services import library_service
 
 
 def _metadata(path: Path, title: str = "Indexed Song") -> dict:
@@ -103,3 +104,19 @@ def test_scan_marks_missing_files_without_deleting_index(tmp_path, monkeypatch):
 
         assert result.missing == 1
         assert song.availability_status == "missing"
+
+
+def test_index_library_file_rejects_paths_outside_configured_music_root(tmp_path, monkeypatch):
+    music = tmp_path / "music"
+    music.mkdir()
+    outside = tmp_path / "outside.mp3"
+    outside.write_bytes(b"audio")
+    monkeypatch.setattr(library_service, "settings", type("Settings", (), {"music_path": str(music)})())
+
+    with _session() as db:
+        try:
+            library_service.index_library_file(db, str(outside))
+        except ValueError as error:
+            assert str(error) == "Path must remain inside the configured music folder"
+        else:  # pragma: no cover - makes the containment guarantee explicit
+            raise AssertionError("out-of-root file was indexed")

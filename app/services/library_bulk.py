@@ -56,8 +56,9 @@ def create_bulk_task(
         spotify_url=f"library://bulk/{operation}",
         task_type=TaskType.LIBRARY_BULK,
         total_items=len(songs),
+            operation_payload=json.dumps({"operation": operation, "options": options or {}}),
+        commit=False,
     )
-    task.operation_payload = json.dumps({"operation": operation, "options": options or {}})
     for song_id in unique_ids:
         song = songs_by_id[song_id]
         task.bulk_items.append(
@@ -191,6 +192,10 @@ class LibraryBulkWorker:
                     task.completed_items += 1
                 except Exception as error:
                     db.rollback()
+                    # Filesystem operations cannot be rolled back by SQLite.
+                    # Reconcile the canonical row before reporting a failed
+                    # item so retries/restarts never retain stale availability.
+                    self._reconcile_item(db, item)
                     task = db.get(Task, task.id)
                     item = db.get(BulkOperationItem, item.id)
                     item.status = "failed"
@@ -219,6 +224,17 @@ class LibraryBulkWorker:
             task.completed_items,
             task.failed_items,
         )
+
+    def _reconcile_item(self, db: Session, item: BulkOperationItem) -> None:
+        song = db.get(Song, item.song_id) if item.song_id else None
+        if song is None:
+            return
+        try:
+            index_file(db, song.path, force=False, commit=False)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Could not reconcile failed bulk item {}", item.id)
 
     def _cancel_remaining(self, db: Session, task: Task) -> None:
         remaining = db.scalars(
@@ -250,8 +266,11 @@ class LibraryBulkWorker:
 
         if operation == "delete":
             source.unlink()
-            result = index_file(db, source, commit=False)
-            library_events.publish("library.track.missing", path=str(source), song_id=result.song_id)
+            # Retain the durable row and its provenance after deletion.
+            song.availability_status = "missing"
+            song.last_indexed_at = utcnow_naive()
+            db.flush()
+            library_events.publish("library.track.missing", path=str(source), song_id=song.id)
             return None
         if operation == "move":
             destination_dir = self._managed_path(options.get("destination", ""), relative=True)

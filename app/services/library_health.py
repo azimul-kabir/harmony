@@ -111,9 +111,8 @@ class LibraryHealthService:
             spotify_url=f"library://maintenance/{action}",
             task_type=TaskType.LIBRARY_MAINTENANCE,
             total_items=max(int(total), 1),
+            operation_payload=json.dumps({"action": action}),
         )
-        task.operation_payload = json.dumps({"action": action})
-        db.commit()
         return task
 
 
@@ -218,7 +217,6 @@ class LibraryMaintenanceWorker:
             task.failed_items = max(1, task.total_items - task.completed_items)
             task.status = TaskStatus.FAILED.value
         else:
-            db.refresh(task)
             if task.status == TaskStatus.RUNNING.value:
                 task.status = TaskStatus.COMPLETED.value
         task.current_item = None

@@ -1,6 +1,7 @@
 from enum import Enum
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.models import Song
@@ -70,7 +71,26 @@ def upsert_song(
 
     if song is None:
         song = Song(**metadata)
-        db.add(song)
+        # A watcher event and an API request can race on a newly discovered
+        # file. ``songs.path`` is the authoritative uniqueness boundary, but
+        # a select-then-insert alone is not atomic.
+        try:
+            with db.begin_nested():
+                db.add(song)
+                db.flush()
+        except IntegrityError:
+            song = db.scalar(select(Song).where(Song.path == metadata["path"]))
+            if song is None:  # pragma: no cover - protects unusual DB drivers
+                raise
+            changed = False
+            for key, value in metadata.items():
+                if getattr(song, key) != value:
+                    setattr(song, key, value)
+                    changed = True
+            if commit:
+                db.commit()
+                db.refresh(song)
+            return (UpsertStatus.UPDATED if changed else UpsertStatus.UNCHANGED), song
 
         if commit:
             db.commit()

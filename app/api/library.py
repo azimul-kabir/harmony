@@ -1,4 +1,3 @@
-import os
 import json
 from queue import Empty
 
@@ -471,12 +470,18 @@ def index_file(request: IndexFileRequest, db: Session = Depends(get_db)):
 def delete_song(song_id: int, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
     if song:
-        if os.path.exists(song.path):
+        from app.services.library_service import managed_library_path
+
+        try:
+            path = managed_library_path(song.path)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        if path.exists():
             try:
-                os.remove(song.path)
-            except OSError:
-                pass
-        db.delete(song)
+                path.unlink()
+            except OSError as error:
+                raise HTTPException(status_code=409, detail=f"Could not delete song file: {error}") from error
+        song.availability_status = "missing"
         db.commit()
         library_search.index_song(db, song_id)
         db.commit()
