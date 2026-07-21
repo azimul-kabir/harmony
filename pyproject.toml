@@ -9,7 +9,8 @@ dependencies = [
     # SpotDL 4.5 declares FastAPI >=0.103,<0.104. Keep this constraint in the
     # canonical manifest so pip can resolve the production image in one pass.
     "fastapi>=0.103,<0.104",
-    "uvicorn[standard]>=0.35.0",
+    # SpotDL 4.5 also requires Uvicorn >=0.23.2,<0.24.
+    "uvicorn[standard]>=0.23.2,<0.24",
     "jinja2>=3.1.6",
     "sqlalchemy>=2.0.43",
     "alembic>=1.16",
