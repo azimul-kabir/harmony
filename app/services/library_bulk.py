@@ -56,8 +56,9 @@ def create_bulk_task(
         spotify_url=f"library://bulk/{operation}",
         task_type=TaskType.LIBRARY_BULK,
         total_items=len(songs),
+            operation_payload=json.dumps({"operation": operation, "options": options or {}}),
+        commit=False,
     )
-    task.operation_payload = json.dumps({"operation": operation, "options": options or {}})
     for song_id in unique_ids:
         song = songs_by_id[song_id]
         task.bulk_items.append(
