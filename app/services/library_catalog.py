@@ -1,6 +1,6 @@
 """Reusable read-model helpers for Library API and integration consumers."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Iterable
 
 from sqlalchemy import Select, select
@@ -52,6 +52,16 @@ def serialize_song(
 ) -> dict[str, Any]:
     """Build the stable Library Song read model used by APIs and integrations."""
     cutoff = utcnow_naive() - timedelta(days=RECENTLY_ADDED_DAYS)
+    date_added = (
+        song.created_at
+        or song.last_indexed_at
+        or song.last_modified
+        or (
+            datetime.fromtimestamp(song.modified_time, tz=UTC).replace(tzinfo=None)
+            if song.modified_time is not None
+            else utcnow_naive()
+        )
+    )
     return {
         "id": song.id,
         "path": song.path,
@@ -75,8 +85,8 @@ def serialize_song(
         "artwork_id": song.artwork_id,
         "artwork": serialize_artwork(song.artwork) if song.artwork else None,
         "cover_url": artwork_url(song.artwork_id) or song.cover_url,
-        "date_added": song.created_at,
-        "recently_added": bool(song.created_at and song.created_at >= cutoff),
+        "date_added": date_added,
+        "recently_added": date_added >= cutoff,
         "last_modified": song.last_modified,
         "last_indexed_at": song.last_indexed_at,
         "availability_status": song.availability_status,
