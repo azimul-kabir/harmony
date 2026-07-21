@@ -13,7 +13,10 @@ class TaskType(StrEnum):
 class TaskStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
+    CANCELLING = "cancelling"
     PAUSED = "paused"       # New state
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    COMPLETED_WITH_ERRORS = "completed_with_errors"
+    INTERRUPTED = "interrupted"

@@ -77,7 +77,7 @@ def start_bulk_operation(request: BulkOperationRequest, db: Session = Depends(ge
             options=request.options,
         )
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise HTTPException(status_code=409 if str(error).startswith("CONFLICTING_JOB") else 400, detail=str(error)) from error
     return serialize_bulk_task(db, task)
 
 
@@ -96,7 +96,7 @@ def cancel_bulk_operation(task_id: int, db: Session = Depends(get_db)):
 @router.get("/{task_id}/export", summary="Download a completed Library export")
 def download_bulk_export(task_id: int, db: Session = Depends(get_db)):
     task = _get_bulk_task(db, task_id)
-    if task.status not in {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value}:
+    if task.status not in {TaskStatus.COMPLETED.value, TaskStatus.COMPLETED_WITH_ERRORS.value}:
         raise HTTPException(status_code=409, detail="Export is not finished")
     if not task.output_path or not Path(task.output_path).is_file():
         raise HTTPException(status_code=404, detail="Export file not found")

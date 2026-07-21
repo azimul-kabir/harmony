@@ -34,12 +34,32 @@ async function loadHealth() {
         document.getElementById("health-score").textContent = health.health_score;
         document.getElementById("health-score-ring").style.setProperty("--health-score", `${health.health_score * 3.6}deg`);
         renderHealthChecks(health.checks || []);
+        await loadLibraryJobs();
         document.getElementById("health-error").hidden = true;
     } catch (error) {
         const box = document.getElementById("health-error");
         box.textContent = `Harmony could not load Library health: ${error.message}`;
         box.hidden = false;
     }
+}
+
+async function loadLibraryJobs() {
+    const [active, recent] = await Promise.all([
+        healthJson("/api/tasks/jobs/active"),
+        healthJson("/api/tasks/library-activity?limit=8"),
+    ]);
+    const renderJobs = (target, jobs, empty) => {
+        target.innerHTML = jobs.length ? jobs.map((job) => `<article class="health-check status-${escapeHealth(job.status)}">
+      <span class="health-check-indicator" aria-hidden="true"></span><div><strong>${escapeHealth(job.name)}</strong><small>${escapeHealth(job.status)} · ${job.processed}/${job.total}${job.error_code ? ` · ${escapeHealth(job.error_code)}` : ""}</small></div>
+      ${["queued", "running", "cancelling"].includes(job.status) ? `<button class="btn-secondary" data-job-cancel="${job.id}">Cancel</button>` : ""}</article>`).join("") : `<p>${empty}</p>`;
+    };
+    const activeTarget = document.getElementById("library-active-jobs");
+    renderJobs(activeTarget, active, "No active jobs.");
+    renderJobs(document.getElementById("library-recent-activity"), recent, "No recent activity.");
+    activeTarget.querySelectorAll("[data-job-cancel]").forEach((button) => button.addEventListener("click", async () => {
+        await healthJson(`/api/tasks/jobs/${button.dataset.jobCancel}/cancel`, {method: "POST"});
+        loadLibraryJobs();
+    }));
 }
 
 function renderHealthChecks(checks) {
@@ -77,7 +97,7 @@ async function pollHealthTask() {
     try {
         const task = await healthJson(`/api/library/health/tasks/${healthState.taskId}`);
         renderHealthTask(task);
-        if (["completed", "failed", "cancelled"].includes(task.status)) {
+        if (["completed", "completed_with_errors", "failed", "cancelled", "interrupted"].includes(task.status)) {
             await loadHealth();
             return;
         }
@@ -89,7 +109,7 @@ async function pollHealthTask() {
 }
 
 function renderHealthTask(task) {
-    const terminal = ["completed", "failed", "cancelled"].includes(task.status);
+    const terminal = ["completed", "completed_with_errors", "failed", "cancelled", "interrupted"].includes(task.status);
     document.getElementById("health-task").hidden = false;
     document.getElementById("health-task-name").textContent = task.name;
     document.getElementById("health-task-count").textContent = `${task.processed} of ${task.total}`;

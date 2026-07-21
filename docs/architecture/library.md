@@ -270,6 +270,38 @@ Current canonical boundaries:
 - `library_bulk` and `library_health`: task-backed filesystem orchestration.
 - `task_progress`: the shared durable-task API contract.
 
+## Persistent Library Jobs and Activity
+
+Library-changing work uses the existing durable `tasks` table; it is not a
+second queue.  Library maintenance and bulk tasks add a resource key, safe
+error summary/code, cancellation timestamp, initiator, resumability and
+restart metadata. `task_item_failures` retains only the newest 100 concise,
+structured failures per job (no tokens, secrets, paths outside the managed
+library, or raw exception traces).
+
+Jobs move through `queued`, `running`, `cancelling`, `cancelled`, `completed`,
+`completed_with_errors`, `failed`, and `interrupted`. Cancellation is
+cooperative between items; a process restart marks non-resumable running
+library jobs interrupted rather than guessing that filesystem changes are safe
+to repeat. Resource keys reserve `library-files` while queued or active, so
+maintenance and bulk file operations cannot modify the same library together.
+
+Stable job APIs are `GET /api/tasks/jobs/active`, `/recent`, `/{id}`, and
+`/{id}/failures?offset=&limit=`, `POST /api/tasks/jobs/{id}/cancel`, plus
+`GET /api/tasks/library-activity`. Existing maintenance and bulk endpoints
+remain compatible and return the legacy progress shape.
+
+At startup, terminal Library history is bounded to the newest 200 jobs; ORM
+cascades remove their bulk-item and failure rows. Active jobs are never removed.
+The database also enforces a partial unique index for active resource keys so
+two concurrent submitters cannot bypass the application-level conflict check.
+
+Compatibility note: this is an additive extension of Harmony's `tasks` table,
+Task lifecycle service, and operation-specific workers. Existing task IDs,
+download/playlist task types, progress fields, and maintenance/bulk endpoints
+remain valid. New job fields and explicit aliases are added to the shared
+serializer; no task records were migrated into a second queue.
+
 `library_service`, `scanner`, and `library_manager` remain compatibility facades.
 New code must depend on the canonical services above rather than add another
 parallel scanner, serializer, path builder, or task response format.
@@ -923,7 +955,8 @@ The Library bulk worker:
 
 - Processes one task in the background and checks cancellation between items.
 - Continues after item-level failures and records each error independently.
-- Recovers `running` tasks and items as `queued` after process restarts.
+- Marks abandoned non-resumable tasks `interrupted` after process restarts;
+  only an operation explicitly marked resumable may return to `queued`.
 - Uses paths constrained to the configured music root and never overwrites a
   destination collision.
 - Preserves the internal song ID when moving or renaming files.
@@ -965,7 +998,7 @@ run in a supervised background worker:
 - Clear Artwork Cache removes content-addressed files and associations; later
   metadata refreshes can populate them again.
 
-Tasks recover from interrupted `running` state as `queued`, report standard
+Non-resumable tasks left running recover as `interrupted`, report standard
 aggregate progress, and publish `library.health.updated` after completion. API:
 
 - `POST /api/library/health/actions/{action}` queues maintenance.

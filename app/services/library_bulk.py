@@ -19,7 +19,7 @@ from app.domain.task import TaskStatus, TaskType
 from app.services.artwork import ArtworkService
 from app.services.library_events import library_events
 from app.services.library_scanner import index_file
-from app.services.task_service import create_task
+from app.services.task_service import create_task, record_item_failure
 
 
 OPERATIONS = {
@@ -32,6 +32,19 @@ OPERATIONS = {
 }
 TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled"}
 INVALID_FILENAME = re.compile(r"[\\/:*?\"<>|\x00-\x1f]")
+
+
+def _safe_operation_error(error: Exception) -> tuple[str, str]:
+    """Map exceptions to bounded messages without persisting raw payloads."""
+    if isinstance(error, FileExistsError):
+        return "DESTINATION_EXISTS", "The destination file already exists"
+    if isinstance(error, FileNotFoundError):
+        return "FILE_NOT_FOUND", "The source file could not be found"
+    if isinstance(error, PermissionError):
+        return "FILE_PERMISSION_DENIED", "Harmony does not have permission to modify this file"
+    if isinstance(error, ValueError):
+        return "INVALID_FILE_OPERATION", "The file operation options or path are invalid"
+    return "FILE_OPERATION_FAILED", "The file operation failed"
 
 
 def create_bulk_task(
@@ -56,7 +69,8 @@ def create_bulk_task(
         spotify_url=f"library://bulk/{operation}",
         task_type=TaskType.LIBRARY_BULK,
         total_items=len(songs),
-            operation_payload=json.dumps({"operation": operation, "options": options or {}}),
+        operation_payload=json.dumps({"operation": operation, "options": options or {}}),
+        resource_key="library-files",
         commit=False,
     )
     for song_id in unique_ids:
@@ -137,9 +151,9 @@ class LibraryBulkWorker:
             update(Task)
             .where(
                 Task.task_type == TaskType.LIBRARY_BULK.value,
-                Task.status == TaskStatus.RUNNING.value,
+                Task.status.in_((TaskStatus.RUNNING.value, TaskStatus.CANCELLING.value)),
             )
-            .values(status=TaskStatus.QUEUED.value, current_item=None)
+            .values(status=TaskStatus.INTERRUPTED.value, current_item=None, completed_at=utcnow_naive())
         )
         db.execute(
             update(BulkOperationItem)
@@ -176,8 +190,18 @@ class LibraryBulkWorker:
             ).all()
             for item in items:
                 db.refresh(task)
-                if task.status == TaskStatus.CANCELLED.value or self._stop.is_set():
+                if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
+                    if self._stop.is_set() and task.status not in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value):
+                        task.status = TaskStatus.INTERRUPTED.value
+                        task.recovery_metadata = '{"reason":"worker_shutdown"}'
+                        task.completed_at = utcnow_naive()
+                        task.current_item = None
+                        db.commit()
+                        return
                     self._cancel_remaining(db, task)
+                    task.status = TaskStatus.CANCELLED.value
+                    task.completed_at = utcnow_naive()
+                    db.commit()
                     return
                 if task.status == TaskStatus.PAUSED.value:
                     return
@@ -198,9 +222,11 @@ class LibraryBulkWorker:
                     self._reconcile_item(db, item)
                     task = db.get(Task, task.id)
                     item = db.get(BulkOperationItem, item.id)
+                    error_code, error_message = _safe_operation_error(error)
                     item.status = "failed"
-                    item.error = str(error)
+                    item.error = error_message
                     task.failed_items += 1
+                    record_item_failure(db, task, Path(item.original_path).name, error_code, error_message)
                     logger.exception("Library bulk task {} failed for {}", task.id, item.original_path)
                 item.completed_at = utcnow_naive()
                 db.commit()
@@ -214,9 +240,12 @@ class LibraryBulkWorker:
             return
         task.current_item = None
         task.completed_at = utcnow_naive()
-        task.status = (
-            TaskStatus.FAILED.value if task.failed_items else TaskStatus.COMPLETED.value
-        )
+        if task.failed_items and not task.completed_items:
+            task.status = TaskStatus.FAILED.value
+        elif task.failed_items:
+            task.status = TaskStatus.COMPLETED_WITH_ERRORS.value
+        else:
+            task.status = TaskStatus.COMPLETED.value
         db.commit()
         logger.info(
             "Library bulk task {} finished: {} completed, {} failed",

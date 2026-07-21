@@ -39,7 +39,10 @@ def health_snapshot(db: Session = Depends(get_db)):
 def start_health_action(action: str, db: Session = Depends(get_db)):
     if action not in HEALTH_ACTIONS:
         raise HTTPException(status_code=404, detail="Library health action not found")
-    task = library_health.create_action(db, action)
+    try:
+        task = library_health.create_action(db, action)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return serialize_task_progress(task)
 
 

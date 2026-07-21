@@ -19,7 +19,7 @@ from app.services.library_events import library_events
 from app.services.library_scanner import index_file, scan_library
 from app.services.library_search import library_search
 from app.services.library_predicates import missing_metadata_expression
-from app.services.task_service import create_task
+from app.services.task_service import create_task, record_item_failure
 
 
 HEALTH_ACTIONS = {
@@ -112,6 +112,7 @@ class LibraryHealthService:
             task_type=TaskType.LIBRARY_MAINTENANCE,
             total_items=max(int(total), 1),
             operation_payload=json.dumps({"action": action}),
+            resource_key="library-files" if action in {"refresh", "rebuild", "verify", "clear_artwork"} else None,
         )
         return task
 
@@ -149,9 +150,9 @@ class LibraryMaintenanceWorker:
             update(Task)
             .where(
                 Task.task_type == TaskType.LIBRARY_MAINTENANCE.value,
-                Task.status == TaskStatus.RUNNING.value,
+                Task.status.in_((TaskStatus.RUNNING.value, TaskStatus.CANCELLING.value)),
             )
-            .values(status=TaskStatus.QUEUED.value, current_item=None)
+            .values(status=TaskStatus.INTERRUPTED.value, current_item=None, completed_at=utcnow_naive())
         )
         db.commit()
 
@@ -218,9 +219,10 @@ class LibraryMaintenanceWorker:
             task.status = TaskStatus.FAILED.value
         else:
             if task.status == TaskStatus.RUNNING.value:
-                task.status = TaskStatus.COMPLETED.value
+                task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items else TaskStatus.COMPLETED.value
         task.current_item = None
-        task.completed_at = utcnow_naive()
+        if task.status != TaskStatus.QUEUED.value:
+            task.completed_at = utcnow_naive()
         db.commit()
         library_events.publish("library.health.updated", action=action, task_id=task.id)
 
@@ -230,10 +232,12 @@ class LibraryMaintenanceWorker:
         for song_id in song_ids:
             processed_any = True
             db.refresh(task)
-            if task.status == TaskStatus.CANCELLED.value or self._stop.is_set():
-                if self._stop.is_set() and task.status != TaskStatus.CANCELLED.value:
-                    task.status = TaskStatus.QUEUED.value
+            if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
+                if self._stop.is_set() and task.status not in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value):
+                    task.status = TaskStatus.INTERRUPTED.value
+                    task.recovery_metadata = '{"reason":"worker_shutdown"}'
                 else:
+                    task.status = TaskStatus.CANCELLED.value
                     task.skipped_items = task.total_items - task.completed_items - task.failed_items
                 db.commit()
                 return
@@ -247,6 +251,7 @@ class LibraryMaintenanceWorker:
                 db.rollback()
                 task = db.get(Task, task.id)
                 task.failed_items += 1
+                record_item_failure(db, task, song.filename, "FILE_VERIFICATION_FAILED", "File could not be verified")
             db.commit()
         if not processed_any:
             task.completed_items = task.total_items
@@ -256,10 +261,12 @@ class LibraryMaintenanceWorker:
         for artwork_id in iter_primary_keys(db, Artwork):
             processed_any = True
             db.refresh(task)
-            if task.status == TaskStatus.CANCELLED.value or self._stop.is_set():
-                if self._stop.is_set() and task.status != TaskStatus.CANCELLED.value:
-                    task.status = TaskStatus.QUEUED.value
+            if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
+                if self._stop.is_set() and task.status not in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value):
+                    task.status = TaskStatus.INTERRUPTED.value
+                    task.recovery_metadata = '{"reason":"worker_shutdown"}'
                 else:
+                    task.status = TaskStatus.CANCELLED.value
                     task.skipped_items = task.total_items - task.completed_items - task.failed_items
                 db.commit()
                 return
@@ -279,6 +286,7 @@ class LibraryMaintenanceWorker:
                 db.rollback()
                 task = db.get(Task, task.id)
                 task.failed_items += 1
+                record_item_failure(db, task, str(artwork_id), "ARTWORK_CACHE_FAILED", "Artwork cache entry could not be cleared")
             db.commit()
         if not processed_any:
             task.completed_items = task.total_items
