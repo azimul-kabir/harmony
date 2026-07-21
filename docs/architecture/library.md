@@ -235,6 +235,24 @@ Favorites
 
 The Library Engine is composed of independent services.
 
+## Metadata Health Engine
+
+`MetadataHealthService` evaluates registered, provider-neutral rules against
+canonical `Song` rows and grouped projections; it never opens audio files or
+contacts external providers. Findings are durable `metadata_issues` records
+with deterministic identities, so repeated analysis updates a finding rather
+than duplicating it. Open findings absent from a subsequent scoped analysis are
+resolved; ignored findings remain ignored. Missing-song rows deliberately have
+no foreign key from issues, retaining audit history. Full-library analysis is a
+durable Library Maintenance job with the `library-metadata-health` resource
+key. The diagnostic score caps each entity's penalty and excludes ignored and
+missing songs; it is not a claim of metadata correctness.
+
+Album projection identities are `normalized(album_artist or artist)::normalized(album)`.
+Artist identities are normalized canonical artist strings with only a leading
+`The` treated as equivalent; featured-artist tokens and version markers are
+retained. These keys are projection identities, not future normalized IDs.
+
 ```
 LibraryService
 

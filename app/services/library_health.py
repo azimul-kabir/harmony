@@ -20,6 +20,7 @@ from app.services.library_scanner import index_file, scan_library
 from app.services.library_search import library_search
 from app.services.library_predicates import missing_metadata_expression
 from app.services.task_service import create_task, record_item_failure
+from app.services.metadata_health import metadata_health
 
 
 HEALTH_ACTIONS = {
@@ -116,6 +117,12 @@ class LibraryHealthService:
         )
         return task
 
+    def create_metadata_analysis(self, db: Session) -> Task:
+        total = db.scalar(select(func.count(Song.id)).where(Song.availability_status == "available")) or 0
+        return create_task(db, name="Metadata Health Analysis", spotify_url="library://metadata-health/analyze",
+            task_type=TaskType.LIBRARY_MAINTENANCE, total_items=max(int(total), 1),
+            operation_payload=json.dumps({"action":"metadata_analysis"}), resource_key="library-metadata-health")
+
 
 class LibraryMaintenanceWorker:
     def __init__(self, poll_seconds: float = 0.5):
@@ -209,6 +216,8 @@ class LibraryMaintenanceWorker:
                 self._verify(db, task)
             elif action == "clear_artwork":
                 self._clear_artwork(db, task)
+            elif action == "metadata_analysis":
+                self._metadata_analysis(db, task)
             else:
                 raise ValueError(f"Unknown maintenance action: {action}")
         except Exception:
@@ -290,6 +299,28 @@ class LibraryMaintenanceWorker:
             db.commit()
         if not processed_any:
             task.completed_items = task.total_items
+
+    def _metadata_analysis(self, db: Session, task: Task) -> None:
+        for song_id in iter_primary_keys(db, Song):
+            db.refresh(task)
+            if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
+                task.status = TaskStatus.CANCELLED.value
+                task.skipped_items = max(0, task.total_items - task.completed_items - task.failed_items)
+                db.commit(); return
+            try:
+                song = db.get(Song, song_id)
+                if song.availability_status != "available": task.skipped_items += 1
+                else:
+                    task.current_item = song.filename
+                    metadata_health.analyze_song(db, song_id, task.id); task.completed_items += 1
+            except Exception:
+                db.rollback(); task=db.get(Task, task.id); task.failed_items += 1
+                record_item_failure(db, task, str(song_id), "METADATA_ANALYSIS_FAILED", "Indexed metadata could not be analyzed")
+            db.commit()
+        # Projection rules run from one batched indexed query after song rules.
+        songs = list(db.scalars(select(Song).where(Song.availability_status == "available")).all())
+        metadata_health._analyze_projections(db, songs, task.id)
+        db.commit()
 
 
 library_health = LibraryHealthService()

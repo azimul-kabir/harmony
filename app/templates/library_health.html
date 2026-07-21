@@ -44,8 +44,14 @@
             <button type="button" data-health-action="refresh"><strong>Refresh Library</strong><span>Find new files and reconcile missing tracks.</span></button>
             <button type="button" data-health-action="rebuild"><strong>Rebuild Index</strong><span>Re-read all metadata and rebuild search.</span></button>
             <button type="button" data-health-action="verify"><strong>Verify Files</strong><span>Check every indexed path without scanning folders.</span></button>
+            <button type="button" id="metadata-analysis"><strong>Run Metadata Analysis</strong><span>Analyze indexed song, album, and artist metadata.</span></button>
             <button type="button" class="health-destructive" data-health-action="clear_artwork"><strong>Clear Artwork Cache</strong><span>Remove cached resources; indexing can recreate them.</span></button>
         </aside>
+    </section>
+    <section class="health-job-panel" aria-labelledby="metadata-issues-title">
+        <div><strong id="metadata-issues-title">Metadata issues</strong><span id="metadata-score-detail">Diagnostic score pending analysis.</span></div>
+        <div class="library-filter-row"><input id="metadata-search" placeholder="Search issues"><select id="metadata-status"><option value="open">Open</option><option value="resolved">Resolved</option><option value="ignored">Ignored</option></select><select id="metadata-severity"><option value="">All severities</option><option>critical</option><option>error</option><option>warning</option><option>info</option></select></div>
+        <div id="metadata-issues" class="health-check-list" aria-live="polite"><p>Loading metadata issues…</p></div>
     </section>
 
     <section id="health-task" class="health-task" hidden aria-live="polite">

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import func, select
 
 from app.database.models import Task
 from app.database.session import get_db
@@ -8,6 +10,8 @@ from app.services.library_health import HEALTH_ACTIONS, library_health
 from app.services.task_service import cancel_task
 from app.services.task_progress import get_typed_task, serialize_task_progress
 from app.api.schemas.library import LibraryHealthResponse, TaskProgressResponse
+from app.services.metadata_health import RULES, metadata_health, serialize_issue
+from app.core.time import utcnow_naive
 
 
 router = APIRouter(prefix="/api/library/health", tags=["library", "health"])
@@ -56,3 +60,70 @@ def cancel_health_task(task_id: int, db: Session = Depends(get_db)):
     task = _get_task(db, task_id)
     cancel_task(db, task)
     return serialize_task_progress(task)
+
+
+@router.post("/metadata/analyze", response_model=TaskProgressResponse, summary="Queue indexed metadata analysis")
+def start_metadata_analysis(db: Session = Depends(get_db)):
+    try:
+        task = library_health.create_metadata_analysis(db)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail={"error":{"code":"conflicting_job","message":str(error)}}) from error
+    return serialize_task_progress(task)
+
+@router.post("/metadata/songs/{song_id}/analyze")
+def analyze_metadata_song(song_id: int, db: Session = Depends(get_db)):
+    try: metadata_health.analyze_song(db, song_id); db.commit()
+    except LookupError as error: raise HTTPException(status_code=404, detail={"error":{"code":"song_not_found","message":str(error)}}) from error
+    return {"items": [serialize_issue(x) for x in metadata_health.list(db, song_id=song_id, limit=200)[0]]}
+
+@router.post("/metadata/albums/analyze")
+def analyze_metadata_album(album_key: str, db: Session = Depends(get_db)):
+    try: findings=metadata_health.analyze_album(db, album_key); db.commit()
+    except LookupError as error: raise HTTPException(status_code=404, detail={"error":{"code":"album_not_found","message":str(error)}}) from error
+    return {"items":[serialize_issue(x) for x in metadata_health.list(db, entity_type="album", entity_id=album_key, limit=200)[0]]}
+
+@router.post("/metadata/artists/analyze")
+def analyze_metadata_artist(artist_key: str, db: Session = Depends(get_db)):
+    try: findings=metadata_health.analyze_artist(db, artist_key); db.commit()
+    except LookupError as error: raise HTTPException(status_code=404, detail={"error":{"code":"artist_not_found","message":str(error)}}) from error
+    return {"items":[serialize_issue(x) for x in metadata_health.list(db, entity_type="artist", entity_id=artist_key, limit=200)[0]]}
+
+@router.get("/metadata/issues")
+def list_metadata_issues(rule_id: str|None=None, severity: str|None=None, status: str|None=None, entity_type: str|None=None, field_name: str|None=None, song_id: int|None=None, album_key: str|None=None, artist_key: str|None=None, automatically_repairable: bool|None=None, first_detected_from:datetime|None=None, first_detected_to:datetime|None=None, last_detected_from:datetime|None=None, last_detected_to:datetime|None=None, resolved_from:datetime|None=None, resolved_to:datetime|None=None, ignored_from:datetime|None=None, ignored_to:datetime|None=None, limit:int=Query(50,ge=1,le=200), offset:int=Query(0,ge=0), db: Session=Depends(get_db)):
+    items,total=metadata_health.list(db, rule_id=rule_id,severity=severity,status=status,entity_type=entity_type,field_name=field_name,song_id=song_id,album_key=album_key,artist_key=artist_key,automatically_repairable=automatically_repairable,first_detected_from=first_detected_from,first_detected_to=first_detected_to,last_detected_from=last_detected_from,last_detected_to=last_detected_to,resolved_from=resolved_from,resolved_to=resolved_to,ignored_from=ignored_from,ignored_to=ignored_to,limit=limit,offset=offset)
+    return {"items":[serialize_issue(x) for x in items],"pagination":{"total":total,"limit":limit,"offset":offset,"has_more":offset+len(items)<total}}
+
+@router.get("/metadata/issues/{issue_id}")
+def metadata_issue(issue_id:int, db:Session=Depends(get_db)):
+    issue=db.get(__import__('app.database.models',fromlist=['MetadataIssue']).MetadataIssue,issue_id)
+    if not issue: raise HTTPException(status_code=404,detail={"error":{"code":"issue_not_found","message":"Metadata issue not found"}})
+    return serialize_issue(issue)
+
+@router.post("/metadata/issues/{issue_id}/ignore")
+def ignore_metadata_issue(issue_id:int, db:Session=Depends(get_db)):
+    from app.database.models import MetadataIssue
+    issue=db.get(MetadataIssue,issue_id)
+    if not issue: raise HTTPException(status_code=404,detail="Metadata issue not found")
+    issue.status="ignored"; issue.ignored_at=utcnow_naive(); db.commit(); return serialize_issue(issue)
+
+@router.post("/metadata/issues/{issue_id}/restore")
+def restore_metadata_issue(issue_id:int, db:Session=Depends(get_db)):
+    from app.database.models import MetadataIssue
+    issue=db.get(MetadataIssue,issue_id)
+    if not issue: raise HTTPException(status_code=404,detail="Metadata issue not found")
+    issue.status="open"; issue.ignored_at=None; db.commit(); return serialize_issue(issue)
+
+@router.post("/metadata/issues/{issue_id}/resolve")
+def resolve_metadata_issue(issue_id:int, db:Session=Depends(get_db)):
+    try: issue=metadata_health.resolve_verified(db,issue_id); db.commit()
+    except LookupError as error: raise HTTPException(status_code=404,detail={"error":{"code":"issue_not_found","message":str(error)}}) from error
+    return serialize_issue(issue)
+
+@router.get("/metadata/summary")
+def metadata_summary(db:Session=Depends(get_db)):
+    from app.database.models import MetadataIssue
+    rows=db.execute(select(MetadataIssue.severity,MetadataIssue.status,func.count()).group_by(MetadataIssue.severity,MetadataIssue.status)).all()
+    return {"counts":[{"severity":a,"status":b,"count":c} for a,b,c in rows], "score":metadata_health.score(db)}
+
+@router.get("/metadata/rules")
+def metadata_rules(): return {"items":[{"id":key,**value,"version":"1"} for key,value in RULES.items()]}

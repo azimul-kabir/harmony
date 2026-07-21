@@ -81,6 +81,106 @@ class Song(Base):
         index=True,
     )
 
+class MetadataSuggestion(Base):
+    """Provider-neutral proposed metadata; never canonical until separately applied."""
+    __tablename__ = "metadata_suggestions"
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('song', 'album', 'artist')", name="ck_metadata_suggestion_entity_type"),
+        CheckConstraint("status IN ('pending', 'accepted', 'rejected', 'superseded', 'applied', 'apply_failed')", name="ck_metadata_suggestion_status"),
+        CheckConstraint("confidence_level IN ('exact', 'high', 'medium', 'low', 'rejected')", name="ck_metadata_suggestion_confidence_level"),
+        CheckConstraint("confidence IS NULL OR (confidence >= 0 AND confidence <= 1)", name="ck_metadata_suggestion_confidence"),
+        Index("ix_metadata_suggestions_entity", "entity_type", "entity_id", "field_name"),
+        Index("ix_metadata_suggestions_pending", "status", "created_at"),
+        Index(
+            "uq_metadata_suggestions_current_review",
+            "entity_type", "entity_id", "field_name",
+            unique=True,
+            sqlite_where=text("status IN ('accepted', 'applied')"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    current_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggested_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    provider_entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_level: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    match_explanation: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    positive_evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conflicting_evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class MetadataHistory(Base):
+    """Immutable audit record for a canonical metadata change."""
+    __tablename__ = "metadata_history"
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('song', 'album', 'artist')", name="ck_metadata_history_entity_type"),
+        Index("ix_metadata_history_entity", "entity_type", "entity_id", "changed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    previous_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    provider_entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    change_source: Mapped[str] = mapped_column(String(120), nullable=False)
+    audio_file_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reversal_of_history_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_history.id", ondelete="SET NULL"), nullable=True)
+
+
+class MetadataIssue(Base):
+    """A durable, provider-neutral finding from indexed canonical metadata."""
+    __tablename__ = "metadata_issues"
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('song', 'album', 'artist')", name="ck_metadata_issue_entity_type"),
+        CheckConstraint("severity IN ('info', 'warning', 'error', 'critical')", name="ck_metadata_issue_severity"),
+        CheckConstraint("status IN ('open', 'resolved', 'ignored')", name="ck_metadata_issue_status"),
+        Index("uq_metadata_issue_identity", "identity_key", unique=True),
+        Index("ix_metadata_issues_filter", "status", "severity", "rule_id", "entity_type"),
+        Index("ix_metadata_issues_detected", "last_detected_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    identity_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    rule_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    rule_version: Mapped[str] = mapped_column(String(20), nullable=False, default="1")
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    song_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True) # intentionally no FK: retain missing-song audit history
+    album_key: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
+    artist_key: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
+    field_name: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    explanation: Mapped[str] = mapped_column(String(1000), nullable=False)
+    current_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggested_action: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    automatically_repairable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    first_detected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    last_detected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ignored_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    detection_job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
 
 class MetadataSuggestion(Base):
     """Provider-neutral proposed metadata; never canonical until separately applied."""

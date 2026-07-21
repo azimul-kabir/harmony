@@ -34,6 +34,7 @@ async function loadHealth() {
         document.getElementById("health-score").textContent = health.health_score;
         document.getElementById("health-score-ring").style.setProperty("--health-score", `${health.health_score * 3.6}deg`);
         renderHealthChecks(health.checks || []);
+        await loadMetadataIssues();
         await loadLibraryJobs();
         document.getElementById("health-error").hidden = true;
     } catch (error) {
@@ -41,6 +42,21 @@ async function loadHealth() {
         box.textContent = `Harmony could not load Library health: ${error.message}`;
         box.hidden = false;
     }
+}
+
+async function loadMetadataIssues() {
+    const status = document.getElementById("metadata-status")?.value || "open";
+    const severity = document.getElementById("metadata-severity")?.value || "";
+    const data = await healthJson(`/api/library/health/metadata/issues?status=${encodeURIComponent(status)}&severity=${encodeURIComponent(severity)}&limit=50`);
+    const target = document.getElementById("metadata-issues");
+    const query = (document.getElementById("metadata-search")?.value || "").toLowerCase();
+    const items = data.items.filter((item) => !query || `${item.title} ${item.explanation} ${item.album_key || ""} ${item.artist_key || ""}`.toLowerCase().includes(query));
+    target.innerHTML = items.length ? items.map((item) => `<article class="health-check status-${escapeHealth(item.severity)}"><span class="health-check-indicator"></span><div><strong>${escapeHealth(item.title)}</strong><small>${escapeHealth(item.explanation)} · ${escapeHealth(item.entity_type)}</small></div><button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>${item.status === "ignored" ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>` : `<button class="btn-secondary" data-metadata-resolve="${item.id}">Resolved</button>`}</article>`).join("") : "<p>No metadata issues match these filters.</p>";
+    target.querySelectorAll("[data-metadata-ignore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataIgnore}/ignore`, {method:"POST"}); loadMetadataIssues(); });
+    target.querySelectorAll("[data-metadata-restore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataRestore}/restore`, {method:"POST"}); loadMetadataIssues(); });
+    target.querySelectorAll("[data-metadata-resolve]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataResolve}/resolve`, {method:"POST"}); loadMetadataIssues(); });
+    const summary = await healthJson("/api/library/health/metadata/summary");
+    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.open_issues} open issues (diagnostic only).`;
 }
 
 async function loadLibraryJobs() {
@@ -164,3 +180,7 @@ document.getElementById("health-task-dismiss").addEventListener("click", () => {
     healthState.taskId = null;
 });
 document.addEventListener("DOMContentLoaded", loadHealth);
+document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
+document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);
+document.getElementById("metadata-severity")?.addEventListener("change", loadMetadataIssues);
+document.getElementById("metadata-search")?.addEventListener("input", loadMetadataIssues);
