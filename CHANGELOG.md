@@ -8,9 +8,18 @@ The format is based on **Keep a Changelog**, and this project follows **Semantic
 
 ## [Unreleased]
 
-This development release establishes Harmony's Library Foundation as the
-canonical index for downloaded music and adds the management, observability,
-and scalability layers built on top of it.
+### Planned
+
+- Direct Navidrome integration beyond Harmony's existing M3U export workflow.
+
+---
+
+## [v1.5.0] - 2026-07-21
+
+Harmony v1.5.0 establishes the Library Foundation as the canonical index for
+managed music and adds the management, observability, and scalability layers
+built on top of it. Playback remains delegated to compatible media servers;
+direct Navidrome integration remains future work.
 
 ### Added
 
@@ -61,6 +70,13 @@ and scalability layers built on top of it.
   SQLite schema.
 - Added optional bounded pagination to Library list APIs while retaining
   existing client-compatible defaults.
+
+### Fixed
+
+- Backfilled legacy `songs.created_at` values during migration and made Library
+  Song serialization resilient while an upgrade is pending. This prevents
+  legacy rows with missing creation timestamps from invalidating Song API
+  responses.
 
 ### Performance
 
