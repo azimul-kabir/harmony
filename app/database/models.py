@@ -6,8 +6,10 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Index,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import (
     Mapped,
@@ -100,6 +102,14 @@ class Artwork(Base):
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        Index(
+            "uq_tasks_active_resource_key",
+            "resource_key",
+            unique=True,
+            sqlite_where=text("resource_key IS NOT NULL AND status IN ('queued', 'running', 'cancelling')"),
+        ),
+    )
     source: Mapped["SyncSource | None"] = relationship(back_populates="tasks")
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)

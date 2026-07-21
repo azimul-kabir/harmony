@@ -150,7 +150,7 @@ class LibraryMaintenanceWorker:
             update(Task)
             .where(
                 Task.task_type == TaskType.LIBRARY_MAINTENANCE.value,
-                Task.status == TaskStatus.RUNNING.value,
+                Task.status.in_((TaskStatus.RUNNING.value, TaskStatus.CANCELLING.value)),
             )
             .values(status=TaskStatus.INTERRUPTED.value, current_item=None, completed_at=utcnow_naive())
         )
@@ -221,7 +221,8 @@ class LibraryMaintenanceWorker:
             if task.status == TaskStatus.RUNNING.value:
                 task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items else TaskStatus.COMPLETED.value
         task.current_item = None
-        task.completed_at = utcnow_naive()
+        if task.status != TaskStatus.QUEUED.value:
+            task.completed_at = utcnow_naive()
         db.commit()
         library_events.publish("library.health.updated", action=action, task_id=task.id)
 
@@ -232,8 +233,9 @@ class LibraryMaintenanceWorker:
             processed_any = True
             db.refresh(task)
             if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
-                if self._stop.is_set() and task.status != TaskStatus.CANCELLED.value:
-                    task.status = TaskStatus.QUEUED.value
+                if self._stop.is_set() and task.status not in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value):
+                    task.status = TaskStatus.INTERRUPTED.value
+                    task.recovery_metadata = '{"reason":"worker_shutdown"}'
                 else:
                     task.status = TaskStatus.CANCELLED.value
                     task.skipped_items = task.total_items - task.completed_items - task.failed_items
@@ -260,8 +262,9 @@ class LibraryMaintenanceWorker:
             processed_any = True
             db.refresh(task)
             if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
-                if self._stop.is_set() and task.status != TaskStatus.CANCELLED.value:
-                    task.status = TaskStatus.QUEUED.value
+                if self._stop.is_set() and task.status not in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value):
+                    task.status = TaskStatus.INTERRUPTED.value
+                    task.recovery_metadata = '{"reason":"worker_shutdown"}'
                 else:
                     task.status = TaskStatus.CANCELLED.value
                     task.skipped_items = task.total_items - task.completed_items - task.failed_items

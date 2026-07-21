@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.database.models import Task, TaskItemFailure, SyncSource
 from sqlalchemy import select, delete
 from app.domain.task import (
@@ -46,9 +47,21 @@ def create_task(
     )
     db.add(task)
     if not commit:
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError as error:
+            db.rollback()
+            if resource_key:
+                raise ValueError("CONFLICTING_JOB: resource is already reserved") from error
+            raise
         return task
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if resource_key:
+            raise ValueError("CONFLICTING_JOB: resource is already reserved") from error
+        raise
     db.refresh(task)
     return task
 
@@ -192,10 +205,39 @@ def cancel_task(
 def record_item_failure(db: Session, task: Task, item: str, code: str, message: str) -> None:
     """Persist bounded, non-secret error details (newest 100 per job)."""
     db.add(TaskItemFailure(task_id=task.id, item_description=item[:500], error_code=code[:80], message=message[:500]))
+    db.flush()
     old = db.scalars(select(TaskItemFailure.id).where(TaskItemFailure.task_id == task.id).order_by(TaskItemFailure.id.desc()).offset(100)).all()
     if old:
         db.execute(delete(TaskItemFailure).where(TaskItemFailure.id.in_(old)))
     task.error_code, task.error_summary = code[:80], message[:500]
+
+
+def cleanup_library_jobs(db: Session, *, retain: int = 200) -> int:
+    """Delete the oldest terminal Library jobs beyond a bounded history."""
+    retain = max(0, retain)
+    terminal = (
+        TaskStatus.CANCELLED.value,
+        TaskStatus.COMPLETED.value,
+        TaskStatus.COMPLETED_WITH_ERRORS.value,
+        TaskStatus.FAILED.value,
+        TaskStatus.INTERRUPTED.value,
+    )
+    old_ids = db.scalars(
+        select(Task.id)
+        .where(
+            Task.task_type.in_((TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value)),
+            Task.status.in_(terminal),
+        )
+        .order_by(Task.created_at.desc(), Task.id.desc())
+        .offset(retain)
+    ).all()
+    if not old_ids:
+        return 0
+    # ORM deletion applies the existing cascades for item records and failures.
+    for task in db.scalars(select(Task).where(Task.id.in_(old_ids))).all():
+        db.delete(task)
+    db.commit()
+    return len(old_ids)
 
 
 def recover_library_jobs(db: Session) -> int:

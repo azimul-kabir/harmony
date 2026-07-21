@@ -55,11 +55,28 @@ def test_bulk_task_continues_after_item_failure(tmp_path, monkeypatch):
             .order_by(BulkOperationItem.id)
         ).all()
 
-        assert task.status == "failed"
+        assert task.status == "completed_with_errors"
         assert task.completed_items == 1
         assert task.failed_items == 1
         assert [item.status for item in items] == ["failed", "completed"]
-        assert items[0].error == "broken tag"
+        assert items[0].error == "The file operation failed"
+
+
+def test_bulk_task_is_failed_when_every_item_fails(tmp_path, monkeypatch):
+    with SessionLocal() as db:
+        songs = _songs(db, tmp_path)
+        task = create_bulk_task(db, operation="refresh_metadata", song_ids=[song.id for song in songs])
+        worker = LibraryBulkWorker()
+        monkeypatch.setattr(worker, "_apply", lambda *_args: (_ for _ in ()).throw(RuntimeError("secret raw payload")))
+
+        worker.process_task(db, task)
+        db.refresh(task)
+
+        assert task.status == "failed"
+        assert task.completed_items == 0
+        assert task.failed_items == 2
+        assert task.error_code == "FILE_OPERATION_FAILED"
+        assert task.error_summary == "The file operation failed"
 
 
 def test_bulk_move_preserves_song_identity_and_rejects_collisions(tmp_path, monkeypatch):

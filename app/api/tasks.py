@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.database.models import Task, TaskItemFailure
@@ -16,6 +16,10 @@ router = APIRouter(
     prefix="/api/tasks",
     tags=["tasks"],
 )
+
+LIBRARY_TASK_TYPES = ("library_bulk", "library_maintenance")
+ACTIVE_JOB_STATES = ("queued", "running", "cancelling")
+TERMINAL_JOB_STATES = ("cancelled", "completed", "completed_with_errors", "failed", "interrupted")
 
 @router.get("")
 def list_tasks(db: Session = Depends(get_db)):
@@ -54,39 +58,49 @@ def list_tasks(db: Session = Depends(get_db)):
 
 @router.get("/jobs/active", summary="List active persistent Library jobs")
 def active_jobs(db: Session = Depends(get_db)):
-    jobs = db.scalars(select(Task).where(Task.task_type.in_(("library_bulk", "library_maintenance")), Task.status.in_(("queued", "running", "cancelling"))).order_by(Task.created_at.desc())).all()
+    jobs = db.scalars(select(Task).where(Task.task_type.in_(LIBRARY_TASK_TYPES), Task.status.in_(ACTIVE_JOB_STATES)).order_by(Task.created_at.desc())).all()
     return [serialize_task_progress(job) for job in jobs]
 
 @router.get("/jobs/recent", summary="List recent Library jobs")
 def recent_jobs(limit: int = 25, db: Session = Depends(get_db)):
-    jobs = db.scalars(select(Task).where(Task.task_type.in_(("library_bulk", "library_maintenance"))).order_by(Task.created_at.desc()).limit(min(max(limit, 1), 100))).all()
+    jobs = db.scalars(select(Task).where(Task.task_type.in_(LIBRARY_TASK_TYPES)).order_by(Task.created_at.desc()).limit(min(max(limit, 1), 100))).all()
     return [serialize_task_progress(job) for job in jobs]
 
 @router.get("/jobs/{task_id}", summary="Get persistent Library job details")
 def job_details(task_id: int, db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
-    if not task or task.task_type not in ("library_bulk", "library_maintenance"):
+    if not task or task.task_type not in LIBRARY_TASK_TYPES:
         raise HTTPException(status_code=404, detail="Library job not found")
     return serialize_task_progress(task)
 
 @router.get("/jobs/{task_id}/failures", summary="Paginate safe per-item Library job failures")
 def job_failures(task_id: int, offset: int = 0, limit: int = 50, db: Session = Depends(get_db)):
-    if not db.get(Task, task_id): raise HTTPException(status_code=404, detail="Library job not found")
+    task = db.get(Task, task_id)
+    if not task or task.task_type not in LIBRARY_TASK_TYPES:
+        raise HTTPException(status_code=404, detail="Library job not found")
+    safe_offset = max(offset, 0)
+    safe_limit = min(max(limit, 1), 100)
     query = select(TaskItemFailure).where(TaskItemFailure.task_id == task_id).order_by(TaskItemFailure.id.desc())
     total = db.scalar(select(func.count()).select_from(TaskItemFailure).where(TaskItemFailure.task_id == task_id)) or 0
-    rows = db.scalars(query.offset(max(offset, 0)).limit(min(max(limit, 1), 100))).all()
-    return {"items": [{"id": x.id, "item": x.item_description, "error_code": x.error_code, "message": x.message, "created_at": x.created_at} for x in rows], "total": total, "offset": offset, "limit": limit}
+    rows = db.scalars(query.offset(safe_offset).limit(safe_limit)).all()
+    return {"items": [{"id": x.id, "item": x.item_description, "error_code": x.error_code, "message": x.message, "created_at": x.created_at} for x in rows], "total": total, "offset": safe_offset, "limit": safe_limit}
 
 @router.post("/jobs/{task_id}/cancel", summary="Request cooperative Library job cancellation")
 def cancel_job(task_id: int, db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
-    if not task or task.task_type not in ("library_bulk", "library_maintenance"): raise HTTPException(status_code=404, detail="Library job not found")
+    if not task or task.task_type not in LIBRARY_TASK_TYPES: raise HTTPException(status_code=404, detail="Library job not found")
     cancel_task(db, task)
     return serialize_task_progress(task)
 
 @router.get("/library-activity", summary="Recent completed Library activity")
 def library_activity(limit: int = 20, db: Session = Depends(get_db)):
-    return recent_jobs(limit, db)
+    jobs = db.scalars(
+        select(Task)
+        .where(Task.task_type.in_(LIBRARY_TASK_TYPES), Task.status.in_(TERMINAL_JOB_STATES))
+        .order_by(Task.completed_at.desc(), Task.id.desc())
+        .limit(min(max(limit, 1), 100))
+    ).all()
+    return [serialize_task_progress(job) for job in jobs]
 
 @router.post("/{task_id}/pause")
 def pause(task_id: int, db: Session = Depends(get_db)):

@@ -22,6 +22,14 @@ def upgrade() -> None:
                 batch.add_column(sa.Column(name, type_, nullable=True))
     op.execute("UPDATE tasks SET resumable = 0 WHERE resumable IS NULL")
     op.create_index("ix_tasks_resource_key", "tasks", ["resource_key"], if_not_exists=True)
+    op.create_index(
+        "uq_tasks_active_resource_key",
+        "tasks",
+        ["resource_key"],
+        unique=True,
+        sqlite_where=sa.text("resource_key IS NOT NULL AND status IN ('queued', 'running', 'cancelling')"),
+        if_not_exists=True,
+    )
     if "task_item_failures" not in inspector.get_table_names():
         op.create_table("task_item_failures", sa.Column("id", sa.Integer(), primary_key=True),
             sa.Column("task_id", sa.Integer(), sa.ForeignKey("tasks.id"), nullable=False),
@@ -31,3 +39,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("task_item_failures")
+    op.drop_index("uq_tasks_active_resource_key", table_name="tasks")
+    op.drop_index("ix_tasks_resource_key", table_name="tasks")

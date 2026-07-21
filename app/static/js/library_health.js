@@ -44,12 +44,19 @@ async function loadHealth() {
 }
 
 async function loadLibraryJobs() {
-    const jobs = await healthJson("/api/tasks/jobs/recent?limit=8");
-    const target = document.getElementById("library-jobs-list");
-    target.innerHTML = jobs.length ? jobs.map((job) => `<article class="health-check">
+    const [active, recent] = await Promise.all([
+        healthJson("/api/tasks/jobs/active"),
+        healthJson("/api/tasks/library-activity?limit=8"),
+    ]);
+    const renderJobs = (target, jobs, empty) => {
+        target.innerHTML = jobs.length ? jobs.map((job) => `<article class="health-check status-${escapeHealth(job.status)}">
       <span class="health-check-indicator" aria-hidden="true"></span><div><strong>${escapeHealth(job.name)}</strong><small>${escapeHealth(job.status)} · ${job.processed}/${job.total}${job.error_code ? ` · ${escapeHealth(job.error_code)}` : ""}</small></div>
-      ${["queued", "running", "cancelling"].includes(job.status) ? `<button class="btn-secondary" data-job-cancel="${job.id}">Cancel</button>` : ""}</article>`).join("") : "<p>No library jobs yet.</p>";
-    target.querySelectorAll("[data-job-cancel]").forEach((button) => button.addEventListener("click", async () => {
+      ${["queued", "running", "cancelling"].includes(job.status) ? `<button class="btn-secondary" data-job-cancel="${job.id}">Cancel</button>` : ""}</article>`).join("") : `<p>${empty}</p>`;
+    };
+    const activeTarget = document.getElementById("library-active-jobs");
+    renderJobs(activeTarget, active, "No active jobs.");
+    renderJobs(document.getElementById("library-recent-activity"), recent, "No recent activity.");
+    activeTarget.querySelectorAll("[data-job-cancel]").forEach((button) => button.addEventListener("click", async () => {
         await healthJson(`/api/tasks/jobs/${button.dataset.jobCancel}/cancel`, {method: "POST"});
         loadLibraryJobs();
     }));
@@ -102,7 +109,7 @@ async function pollHealthTask() {
 }
 
 function renderHealthTask(task) {
-    const terminal = ["completed", "failed", "cancelled"].includes(task.status);
+    const terminal = ["completed", "completed_with_errors", "failed", "cancelled", "interrupted"].includes(task.status);
     document.getElementById("health-task").hidden = false;
     document.getElementById("health-task-name").textContent = task.name;
     document.getElementById("health-task-count").textContent = `${task.processed} of ${task.total}`;

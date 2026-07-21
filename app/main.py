@@ -25,7 +25,7 @@ from app.services.dashboard import get_dashboard_stats
 from app.services.library_watcher import LibraryWatcher
 from app.services.library_bulk import library_bulk_worker
 from app.services.library_health import library_maintenance_worker
-from app.services.task_service import recover_library_jobs
+from app.services.task_service import cleanup_library_jobs, recover_library_jobs
 from app.web.downloads import router as downloads_page_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         recover_library_jobs(db)
+        cleanup_library_jobs(db)
     finally:
         db.close()
     library_bulk_worker.start()
