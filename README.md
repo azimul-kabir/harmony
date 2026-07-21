@@ -341,6 +341,10 @@ Navidrome / Jellyfin / Plex
 
 # Installation
 
+`pyproject.toml` is Harmony's canonical dependency manifest. The filesystem
+watcher is a required production dependency because the Library watcher is
+enabled by default; installing Harmony always installs `watchdog`.
+
 Clone the repository.
 
 ```bash
@@ -393,6 +397,23 @@ Interactive API documentation is available at:
 ```text
 http://localhost:8080/docs
 ```
+
+## Development and Testing
+
+Install the development extra before running tests. It includes pytest as well
+as Harmony's required runtime dependencies, including `watchdog` and its
+watcher tests:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+Do not install from a separate requirements file: production, development, and
+test dependencies are declared in `pyproject.toml`. If dependency installation
+fails, resolve the package index, proxy, or network configuration first rather
+than skipping the watcher tests.
 
 ---
 
