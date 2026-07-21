@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.4.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,10 +25,10 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v1.4.0**
+Current stable version: **v1.5.0**
 
-The `codex-new` branch also contains the unreleased Library Foundation described
-below. See [CHANGELOG.md](CHANGELOG.md) for the complete development history.
+See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
+[v1.5.0 release notes](docs/releases/v1.5.0.md) for upgrade guidance.
 
 ---
 
@@ -64,15 +64,17 @@ Features include:
 
 ---
 
-## 📚 Indexed Library Manager
+## 📚 Library Foundation
 
-Harmony's persistent Library Index is the single source of truth for downloaded
+Harmony's persistent Library Index is the single source of truth for managed
 music. It stores stable Song IDs, paths, metadata, technical audio properties,
-external identifiers, source provenance, artwork state, and file availability.
+external identifiers, source provenance, artwork state, availability, and
+timestamps.
 
 The index updates incrementally through a supervised filesystem watcher. New,
 modified, deleted, moved, and renamed files are reconciled without periodic
-full-library scans.
+full-library scans. Library search, collections, analytics, health, and bulk
+operations read this index instead of walking the music filesystem.
 
 ### Songs View
 
@@ -101,7 +103,7 @@ full-library scans.
 - Album counts
 - Click to browse artist collection
 
-### Smart Collections
+### Smart Collections and Health
 
 - Recently Added and Recently Downloaded
 - Highest Bitrate
@@ -109,6 +111,7 @@ full-library scans.
 - Recently Modified
 - Large Albums
 - Favorites placeholder for a future favorites signal
+- Library health score, indexing checks, and maintenance actions
 
 ---
 
@@ -458,6 +461,7 @@ Just a synchronized self-hosted music library.
 - Scheduled synchronization
 - Backup & restore
 - Import/export settings
+- Direct Navidrome integration beyond the existing M3U workflow
 
 ---
 
