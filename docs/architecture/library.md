@@ -388,6 +388,10 @@ Filesystem tools often emit several notifications while a file is being
 written. Events are coalesced per path and failed indexing operations are
 retried with bounded backoff. A supervisor restarts the native observer if it
 stops unexpectedly. Failures and recoveries use the standard Harmony logger.
+Watcher notifications are best effort: Docker and Synology mounts can coalesce,
+delay, duplicate, or omit them, so a manual Refresh Library remains the
+integrity-reconciliation path. As defence in depth, events that resolve outside
+the configured music root, including symlink escapes, are ignored.
 
 The watcher publishes transient domain events through `LibraryEventBroker`:
 
