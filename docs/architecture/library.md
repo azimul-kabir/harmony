@@ -259,6 +259,155 @@ Artist identities are normalized canonical artist strings with only a leading
 `The` treated as equivalent; featured-artist tokens and version markers are
 retained. These keys are projection identities, not future normalized IDs.
 
+## Metadata Matching and Confidence Engine
+
+Metadata matching is a provider-neutral read pipeline:
+
+```
+canonical Library projection -> bounded provider searches -> normalized candidates
+ -> deterministic scorer -> durable ranked discovery -> explicit selection
+ -> explicit pending field-level suggestions
+```
+
+Provider retrieval, matching, persistence, suggestion generation, and future
+metadata application are separate layers. The scorer imports only normalized
+`RecordingCandidate`, `ReleaseCandidate`, and `ArtistCandidate` models. It never
+sees MusicBrainz response objects or raw payloads. Discovery neither changes a
+Song nor opens an audio file, and selection does not imply metadata acceptance.
+
+Public discovery is Song-only in v1.6.0. Album and artist projection scorers
+remain internal because those projections do not yet have normalized persistent
+identities. Public attempts to use unsupported entity scopes return
+`unsupported_entity_type`; no partially functional album/artist workflow is
+advertised.
+
+### Search strategy and bounds
+
+Song searches run in stable order: existing provider recording ID lookup, ISRC,
+exact title plus artist, title plus artist plus album, title plus album artist,
+and conservative normalized title plus artist. At most six variants run, each
+returns at most 10 candidates, at most 40 unique provider/entity identities are
+considered, and at most 15 ranked results are retained. Results are deduplicated
+by provider and provider entity ID while preserving every search label that
+found them. A failed variant is retained as a bounded safe error and does not
+discard candidates from successful variants. Filename is diagnostic only.
+
+### Song scoring
+
+The `deterministic-2026-07` score normalizes available weighted evidence onto
+0–100; unavailable evidence is neutral and produces a structured explanation.
+
+| Evidence | Weight / behavior |
+| --- | --- |
+| Exact ISRC | 36; a conflicting supplied ISRC rejects |
+| Existing provider recording ID | 40; a conflict rejects |
+| Title | 26, similarity weighted; severe contradiction rejects |
+| Full artist credit | 22, similarity weighted; featured artists are retained |
+| Album | 6; mismatch has only a limited penalty |
+| Album artist | 4; unavailable is neutral |
+| Duration | 8 within 3 seconds, half within 10 seconds; over 90 seconds rejects |
+| Track / disc | 3 / 2; mismatch is contextual |
+| Release year | 3; adjacent years receive partial evidence |
+| Version markers | +4 agreement; incompatible markers reject with a 30-point penalty |
+| Compilation context | 2 agreement; mismatch has a one-point contextual penalty |
+
+Identity-significant markers are live, remix, remaster/remastered, acoustic,
+instrumental, karaoke, demo, edit/radio edit, extended, mono, stereo, cover,
+anniversary, and deluxe. They are never removed by normalization. Album and
+artist projection scoring uses the same result/evidence framework but is
+initially conservative.
+
+Thresholds are configurable: exact 97–100, high 88–96, medium 72–87, low
+50–71, rejected below 50 or on hard contradiction. Exact additionally requires
+an exact ISRC or existing provider ID and no contradiction; fuzzy text alone
+cannot be exact. Ranking is score descending, then provider and provider entity
+ID as documented stable tie-breakers. Scores within three points are ambiguous;
+an exact label is downgraded while ambiguous. Low and ambiguous selection needs
+explicit confirmation, and rejected results cannot be selected.
+
+### Persistence and lifecycle
+
+`metadata_discoveries` retains entity/key, provider, status, selected result,
+ambiguity, timestamps, job linkage, version fields, bounded query summary, and
+bounded safe failures. A SHA-256 snapshot of identity-relevant canonical Song
+columns marks a result stale if those columns change later; it contains no path.
+`metadata_match_results` retains candidate summaries,
+rank/score/confidence, viability, structured evidence, rejection reasons, and
+search provenance. Neither table references a Song, so missing-song audit data
+survives. Raw provider payloads and local paths are never stored. Common entity,
+provider, status, job, timestamp, score, and confidence paths are indexed.
+
+Operators should periodically remove old unselected discoveries according to
+deployment needs; selected discoveries and discoveries referenced by pending
+suggestions must be retained. The service retains no more than 15 results per
+discovery. Rerun creates a new auditable session rather than overwriting one.
+
+Suggestion generation is a separate explicit operation on a selected viable
+result. It creates only supported, present, changed field values, remains
+pending, preserves discovery/result/job IDs plus provider/score/evidence
+provenance, and suppresses an equivalent pending suggestion. Field failures are
+reported separately without removing successful field suggestions. It never
+accepts or applies a suggestion.
+
+### Durable discovery jobs and locking
+
+Starting discovery creates the `Task`, per-Song `MetadataDiscovery` rows, and
+per-Song reservations in one transaction, then returns immediately. The
+existing Library Maintenance worker owns provider I/O and scoring; no second
+queue or executor exists. A database transaction is committed before each
+network sequence. Cancellation is checked between Songs and provider variants.
+Successful variants survive bounded failures, and per-Song results commit
+independently. Provider-variant errors yield `completed_with_errors`; isolated
+Song failures also yield `completed_with_errors`; only an unexpected job-level
+failure is `failed`. Process restarts use the existing non-resumable
+`interrupted` behavior and release abandoned reservations.
+
+`metadata_discovery_locks` has one primary-key row per Song and references its
+active task. This transactionally rejects single or batch scopes overlapping
+any active discovery while unrelated Songs remain concurrent. The stable error
+is `discovery_conflict` and its message identifies the active job when known.
+Queued cancellation and terminal/restart handling release locks. Future
+metadata-writing jobs must reserve/check the same per-Song lock boundary;
+ordinary read-only browsing and search take no lock.
+
+Selected-Song requests sort and deduplicate IDs, cap the scope at the configured
+maximum (500 by default), and are processed in bounded order without loading
+the full Library. Health discovery is explicit and resolves supported open
+song, album-projection, and artist-projection issues into a bounded deduplicated
+Song scope. Health analysis never starts discovery, and discovery never changes
+issue state.
+
+Normalized recording candidates now include album artist, track/disc totals,
+release/original dates and year, ISRC, compilation context, recording/release
+disambiguation, recording artist/release artist IDs, release/release-group IDs,
+and the conservative release context used. MusicBrainz parsing remains inside
+the provider. Search responses use the first normalized release supplied by
+MusicBrainz and record `first_normalized_release`; absent or ambiguous values
+remain absent. Cache normalization version `ws2-normalization-v2` prevents old
+schema entries from being reused as current candidates.
+
+Stable additive APIs below `/api/metadata/discoveries` are:
+
+- `POST /songs/{song_id}`: queue one Song and return job/discovery linkage.
+- `POST /songs`: queue an explicit selected-Song scope.
+- `POST /health-rules` and `/health-issues`: queue explicit health scopes.
+- `GET /`: paginate and filter durable discoveries.
+- `GET /{id}`: retrieve state, stale flag, and ranked candidates.
+- `POST /{id}/rerun`: queue a new auditable discovery.
+- `POST /{id}/select` and `DELETE /{id}/selection`: manage selection.
+- `POST /{id}/suggestions`: explicitly create pending field suggestions.
+- `GET /{id}/compare`: compare two persisted candidate explanations.
+- `GET /capabilities`: retrieve public boundary, versions, thresholds, and bounds.
+
+Job polling, cancellation, safe failures, and Activity use the unchanged
+`/api/tasks/jobs/...` and `/api/tasks/library-activity` contracts. The Song
+dialog queues and polls jobs, supports cancellation/retry, reports partial,
+interrupted, no-result and stale states, compares two results, confirms weak or
+ambiguous selection, and keeps Select separate from Generate Suggestions.
+Responses use the existing structured domain error envelope. The original
+Provider, Metadata, Health, Library, and Jobs API contracts remain additive and
+compatible.
+
 ### Rule registration and execution
 
 Rules are described by immutable `RuleDefinition` records and registered with

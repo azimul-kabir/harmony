@@ -22,7 +22,7 @@ from app.providers.metadata.http import ProviderHttpClient, RetryPolicy
 from app.providers.metadata.rate_limit import AsyncRateLimiter
 
 PROVIDER = "musicbrainz"
-PROVIDER_VERSION = "ws2-normalization-v1"
+PROVIDER_VERSION = "ws2-normalization-v2"
 _MBID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
 _candidate_adapter = TypeAdapter(ProviderCandidate)
 
@@ -41,6 +41,16 @@ def _artist_credit(data: dict) -> str | None:
         name = _text(item.get("name")) or _text(artist.get("name"))
         if name: parts.append(name + (item.get("joinphrase") if isinstance(item.get("joinphrase"), str) else ""))
     return "".join(parts).strip() or None
+
+
+def _artist_credit_id(data: dict) -> str | None:
+    credits=data.get("artist-credit") or []
+    if not isinstance(credits,list): return None
+    for item in credits:
+        artist=item.get("artist") if isinstance(item,dict) else None
+        value=_text(artist.get("id")) if isinstance(artist,dict) else None
+        if value: return value
+    return None
 
 
 def _aliases(data: dict) -> tuple[str, ...]:
@@ -102,6 +112,12 @@ def _track_context(release: dict) -> tuple[int | None, int | None]:
     return None, None
 
 
+def _release_counts(release: dict) -> tuple[int | None,int | None]:
+    media=release.get("media") if isinstance(release.get("media"),list) else []
+    counts=[x.get("track-count") for x in media if isinstance(x,dict) and isinstance(x.get("track-count"),int)]
+    return (sum(counts) or None,len(media) or None)
+
+
 def normalize(entity_type: EntityType, data: dict) -> ProviderCandidate:
     entity_id, title = _text(data.get("id")), _text(data.get("title")) or _text(data.get("name"))
     if not entity_id or not title:
@@ -126,11 +142,20 @@ def normalize(entity_type: EntityType, data: dict) -> ProviderCandidate:
     release = _first_release(data)
     group = _release_group(release)
     track, disc = _track_context(release)
+    total_tracks,total_discs=_release_counts(release)
     length = data.get("length")
+    release_date=_text(release.get("date"));original_date=_text(group.get("first-release-date"))
+    secondary=group.get("secondary-types") if isinstance(group.get("secondary-types"),list) else []
+    isrcs=[_text(x) for x in data.get("isrcs",[]) if _text(x)]
     return RecordingCandidate(**common, artist=_artist_credit(data), album=_text(release.get("title")),
         duration_seconds=length / 1000 if isinstance(length, (int, float)) else None,
         track_number=track, disc_number=disc, release_date=_text(release.get("date")),
-        release_group=_text(group.get("title")))
+        release_group=_text(group.get("title")),album_artist=_artist_credit(release),total_tracks=total_tracks,total_discs=total_discs,
+        original_release_date=original_date,year=int(release_date[:4]) if release_date and release_date[:4].isdigit() else None,
+        isrc=isrcs[0] if len(isrcs)==1 else None,recording_disambiguation=_text(data.get("disambiguation")),
+        release_disambiguation=_text(release.get("disambiguation")),compilation=True if "Compilation" in secondary else None,
+        release_id=_text(release.get("id")),release_group_id=_text(group.get("id")),artist_id=_artist_credit_id(data),
+        release_artist_id=_artist_credit_id(release),release_context="first_normalized_release" if release else None)
 
 
 class MusicBrainzProvider(MetadataProvider):

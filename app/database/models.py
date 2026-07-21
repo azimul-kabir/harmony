@@ -123,6 +123,8 @@ class MetadataSuggestion(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by_job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    discovery_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    match_result_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
@@ -149,6 +151,70 @@ class MetadataHistory(Base):
     audio_file_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     reversal_of_history_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_history.id", ondelete="SET NULL"), nullable=True)
+
+
+class MetadataDiscovery(Base):
+    """Durable review session; intentionally has no Song foreign key."""
+    __tablename__ = "metadata_discoveries"
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('song', 'album', 'artist')", name="ck_metadata_discovery_entity_type"),
+        CheckConstraint("status IN ('queued', 'running', 'completed', 'completed_with_errors', 'cancelled', 'failed')", name="ck_metadata_discovery_status"),
+        Index("ix_metadata_discoveries_entity", "entity_type", "entity_id", "created_at"),
+        Index("ix_metadata_discoveries_filter", "provider", "status", "ambiguous"),
+        Index("ix_metadata_discoveries_job", "job_id"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(500), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="running")
+    selected_match_result_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    ambiguous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    matcher_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    scoring_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    query_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    canonical_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    results: Mapped[list["MetadataMatchResult"]] = relationship(back_populates="discovery", cascade="all, delete-orphan")
+
+
+class MetadataMatchResult(Base):
+    __tablename__ = "metadata_match_results"
+    __table_args__ = (
+        CheckConstraint("confidence_level IN ('exact', 'high', 'medium', 'low', 'rejected')", name="ck_metadata_match_confidence"),
+        CheckConstraint("score >= 0 AND score <= 100", name="ck_metadata_match_score"),
+        Index("ix_metadata_match_results_ranking", "discovery_id", "rank", "score"),
+        Index("ix_metadata_match_results_confidence", "confidence_level", "score"),
+        Index("uq_metadata_match_result_provider", "discovery_id", "provider_entity_id", unique=True),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    discovery_id: Mapped[int] = mapped_column(ForeignKey("metadata_discoveries.id", ondelete="CASCADE"), nullable=False)
+    provider_entity_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    viable: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    ambiguous: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    hard_rejection: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    candidate_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    positive_evidence: Mapped[str] = mapped_column(Text, nullable=False)
+    conflicting_evidence: Mapped[str] = mapped_column(Text, nullable=False)
+    unavailable_evidence: Mapped[str] = mapped_column(Text, nullable=False)
+    rejection_reasons: Mapped[str] = mapped_column(Text, nullable=False)
+    search_provenance: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    discovery: Mapped["MetadataDiscovery"] = relationship(back_populates="results")
+
+
+class MetadataDiscoveryLock(Base):
+    """Per-Song active discovery reservation; removed when its job terminates."""
+    __tablename__ = "metadata_discovery_locks"
+    song_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
 
 class ProviderCacheEntry(Base):

@@ -42,6 +42,18 @@ def test_normalization_exposes_domain_fields_only():
     assert "artist-credit" not in item.model_dump()
 
 
+def test_recording_normalization_exposes_release_context_for_suggestions():
+    payload=recording_payload();release=payload["releases"][0]
+    release.update({"id":"release-id","disambiguation":"Deluxe","artist-credit":[{"artist":{"id":"release-artist-id","name":"Album Artist"}}]})
+    release["release-group"].update({"id":"group-id","first-release-date":"2019-01-01","secondary-types":["Compilation"]})
+    release["media"][0]["track-count"]=10
+    item=normalize("recording",payload)
+    assert item.release_id=="release-id" and item.release_group_id=="group-id"
+    assert item.artist_id=="223e4567-e89b-12d3-a456-426614174000" and item.release_artist_id=="release-artist-id"
+    assert (item.track_number,item.total_tracks,item.disc_number,item.total_discs)==(3,10,2,1)
+    assert item.original_release_date=="2019-01-01" and item.year==2020 and item.compilation is True
+
+
 def test_provider_implements_abstraction():
     provider = MusicBrainzProvider(settings(), transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})))
     assert isinstance(provider, MetadataProvider)

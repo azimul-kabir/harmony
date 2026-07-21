@@ -41,6 +41,20 @@ class RecordingCandidate(CandidateBase):
     disc_number: int | None = None
     release_date: str | None = None
     release_group: str | None = None
+    album_artist: str | None = None
+    total_tracks: int | None = None
+    total_discs: int | None = None
+    original_release_date: str | None = None
+    year: int | None = None
+    isrc: str | None = None
+    recording_disambiguation: str | None = None
+    release_disambiguation: str | None = None
+    compilation: bool | None = None
+    release_id: str | None = None
+    release_group_id: str | None = None
+    artist_id: str | None = None
+    release_artist_id: str | None = None
+    release_context: str | None = None
 
 
 class ReleaseCandidate(CandidateBase):

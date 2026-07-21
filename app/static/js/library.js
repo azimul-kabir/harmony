@@ -462,7 +462,86 @@ async function openMetadataReview(songId) {
     const dialog = document.getElementById("metadata-review-dialog");
     dialog.dataset.songId = String(songId);
     dialog.showModal();
+    document.getElementById("metadata-discover").onclick = () => discoverMetadataMatch(songId);
     await loadMetadataReview(songId);
+}
+
+async function discoverMetadataMatch(songId) {
+    const status = document.getElementById("metadata-review-status");
+    const target = document.getElementById("metadata-matches");
+    status.textContent = "Discovering bounded provider candidates…";
+    target.innerHTML = '<p class="library-search-status">Contacting metadata provider…</p>';
+    try {
+        const response = await fetch(`/api/metadata/discoveries/songs/${songId}`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "musicbrainz" }),
+        });
+        const started = await response.json();
+        if (!response.ok) throw new Error(started.error?.message || "Discovery failed");
+        const job = started.job;
+        const discoveryId = started.discovery.id;
+        target.innerHTML = `<p class="library-search-status">Discovery job ${job.id} queued.</p><button class="btn-secondary" type="button" data-cancel-discovery="${job.id}">Cancel discovery</button>`;
+        target.querySelector("[data-cancel-discovery]").onclick = async () => fetch(`/api/tasks/jobs/${job.id}/cancel`, {method:"POST"});
+        let state = job;
+        while (["queued", "running", "cancelling"].includes(state.status)) {
+            await new Promise((resolve) => setTimeout(resolve, 750));
+            state = await fetchJson(`/api/tasks/jobs/${job.id}`);
+            status.textContent = `${state.status.replaceAll("_", " ")} · ${state.progress_percentage}% · ${state.processed_items}/${state.total_items}`;
+        }
+        if (["cancelled", "interrupted", "failed"].includes(state.status)) {
+            target.innerHTML = `<p class="library-search-status">Discovery ${escapeHtml(state.status)}. Existing metadata was not changed.</p><button class="btn-secondary" type="button" data-retry-discovery>Retry discovery</button>`;
+            target.querySelector("[data-retry-discovery]").onclick = () => discoverMetadataMatch(songId);
+            return;
+        }
+        const discovery = await fetchJson(`/api/metadata/discoveries/${discoveryId}`);
+        renderMetadataMatches(discovery, target);
+        status.textContent = discovery.status === "completed_with_errors" ? "Partial results: one or more provider searches failed safely." : "Discovery complete. Selection does not accept metadata.";
+    } catch (error) {
+        target.innerHTML = '<p class="library-search-status">Provider discovery is unavailable. Existing metadata was not changed.</p>';
+        status.textContent = error.message;
+    }
+}
+
+function renderMetadataMatches(discovery, target) {
+        target.innerHTML = `${discovery.stale ? '<p class="library-search-status">These results are stale because canonical metadata changed after discovery.</p>' : ""}${discovery.results.map((result) => {
+            const candidate = result.candidate_summary;
+            const label = result.confidence_level === "medium" ? "possible match" : result.confidence_level === "low" ? "weak match" : `${result.confidence_level} confidence`;
+            return `<article class="metadata-suggestion-card">
+                <header><strong>${escapeHtml(candidate.title || "Untitled candidate")}</strong><span>${result.score.toFixed(2)} · ${escapeHtml(result.ambiguous ? "ambiguous" : label)}</span></header>
+                <p>${escapeHtml(candidate.artist || "Unknown artist")} · ${escapeHtml(candidate.album || "Release unavailable")} · ${escapeHtml(candidate.release_date || "Date unavailable")}</p>
+                <small><b>Positive evidence:</b> ${escapeHtml(result.positive_evidence.map((item) => item.message).join(" · ") || "None")}</small>
+                <small><b>Conflicts:</b> ${escapeHtml(result.conflicting_evidence.map((item) => item.message).join(" · ") || "None")}</small>
+                <small><b>Unavailable:</b> ${escapeHtml(result.unavailable_evidence.map((item) => item.message).join(" · ") || "None")}</small>
+                <small><b>Found by:</b> ${escapeHtml(result.search_provenance.join(" · ") || "Unknown")}</small>
+                <label><input type="checkbox" data-compare-result="${result.id}"> Compare</label>
+                ${result.viable ? `<button class="btn-secondary" type="button" data-match-result="${result.id}" data-discovery="${discovery.id}" data-confirm="${result.ambiguous || result.confidence_level === "low"}">Select candidate</button>` : "<b>Rejected candidate</b>"}
+            </article>`;
+        }).join("") || '<p class="library-search-status">No provider candidates were found.</p>'}<button class="btn-secondary" type="button" data-compare-selected>Compare two selected candidates</button><div data-comparison-output></div>`;
+        target.querySelectorAll("[data-match-result]").forEach((button) => button.addEventListener("click", () => selectMetadataMatch(button)));
+        target.querySelector("[data-compare-selected]").onclick = async () => {
+            const ids=[...target.querySelectorAll("[data-compare-result]:checked")].map((item)=>item.dataset.compareResult);
+            if (ids.length !== 2) { target.querySelector("[data-comparison-output]").textContent="Select exactly two candidates to compare."; return; }
+            const comparison=await fetchJson(`/api/metadata/discoveries/${discovery.id}/compare?left_result_id=${ids[0]}&right_result_id=${ids[1]}`);
+            target.querySelector("[data-comparison-output]").innerHTML=`<p><strong>Score difference:</strong> ${comparison.score_difference}</p><small>${escapeHtml(comparison.left.positive_evidence.map((x)=>x.message).join(" · "))}</small><small>${escapeHtml(comparison.right.positive_evidence.map((x)=>x.message).join(" · "))}</small>`;
+        };
+}
+
+async function selectMetadataMatch(button) {
+    const needsConfirmation = button.dataset.confirm === "true";
+    if (needsConfirmation && !window.confirm("This candidate is ambiguous or low confidence. Select it for suggestion generation anyway?")) return;
+    const response = await fetch(`/api/metadata/discoveries/${button.dataset.discovery}/select`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+        result_id:Number(button.dataset.matchResult), confirm_ambiguous:needsConfirmation, confirm_low_confidence:needsConfirmation,
+    })});
+    if (!response.ok) { document.getElementById("metadata-review-status").textContent="Candidate selection could not be saved."; return; }
+    const generateButton = button.cloneNode(true);
+    generateButton.textContent = "Generate pending suggestions";
+    button.replaceWith(generateButton);
+    generateButton.addEventListener("click", async () => {
+        generateButton.disabled = true;
+        const generate = await fetch(`/api/metadata/discoveries/${generateButton.dataset.discovery}/suggestions`, {method:"POST"});
+        document.getElementById("metadata-review-status").textContent = generate.ok ? "Pending suggestions generated; acceptance remains a separate decision." : "The selected candidate produced no new applicable suggestions.";
+        await loadMetadataReview(Number(document.getElementById("metadata-review-dialog").dataset.songId));
+    });
+    document.getElementById("metadata-review-status").textContent = "Candidate selected. Generate suggestions only if you want field-level proposals.";
 }
 
 async function loadMetadataReview(songId) {

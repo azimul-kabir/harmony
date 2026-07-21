@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import asyncio
+import itertools
 from pathlib import Path
 import threading
 
@@ -10,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.core.time import utcnow_naive
-from app.database.models import Artwork, MetadataIssue, Song, Task
+from app.database.models import Artwork, MetadataDiscovery, MetadataIssue, Song, Task
 from app.database.session import SessionLocal
 from app.database.pagination import iter_primary_keys
 from app.domain.task import TaskStatus, TaskType
@@ -21,6 +23,7 @@ from app.services.library_search import library_search
 from app.services.library_predicates import missing_metadata_expression
 from app.services.task_service import create_task, record_item_failure
 from app.services.metadata_health import metadata_health
+from app.services.metadata_discovery import metadata_discovery_service
 
 
 HEALTH_ACTIONS = {
@@ -131,6 +134,7 @@ class LibraryMaintenanceWorker:
         self.settings = get_settings()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -165,28 +169,32 @@ class LibraryMaintenanceWorker:
         db.commit()
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            db = SessionLocal()
-            try:
-                task = db.scalar(
-                    select(Task)
-                    .where(
-                        Task.task_type == TaskType.LIBRARY_MAINTENANCE.value,
-                        Task.status == TaskStatus.QUEUED.value,
+        self._loop=asyncio.new_event_loop()
+        try:
+            while not self._stop.is_set():
+                db = SessionLocal()
+                try:
+                    task = db.scalar(
+                        select(Task)
+                        .where(
+                            Task.task_type == TaskType.LIBRARY_MAINTENANCE.value,
+                            Task.status == TaskStatus.QUEUED.value,
+                        )
+                        .order_by(Task.created_at, Task.id)
+                        .limit(1)
                     )
-                    .order_by(Task.created_at, Task.id)
-                    .limit(1)
-                )
-                if task:
-                    self.process_task(db, task)
-                    continue
-            except Exception:
-                logger.exception("Library maintenance worker recovered after failure")
-                db.rollback()
-                self._recover(db)
-            finally:
-                db.close()
-            self._stop.wait(self.poll_seconds)
+                    if task:
+                        self.process_task(db, task)
+                        continue
+                except Exception:
+                    logger.exception("Library maintenance worker recovered after failure")
+                    db.rollback()
+                    self._recover(db)
+                finally:
+                    db.close()
+                self._stop.wait(self.poll_seconds)
+        finally:
+            self._loop.close();self._loop=None
 
     def process_task(self, db: Session, task: Task) -> None:
         action = json.loads(task.operation_payload or "{}").get("action")
@@ -219,6 +227,8 @@ class LibraryMaintenanceWorker:
                 self._clear_artwork(db, task)
             elif action == "metadata_analysis":
                 self._metadata_analysis(db, task)
+            elif action == "metadata_discovery":
+                self._metadata_discovery(db, task)
             else:
                 raise ValueError(f"Unknown maintenance action: {action}")
         except Exception:
@@ -235,6 +245,67 @@ class LibraryMaintenanceWorker:
             task.completed_at = utcnow_naive()
         db.commit()
         library_events.publish("library.health.updated", action=action, task_id=task.id)
+
+    def _metadata_discovery(self, db: Session, task: Task) -> None:
+        payload=json.loads(task.operation_payload or "{}")
+        song_ids=payload.get("song_ids") if isinstance(payload.get("song_ids"),list) else []
+        counters=payload.setdefault("counters",{})
+        provider=payload.get("provider","musicbrainz")
+        discoveries={int(item.entity_id):item for item in db.scalars(select(MetadataDiscovery).where(
+            MetadataDiscovery.job_id==task.id,MetadataDiscovery.entity_type=="song")).all() if item.entity_id.isdigit()}
+        try:
+            chunk_size=max(1,self.settings.metadata_discovery_chunk_size)
+            chunks=(song_ids[start:start+chunk_size] for start in range(0,len(song_ids),chunk_size))
+            for song_id in itertools.chain.from_iterable(chunks):
+                db.refresh(task)
+                if task.status in (TaskStatus.CANCELLED.value,TaskStatus.CANCELLING.value) or self._stop.is_set():
+                    task.status=TaskStatus.INTERRUPTED.value if self._stop.is_set() else TaskStatus.CANCELLED.value
+                    task.skipped_items=max(0,task.total_items-task.completed_items-task.failed_items)
+                    for item in discoveries.values():
+                        if item.status in ("queued","running"): item.status="cancelled";item.completed_at=utcnow_naive()
+                    db.commit();return
+                discovery=discoveries.get(song_id);song=db.get(Song,song_id)
+                if song is None:
+                    task.skipped_items+=1
+                    record_item_failure(db,task,str(song_id),"DISCOVERY_SONG_NOT_FOUND","Selected Song no longer exists")
+                    if discovery: discovery.status="failed";discovery.completed_at=utcnow_naive();discovery.error_metadata='[{"code":"entity_not_found"}]'
+                    db.commit();continue
+                task.current_item=f"Song {song_id}"
+                cancel_event=asyncio.Event()
+                progress_state={"candidates":0,"duplicates":0,"failures":0}
+                def progress(processed,total,candidate_count,duplicate_count,failure_count):
+                    db.expire(task);db.refresh(task)
+                    counters["search_variants_total"]=counters.get("search_variants_total",0)+(total if processed==1 else 0)
+                    counters["search_variants_processed"]=counters.get("search_variants_processed",0)+1
+                    counters["candidates_found"]=counters.get("candidates_found",0)+max(0,candidate_count-progress_state["candidates"])
+                    counters["candidates_deduplicated"]=counters.get("candidates_deduplicated",0)+max(0,duplicate_count-progress_state["duplicates"])
+                    counters["provider_failures"]=counters.get("provider_failures",0)+max(0,failure_count-progress_state["failures"])
+                    progress_state.update(candidates=candidate_count,duplicates=duplicate_count,failures=failure_count)
+                    task.operation_payload=json.dumps(payload,separators=(",",":"));db.commit()
+                    if task.status in (TaskStatus.CANCELLING.value,TaskStatus.CANCELLED.value): cancel_event.set()
+                try:
+                    if self._loop is None: raise RuntimeError("Metadata discovery event loop is unavailable")
+                    item=self._loop.run_until_complete(metadata_discovery_service.discover_song(db,song_id,provider_name=provider,
+                        cancel_event=cancel_event,job_id=task.id,discovery_id=discovery.id if discovery else None,progress=progress))
+                    if item.status=="cancelled":
+                        task.status=TaskStatus.CANCELLED.value;task.skipped_items=max(0,task.total_items-task.completed_items-task.failed_items);db.commit();return
+                    viable=sum(1 for result in item.results if result.viable);rejected=sum(1 for result in item.results if result.hard_rejection)
+                    counters["viable_candidates"]=counters.get("viable_candidates",0)+viable
+                    counters["rejected_candidates"]=counters.get("rejected_candidates",0)+rejected
+                    if item.ambiguous: counters["ambiguous"]=counters.get("ambiguous",0)+1
+                    elif viable: counters["matched"]=counters.get("matched",0)+1
+                    else: counters["unmatched"]=counters.get("unmatched",0)+1
+                    task.completed_items+=1
+                except Exception:
+                    db.rollback();task=db.get(Task,task.id);payload=json.loads(task.operation_payload or "{}");counters=payload.setdefault("counters",{})
+                    task.failed_items+=1;record_item_failure(db,task,str(song_id),"METADATA_DISCOVERY_FAILED","Metadata candidates could not be discovered")
+                    failed=db.get(MetadataDiscovery,discovery.id) if discovery else None
+                    if failed: failed.status="failed";failed.completed_at=utcnow_naive();failed.error_metadata='[{"code":"discovery_failed"}]'
+                task.operation_payload=json.dumps(payload,separators=(",",":"));db.commit()
+        finally:
+            metadata_discovery_service.release_locks(db,task.id);db.commit()
+        if counters.get("provider_failures") and task.status==TaskStatus.RUNNING.value:
+            task.status=TaskStatus.COMPLETED_WITH_ERRORS.value
 
     def _verify(self, db: Session, task: Task) -> None:
         song_ids = iter_primary_keys(db, Song)

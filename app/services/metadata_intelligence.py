@@ -77,8 +77,11 @@ class MetadataService:
         values.update({
             "title": song.title, "artist": song.artist, "album_artist": song.album_artist,
             "album": song.album, "track_number": song.track, "disc_number": song.disc,
+            "total_tracks": song.track_total, "total_discs": song.disc_total,
             "year": song.year, "genre": song.genre, "isrc": song.isrc,
             "musicbrainz_recording_id": song.musicbrainz_recording_id,
+            "musicbrainz_release_id": song.musicbrainz_release_id,
+            "musicbrainz_artist_id": song.musicbrainz_artist_id,
             "artwork_source": song.artwork.source if song.artwork else None,
         })
         return {field: values[field] for field in sorted(values)}
@@ -89,6 +92,7 @@ class MetadataService:
                           current_value: Any = None, provider_entity_id: str | None = None,
                           match_explanation: str | None = None, positive_evidence: Any = None,
                           conflicting_evidence: Any = None, created_by_job_id: int | None = None,
+                          discovery_id: int | None = None, match_result_id: int | None = None,
                           reviewed_by: str | None = None) -> MetadataSuggestion:
         self._validate_entity(entity_type, entity_id, db)
         self._validate_field(field_name)
@@ -111,6 +115,7 @@ class MetadataService:
             positive_evidence=_json_dump(positive_evidence, limit=MAX_EVIDENCE_BYTES),
             conflicting_evidence=_json_dump(conflicting_evidence, limit=MAX_EVIDENCE_BYTES),
             status="pending", created_by_job_id=created_by_job_id, reviewed_by=reviewed_by,
+            discovery_id=discovery_id, match_result_id=match_result_id,
         )
         db.add(suggestion)
         db.flush()
@@ -229,7 +234,8 @@ def serialize_suggestion(item: MetadataSuggestion) -> dict[str, Any]:
     return {column: getattr(item, column) for column in (
         "id", "entity_type", "entity_id", "field_name", "provider", "provider_entity_id",
         "confidence", "confidence_level", "match_explanation", "status", "created_at",
-        "reviewed_at", "applied_at", "rejected_at", "created_by_job_id", "reviewed_by"
+            "reviewed_at", "applied_at", "rejected_at", "created_by_job_id", "reviewed_by"
+            , "discovery_id", "match_result_id"
     )} | {"current_value": _json_load(item.current_value), "suggested_value": _json_load(item.suggested_value),
           "positive_evidence": _json_load(item.positive_evidence), "conflicting_evidence": _json_load(item.conflicting_evidence)}
 

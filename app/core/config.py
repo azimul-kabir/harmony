@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     musicbrainz_requests_per_second: float = 1.0
     musicbrainz_cache_ttl_seconds: int = 86400
     musicbrainz_max_concurrent_requests: int = 2
+    metadata_discovery_chunk_size: int = 25
+    metadata_discovery_max_batch_songs: int = 500
 
 
 @lru_cache

@@ -26,6 +26,12 @@ def serialize_task_progress(task: Task) -> dict[str, Any]:
             recovery_metadata = json.loads(task.recovery_metadata)
         except (TypeError, ValueError):
             recovery_metadata = {"detail": "Recovery metadata is unavailable"}
+    operation = {}
+    if task.operation_payload:
+        try:
+            operation = json.loads(task.operation_payload)
+        except (TypeError, ValueError):
+            operation = {}
     return {
         "id": task.id,
         "job_id": task.id,
@@ -57,4 +63,6 @@ def serialize_task_progress(task: Task) -> dict[str, Any]:
         "initiating_source_id": task.source_id,
         "resumable": task.resumable,
         "recovery_metadata": recovery_metadata,
+        "operation": operation.get("action"),
+        "counters": operation.get("counters", {}),
     }
