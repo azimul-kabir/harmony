@@ -1,7 +1,7 @@
 # Harmony Library Architecture
 
-> Version: 1.13.0
-> Status: Implemented Foundation
+> Version: 1.5.0
+> Status: Released
 > Last Updated: 2026-07-21
 
 ---
