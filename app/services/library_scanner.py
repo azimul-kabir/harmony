@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import os
 from pathlib import Path
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -167,10 +167,18 @@ def scan_library(
 
     logger.info("Indexing library {}", library_root)
 
+    # Callers treat a scan as a committing operation. Close any read snapshot
+    # they opened so each file can acquire a fresh SQLite writer reservation.
+    db.commit()
+
     for file in iter_music_files(library_root):
         result.discovered += 1
         found.add(str(file.resolve()))
         try:
+            # In WAL mode a transaction that reads first cannot always upgrade
+            # after another connection writes (SQLITE_BUSY_SNAPSHOT). Reserve
+            # the one SQLite writer before index_file performs its first SELECT.
+            db.execute(text("BEGIN IMMEDIATE"))
             with db.begin_nested():
                 indexed = index_file(db, file, force=force, commit=False)
             # A rebuild can run for many minutes. Keep each file as the atomic
