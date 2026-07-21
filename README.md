@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.4.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,7 +25,10 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current Version: **v1.4.0**
+Current stable version: **v1.5.0**
+
+See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
+[v1.5.0 release notes](docs/releases/v1.5.0.md) for upgrade guidance.
 
 ---
 
@@ -61,9 +64,17 @@ Features include:
 
 ---
 
-## 📚 Modern Library Manager
+## 📚 Library Foundation
 
-Harmony now includes a complete library browser.
+Harmony's persistent Library Index is the single source of truth for managed
+music. It stores stable Song IDs, paths, metadata, technical audio properties,
+external identifiers, source provenance, artwork state, availability, and
+timestamps.
+
+The index updates incrementally through a supervised filesystem watcher. New,
+modified, deleted, moved, and renamed files are reconciled without periodic
+full-library scans. Library search, collections, analytics, health, and bulk
+operations read this index instead of walking the music filesystem.
 
 ### Songs View
 
@@ -73,7 +84,10 @@ Harmony now includes a complete library browser.
 - Track selection
 - Search
 - Sorting
-- Pagination
+- Combined filters
+- Multi-song selection
+- Recently Added badges
+- Responsive pagination
 
 ### Albums View
 
@@ -89,6 +103,16 @@ Harmony now includes a complete library browser.
 - Album counts
 - Click to browse artist collection
 
+### Smart Collections and Health
+
+- Recently Added and Recently Downloaded
+- Highest Bitrate
+- Missing Artwork and Missing Metadata
+- Recently Modified
+- Large Albums
+- Favorites placeholder for a future favorites signal
+- Library health score, indexing checks, and maintenance actions
+
 ---
 
 ## 🔍 Powerful Library Search
@@ -100,6 +124,13 @@ Search instantly across:
 - Albums
 - Genres
 - Filenames
+- Playlist names
+- Spotify track IDs
+- MusicBrainz recording IDs
+- ISRCs
+
+Search is powered by SQLite FTS5 and reads only the Library Index—never audio
+files or folders during a query.
 
 ---
 
@@ -113,6 +144,61 @@ Sort your library by:
 - Newest Added
 - Duration
 - Year
+- Recently Modified
+- Bitrate
+
+Filters can be combined for artist, album, genre, codec, bitrate, downloaded
+today, recently added, missing artwork, and missing metadata. Preferences are
+stored in the browser.
+
+---
+
+## 🖼 Local Artwork Cache
+
+- Detects embedded artwork and common folder artwork files
+- Deduplicates identical images by SHA-256 checksum
+- Stores reusable content-addressed cache files
+- Serves immutable artwork through Library APIs
+- Repairs missing cache files when a local source is available again
+
+MusicBrainz Cover Art Archive downloads, Spotify artwork ingestion, and manual
+replacement are intentionally reserved for future provider integrations.
+
+---
+
+## 📊 Analytics and Library Health
+
+The Library dashboard reports songs, albums, artists, genres, storage usage,
+average bitrate and duration, recently added music, and album insights.
+
+The dedicated **Library Health** page adds:
+
+- Missing artwork and missing metadata checks
+- Weighted health score
+- Library last-updated time
+- Refresh Library and Rebuild Index
+- Indexed-file verification
+- Artwork-cache clearing
+- Durable progress and cancellation
+
+Duplicate Detection is currently displayed as a placeholder; Harmony does not
+yet claim to calculate duplicate groups.
+
+---
+
+## 🧰 Bulk Library Operations
+
+Select multiple Songs and run asynchronous:
+
+- Delete
+- Move
+- Pattern-based rename
+- Refresh metadata
+- Refresh artwork cache
+- ZIP export
+
+Operations continue after individual failures and expose per-song progress,
+errors, cancellation, and recovery through Harmony's task system.
 
 ---
 
@@ -203,6 +289,13 @@ Staging Folder
 Library Import
     │
     ▼
+Persistent Library Index
+    │
+    ├── FTS Search
+    ├── Artwork Cache
+    ├── Collections / Analytics / Health
+    │
+    ▼
 Rebuild Playlists
     │
     ▼
@@ -217,8 +310,11 @@ Navidrome / Jellyfin / Plex
 
 - Python 3.12
 - FastAPI
-- SQLAlchemy
+- SQLAlchemy 2.0
+- Alembic
 - SpotDL
+- Mutagen
+- Watchdog
 
 ### Frontend
 
@@ -229,7 +325,8 @@ Navidrome / Jellyfin / Plex
 
 ### Database
 
-- SQLite
+- SQLite with WAL mode
+- SQLite FTS5 Library search
 
 ### Deployment
 
@@ -264,6 +361,21 @@ SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret
 ```
 
+Review the storage paths before starting, especially when using Docker or a
+Synology NAS:
+
+```env
+DATABASE_URL=sqlite:////database/harmony.db
+MUSIC_PATH=/music
+DOWNLOAD_PATH=/downloads
+STAGING_PATH=/downloads/staging
+FAILED_PATH=/downloads/failed
+ARTWORK_CACHE_PATH=/database/artwork
+```
+
+The sample `docker-compose.yml` contains host volume examples. Replace those
+host paths with directories that exist on your system before deployment.
+
 Start Harmony.
 
 ```bash
@@ -276,20 +388,36 @@ Open:
 http://localhost:8080
 ```
 
+Interactive API documentation is available at:
+
+```text
+http://localhost:8080/docs
+```
+
 ---
 
 # Directory Structure
 
 ```text
 Music/
-├── Albums/
-├── Singles/
+├── Album Artist/
+│   └── Album/
+│       └── 01 - Track.flac
+├── Another Artist/
+│   └── Singles/
+│       └── Track.mp3
 ├── Playlists/
 │   ├── Chill Mix.m3u
 │   ├── Road Trip.m3u
 │   └── Workout.m3u
-└── Harmony Database
+
+Database/
+├── harmony.db
+└── artwork/
 ```
+
+The exact organization follows the configured import path rules. The database
+and artwork cache should remain on persistent storage outside the music tree.
 
 ---
 
@@ -325,30 +453,29 @@ Just a synchronized self-hosted music library.
 
 # Roadmap
 
-## v1.5
+## Near Term
 
-### Settings & Automation
+### Operations and Automation
 
 - Editable application settings
 - Scheduled synchronization
 - Backup & restore
 - Import/export settings
+- Direct Navidrome integration beyond the existing M3U workflow
 
 ---
-
-## v1.6
 
 ### Library Intelligence
 
-- Library Health dashboard
 - Metadata editor
-- Duplicate finder
-- Artwork manager
+- Metadata repair workflows
+- Duplicate detection and resolution
+- Manual artwork replacement
+- MusicBrainz metadata integration
+- Cover Art Archive integration
 - Advanced search improvements
 
 ---
-
-## v1.7
 
 ### Smart Library
 
@@ -356,7 +483,7 @@ Just a synchronized self-hosted music library.
 - Ratings
 - Tags
 - Smart Playlists
-- Collections
+- User-defined collection rules
 
 ---
 
@@ -368,7 +495,8 @@ Just a synchronized self-hosted music library.
 - Multiple music providers
 - Multi-user support
 - Plugin system
-- REST API
+- API authentication and external integration hardening
+- Navidrome synchronization hooks
 - Progressive Web App (PWA)
 - Lyrics support
 
@@ -395,6 +523,11 @@ Just a synchronized self-hosted music library.
 Contributions, bug reports, feature requests, and pull requests are always welcome.
 
 If you have ideas to improve Harmony, feel free to open an issue or start a discussion.
+
+Library changes should follow
+[`docs/architecture/library.md`](docs/architecture/library.md), which is the
+source of truth for Library ownership, service boundaries, API contracts, and
+large-library performance requirements.
 
 ---
 

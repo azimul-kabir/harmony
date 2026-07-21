@@ -1,15 +1,7 @@
 from collections.abc import Generator
-from sqlalchemy import create_engine, event
+from sqlalchemy import event
 from sqlalchemy.orm import Session, sessionmaker
-from app.database.base import Base # Ensure this points to your Base definition
-
-# Replace with your actual path if it differs
-SQLALCHEMY_DATABASE_URL = "sqlite:///./database/harmony.db"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False}
-)
+from app.database.database import engine
 
 # --- WAL Mode for concurrency ---
 @event.listens_for(engine, "connect")

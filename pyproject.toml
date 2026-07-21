@@ -1,6 +1,6 @@
 [project]
 name = "harmony"
-version = "1.0.0"
+version = "1.5.0"
 description = "Self-hosted music downloader and organizer for Navidrome."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,6 +16,7 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "loguru>=0.7.3",
     "mutagen>=1.47",
+    "watchdog>=6.0",
     "spotdl>=4.5",
     "spotipy>=2.25.0",
     "yt-dlp>=2025.1.1",

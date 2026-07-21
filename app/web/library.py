@@ -10,3 +10,11 @@ def library_page(request: Request):
         "library.html",
         template_context(request=request, page="library"),
     )
+
+
+@router.get("/library/health")
+def library_health_page(request: Request):
+    return templates.TemplateResponse(
+        "library_health.html",
+        template_context(request=request, page="library"),
+    )

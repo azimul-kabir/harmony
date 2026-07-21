@@ -4,7 +4,6 @@ import shutil
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
-from app.database.crud import upsert_song
 from app.exceptions.library import (
     DuplicateTrackError,
     ImportError,
@@ -12,12 +11,15 @@ from app.exceptions.library import (
 )
 from app.services.duplicate_detector import is_duplicate
 from app.services.library_paths import build_destination
+from app.services.library_scanner import index_file
 from app.services.metadata import read_metadata
 
 
 def import_download(
     db: Session,
     downloaded_file: str | Path,
+    download_source: str = "filesystem",
+    cover_url: str | None = None,
 ) -> Path:
     """
     Import a downloaded file into the Harmony library.
@@ -70,14 +72,14 @@ def import_download(
 
         moved = True
 
-        metadata["path"] = str(destination)
-        metadata["filename"] = destination.name
-
         logger.info("Updating library database...")
 
-        upsert_song(
-            db=db,
-            metadata=metadata,
+        index_file(
+            db,
+            destination,
+            force=True,
+            cover_url=cover_url,
+            download_source=download_source,
             commit=False,
         )
 

@@ -1,10 +1,10 @@
-from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 from app.database.models import Task, SyncSource
 from app.domain.task import (
     TaskStatus,
     TaskType,
 )
+from app.core.time import utcnow_naive
 
 def create_task(
     db: Session,
@@ -37,7 +37,7 @@ def start_task(
     task: Task,
 ) -> None:
     task.status = TaskStatus.RUNNING.value
-    task.started_at = datetime.now(UTC)
+    task.started_at = utcnow_naive()
     db.commit()
     db.refresh(task)
 
@@ -46,7 +46,7 @@ def _complete_task(
     task: Task,
 ) -> None:
     task.status = TaskStatus.COMPLETED.value
-    task.completed_at = datetime.now(UTC)
+    task.completed_at = utcnow_naive()
     task.current_item = None
     db.commit()
     db.refresh(task)
@@ -56,7 +56,7 @@ def _fail_task(
     task: Task,
 ) -> None:
     task.status = TaskStatus.FAILED.value
-    task.completed_at = datetime.now(UTC)
+    task.completed_at = utcnow_naive()
     task.current_item = None
     db.commit()
     db.refresh(task)
@@ -119,7 +119,7 @@ def _finish_if_complete(
         return
 
     task.current_item = None
-    task.completed_at = datetime.now(UTC)
+    task.completed_at = utcnow_naive()
 
     if task.failed_items > 0:
         task.status = TaskStatus.FAILED.value
@@ -130,7 +130,7 @@ def _finish_if_complete(
         if task.source_id:
             source = db.get(SyncSource, task.source_id)
             if source:
-                source.last_synced_at = datetime.now(UTC)
+                source.last_synced_at = utcnow_naive()
 
     db.commit()
     db.refresh(task)
@@ -159,7 +159,7 @@ def cancel_task(
 ) -> None:
     if task.status not in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value):
         task.status = TaskStatus.CANCELLED.value
-        task.completed_at = datetime.now(UTC)
+        task.completed_at = utcnow_naive()
         task.current_item = None
         db.commit()
         db.refresh(task)

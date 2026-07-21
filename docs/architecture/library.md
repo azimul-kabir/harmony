@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
 > Version: 1.5.0
-> Status: Draft
-> Last Updated: YYYY-MM-DD
+> Status: Released
+> Last Updated: 2026-07-21
 
 ---
 
@@ -105,22 +105,27 @@ Represents one audio file.
 Fields
 
 - id
+- path
+- filename
+- artist
+- album
+- album_artist
 - title
-- artist_id
-- album_id
 - track_number
 - disc_number
+- genre
+- year
 - duration
 - bitrate
 - codec
 - sample_rate
 - file_size
-- path
-- filename
 - date_added
 - last_modified
 - artwork_id
-- metadata_status
+- artwork_status
+- availability_status
+- download_source
 
 External IDs
 
@@ -152,44 +157,18 @@ Playlist References
 
 ## Album
 
-Fields
-
-- id
-- title
-- artist_id
-- year
-- genre
-- artwork_id
-
-External IDs
-
-- spotify_album_id
-- musicbrainz_release_id
-
-Contains
-
-Many Songs
+Album is currently a grouped read projection over canonical Song rows, keyed by
+album name and coalesced album artist. It is not a persistent table or identity.
+A future normalized Album entity must be introduced through an additive
+migration and preserve Song IDs and existing read contracts.
 
 ---
 
 ## Artist
 
-Fields
-
-- id
-- name
-- sort_name
-
-External IDs
-
-- spotify_artist_id
-- musicbrainz_artist_id
-
-Contains
-
-Many Albums
-
-Many Songs
+Artist is currently a grouped read projection over canonical Song rows. Future
+MusicBrainz artist identities and aliases belong in a normalized additive
+entity; provider-specific IDs must not become the Library's internal identity.
 
 ---
 
@@ -278,6 +257,23 @@ ImportService
 
 Each service should have a single responsibility.
 
+Current canonical boundaries:
+
+- `library_scanner`: filesystem discovery and canonical Song upsert.
+- `library_catalog`: typed read-model serialization, eager artwork loading, and
+  batched playlist provenance for APIs and future integrations.
+- `library_search`: transactional FTS projection maintenance and bounded search.
+- `library_filters`: composable query filters and stable sorting.
+- `library_predicates`: shared semantic SQL definitions such as missing metadata.
+- `collections`, `library_analytics`, and `library_health`: index-only projections.
+- `artwork`: content-addressed local artwork detection and storage.
+- `library_bulk` and `library_health`: task-backed filesystem orchestration.
+- `task_progress`: the shared durable-task API contract.
+
+`library_service`, `scanner`, and `library_manager` remain compatibility facades.
+New code must depend on the canonical services above rather than add another
+parallel scanner, serializer, path builder, or task response format.
+
 ---
 
 # Event Flow
@@ -338,6 +334,31 @@ Navidrome Sync
 
 The Library Index is the source of truth.
 
+The persistent index is the `songs` table. One row represents one managed
+audio file and keeps a stable internal ID even when the file becomes missing.
+Downloaded files must be indexed through `LibraryService`; download workers,
+API routes, and future integrations must not maintain parallel song records.
+
+In addition to descriptive metadata, each indexed file stores technical audio
+properties, artwork status, availability, filesystem timestamps, metadata hash,
+download source, Spotify/MusicBrainz/ISRC identifiers, and indexing timestamps.
+Playlist sources are resolved from the persistent `playlists` and
+`playlist_tracks` index using the Spotify track ID. This avoids duplicating
+playlist membership on each song row while still exposing it in Library APIs.
+
+Incremental indexing compares file size and modified time before parsing tags.
+Unchanged files are skipped. Re-indexing forces tag extraction and compares the
+metadata hash. Files absent during reconciliation are marked `missing`, not
+deleted, so history, source relationships, and internal IDs remain stable.
+
+Library maintenance API:
+
+- `GET /api/library/songs/{id}` returns one complete index record.
+- `GET /api/library/missing` returns retained missing-file records.
+- `POST /api/library/index` incrementally indexes one file.
+- `POST /api/library/rescan` reconciles the managed library.
+- `POST /api/library/reindex` forces a complete metadata rebuild.
+
 Never scan the filesystem unless:
 
 - First startup
@@ -350,19 +371,40 @@ Normal operation should use incremental updates.
 
 # File Watcher
 
-The watcher monitors:
+`LibraryWatcher` runs as a supervised background service for the configured
+music root. It uses native filesystem notifications through Watchdog and does
+not perform periodic full-directory scans.
 
-New files
+Supported changes:
 
-Deleted files
+- New audio files are incrementally indexed after a short debounce period.
+- Deleted audio files are retained in the index and marked `missing`.
+- Modified files are forcibly re-read so tag-only changes are detected even
+  when file size or timestamp granularity would otherwise hide the change.
+- Renamed and moved files update the existing row before re-indexing, preserving
+  the stable internal song ID.
 
-Modified files
+Filesystem tools often emit several notifications while a file is being
+written. Events are coalesced per path and failed indexing operations are
+retried with bounded backoff. A supervisor restarts the native observer if it
+stops unexpectedly. Failures and recoveries use the standard Harmony logger.
 
-Renamed files
+The watcher publishes transient domain events through `LibraryEventBroker`:
 
-The watcher updates the Library Index.
+- `library.track.added`
+- `library.track.updated`
+- `library.track.missing`
+- `library.track.renamed`
+- `library.index.error`
+- `library.watcher.error`
+- `library.watcher.recovered`
 
-No full rescans.
+Consumers can subscribe using `GET /api/library/events`, an SSE endpoint. These
+events are notifications, not persistent state; reconnecting consumers must
+query the Library Index to reconcile their view.
+
+No full rescans are initiated by the watcher. Manual rescan and re-index
+operations remain explicit integrity tools.
 
 ---
 
@@ -371,6 +413,23 @@ No full rescans.
 Search operates only on the Library Index.
 
 Never search the filesystem.
+
+Harmony's first indexed search engine uses SQLite FTS5. `library_search` is a
+derived projection keyed by the stable Song ID; API results are always hydrated
+from canonical `songs`, `playlists`, and `playlist_tracks` records. The search
+projection contains no file paths and search execution performs no filesystem
+access.
+
+The FTS tokenizer is Unicode-aware, removes diacritics, and supports prefix
+matching across multiple terms. Results are ordered by BM25 relevance, then by
+stable Library metadata. Missing-file rows remain searchable only when the
+caller explicitly enables `include_missing`.
+
+The projection is maintained transactionally when a Song is indexed or
+re-indexed. Playlist synchronization refreshes only Songs associated with the
+changed playlist track IDs. The Alembic migration backfills existing libraries.
+`POST /api/library/search/rebuild` is an explicit repair operation; normal
+search and watcher activity never initiate a filesystem scan or full rebuild.
 
 Supported search fields
 
@@ -392,23 +451,91 @@ ISRC
 
 Filename
 
+Search API:
+
+- `GET /api/library/search?q=...` returns ranked, paginated Song records.
+- Optional filters: artist, album, genre, playlist_id, year, min_bitrate,
+  max_bitrate, and include_missing.
+- `POST /api/library/search/rebuild` rebuilds the projection from database
+  records only.
+
+The web Library search box queries this API with a debounce and projects the
+ranked Song matches into the Songs, Albums, and Artists views. Collection names
+remain locally filtered UI navigation rather than FTS content.
+
+## Sorting and Filtering
+
+Library listing and FTS search share the immutable `LibraryFilters` query model.
+All supplied filters use AND semantics and execute against indexed database
+columns; the UI never filters by reading tags or walking the filesystem.
+
+Supported sorts are Artist, Album, Title, Recently Added, Recently Modified,
+Bitrate, Duration, Year, and Alphabetical. Sort keys are allow-listed and use
+stable secondary ordering. Supported filters are Artist, Album, Genre, Codec,
+Bitrate range, Downloaded Today, Recently Added, Missing Artwork, and Missing
+Metadata. Search additionally retains the Playlist, Year, and missing-file
+filters exposed by the first FTS API.
+
+`GET /api/library/filter-options` returns the distinct metadata values and
+standard bitrate bands used to build filter controls. `GET /api/library/songs`
+and `GET /api/library/search` accept the same composable filter parameters.
+Downloaded Today uses `songs.created_at` since that is the Library Index's date
+added; Recently Added is the rolling seven-day window used elsewhere.
+
+Sort and filter preferences are stored in browser local storage under a
+versioned Harmony key. Preferences are presentation state, not shared Library
+domain data, and therefore do not require a database table or migration.
+
+Single-column and selective composite indexes cover availability, artist,
+album, title, genre, codec, bitrate, year, date added, and last modified. This
+keeps common filter/sort plans efficient without duplicating canonical Song
+metadata.
+
 ---
 
 # Artwork
 
-Artwork priority
+Artwork is a reusable, content-addressed resource. The `artwork` table owns one
+row per unique image and Songs reference it through nullable `songs.artwork_id`.
+The checksum is a SHA-256 digest of the image bytes and is unique, so identical
+embedded or folder images share one database row and one cached file.
+
+Cached files live below the configured `ARTWORK_CACHE_PATH` in checksum-prefix
+directories. Cache paths are internal implementation details and are never
+returned to API clients. The public immutable URL is
+`/api/artwork/{id}/file`. Cache writes are atomic; a database record whose file
+was lost is repaired from the next locally detected copy.
+
+Artwork resolution runs as part of Library indexing and uses this priority:
 
 1 Embedded artwork
 
-2 Cached artwork
+2 Existing associated cache
 
 3 Folder artwork
 
-4 Future providers
+4 Future providers (not fetched by the foundation)
 
 - Spotify
 
 - Cover Art Archive
+
+Supported folder filenames are `cover`, `folder`, `front`, and `album` with
+JPEG, PNG, or WebP extensions. Embedded images are read through Mutagen from
+ID3 APIC, MP4 `covr`, and FLAC picture blocks. Remote `cover_url` values remain
+compatible metadata but are never downloaded by `ArtworkService`.
+
+Artwork API:
+
+- `GET /api/artwork` lists resource metadata with offset/limit pagination.
+- `GET /api/artwork/{id}` returns one resource's metadata and public URL.
+- `GET /api/artwork/{id}/file` serves immutable cached bytes.
+
+The model reserves `provider`, `provider_id`, and `original_url` for future
+Spotify and Cover Art Archive provenance. Manual replacement will create or
+reuse a content-addressed resource and change an association; it must never
+overwrite shared bytes in place. Remote-provider ingestion and manual upload
+endpoints are intentionally outside this foundation.
 
 ---
 
@@ -442,9 +569,42 @@ Last Updated
 
 # Smart Collections
 
-Collections are generated.
+Smart Collections are generated live from the Library Index. Users never
+manually edit their membership, and no collection-item rows duplicate Song
+state. Counts and contents therefore update automatically after normal index or
+watcher transactions without a refresh job or filesystem scan.
 
-Users never manually edit them.
+`CollectionEngine` owns an ordered registry of immutable
+`CollectionDefinition` values. Each definition contains presentation metadata
+and a serializable `CollectionRule` or nested `RuleGroup`. The rule compiler
+currently supports equality, inequality, rolling date windows, missing values,
+dynamic maximum values, album song-count thresholds, AND/OR groups, and
+placeholders. This registry/compiler boundary is the extension point for future
+stored custom rules; UI routes must not implement collection predicates.
+
+Initial collections:
+
+- Recently Added: date added within seven days.
+- Recently Downloaded: date added within seven days and download source is not
+  `filesystem`.
+- Highest Bitrate: tracks matching the current maximum available bitrate.
+- Missing Artwork: artwork status is missing.
+- Missing Metadata: title, artist, or album is empty.
+- Recently Modified: filesystem modification time within seven days.
+- Large Albums: albums containing at least ten available indexed songs.
+- Favorites: a zero-item placeholder until a favorite signal is introduced.
+
+Collection API:
+
+- `GET /api/library/collections` returns definitions and live counts.
+- `GET /api/library/collections/{id}` returns one definition, rule, and count.
+- `GET /api/library/collections/{id}/songs` returns live indexed Song records
+  and composes with the standard Library sort and filter parameters.
+
+The Library web page renders every registered collection and loads its contents
+through the collection API. It never reimplements rules in JavaScript. Selecting
+a collection projects its Songs into the existing Songs, Albums, and Artists
+views while preserving the current user filters and sort.
 
 Examples
 
@@ -468,25 +628,36 @@ Custom Rules
 
 # Analytics
 
-Analytics use the Library Index.
+Library Analytics use available records in the Library Index exclusively.
+They never inspect files, parse tags, or walk the filesystem.
 
-Never calculate directly from the filesystem.
+`LibraryAnalyticsService` returns one reusable structured snapshot. A single
+aggregate query calculates Songs, Artists, Genres, Storage Used, Average
+Bitrate, Average Duration, and Recently Added. Album count and the three album
+insights use grouped SQL subqueries with indexed ordering and `LIMIT 1`; Song
+rows are never materialized in application memory.
 
-Examples
+Definitions:
 
-Song Count
+- Albums count distinct non-empty album/album-artist groups.
+- Storage Used is the sum of indexed file sizes.
+- Average Bitrate and Average Duration ignore unknown values.
+- Largest Album is the album with the most available Songs, using storage and
+  name as stable tie-breakers.
+- Newest Album and Oldest Album use indexed release year and ignore albums with
+  no year.
+- Recently Added is the rolling seven-day count shared with Smart Collections.
 
-Album Count
+`GET /api/library/analytics` exposes the analytics snapshot for dashboards and
+future integrations. The Library page loads it independently from song/filter
+queries and refreshes it after rescans and Library watcher events. Analytics
+therefore remain global when a user narrows the current Library view.
 
-Artist Count
+Composite indexes on availability/album/album-artist and
+availability/year/album support grouped album insights for large libraries.
 
-Genre Count
-
-Storage
-
-Average Bitrate
-
-Health Score
+Future metrics such as Health Score should be added to this service and API,
+not recomputed in UI code.
 
 ---
 
@@ -578,6 +749,9 @@ songs
 
 artwork
 
+Current `artwork` fields: id, checksum, cache_path, source, mime_type, width,
+height, file_size, provider, provider_id, original_url, created_at, updated_at.
+
 playlists
 
 playlist_songs
@@ -627,6 +801,47 @@ Support
 10,000+ albums
 
 5,000+ artists
+
+## Large Library Query Policy
+
+The supported design target is at least 100,000 Songs. Services must therefore:
+
+- Use keyset or bounded offset pagination for background iteration and public
+  endpoints. List endpoints accept optional `limit` (maximum 1,000) and
+  `offset`; existing unbounded defaults remain only for client compatibility.
+- Never rebuild FTS one Song at a time. Rebuild uses one `INSERT ... SELECT`
+  projection with playlist names pre-aggregated once; incremental updates use
+  SQLite-safe batches of at most 500 identifiers.
+- Eager-load the to-one Artwork relationship and batch playlist provenance once
+  per bounded result page, avoiding serializer N+1 queries.
+- Stream scan reconciliation rows in bounded chunks. The discovery path set is
+  the only scan-wide in-memory structure and stores strings, not ORM entities.
+- Use keyset primary-key iteration for verification and cache maintenance so
+  worker memory does not grow with library size.
+- Avoid building full directory-entry maps during artwork discovery; retain only
+  the fixed set of supported candidate filenames.
+
+Automated coverage asserts that rebuilding 2,500 FTS rows uses a constant number
+of SQL statements. Performance-sensitive changes should preserve set-based
+plans and be profiled against a generated 100,000-row SQLite fixture.
+
+## API Contracts and Extension Compatibility
+
+FastAPI response models in `app/api/schemas/library.py` document task, bulk, and
+health contracts in OpenAPI. Every Library route has a stable summary; bounded
+search responses always expose total, limit, offset, filters, and hydrated Song
+read models. Internal filesystem paths remain present for backward compatibility
+but should be access-controlled before exposing Harmony outside a trusted host.
+
+External systems integrate through provider-neutral boundaries:
+
+- MusicBrainz and metadata repair write canonical fields through the index/upsert
+  service and store provider provenance separately when that schema is added.
+- YouTube Music is a download source value, never a Library identity.
+- Duplicate detection consumes stable Song read models and external identifiers
+  without changing search or collection ownership.
+- Navidrome consumes available indexed paths and events; it does not write Song
+  rows directly.
 
 ---
 
@@ -679,3 +894,73 @@ Responsibilities
 Harmony prepares the perfect music library.
 
 Applications like Navidrome provide playback.
+
+---
+
+# Bulk Operations
+
+Library bulk operations are durable asynchronous Tasks. `tasks` is the parent
+progress record and `bulk_operation_items` stores the status, original path,
+result path, and error for every selected song. This keeps progress and partial
+failures inspectable without coupling the Library UI to worker threads.
+
+Supported operations are delete, move, rename, metadata refresh, artwork cache
+refresh, and ZIP export. All operations resolve songs through the Library Index.
+UI routes never perform filesystem mutations.
+
+The Library bulk worker:
+
+- Processes one task in the background and checks cancellation between items.
+- Continues after item-level failures and records each error independently.
+- Recovers `running` tasks and items as `queued` after process restarts.
+- Uses paths constrained to the configured music root and never overwrites a
+  destination collision.
+- Preserves the internal song ID when moving or renaming files.
+- Publishes the existing Library events after index-changing operations.
+
+Exports are written beneath `<download_path>/exports` and exposed through an
+authenticated-ready API boundary. Export creation reads files only in the
+worker; search and normal Library reads remain index-only.
+
+API surface:
+
+- `POST /api/library/bulk` creates a task from an operation, song IDs, and options.
+- `GET /api/library/bulk/{task_id}` returns aggregate progress and item results.
+- `POST /api/library/bulk/{task_id}/cancel` requests cooperative cancellation.
+- `GET /api/library/bulk/{task_id}/export` streams a completed ZIP export.
+
+---
+
+# Library Health
+
+`LibraryHealthService` provides a reusable, index-only health snapshot. It
+combines the existing analytics aggregates with registered health checks for
+artwork completeness, metadata completeness, and future duplicate detection.
+The duplicate check is explicitly unavailable until a detector exists; clients
+must not treat the placeholder as a zero-duplicate result.
+
+The Health Score is a bounded 0–100 completeness indicator. Missing metadata,
+missing artwork, and missing files currently contribute weighted penalties.
+New checks such as metadata confidence, duplicate groups, and repair history
+must be added to the service's check registry and score policy, not hard-coded
+in the web page. `GET /api/library/health` exposes this stable snapshot shape.
+
+Maintenance actions reuse Harmony Tasks with the `library_maintenance` type and
+run in a supervised background worker:
+
+- Refresh Library performs an incremental scan and missing-file reconciliation.
+- Rebuild Index forces metadata extraction and rebuilds the FTS projection.
+- Verify Files checks indexed paths directly without discovering new files.
+- Clear Artwork Cache removes content-addressed files and associations; later
+  metadata refreshes can populate them again.
+
+Tasks recover from interrupted `running` state as `queued`, report standard
+aggregate progress, and publish `library.health.updated` after completion. API:
+
+- `POST /api/library/health/actions/{action}` queues maintenance.
+- `GET /api/library/health/tasks/{task_id}` reports progress.
+- `POST /api/library/health/tasks/{task_id}/cancel` requests cancellation.
+
+The `/library/health` dashboard consumes only these APIs. Future metadata repair
+and duplicate detection should register checks and actions behind the same
+service/API boundaries, preserving the dashboard layout.

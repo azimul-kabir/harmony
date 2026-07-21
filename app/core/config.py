@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "0.7.0-alpha"
+    app_version: str = "1.5.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:////database/harmony.db"
 
     music_path: str = "/music"
+    artwork_cache_path: str = "/database/artwork"
 
     download_path: str = "/downloads"
     staging_path: str = "/downloads/staging"
@@ -44,6 +45,9 @@ class Settings(BaseSettings):
     audio_providers: str = "youtube-music,youtube"
 
     max_parallel_downloads: int = 4
+
+    library_watcher_enabled: bool = True
+    library_watcher_debounce_seconds: float = 0.75
 
 
 @lru_cache

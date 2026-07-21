@@ -6,6 +6,102 @@ The format is based on **Keep a Changelog**, and this project follows **Semantic
 
 ---
 
+## [Unreleased]
+
+### Planned
+
+- Direct Navidrome integration beyond Harmony's existing M3U export workflow.
+
+---
+
+## [v1.5.0] - 2026-07-21
+
+Harmony v1.5.0 establishes the Library Foundation as the canonical index for
+managed music and adds the management, observability, and scalability layers
+built on top of it. Playback remains delegated to compatible media servers;
+direct Navidrome integration remains future work.
+
+### Added
+
+- **Persistent Library Index:** Stores file identity, descriptive and technical
+  metadata, external identifiers, download provenance, artwork state, file
+  availability, and indexing timestamps while preserving stable internal Song
+  IDs across moves and missing files.
+- **Incremental Filesystem Watcher:** Detects new, modified, deleted, moved, and
+  renamed audio files through native filesystem events without periodic full
+  rescans. Includes debounce, retry, supervision, and Library SSE events.
+- **Indexed Search:** Added an SQLite FTS5 projection covering title, artist,
+  album, genre, playlist, filename, Spotify ID, MusicBrainz ID, and ISRC. Search
+  never reads the filesystem.
+- **Library Views:** Added Songs, Albums, Artists, and Smart Collections views
+  backed by the Library Index, including responsive artwork cards and counts.
+- **Sorting and Filtering:** Added composable filters for artist, album, genre,
+  codec, bitrate, date added, missing artwork, and missing metadata, plus stable
+  sorting by artist, album, title, date, bitrate, duration, and year. Browser
+  preferences persist locally.
+- **Smart Collections:** Added automatic Recently Added, Recently Downloaded,
+  Highest Bitrate, Missing Artwork, Missing Metadata, Recently Modified, and
+  Large Albums collections. Favorites remains an explicit placeholder.
+- **Artwork Foundation:** Detects embedded and folder artwork, stores unique
+  images in a content-addressed local cache, and exposes reusable artwork APIs.
+  Remote artwork downloads and manual replacement remain future work.
+- **Library Analytics:** Added indexed aggregates for songs, albums, artists,
+  genres, storage, average bitrate and duration, album insights, and recently
+  added music.
+- **Bulk Operations:** Added asynchronous multi-song delete, move, pattern-based
+  rename, metadata refresh, artwork refresh, and ZIP export with confirmations,
+  durable progress, cancellation, and per-song failure reporting.
+- **Library Health Dashboard:** Added a health score, completeness checks,
+  storage and update metrics, and task-backed Refresh Library, Rebuild Index,
+  Verify Files, and Clear Artwork Cache actions. Duplicate detection is shown as
+  an unavailable placeholder until its engine is implemented.
+- **Typed Library APIs:** Added documented OpenAPI response contracts for Song,
+  search, health, bulk-task, album, and artist read models. API documentation is
+  available at `/docs` while Harmony is running.
+
+### Changed
+
+- Consolidated Song serialization, playlist provenance, Library predicates,
+  task progress, timestamp handling, and keyset pagination into reusable
+  services instead of duplicating logic across APIs and workers.
+- Clarified canonical Library service boundaries and compatibility facades in
+  `docs/architecture/library.md`.
+- Standardized UTC storage using naive UTC values compatible with the existing
+  SQLite schema.
+- Added optional bounded pagination to Library list APIs while retaining
+  existing client-compatible defaults.
+
+### Fixed
+
+- Backfilled legacy `songs.created_at` values during migration and made Library
+  Song serialization resilient while an upgrade is pending. This prevents
+  legacy rows with missing creation timestamps from invalidating Song API
+  responses.
+
+### Performance
+
+- Replaced the N+1 FTS rebuild with a set-based `INSERT ... SELECT` projection
+  and pre-aggregated playlist names.
+- Added SQLite-safe batching for incremental search projection updates.
+- Streamed scan reconciliation rows instead of materializing the complete Song
+  table as ORM objects.
+- Added keyset iteration for verification and artwork-cache maintenance.
+- Eager-loaded artwork and batched playlist provenance to eliminate Library API
+  serialization N+1 queries.
+- Reduced artwork folder scanning to a fixed candidate set.
+- Added a regression test proving a 2,500-Song FTS rebuild uses a constant
+  number of SQL statements.
+
+### Documentation
+
+- Expanded the Library architecture document with canonical domain ownership,
+  search, watcher, artwork, collections, analytics, bulk operations, health,
+  API contracts, large-library policies, and future integration boundaries for
+  MusicBrainz, YouTube Music, duplicate detection, metadata repair, and
+  Navidrome.
+
+---
+
 ## [v1.4.0] - 2026-07-20
 
 This release significantly enhances Harmony's Library, transforming it into a modern music collection manager with multiple browsing modes, advanced search, flexible sorting, and an improved mobile experience.
