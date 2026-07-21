@@ -127,3 +127,21 @@ def test_observer_health_includes_native_emitter_threads():
     )()
 
     assert not _observer_is_healthy(observer)
+
+
+def test_watcher_ignores_events_resolving_outside_music_root(tmp_path, monkeypatch):
+    music = tmp_path / "music"
+    music.mkdir()
+    outside = tmp_path / "outside.mp3"
+    outside.write_bytes(b"audio")
+    watcher = LibraryWatcher(root=music)
+    called = False
+
+    def unexpected_session():
+        nonlocal called
+        called = True
+        raise AssertionError("out-of-root watcher event opened a database session")
+
+    monkeypatch.setattr(library_watcher, "SessionLocal", unexpected_session)
+    watcher._apply(PendingFileEvent(kind="created", source=str(outside)))
+    assert not called
