@@ -111,9 +111,8 @@ class LibraryHealthService:
             spotify_url=f"library://maintenance/{action}",
             task_type=TaskType.LIBRARY_MAINTENANCE,
             total_items=max(int(total), 1),
+            operation_payload=json.dumps({"action": action}),
         )
-        task.operation_payload = json.dumps({"action": action})
-        db.commit()
         return task
 
 
