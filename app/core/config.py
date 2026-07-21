@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "1.5.0"
+    app_version: str = "1.6.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -48,6 +48,15 @@ class Settings(BaseSettings):
 
     library_watcher_enabled: bool = True
     library_watcher_debounce_seconds: float = 0.75
+
+    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
+    musicbrainz_user_agent: str = "Harmony/1.6.0 (https://github.com/azimul-kabir/harmony)"
+    musicbrainz_timeout_seconds: float = 10.0
+    musicbrainz_max_retries: int = 3
+    musicbrainz_backoff_seconds: float = 0.5
+    musicbrainz_requests_per_second: float = 1.0
+    musicbrainz_cache_ttl_seconds: int = 86400
+    musicbrainz_max_concurrent_requests: int = 2
 
 
 @lru_cache

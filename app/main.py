@@ -18,6 +18,7 @@ from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
 from app.api.sync_sources import router as sync_sources_router
 from app.api.tasks import router as tasks_router
+from app.api.providers import router as providers_router
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
@@ -32,6 +33,8 @@ from app.web.downloads import router as downloads_page_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
 from app.web.sources import router as sources_page_router
+from app.web.providers import router as providers_page_router
+from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
 
@@ -79,6 +82,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await close_providers()
         library_bulk_worker.stop()
         library_maintenance_worker.stop()
         if library_watcher is not None:
@@ -113,6 +117,8 @@ app.include_router(sources_page_router)
 app.include_router(playlists_page_router)  # <-- Added the new Playlists route
 app.include_router(playlist_router)
 app.include_router(sync_sources_router)
+app.include_router(providers_router)
+app.include_router(providers_page_router)
 
 
 @app.exception_handler(MetadataServiceError)

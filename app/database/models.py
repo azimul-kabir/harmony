@@ -151,6 +151,25 @@ class MetadataHistory(Base):
     reversal_of_history_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_history.id", ondelete="SET NULL"), nullable=True)
 
 
+class ProviderCacheEntry(Base):
+    """Persistent provider cache containing normalized domain data, never raw payloads."""
+    __tablename__ = "provider_cache_entries"
+    __table_args__ = (
+        Index("uq_provider_cache_key", "provider", "cache_key", unique=True),
+        Index("ix_provider_cache_expiry", "provider", "expires_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    cache_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    lookup_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    query: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    normalized_data: Mapped[str] = mapped_column(Text, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    provider_version: Mapped[str] = mapped_column(String(40), nullable=False)
+
+
 class MetadataIssue(Base):
     """A durable, provider-neutral finding from indexed canonical metadata."""
     __tablename__ = "metadata_issues"
