@@ -53,8 +53,11 @@ def test_health_snapshot_reports_completeness_and_future_duplicates():
 def test_health_action_uses_durable_task_system():
     with SessionLocal() as db:
         task = library_health.create_action(db, "refresh")
+        task_id = task.id
+        db.expire_all()
+        persisted = db.get(type(task), task_id)
 
-        assert task.task_type == "library_maintenance"
-        assert task.status == "queued"
-        assert task.operation_payload == '{"action": "refresh"}'
-        assert task.total_items == 1
+        assert persisted.task_type == "library_maintenance"
+        assert persisted.status == "queued"
+        assert persisted.operation_payload == '{"action": "refresh"}'
+        assert persisted.total_items == 1
