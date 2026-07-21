@@ -265,9 +265,11 @@ class LibraryWatcher:
                     return
 
     def _apply(self, event: PendingFileEvent) -> None:
-            if not self._is_managed(event.source) or (
-            event.destination is not None and not self._is_managed(event.destination)
-        ):
+        source_is_managed = self._is_managed(event.source)
+        destination_is_managed = (
+            event.destination is None or self._is_managed(event.destination)
+        )
+        if not source_is_managed or not destination_is_managed:
             logger.warning("Ignoring watcher event outside music root: {}", event.source)
             return
         db = SessionLocal()
