@@ -72,3 +72,18 @@ def test_song_response_marks_recently_added_tracks():
     )
 
     assert _serialize_song(song)["recently_added"] is True
+
+
+def test_song_response_falls_back_when_a_legacy_song_has_no_created_at():
+    indexed_at = datetime.now(UTC).replace(tzinfo=None)
+    song = Song(
+        path="/music/legacy.mp3",
+        filename="legacy.mp3",
+        created_at=None,
+        last_indexed_at=indexed_at,
+    )
+
+    response = _serialize_song(song)
+
+    assert response["date_added"] == indexed_at
+    assert response["recently_added"] is True
