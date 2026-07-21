@@ -2,7 +2,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 def test_library_foundation_migrates_existing_songs_table(tmp_path):
@@ -14,8 +14,16 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
             "CREATE TABLE songs ("
             "id INTEGER PRIMARY KEY, "
             "path VARCHAR NOT NULL UNIQUE, "
-            "filename VARCHAR NOT NULL"
+            "filename VARCHAR NOT NULL, "
+            "modified_time INTEGER, "
+            "created_at DATETIME"
             ")"
+        )
+        connection.execute(
+            text(
+                "INSERT INTO songs (id, path, filename, modified_time, created_at) "
+                "VALUES (1, '/music/legacy.mp3', 'legacy.mp3', 1720000000, NULL)"
+            )
         )
 
     root = Path(__file__).resolve().parents[1]
@@ -72,6 +80,11 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "ix_songs_bitrate",
     } <= song_indexes
     assert "bulk_operation_items" in inspect(engine).get_table_names()
+    with engine.connect() as connection:
+        created_at = connection.execute(
+            text("SELECT created_at FROM songs WHERE id = 1")
+        ).scalar_one()
+    assert created_at is not None
     task_columns = {
         column["name"] for column in inspect(engine).get_columns("tasks")
     }
