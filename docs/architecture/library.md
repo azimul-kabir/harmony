@@ -112,7 +112,9 @@ Fields
 - album_artist
 - title
 - track_number
+- track_total
 - disc_number
+- disc_total
 - genre
 - year
 - duration
@@ -131,7 +133,11 @@ External IDs
 
 - spotify_id
 - musicbrainz_recording_id
+- musicbrainz_release_id
+- musicbrainz_artist_id
 - isrc
+
+Additional indexed release context includes a nullable compilation marker.
 
 Relationships
 
@@ -252,6 +258,73 @@ Album projection identities are `normalized(album_artist or artist)::normalized(
 Artist identities are normalized canonical artist strings with only a leading
 `The` treated as equivalent; featured-artist tokens and version markers are
 retained. These keys are projection identities, not future normalized IDs.
+
+### Rule registration and execution
+
+Rules are described by immutable `RuleDefinition` records and registered with
+`MetadataHealthService`. A definition supplies the stable rule ID, version,
+scope, severity, explanation, and suggested action. Detectors consume only
+canonical `Song` columns and in-memory album/artist projections. Registration
+is deliberately provider-neutral: a future provider-backed detector can add a
+rule definition without changing issue, score, API, or UI contracts.
+
+The initial registry contains 20 song rules, 13 album rules, and 4 artist
+rules. Missing MusicBrainz recording, release, and artist IDs are informational.
+Invalid numeric values are errors. All other initial findings are warnings.
+No initial rule writes tags or creates a `MetadataSuggestion`.
+
+Comparison normalization uses Unicode NFKC, trims boundary whitespace,
+collapses repeated whitespace, case-folds text, and canonicalizes common quote,
+dash, and separator punctuation. Artist comparisons may treat a leading
+`The` as equivalent. Featured-artist tokens and track version markers are
+retained. Normalized values are diagnostic data and never replace canonical
+values automatically.
+
+Implausible duration, track/disc maximums, and allowed future-year tolerance
+are constructor-configurable thresholds. Defaults are eight hours, track 999,
+disc 99, and one future year; the current year itself is always valid.
+
+### Persistence and lifecycle
+
+`metadata_issues` is additive and has no `Song` foreign key by design. Its
+SHA-256 identity covers rule/version, entity projection, field, and bounded
+rule evidence. Re-detection updates `last_detected_at`; absent open findings
+resolve; recurrence reopens resolved findings; ignored findings stay ignored
+until explicitly restored. Evidence is JSON limited to 20 values and 2 KB and
+never contains raw tag dumps or exceptions. Indexes cover identity, common
+status/severity/rule filters, entity lookup, and first/last detection times.
+
+### Jobs and performance
+
+Full analysis is a persistent Library Maintenance job using resource key
+`library-metadata-health`. It counts available songs as successful or failed
+and missing songs as skipped, supports cooperative cancellation, and records
+bounded `METADATA_ANALYSIS_FAILED` item failures. A job with isolated failures
+ends `completed_with_errors`; an unexpected engine-level failure ends `failed`.
+Search remains read-only and does not reserve the metadata-health resource.
+
+Normal analysis never opens audio files. Song rows are streamed by primary key
+for progress/cancellation, while album and artist projections are built from a
+single indexed query. Issue endpoints are paginated, and summary/score queries
+aggregate once per request rather than once per rendered row.
+
+### Diagnostic score
+
+The metadata score is deterministic from 0–100. Open informational, warning,
+error, and critical issues have weights `0.25`, `2`, `6`, and `12`. The summed
+penalty is capped at 20 per entity/projection, then measured against a budget of
+10 points per available song. Ignored issues and issues attached to missing
+songs are excluded and separately counted. The API returns the score together
+with weights, counts, cap, penalty, and budget. This is a diagnostic prioritizing
+signal, not a claim that metadata is correct.
+
+### Additive APIs
+
+Metadata health endpoints live below `/api/library/health/metadata`: start a
+full job; analyze a song, album, or artist; paginate/filter issues; retrieve,
+ignore, restore, or resolve an issue; obtain multidimensional summary and score
+inputs; and enumerate rule definitions. These routes do not alter the existing
+Library Health snapshot contract or metadata suggestion/history contracts.
 
 ```
 LibraryService

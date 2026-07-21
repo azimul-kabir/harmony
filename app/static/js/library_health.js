@@ -10,7 +10,8 @@ async function healthJson(url, options) {
     const response = await fetch(url, options);
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || `Request failed: ${response.status}`);
+        const detail = body.detail?.error || body.error || body.detail;
+        throw new Error(detail?.message || detail || `Request failed: ${response.status}`);
     }
     return response.json();
 }
@@ -47,16 +48,32 @@ async function loadHealth() {
 async function loadMetadataIssues() {
     const status = document.getElementById("metadata-status")?.value || "open";
     const severity = document.getElementById("metadata-severity")?.value || "";
-    const data = await healthJson(`/api/library/health/metadata/issues?status=${encodeURIComponent(status)}&severity=${encodeURIComponent(severity)}&limit=50`);
+    const query = document.getElementById("metadata-search")?.value || "";
+    const entityType = document.getElementById("metadata-entity")?.value || "";
+    const data = await healthJson(`/api/library/health/metadata/issues?status=${encodeURIComponent(status)}&severity=${encodeURIComponent(severity)}&entity_type=${encodeURIComponent(entityType)}&search=${encodeURIComponent(query)}&limit=50`);
     const target = document.getElementById("metadata-issues");
-    const query = (document.getElementById("metadata-search")?.value || "").toLowerCase();
-    const items = data.items.filter((item) => !query || `${item.title} ${item.explanation} ${item.album_key || ""} ${item.artist_key || ""}`.toLowerCase().includes(query));
-    target.innerHTML = items.length ? items.map((item) => `<article class="health-check status-${escapeHealth(item.severity)}"><span class="health-check-indicator"></span><div><strong>${escapeHealth(item.title)}</strong><small>${escapeHealth(item.explanation)} · ${escapeHealth(item.entity_type)}</small></div><button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>${item.status === "ignored" ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>` : `<button class="btn-secondary" data-metadata-resolve="${item.id}">Resolved</button>`}</article>`).join("") : "<p>No metadata issues match these filters.</p>";
+    const items = data.items;
+    target.innerHTML = items.length ? items.map((item) => {
+        const destination = item.entity_type === "song" && item.song_id
+            ? `<a class="btn-secondary" href="/library?song=${item.song_id}&metadata=review">Review song</a>`
+            : item.entity_type === "album" && item.album_key
+                ? `<a class="btn-secondary" href="/library?view=albums&album=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
+        const action = item.status === "ignored"
+            ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>`
+            : item.status === "open" ? `<button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>` : "";
+        return `<details class="health-check status-${escapeHealth(item.severity)}"><summary><span class="health-check-indicator"></span><div><strong>${escapeHealth(item.title)}</strong><small>${escapeHealth(item.rule_id)} · ${escapeHealth(item.entity_type)} · ${escapeHealth(item.severity)}</small></div></summary><p>${escapeHealth(item.explanation)}</p><p><strong>Next action:</strong> ${escapeHealth(item.suggested_action)}</p><div>${destination}${action}</div></details>`;
+    }).join("") : `<p>${status === "open" ? "No open metadata issues. Run an analysis to refresh results." : `No ${escapeHealth(status)} metadata issues match these filters.`}</p>`;
     target.querySelectorAll("[data-metadata-ignore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataIgnore}/ignore`, {method:"POST"}); loadMetadataIssues(); });
     target.querySelectorAll("[data-metadata-restore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataRestore}/restore`, {method:"POST"}); loadMetadataIssues(); });
     target.querySelectorAll("[data-metadata-resolve]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataResolve}/resolve`, {method:"POST"}); loadMetadataIssues(); });
     const summary = await healthJson("/api/library/health/metadata/summary");
-    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.open_issues} open issues (diagnostic only).`;
+    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issues · ${summary.score.inputs.ignored_issues} ignored (diagnostic only).`;
+    const severityCounts = Object.fromEntries((summary.counts.severity || []).map((row) => [row.value, row.count]));
+    document.getElementById("metadata-severity-counts").textContent = ["critical", "error", "warning", "info"].map((key) => `${key}: ${severityCounts[key] || 0}`).join(" · ");
+    const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count).slice(0, 8);
+    document.getElementById("metadata-rule-counts").textContent = ruleCounts.length
+        ? `Most frequent: ${ruleCounts.map((row) => `${row.value.replaceAll("_", " ")} (${row.count})`).join(" · ")}`
+        : "No rule counts yet.";
 }
 
 async function loadLibraryJobs() {
@@ -183,4 +200,9 @@ document.addEventListener("DOMContentLoaded", loadHealth);
 document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
 document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);
 document.getElementById("metadata-severity")?.addEventListener("change", loadMetadataIssues);
-document.getElementById("metadata-search")?.addEventListener("input", loadMetadataIssues);
+document.getElementById("metadata-entity")?.addEventListener("change", loadMetadataIssues);
+let metadataSearchTimer;
+document.getElementById("metadata-search")?.addEventListener("input", () => {
+    clearTimeout(metadataSearchTimer);
+    metadataSearchTimer = setTimeout(loadMetadataIssues, 250);
+});

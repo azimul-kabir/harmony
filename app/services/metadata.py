@@ -36,6 +36,27 @@ def _parse_number(value):
         return None
 
 
+def _parse_total(value):
+    if value is None:
+        return None
+    parts = str(value).split("/", 1)
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[1])
+    except ValueError:
+        return None
+
+
+def _parse_bool(value):
+    normalized = str(value).strip().casefold() if value is not None else ""
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    return None
+
+
 def read_metadata(file_path: str | Path) -> dict:
     path = Path(file_path)
 
@@ -62,7 +83,9 @@ def read_metadata(file_path: str | Path) -> dict:
         "album": _first(easy.get("album")),
         # Track
         "track": _parse_number(_first(easy.get("tracknumber"))),
+        "track_total": _parse_total(_first(easy.get("tracknumber"))),
         "disc": _parse_number(_first(easy.get("discnumber"))),
+        "disc_total": _parse_total(_first(easy.get("discnumber"))),
         # Other
         "genre": _first(easy.get("genre")),
         "year": _parse_number(_first(easy.get("date"))),
@@ -80,6 +103,9 @@ def read_metadata(file_path: str | Path) -> dict:
             tags.get("musicbrainz_recordingid")
             or tags.get("musicbrainz_trackid")
         ),
+        "musicbrainz_release_id": _first(tags.get("musicbrainz_albumid")),
+        "musicbrainz_artist_id": _first(tags.get("musicbrainz_artistid")),
+        "compilation": _parse_bool(_first(tags.get("compilation") or easy.get("compilation"))),
         "isrc": _first(tags.get("isrc")),
     }
 

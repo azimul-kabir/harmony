@@ -44,6 +44,11 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "download_source",
         "musicbrainz_recording_id",
         "artwork_id",
+        "track_total",
+        "disc_total",
+        "musicbrainz_release_id",
+        "musicbrainz_artist_id",
+        "compilation",
     } <= columns
     assert "artwork" in inspect(engine).get_table_names()
     artwork_columns = {
@@ -90,7 +95,7 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
     }
     assert {"operation_payload", "output_path"} <= task_columns
     tables = set(inspect(engine).get_table_names())
-    assert {"metadata_suggestions", "metadata_history"} <= tables
+    assert {"metadata_suggestions", "metadata_history", "metadata_issues"} <= tables
     suggestion_columns = {column["name"] for column in inspect(engine).get_columns("metadata_suggestions")}
     assert {"entity_type", "field_name", "suggested_value", "confidence_level", "positive_evidence", "status"} <= suggestion_columns
     with engine.connect() as connection:
