@@ -425,6 +425,7 @@ function renderSongs() {
                 <td data-label="Album">${escapeHtml(song.album || "Unknown album")}</td>
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
+                <td data-label="Metadata"><button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button></td>
             </tr>
         `).join("");
     }
@@ -437,9 +438,76 @@ function renderSongs() {
             updateBulkSelection(page.items);
         });
     });
+    body.querySelectorAll("[data-review-song]").forEach((button) => {
+        button.addEventListener("click", () => openMetadataReview(Number(button.dataset.reviewSong)));
+    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
+}
+
+function metadataValue(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+function evidenceText(value) {
+    if (value === null || value === undefined) return "None recorded";
+    if (Array.isArray(value)) return value.map(metadataValue).join(" · ") || "None recorded";
+    if (typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${metadataValue(item)}`).join(" · ");
+    return String(value);
+}
+
+async function openMetadataReview(songId) {
+    const dialog = document.getElementById("metadata-review-dialog");
+    dialog.dataset.songId = String(songId);
+    dialog.showModal();
+    await loadMetadataReview(songId);
+}
+
+async function loadMetadataReview(songId) {
+    const status = document.getElementById("metadata-review-status");
+    status.textContent = "Loading metadata review…";
+    try {
+        const [review, history] = await Promise.all([
+            fetchJson(`/api/library/songs/${songId}/metadata`),
+            fetchJson(`/api/library/songs/${songId}/metadata/history`),
+        ]);
+        const song = libraryState.songs.find((item) => item.id === songId);
+        document.getElementById("metadata-review-title").textContent = song?.title || song?.filename || `Song ${songId}`;
+        document.getElementById("metadata-current").innerHTML = review.fields
+            .filter((field) => field.current_value !== null && field.current_value !== "")
+            .map((field) => `<div><dt>${escapeHtml(field.field_name.replaceAll("_", " "))}</dt><dd>${escapeHtml(metadataValue(field.current_value))}</dd></div>`).join("") || "<p>No canonical metadata is indexed.</p>";
+        const pending = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "pending");
+        document.getElementById("metadata-suggestions").innerHTML = pending.map((item) => `
+            <article class="metadata-suggestion-card">
+                <header><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(item.provider)} · ${escapeHtml(item.confidence_level)}${item.confidence === null ? "" : ` (${Math.round(item.confidence * 100)}%)`}</span></header>
+                <p class="metadata-proposed">${escapeHtml(metadataValue(item.current_value))} <span aria-hidden="true">→</span> <strong>${escapeHtml(metadataValue(item.suggested_value))}</strong></p>
+                <p>${escapeHtml(item.match_explanation || "No match explanation supplied.")}</p>
+                <small><b>Positive evidence:</b> ${escapeHtml(evidenceText(item.positive_evidence))}</small>
+                <small><b>Conflicting evidence:</b> ${escapeHtml(evidenceText(item.conflicting_evidence))}</small>
+                <div><button class="btn-primary" data-metadata-action="accept" data-suggestion-id="${item.id}">Accept</button><button class="btn-secondary" data-metadata-action="reject" data-suggestion-id="${item.id}">Reject</button></div>
+            </article>`).join("") || '<p class="library-search-status">No pending suggestions.</p>';
+        document.getElementById("metadata-history").innerHTML = history.items.map((item) => `
+            <article><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(metadataValue(item.previous_value))} → ${escapeHtml(metadataValue(item.new_value))}</span><small>${escapeHtml(item.change_source)} · ${new Date(item.changed_at).toLocaleString()}</small></article>`).join("") || '<p class="library-search-status">No applied-change history.</p>';
+        document.querySelectorAll("[data-metadata-action]").forEach((button) => button.addEventListener("click", () => reviewMetadataSuggestion(button)));
+        status.textContent = "Accepting records a decision only; it does not change tags or canonical metadata.";
+    } catch (error) {
+        status.textContent = "Harmony could not load this metadata review.";
+    }
+}
+
+async function reviewMetadataSuggestion(button) {
+    button.disabled = true;
+    const response = await fetch(`/api/metadata/suggestions/${button.dataset.suggestionId}/${button.dataset.metadataAction}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewed_by: "library-ui" }),
+    });
+    if (!response.ok) {
+        document.getElementById("metadata-review-status").textContent = "The review decision could not be saved.";
+        button.disabled = false;
+        return;
+    }
+    await loadMetadataReview(Number(document.getElementById("metadata-review-dialog").dataset.songId));
 }
 
 function renderAlbums() {
@@ -787,6 +855,7 @@ document.getElementById("library-select-page").addEventListener("change", (event
     });
     renderSongs();
 });
+document.getElementById("metadata-review-close").addEventListener("click", () => document.getElementById("metadata-review-dialog").close());
 
 document.getElementById("library-clear-selection").addEventListener("click", clearBulkSelection);
 document.querySelectorAll("[data-bulk-action]").forEach((button) => {

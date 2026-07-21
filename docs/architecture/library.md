@@ -1,7 +1,7 @@
 # Harmony Library Architecture
 
-> Version: 1.5.0
-> Status: Released
+> Version: 1.6.0 (Metadata Intelligence foundation)
+> Status: In development
 > Last Updated: 2026-07-21
 
 ---
@@ -607,6 +607,51 @@ Provider
 Confidence
 
 Last Updated
+
+## Metadata Intelligence foundation
+
+Canonical metadata remains on the existing `songs` Library Index. The
+`metadata_suggestions` table is a provider-neutral review queue and never
+overwrites a Song merely because a suggestion is created or accepted. The
+`metadata_history` table is an immutable applied-change audit log. Neither
+table introduces a second library database, stores provider response payloads,
+or has a cascading foreign key to Songs; stable entity type/ID references keep
+audit data when a file is missing and allow future normalized Album and Artist
+entities to use the same model.
+
+Suggestions support competing provider proposals, bounded JSON values and
+evidence, confidence and explanation, provenance, durable job attribution, and
+review timestamps. A partial unique index permits only one `accepted` or
+`applied` suggestion for an entity field. Accepting a newer pending proposal
+atomically marks an older accepted proposal `superseded`. Acceptance records a
+decision only: canonical rows and audio files remain unchanged in this phase.
+Rejections and superseded proposals are retained.
+
+Applied-change history records previous/new values, provider provenance,
+confidence, initiating job/source, whether audio was changed, reversibility,
+and an optional reversal link. Audit history has no automatic deletion policy.
+Operators should retain it for the life of the Library; if storage policy is
+later required, it must be explicit, documented, and preserve externally
+exported audit records. Structured evidence is limited to 8 KiB per evidence
+field and metadata values to 4 KiB. Raw provider responses, secrets, exception
+payloads, and audio content are never stored here.
+
+Stable endpoints are:
+
+- `GET /api/library/songs/{id}/metadata`
+- `GET /api/library/songs/{id}/metadata/suggestions`
+- `GET /api/library/songs/{id}/metadata/history`
+- `GET /api/metadata/suggestions/pending`
+- `GET /api/metadata/suggestions/{id}`
+- `POST /api/metadata/suggestions/{id}/accept`
+- `POST /api/metadata/suggestions/{id}/reject`
+
+Metadata discovery or apply work that becomes asynchronous must use the
+existing persistent Library Jobs framework and its safe diagnostics. No
+provider work is scheduled by this foundation. The Library UI exposes a
+provider-neutral per-Song review dialog with canonical values, evidence,
+decisions, and applied history. Existing Library API response contracts remain
+unchanged.
 
 ---
 

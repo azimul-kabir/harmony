@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -79,6 +80,71 @@ class Song(Base):
         default=utcnow_naive,
         index=True,
     )
+
+
+class MetadataSuggestion(Base):
+    """Provider-neutral proposed metadata; never canonical until separately applied."""
+    __tablename__ = "metadata_suggestions"
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('song', 'album', 'artist')", name="ck_metadata_suggestion_entity_type"),
+        CheckConstraint("status IN ('pending', 'accepted', 'rejected', 'superseded', 'applied', 'apply_failed')", name="ck_metadata_suggestion_status"),
+        CheckConstraint("confidence_level IN ('exact', 'high', 'medium', 'low', 'rejected')", name="ck_metadata_suggestion_confidence_level"),
+        CheckConstraint("confidence IS NULL OR (confidence >= 0 AND confidence <= 1)", name="ck_metadata_suggestion_confidence"),
+        Index("ix_metadata_suggestions_entity", "entity_type", "entity_id", "field_name"),
+        Index("ix_metadata_suggestions_pending", "status", "created_at"),
+        Index(
+            "uq_metadata_suggestions_current_review",
+            "entity_type", "entity_id", "field_name",
+            unique=True,
+            sqlite_where=text("status IN ('accepted', 'applied')"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    current_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggested_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    provider_entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_level: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    match_explanation: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    positive_evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    conflicting_evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class MetadataHistory(Base):
+    """Immutable audit record for a canonical metadata change."""
+    __tablename__ = "metadata_history"
+    __table_args__ = (
+        CheckConstraint("entity_type IN ('song', 'album', 'artist')", name="ck_metadata_history_entity_type"),
+        Index("ix_metadata_history_entity", "entity_type", "entity_id", "changed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    previous_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    provider_entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    change_source: Mapped[str] = mapped_column(String(120), nullable=False)
+    audio_file_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reversal_of_history_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_history.id", ondelete="SET NULL"), nullable=True)
 
 
 class Artwork(Base):

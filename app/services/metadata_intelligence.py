@@ -1,0 +1,247 @@
+"""Provider-independent metadata review and audit service."""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.core.time import utcnow_naive
+from app.database.models import MetadataHistory, MetadataSuggestion, Song
+
+ENTITY_TYPES = frozenset({"song", "album", "artist"})
+METADATA_FIELDS = frozenset({
+    "title", "artist", "album_artist", "album", "track_number", "total_tracks",
+    "disc_number", "total_discs", "release_date", "original_release_date", "year",
+    "genre", "isrc", "musicbrainz_recording_id", "musicbrainz_release_id",
+    "musicbrainz_release_group_id", "musicbrainz_artist_id",
+    "musicbrainz_release_artist_id", "artwork_source",
+})
+STATUSES = frozenset({"pending", "accepted", "rejected", "superseded", "applied", "apply_failed"})
+CONFIDENCE_LEVELS = frozenset({"exact", "high", "medium", "low", "rejected"})
+CURRENT_STATUSES = ("accepted", "applied")
+MAX_VALUE_BYTES = 4096
+MAX_EVIDENCE_BYTES = 8192
+
+
+@dataclass
+class MetadataServiceError(Exception):
+    code: str
+    message: str
+    status_code: int = 400
+
+    def __str__(self) -> str:
+        return self.message
+
+
+def _json_dump(value: Any, *, limit: int) -> str | None:
+    if value is None:
+        return None
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError) as exc:
+        raise MetadataServiceError("metadata_invalid_json", "Metadata values and evidence must be JSON-compatible.") from exc
+    if len(encoded.encode("utf-8")) > limit:
+        raise MetadataServiceError("metadata_payload_too_large", "Metadata value or evidence exceeds the bounded storage limit.", 413)
+    return encoded
+
+
+def _json_load(value: str | None) -> Any:
+    return None if value is None else json.loads(value)
+
+
+class MetadataService:
+    def _validate_entity(self, entity_type: str, entity_id: int, db: Session, *, require_existing: bool = True) -> None:
+        if entity_type not in ENTITY_TYPES:
+            raise MetadataServiceError("metadata_invalid_entity_type", "Unsupported metadata entity type.")
+        if entity_id < 1:
+            raise MetadataServiceError("metadata_invalid_entity_id", "Entity ID must be positive.")
+        if require_existing and entity_type == "song" and db.get(Song, entity_id) is None:
+            raise MetadataServiceError("metadata_song_not_found", "Song not found.", 404)
+
+    def _validate_field(self, field_name: str) -> None:
+        if field_name not in METADATA_FIELDS:
+            raise MetadataServiceError("metadata_invalid_field", "Unsupported metadata field.")
+
+    def canonical_metadata(self, db: Session, entity_type: str, entity_id: int) -> dict[str, Any]:
+        self._validate_entity(entity_type, entity_id, db)
+        if entity_type != "song":
+            return {field: None for field in sorted(METADATA_FIELDS)}
+        song = db.get(Song, entity_id)
+        assert song is not None
+        values = {field: None for field in METADATA_FIELDS}
+        values.update({
+            "title": song.title, "artist": song.artist, "album_artist": song.album_artist,
+            "album": song.album, "track_number": song.track, "disc_number": song.disc,
+            "year": song.year, "genre": song.genre, "isrc": song.isrc,
+            "musicbrainz_recording_id": song.musicbrainz_recording_id,
+            "artwork_source": song.artwork.source if song.artwork else None,
+        })
+        return {field: values[field] for field in sorted(values)}
+
+    def create_suggestion(self, db: Session, *, entity_type: str, entity_id: int,
+                          field_name: str, suggested_value: Any, provider: str,
+                          confidence_level: str, confidence: float | None = None,
+                          current_value: Any = None, provider_entity_id: str | None = None,
+                          match_explanation: str | None = None, positive_evidence: Any = None,
+                          conflicting_evidence: Any = None, created_by_job_id: int | None = None,
+                          reviewed_by: str | None = None) -> MetadataSuggestion:
+        self._validate_entity(entity_type, entity_id, db)
+        self._validate_field(field_name)
+        provider = provider.strip()
+        if not provider or len(provider) > 80:
+            raise MetadataServiceError("metadata_invalid_provider", "Provider is required and must be at most 80 characters.")
+        if confidence_level not in CONFIDENCE_LEVELS:
+            raise MetadataServiceError("metadata_invalid_confidence_level", "Unsupported confidence level.")
+        if confidence is not None and not 0 <= confidence <= 1:
+            raise MetadataServiceError("metadata_invalid_confidence", "Confidence must be between 0 and 1.")
+        if match_explanation and len(match_explanation) > 1000:
+            raise MetadataServiceError("metadata_payload_too_large", "Match explanation exceeds 1000 characters.", 413)
+        canonical = self.canonical_metadata(db, entity_type, entity_id)
+        suggestion = MetadataSuggestion(
+            entity_type=entity_type, entity_id=entity_id, field_name=field_name,
+            current_value=_json_dump(canonical[field_name] if current_value is None else current_value, limit=MAX_VALUE_BYTES),
+            suggested_value=_json_dump(suggested_value, limit=MAX_VALUE_BYTES), provider=provider,
+            provider_entity_id=provider_entity_id, confidence=confidence, confidence_level=confidence_level,
+            match_explanation=match_explanation,
+            positive_evidence=_json_dump(positive_evidence, limit=MAX_EVIDENCE_BYTES),
+            conflicting_evidence=_json_dump(conflicting_evidence, limit=MAX_EVIDENCE_BYTES),
+            status="pending", created_by_job_id=created_by_job_id, reviewed_by=reviewed_by,
+        )
+        db.add(suggestion)
+        db.flush()
+        return suggestion
+
+    def get_suggestion(self, db: Session, suggestion_id: int) -> MetadataSuggestion:
+        item = db.get(MetadataSuggestion, suggestion_id)
+        if item is None:
+            raise MetadataServiceError("metadata_suggestion_not_found", "Metadata suggestion not found.", 404)
+        return item
+
+    def list_suggestions(self, db: Session, *, entity_type: str | None = None,
+                         entity_id: int | None = None, provider: str | None = None,
+                         status: str | None = None, confidence_level: str | None = None,
+                         field_name: str | None = None, created_from: datetime | None = None,
+                         created_to: datetime | None = None, offset: int = 0, limit: int = 50) -> tuple[list[MetadataSuggestion], int]:
+        if entity_type is not None and entity_type not in ENTITY_TYPES:
+            raise MetadataServiceError("metadata_invalid_entity_type", "Unsupported metadata entity type.")
+        if status is not None and status not in STATUSES:
+            raise MetadataServiceError("metadata_invalid_status", "Unsupported suggestion status.")
+        if confidence_level is not None and confidence_level not in CONFIDENCE_LEVELS:
+            raise MetadataServiceError("metadata_invalid_confidence_level", "Unsupported confidence level.")
+        if field_name is not None:
+            self._validate_field(field_name)
+        conditions = []
+        for column, value in ((MetadataSuggestion.entity_type, entity_type), (MetadataSuggestion.entity_id, entity_id),
+                              (MetadataSuggestion.provider, provider), (MetadataSuggestion.status, status),
+                              (MetadataSuggestion.confidence_level, confidence_level), (MetadataSuggestion.field_name, field_name)):
+            if value is not None:
+                conditions.append(column == value)
+        if created_from is not None: conditions.append(MetadataSuggestion.created_at >= created_from)
+        if created_to is not None: conditions.append(MetadataSuggestion.created_at <= created_to)
+        total = db.scalar(select(func.count()).select_from(MetadataSuggestion).where(*conditions)) or 0
+        items = list(db.scalars(select(MetadataSuggestion).where(*conditions).order_by(MetadataSuggestion.created_at.desc(), MetadataSuggestion.id.desc()).offset(offset).limit(limit)).all())
+        return items, total
+
+    def list_pending_suggestions(self, db: Session, **filters: Any) -> tuple[list[MetadataSuggestion], int]:
+        filters["status"] = "pending"
+        return self.list_suggestions(db, **filters)
+
+    def accept_suggestion(self, db: Session, suggestion_id: int, *, reviewed_by: str | None = None) -> MetadataSuggestion:
+        suggestion = self.get_suggestion(db, suggestion_id)
+        if suggestion.status != "pending":
+            raise MetadataServiceError("metadata_invalid_transition", "Only pending suggestions can be accepted.", 409)
+        now = utcnow_naive()
+        db.execute(update(MetadataSuggestion).where(
+            MetadataSuggestion.entity_type == suggestion.entity_type,
+            MetadataSuggestion.entity_id == suggestion.entity_id,
+            MetadataSuggestion.field_name == suggestion.field_name,
+            MetadataSuggestion.id != suggestion.id,
+            MetadataSuggestion.status.in_(CURRENT_STATUSES),
+        ).values(status="superseded", reviewed_at=now))
+        suggestion.status = "accepted"
+        suggestion.reviewed_at = now
+        suggestion.reviewed_by = reviewed_by or suggestion.reviewed_by
+        try:
+            db.flush()
+        except IntegrityError as exc:
+            db.rollback()
+            raise MetadataServiceError("metadata_acceptance_conflict", "A competing suggestion was accepted concurrently.", 409) from exc
+        return suggestion
+
+    def reject_suggestion(self, db: Session, suggestion_id: int, *, reviewed_by: str | None = None) -> MetadataSuggestion:
+        suggestion = self.get_suggestion(db, suggestion_id)
+        if suggestion.status != "pending":
+            raise MetadataServiceError("metadata_invalid_transition", "Only pending suggestions can be rejected.", 409)
+        now = utcnow_naive()
+        suggestion.status, suggestion.reviewed_at, suggestion.rejected_at = "rejected", now, now
+        suggestion.reviewed_by = reviewed_by or suggestion.reviewed_by
+        db.flush()
+        return suggestion
+
+    def supersede_suggestion(self, db: Session, suggestion_id: int, *, reviewed_by: str | None = None) -> MetadataSuggestion:
+        suggestion = self.get_suggestion(db, suggestion_id)
+        if suggestion.status not in {"pending", "accepted"}:
+            raise MetadataServiceError("metadata_invalid_transition", "Suggestion cannot be superseded from its current status.", 409)
+        suggestion.status, suggestion.reviewed_at = "superseded", utcnow_naive()
+        suggestion.reviewed_by = reviewed_by or suggestion.reviewed_by
+        db.flush()
+        return suggestion
+
+    def record_history(self, db: Session, **values: Any) -> MetadataHistory:
+        self._validate_entity(values["entity_type"], values["entity_id"], db, require_existing=False)
+        self._validate_field(values["field_name"])
+        values["previous_value"] = _json_dump(values.get("previous_value"), limit=MAX_VALUE_BYTES)
+        values["new_value"] = _json_dump(values.get("new_value"), limit=MAX_VALUE_BYTES)
+        history = MetadataHistory(**values)
+        db.add(history); db.flush()
+        return history
+
+    def get_history(self, db: Session, entity_type: str, entity_id: int, *, offset: int = 0,
+                    limit: int = 50) -> tuple[list[MetadataHistory], int]:
+        self._validate_entity(entity_type, entity_id, db, require_existing=False)
+        conditions = (MetadataHistory.entity_type == entity_type, MetadataHistory.entity_id == entity_id)
+        total = db.scalar(select(func.count()).select_from(MetadataHistory).where(*conditions)) or 0
+        items = list(db.scalars(select(MetadataHistory).where(*conditions).order_by(
+            MetadataHistory.changed_at.desc(), MetadataHistory.id.desc()).offset(offset).limit(limit)).all())
+        return items, total
+
+    def compare(self, db: Session, entity_type: str, entity_id: int) -> dict[str, Any]:
+        current = self.canonical_metadata(db, entity_type, entity_id)
+        suggestions, _ = self.list_suggestions(db, entity_type=entity_type, entity_id=entity_id, limit=1000)
+        return {"entity_type": entity_type, "entity_id": entity_id, "current": current,
+                "suggestions": [serialize_suggestion(item) for item in suggestions]}
+
+    def review_model(self, db: Session, entity_type: str, entity_id: int) -> dict[str, Any]:
+        comparison = self.compare(db, entity_type, entity_id)
+        grouped = {field: [] for field in sorted(METADATA_FIELDS)}
+        for item in comparison["suggestions"]:
+            grouped[item["field_name"]].append(item)
+        return {"entity_type": entity_type, "entity_id": entity_id,
+                "fields": [{"field_name": field, "current_value": comparison["current"][field], "suggestions": grouped[field]} for field in sorted(grouped)]}
+
+
+def serialize_suggestion(item: MetadataSuggestion) -> dict[str, Any]:
+    return {column: getattr(item, column) for column in (
+        "id", "entity_type", "entity_id", "field_name", "provider", "provider_entity_id",
+        "confidence", "confidence_level", "match_explanation", "status", "created_at",
+        "reviewed_at", "applied_at", "rejected_at", "created_by_job_id", "reviewed_by"
+    )} | {"current_value": _json_load(item.current_value), "suggested_value": _json_load(item.suggested_value),
+          "positive_evidence": _json_load(item.positive_evidence), "conflicting_evidence": _json_load(item.conflicting_evidence)}
+
+
+def serialize_history(item: MetadataHistory) -> dict[str, Any]:
+    data = {column: getattr(item, column) for column in (
+        "id", "entity_type", "entity_id", "field_name", "provider", "provider_entity_id",
+        "confidence", "changed_at", "job_id", "change_source", "audio_file_modified",
+        "reversible", "reversal_of_history_id"
+    )}
+    data.update(previous_value=_json_load(item.previous_value), new_value=_json_load(item.new_value))
+    return data
+
+
+metadata_service = MetadataService()

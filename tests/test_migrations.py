@@ -89,3 +89,9 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         column["name"] for column in inspect(engine).get_columns("tasks")
     }
     assert {"operation_payload", "output_path"} <= task_columns
+    tables = set(inspect(engine).get_table_names())
+    assert {"metadata_suggestions", "metadata_history"} <= tables
+    suggestion_columns = {column["name"] for column in inspect(engine).get_columns("metadata_suggestions")}
+    assert {"entity_type", "field_name", "suggested_value", "confidence_level", "positive_evidence", "status"} <= suggestion_columns
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT filename FROM songs WHERE id = 1")).scalar_one() == "legacy.mp3"

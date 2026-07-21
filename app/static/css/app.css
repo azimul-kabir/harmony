@@ -614,6 +614,31 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     }
 }
 
+.metadata-review-dialog { width: min(900px, calc(100% - 32px)); max-height: 90vh; padding: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); color: var(--text-main); }
+.metadata-review-dialog::backdrop { background: rgba(0, 0, 0, .58); }
+.metadata-review-shell { padding: 24px; overflow-y: auto; max-height: calc(90vh - 48px); }
+.metadata-review-shell > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.metadata-review-shell h2, .metadata-review-shell h3 { margin: 5px 0 14px; }
+.metadata-review-shell section { margin-top: 24px; }
+.metadata-current-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.metadata-current-grid div, .metadata-suggestion-card, .metadata-history-list article { padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-alt); }
+.metadata-current-grid dt { color: var(--text-muted); font-size: .72rem; text-transform: uppercase; }
+.metadata-current-grid dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.metadata-suggestion-list, .metadata-history-list { display: grid; gap: 12px; }
+.metadata-suggestion-card header, .metadata-history-list article { display: flex; justify-content: space-between; gap: 12px; }
+.metadata-suggestion-card header span, .metadata-suggestion-card small, .metadata-history-list small { color: var(--text-muted); }
+.metadata-suggestion-card small { display: block; margin: 6px 0; }
+.metadata-suggestion-card > div { display: flex; gap: 8px; margin-top: 12px; }
+.metadata-suggestion-card .btn-primary { padding: 8px 16px; }
+.metadata-proposed { font-size: 1.05rem; }
+
+@media (max-width: 768px) {
+    .metadata-current-grid { grid-template-columns: 1fr; }
+    .metadata-review-shell { padding: 16px; }
+    .metadata-suggestion-card header, .metadata-history-list article { flex-direction: column; }
+    .library-songs-table #library-body td:nth-child(7) { grid-column: 1 / -1; padding-left: 56px !important; }
+}
+
 /* --- Mobile Library Grid & Layout Fixes --- */
 @media (max-width: 768px) {
     /* Force Albums and Artists grids to single-column stacking on mobile */
