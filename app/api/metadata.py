@@ -7,13 +7,22 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.services.metadata_intelligence import metadata_service, serialize_history, serialize_suggestion
+from app.services.metadata_intelligence import APPLICABLE_FIELDS, metadata_service, metadata_application_service, serialize_history, serialize_suggestion
 
 router = APIRouter(tags=["metadata"])
 
 
 class ReviewRequest(BaseModel):
     reviewed_by: str | None = Field(default=None, max_length=120)
+
+
+class ApplicationRequest(BaseModel):
+    suggestion_ids: list[int] | None = None
+    force: bool = False
+    force_confirmation: bool = False
+    stale_override_reason: str | None = Field(default=None, max_length=500)
+    initiated_by: str | None = Field(default=None, max_length=120)
+    atomic: bool = True
 
 
 def _page(items: list[Any], total: int, limit: int, offset: int) -> dict[str, Any]:
@@ -45,6 +54,47 @@ def get_song_history(song_id: int, limit: int = Query(default=50, ge=1, le=200),
     return {"items": [serialize_history(item) for item in items], "pagination": {
         "total": total, "limit": limit, "offset": offset, "has_more": offset + len(items) < total,
     }}
+
+
+@router.get("/api/library/songs/{song_id}/metadata/application-preview")
+def preview_accepted_application(song_id: int, db: Session = Depends(get_db)):
+    return metadata_application_service.build_preview(db, song_id)
+
+
+@router.post("/api/library/songs/{song_id}/metadata/application-preview")
+def preview_selected_application(song_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
+    return metadata_application_service.build_preview(db, song_id, request.suggestion_ids, initiated_by=request.initiated_by)
+
+
+@router.post("/api/library/songs/{song_id}/metadata/apply")
+def apply_accepted_application(song_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
+    result = metadata_application_service.apply_selected(db, song_id, None, force=request.force, force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by, atomic=request.atomic)
+    db.commit()
+    return result
+
+
+@router.post("/api/library/songs/{song_id}/metadata/apply-selected")
+def apply_selected_application(song_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
+    result = metadata_application_service.apply_selected(db, song_id, request.suggestion_ids, force=request.force, force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by, atomic=request.atomic)
+    db.commit()
+    return result
+
+
+@router.get("/api/metadata/history/{history_id}/rollback-preview")
+def preview_rollback(history_id: int, db: Session = Depends(get_db)):
+    return metadata_application_service.rollback_preview(db, history_id)
+
+
+@router.post("/api/metadata/history/{history_id}/rollback")
+def rollback(history_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
+    result = metadata_application_service.rollback(db, history_id, force=request.force, force_confirmation=request.force_confirmation, initiated_by=request.initiated_by)
+    db.commit()
+    return result
+
+
+@router.get("/api/metadata/application/capabilities")
+def application_capabilities():
+    return {"entity_types": ["song"], "supported_fields": sorted(APPLICABLE_FIELDS), "unsupported_fields": ["artwork_source"], "limits": {"max_text_length": 500, "year_min": 1000}}
 
 
 @router.get("/api/metadata/suggestions/pending", summary="List pending metadata suggestions")
