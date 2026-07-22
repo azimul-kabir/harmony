@@ -293,6 +293,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-attention-description { color: var(--text-muted); font-size: .82rem; overflow-wrap: anywhere; }
 .dashboard-attention-count { color: var(--text-main); font-size: 1rem; }
 .dashboard-attention-action, .dashboard-attention-recovery { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.dashboard-attention-recovery[hidden] { display: none !important; }
 .dashboard-attention-item.severity-critical { border-left-color: var(--danger); }
 .dashboard-attention-item.severity-critical .dashboard-attention-severity { color: var(--danger); }
 .dashboard-attention-item.severity-warning { border-left-color: var(--warning, #c48716); }
