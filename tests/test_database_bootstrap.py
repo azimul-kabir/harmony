@@ -172,3 +172,34 @@ def test_existing_database_retries_interrupted_metadata_health_indexes_migration
         .scalar_one()
         == "20260722_0015"
     )
+
+
+def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
+    tmp_path, monkeypatch
+):
+    """A database pre-created by the old bootstrap must still reach head."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-precreated.db'}")
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+
+    with engine.begin() as connection:
+        # This is the state produced when the former bootstrap called
+        # create_all() before upgrading a database recorded at 0008.
+        database_init.Base.metadata.create_all(bind=connection)
+        connection.exec_driver_sql(
+            "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"
+        )
+        connection.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES ('20260721_0008')")
+        )
+
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+
+    assert (
+        engine.connect()
+        .execute(text("SELECT version_num FROM alembic_version"))
+        .scalar_one()
+        == "20260722_0015"
+    )
