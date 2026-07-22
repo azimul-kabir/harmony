@@ -4,7 +4,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from app.database.models import MetadataApplicationBatch, MetadataHistory
 
 from app.database.session import get_db
 from app.services.metadata_intelligence import APPLICABLE_FIELDS, metadata_service, metadata_application_service, serialize_history, serialize_suggestion
@@ -68,16 +70,12 @@ def preview_selected_application(song_id: int, request: ApplicationRequest, db: 
 
 @router.post("/api/library/songs/{song_id}/metadata/apply")
 def apply_accepted_application(song_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
-    result = metadata_application_service.apply_selected(db, song_id, None, force=request.force, force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by, atomic=request.atomic)
-    db.commit()
-    return result
+    return metadata_application_service.submit(db, [song_id], force=request.force, force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by)
 
 
 @router.post("/api/library/songs/{song_id}/metadata/apply-selected")
 def apply_selected_application(song_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
-    result = metadata_application_service.apply_selected(db, song_id, request.suggestion_ids, force=request.force, force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by, atomic=request.atomic)
-    db.commit()
-    return result
+    return metadata_application_service.submit(db, [song_id], suggestion_ids=request.suggestion_ids, force=request.force, force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by)
 
 
 @router.get("/api/metadata/history/{history_id}/rollback-preview")
@@ -87,9 +85,69 @@ def preview_rollback(history_id: int, db: Session = Depends(get_db)):
 
 @router.post("/api/metadata/history/{history_id}/rollback")
 def rollback(history_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
-    result = metadata_application_service.rollback(db, history_id, force=request.force, force_confirmation=request.force_confirmation, initiated_by=request.initiated_by)
-    db.commit()
-    return result
+    history = db.get(MetadataHistory, history_id)
+    if history is None: from app.services.metadata_intelligence import MetadataServiceError; raise MetadataServiceError("history_not_found", "Metadata history not found.", 404)
+    return metadata_application_service.submit(db, [history.entity_id], rollback_history_ids=[history_id], force=request.force, force_confirmation=request.force_confirmation, initiated_by=request.initiated_by)
+
+
+@router.post("/api/metadata/applications/apply")
+def apply_selected_songs(song_ids: list[int], request: ApplicationRequest, db: Session = Depends(get_db)):
+    """Queue accepted metadata for an explicit selected-Song scope."""
+    return metadata_application_service.submit(db, song_ids, suggestion_ids=request.suggestion_ids, force=request.force,
+        force_confirmation=request.force_confirmation, stale_override_reason=request.stale_override_reason, initiated_by=request.initiated_by)
+
+
+@router.get("/api/metadata/batches")
+def list_batches(status: str | None = None, job_id: int | None = None, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    conditions = [MetadataApplicationBatch.status == status] if status else []
+    if job_id is not None: conditions.append(MetadataApplicationBatch.job_id == job_id)
+    total = db.scalar(select(func.count()).select_from(MetadataApplicationBatch).where(*conditions)) or 0
+    items = db.scalars(select(MetadataApplicationBatch).where(*conditions).order_by(MetadataApplicationBatch.created_at.desc(), MetadataApplicationBatch.id.desc()).offset(offset).limit(limit)).all()
+    return {"items": [_serialize_batch(x) for x in items], "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": offset + len(items) < total}}
+
+
+@router.get("/api/metadata/batches/{batch_id}")
+def get_batch(batch_id: int, db: Session = Depends(get_db)):
+    batch = db.get(MetadataApplicationBatch, batch_id)
+    if batch is None: from app.services.metadata_intelligence import MetadataServiceError; raise MetadataServiceError("batch_not_found", "Metadata application batch not found.", 404)
+    return _serialize_batch(batch)
+
+
+@router.get("/api/metadata/batches/{batch_id}/results")
+def batch_results(batch_id: int, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    get_batch(batch_id, db)
+    rows = db.scalars(select(MetadataHistory).where(MetadataHistory.application_batch_id == batch_id).order_by(MetadataHistory.id).offset(offset).limit(limit)).all()
+    total = db.scalar(select(func.count()).select_from(MetadataHistory).where(MetadataHistory.application_batch_id == batch_id)) or 0
+    return {"items": [serialize_history(x) for x in rows], "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": offset + len(rows) < total}}
+
+
+@router.post("/api/metadata/batches/{batch_id}/rollback")
+def rollback_batch(batch_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
+    get_batch(batch_id, db)
+    rows = db.scalars(select(MetadataHistory).where(MetadataHistory.application_batch_id == batch_id, MetadataHistory.reversible.is_(True))).all()
+    if not rows: from app.services.metadata_intelligence import MetadataServiceError; raise MetadataServiceError("rollback_not_available", "No reversible batch history is available.", 409)
+    return metadata_application_service.submit(db, sorted({x.entity_id for x in rows}), rollback_history_ids=[x.id for x in rows], force=request.force, force_confirmation=request.force_confirmation, initiated_by=request.initiated_by)
+
+
+@router.get("/api/metadata/history")
+def history(song_id: int | None = None, field_name: str | None = None, provider: str | None = None, job_id: int | None = None, batch_id: int | None = None, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    conditions = []
+    for column, value in ((MetadataHistory.entity_id, song_id), (MetadataHistory.field_name, field_name), (MetadataHistory.provider, provider), (MetadataHistory.job_id, job_id), (MetadataHistory.application_batch_id, batch_id)):
+        if value is not None: conditions.append(column == value)
+    total = db.scalar(select(func.count()).select_from(MetadataHistory).where(*conditions)) or 0
+    rows = db.scalars(select(MetadataHistory).where(*conditions).order_by(MetadataHistory.changed_at.desc(), MetadataHistory.id.desc()).offset(offset).limit(limit)).all()
+    return {"items": [serialize_history(x) for x in rows], "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": offset + len(rows) < total}}
+
+
+@router.get("/api/metadata/history/{history_id}")
+def history_item(history_id: int, db: Session = Depends(get_db)):
+    row = db.get(MetadataHistory, history_id)
+    if row is None: from app.services.metadata_intelligence import MetadataServiceError; raise MetadataServiceError("history_not_found", "Metadata history not found.", 404)
+    return serialize_history(row)
+
+
+def _serialize_batch(item: MetadataApplicationBatch) -> dict[str, Any]:
+    return {key: getattr(item, key) for key in ("id", "entity_scope", "status", "total_fields", "applied_fields", "unchanged_fields", "stale_fields", "invalid_fields", "unsupported_fields", "failed_fields", "forced_fields", "initiated_by", "created_at", "started_at", "completed_at", "job_id")}
 
 
 @router.get("/api/metadata/application/capabilities")
