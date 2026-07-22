@@ -141,6 +141,7 @@
                     <button type="button" data-bulk-action="move">Move</button>
                     <button type="button" data-bulk-action="rename">Rename</button>
                     <button type="button" data-bulk-action="refresh_metadata">Refresh metadata</button>
+                    <button type="button" data-bulk-action="write_tags">Write canonical tags</button>
                     <button type="button" data-bulk-action="refresh_artwork">Refresh artwork</button>
                     <button type="button" data-bulk-action="fetch_artwork">Fetch album art</button>
                     <button type="button" data-bulk-action="export">Export</button>
@@ -227,6 +228,7 @@
         <p id="metadata-review-status" class="library-search-status" aria-live="polite"></p>
         <section><h3>Provider matches</h3><button id="metadata-discover" class="btn-secondary" type="button">Discover match</button><div id="metadata-matches" class="metadata-suggestion-list"><p class="library-search-status">Discovery has not run.</p></div></section>
         <section><h3>Current canonical metadata</h3><dl id="metadata-current" class="metadata-current-grid"></dl></section>
+        <section><h3>Audio-file tags</h3><p class="library-search-status">Writing tags modifies the audio file. Provider acceptance and canonical metadata application never do this.</p><div id="metadata-tag-preview" class="metadata-suggestion-list"></div><div class="library-actions"><button id="metadata-preview-tags" class="btn-secondary" type="button">Preview file-tag changes</button><button id="metadata-write-tags" class="btn-primary" type="button">Write tags to file</button></div></section>
         <section><h3>Pending suggestions</h3><div id="metadata-suggestions" class="metadata-suggestion-list"></div></section>
         <section><h3>Accepted suggestions</h3><p class="library-search-status">Select eligible fields, preview them, then queue a durable database-only update.</p><div id="metadata-accepted" class="metadata-suggestion-list"></div><div class="library-actions"><button id="metadata-select-eligible" class="btn-secondary" type="button">Select all eligible</button><button id="metadata-clear-selection" class="btn-secondary" type="button">Clear selection</button><button id="metadata-preview-accepted" class="btn-secondary" type="button">Preview changes</button><button id="metadata-apply-selected" class="btn-primary" type="button">Apply selected</button><button id="metadata-apply-accepted" class="btn-primary" type="button">Apply all eligible</button></div><label id="metadata-force-control" hidden><input id="metadata-force" type="checkbox"> Overwrite newer canonical values after reviewing stale fields.</label><div id="metadata-application-preview" class="metadata-suggestion-list"></div><small>Library metadata updated. Audio-file tags were NOT modified.</small></section>
         <section><h3>Metadata history</h3><div id="metadata-history" class="metadata-history-list"></div></section>

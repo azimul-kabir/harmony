@@ -608,6 +608,19 @@ Library changes should follow
 source of truth for Library ownership, service boundaries, API contracts, and
 large-library performance requirements.
 
+## Canonical metadata and audio tags
+
+Harmony intentionally separates metadata repair into three explicit stages:
+
+1. **Accept provider match** records the review decision only.
+2. **Apply to canonical metadata** updates Harmony's database and audit history only.
+3. **Write canonical tags to the audio file** is a separately confirmed action that
+   changes embedded tags. It is the stage Navidrome and similar music servers
+   require; run their library scan afterwards to pick up the changed file mtime.
+
+Harmony never silently rewrites the library during matching, acceptance, or
+canonical metadata application.
+
 ---
 
 # License

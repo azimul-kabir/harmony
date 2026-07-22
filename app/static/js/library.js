@@ -657,10 +657,37 @@ async function loadMetadataReview(songId) {
         document.getElementById("metadata-history").innerHTML = history.items.map((item) => `
             <article><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(metadataValue(item.previous_value))} → ${escapeHtml(metadataValue(item.new_value))}</span><small>${escapeHtml(item.change_source)} · ${new Date(item.changed_at).toLocaleString()}</small></article>`).join("") || '<p class="library-search-status">No applied-change history.</p>';
         document.querySelectorAll("[data-metadata-action]").forEach((button) => button.addEventListener("click", () => reviewMetadataSuggestion(button)));
+        document.getElementById("metadata-preview-tags").onclick = () => previewFileTags(songId);
+        document.getElementById("metadata-write-tags").onclick = () => writeFileTags(songId);
+        await previewFileTags(songId);
         status.textContent = "Accepting records a decision only; it does not change tags or canonical metadata.";
     } catch (error) {
         status.textContent = "Harmony could not load this metadata review.";
     }
+}
+
+async function previewFileTags(songId) {
+    const target = document.getElementById("metadata-tag-preview");
+    const button = document.getElementById("metadata-write-tags");
+    try {
+        const preview = await fetchJson(`/api/library/songs/${songId}/metadata/tag-preview`);
+        button.disabled = !preview.available;
+        target.innerHTML = preview.available
+            ? preview.fields.map((field) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(field.field.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(field.current))} → ${escapeHtml(metadataValue(field.canonical))}</p><small>${field.will_change ? "Will change" : "Already matches"}</small></article>`).join("")
+            : "<p class=\"library-search-status\">Tags cannot be written: the file is missing, unsafe, unsupported, or canonical metadata is unavailable.</p>";
+    } catch (_) { button.disabled = true; target.textContent = "Tag preview is unavailable."; }
+}
+
+async function writeFileTags(songId) {
+    if (!window.confirm("This will modify the audio file's embedded tags. Continue?")) return;
+    const status = document.getElementById("metadata-review-status");
+    const button = document.getElementById("metadata-write-tags"); button.disabled = true;
+    try {
+        const response = await fetch(`/api/library/songs/${songId}/metadata/write-tags`, { method: "POST" });
+        const result = await response.json();
+        status.textContent = result.status === "succeeded" ? "Canonical tags were written to the audio file." : "Tags were not written; the file was left unchanged.";
+        await previewFileTags(songId);
+    } catch (_) { status.textContent = "Harmony could not write tags to this audio file."; button.disabled = false; }
 }
 
 async function reviewMetadataSuggestion(button) {
@@ -897,6 +924,11 @@ const bulkActions = {
         message: "Harmony will re-read tags and technical audio properties from every selected file.",
         confirm: "Refresh metadata",
     },
+    write_tags: {
+        title: "Write canonical tags?",
+        message: "Harmony will modify each selected audio file's embedded tags. This is required before Navidrome can read the canonical values.",
+        confirm: "Write tags",
+    },
     refresh_artwork: {
         title: "Refresh artwork cache?",
         message: "Harmony will re-read embedded and folder artwork and repair local cache associations.",
@@ -960,6 +992,16 @@ function showBulkDialog(operation) {
 }
 
 async function startBulkOperation(operation, optionValue) {
+    if (operation === "write_tags") {
+        const response = await fetch("/api/library/metadata/write-tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song_ids: [...libraryState.selectedSongs] }) });
+        if (!response.ok) throw new Error("Unable to write canonical tags.");
+        const result = await response.json();
+        document.getElementById("library-bulk-progress").hidden = false;
+        document.getElementById("library-bulk-progress-title").textContent = "Canonical tag writing finished";
+        document.getElementById("library-bulk-progress-detail").textContent = `Tag writing finished: ${result.totals.succeeded} succeeded, ${result.totals.skipped} skipped, ${result.totals.unsupported} unsupported, ${result.totals.missing} missing, ${result.totals.failed} failed.`;
+        await loadLibrary();
+        return;
+    }
     const options = {};
     if (operation === "move") options.destination = optionValue;
     if (operation === "rename") options.pattern = optionValue;
