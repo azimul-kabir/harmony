@@ -28,7 +28,7 @@ def test_snapshot_counts_order_bounds_and_safe_serialization():
         ])
         db.commit()
         snapshot = get_download_snapshot(db, queue_limit=999, history_limit=999)
-        assert snapshot["counts"] == {"running": 2, "queued": 2, "paused": 1, "completed": 1, "failed": 2, "cancelled": 1}
+        assert snapshot["counts"] == {"running": 2, "queued": 2, "paused": 1, "completed": 1, "failed": 1, "cancelled": 1, "skipped": 0}
         assert [item["title"] for item in snapshot["active"]] == ["Running two", "Running one"]
         assert [item["title"] for item in snapshot["queued"]] == ["Queue two", "Queue one"]
         assert [item["position"] for item in snapshot["queued"]] == [1, 2]
