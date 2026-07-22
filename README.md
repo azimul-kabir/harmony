@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.6.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,10 +25,10 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v1.5.0**
+Current stable version: **v1.6.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v1.5.0 release notes](docs/releases/v1.5.0.md) for upgrade guidance.
+[v1.6.0 release notes](docs/releases/v1.6.0.md) for upgrade guidance.
 
 ---
 
@@ -202,6 +202,27 @@ errors, cancellation, and recovery through Harmony's task system.
 
 ---
 
+## ✨ Metadata Intelligence
+
+Harmony can evaluate library metadata, discover authoritative candidates, and
+apply only the changes you review and accept.
+
+- Provider-neutral metadata-health rules identify missing, inconsistent, and
+  malformed Song metadata with durable issue records.
+- MusicBrainz discovery uses deterministic, explainable candidate matching and
+  confidence levels rather than silently overwriting tags.
+- Suggestions retain evidence, provider provenance, review status, and a
+  canonical-value snapshot so stale changes are detected before application.
+- Accepted changes can be previewed, applied in durable background batches,
+  audited in history, and rolled back when the recorded change is reversible.
+- MusicBrainz requests are rate-limited, retried, and cached locally to make
+  repeated discovery safe for public provider infrastructure.
+
+Metadata discovery and application currently support Songs. Album and Artist
+matching remains an internal foundation for future releases.
+
+---
+
 ## 📂 Automatic M3U Export
 
 Harmony automatically exports playlists in standard `.m3u` format.
@@ -242,7 +263,8 @@ Current configurable settings include:
 - Spotify configuration
 - System information
 
-Additional runtime settings are planned for future releases.
+Metadata discovery can also be tuned with the documented `MUSICBRAINZ_*` and
+`METADATA_DISCOVERY_*` environment variables in `.env.example`.
 
 ---
 
@@ -488,11 +510,10 @@ Just a synchronized self-hosted music library.
 
 ### Library Intelligence
 
-- Metadata editor
-- Metadata repair workflows
+- Metadata editing beyond reviewed MusicBrainz suggestions
+- Additional metadata providers and repair workflows
 - Duplicate detection and resolution
 - Manual artwork replacement
-- MusicBrainz metadata integration
 - Cover Art Archive integration
 - Advanced search improvements
 
