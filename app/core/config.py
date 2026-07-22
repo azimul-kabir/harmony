@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     musicbrainz_requests_per_second: float = 1.0
     musicbrainz_cache_ttl_seconds: int = 86400
     musicbrainz_max_concurrent_requests: int = 2
+    cover_art_archive_base_url: str = "https://coverartarchive.org"
+    cover_art_archive_timeout_seconds: float = 20.0
+    cover_art_archive_max_bytes: int = 15 * 1024 * 1024
     metadata_discovery_chunk_size: int = 25
     metadata_discovery_max_batch_songs: int = 500
 

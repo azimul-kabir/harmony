@@ -21,12 +21,61 @@ document.addEventListener("DOMContentLoaded", () => {
     connectSSE();
 });
 
-function renderStats(stats) {
-    if (!stats) return;
-    document.getElementById("card-songs").textContent = stats.songs;
-    document.getElementById("card-downloads").textContent = stats.downloads;
-    document.getElementById("card-sources").textContent = stats.sources;
-    document.getElementById("card-failed").textContent = stats.failed;
+function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+}
+
+function formatBytes(bytes) {
+    if (!bytes) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / (1024 ** index)).toFixed(index < 3 ? 0 : 1)} ${units[index]}`;
+}
+
+function renderDashboard(snapshot) {
+    if (!snapshot) return;
+    const kpis = snapshot.kpis || {};
+    setText("kpi-songs", Number(kpis.songs || 0).toLocaleString());
+    setText("kpi-albums", Number(kpis.albums || 0).toLocaleString());
+    setText("kpi-artists", Number(kpis.artists || 0).toLocaleString());
+    setText("kpi-sources", Number(kpis.sources || 0).toLocaleString());
+    setText("kpi-playlists", Number(kpis.playlists || 0).toLocaleString());
+    setText("kpi-storage", formatBytes(kpis.storage_bytes));
+    setText("kpi-health", `${Number(kpis.health_score || 0)}%`);
+    setText("kpi-failed", Number(kpis.failed_jobs || 0).toLocaleString());
+
+    const downloads = snapshot.downloads || {};
+    setText("queue-running", Number(downloads.running || 0).toLocaleString());
+    setText("queue-queued", Number(downloads.queued || 0).toLocaleString());
+    setText("queue-today", Number(downloads.completed_today || 0).toLocaleString());
+    setText("queue-failed", Number(downloads.failed || 0).toLocaleString());
+
+    const health = snapshot.health || {};
+    setText("health-score", `${Number(health.score || 0)}%`);
+    setText("health-artwork", Number(health.missing_artwork || 0).toLocaleString());
+    setText("health-metadata", Number(health.missing_metadata || 0).toLocaleString());
+    setText("health-files", Number(health.missing_files || 0).toLocaleString());
+    setText("health-suggestions", Number(health.pending_suggestions || 0).toLocaleString());
+    const artworkLink = document.getElementById("health-artwork-link");
+    if (artworkLink) artworkLink.href = "/library?missing_artwork=true";
+    renderCollections(snapshot.collections || []);
+}
+
+function renderCollections(collections) {
+    const container = document.getElementById("dashboard-collections");
+    if (!container) return;
+    container.replaceChildren();
+    collections.forEach((collection) => {
+        const link = document.createElement("a");
+        link.href = `/library?collection=${encodeURIComponent(collection.id)}`;
+        const name = document.createElement("span");
+        name.textContent = collection.name;
+        const count = document.createElement("strong");
+        count.textContent = Number(collection.song_count || 0).toLocaleString();
+        link.append(name, count);
+        container.appendChild(link);
+    });
 }
 
 // Inside app/static/js/dashboard.js, update renderWorkers() and renderActivity():
@@ -253,11 +302,11 @@ function renderTasks(tasks) {
 }
 
 function connectSSE() {
-    if (!document.getElementById("card-songs")) return;
+    if (!document.getElementById("kpi-songs")) return;
     const eventSource = new EventSource("/api/dashboard/stream");
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
-        renderStats(data.stats);
+        renderDashboard(data);
         renderWorkers(data.workers || [], data.max_workers || 4); // NEW: Render workers
         renderActivity(data.activity);
         renderTasks(data.tasks);

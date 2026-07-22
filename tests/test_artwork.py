@@ -95,3 +95,81 @@ def test_artwork_metadata_and_file_apis(tmp_path):
     assert metadata["url"] == f"/api/artwork/{artwork_id}/file"
     assert image.media_type == "image/png"
     assert Path(image.path).read_bytes() == PNG
+
+
+def test_fetches_and_caches_cover_art_archive_front_image(tmp_path, monkeypatch):
+    session_factory = _database()
+    service = ArtworkService(tmp_path / "cache")
+    release_id = "24b78a62-5b88-4f3b-9bfc-1e1db47c50ad"
+    monkeypatch.setattr(
+        "app.services.artwork.get_settings",
+        lambda: SimpleNamespace(
+            cover_art_archive_base_url="https://coverartarchive.example",
+            cover_art_archive_timeout_seconds=1,
+            cover_art_archive_max_bytes=1024,
+        ),
+    )
+
+    class Response:
+        def read(self, amount):
+            assert amount == 1025
+            return PNG
+
+        def geturl(self):
+            return f"https://coverartarchive.example/release/{release_id}/front"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        assert request.full_url == f"https://coverartarchive.example/release/{release_id}/front"
+        assert timeout == 1
+        return Response()
+
+    monkeypatch.setattr("app.services.artwork.urlopen", fake_urlopen)
+
+    with session_factory() as db:
+        artwork = service.fetch_musicbrainz_release_artwork(db, release_id)
+        db.commit()
+
+        assert artwork.source == "remote"
+        assert artwork.provider == "cover_art_archive"
+        assert artwork.provider_id == release_id
+        assert artwork.original_url == f"https://coverartarchive.example/release/{release_id}/front"
+        assert Path(artwork.cache_path).read_bytes() == PNG
+
+
+def test_cover_art_archive_rejects_non_image_response(tmp_path, monkeypatch):
+    service = ArtworkService(tmp_path / "cache")
+    monkeypatch.setattr(
+        "app.services.artwork.get_settings",
+        lambda: SimpleNamespace(
+            cover_art_archive_base_url="https://coverartarchive.example",
+            cover_art_archive_timeout_seconds=1,
+            cover_art_archive_max_bytes=1024,
+        ),
+    )
+    class Response:
+        def read(self, _amount):
+            return b"not an image"
+
+        def geturl(self):
+            return "https://coverartarchive.example/image"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr("app.services.artwork.urlopen", lambda *_args, **_kwargs: Response())
+    with _database()() as db:
+        try:
+            service.fetch_musicbrainz_release_artwork(db, "24b78a62-5b88-4f3b-9bfc-1e1db47c50ad")
+        except ValueError as error:
+            assert str(error) == "Cover Art Archive returned an unsupported artwork format"
+        else:
+            raise AssertionError("expected non-image response to be rejected")

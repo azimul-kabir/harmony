@@ -26,6 +26,7 @@ class BulkOperationRequest(BaseModel):
         "rename",
         "refresh_metadata",
         "refresh_artwork",
+        "fetch_artwork",
         "export",
     ]
     song_ids: list[int] = Field(min_length=1, max_length=5000)

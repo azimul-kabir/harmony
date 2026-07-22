@@ -797,16 +797,21 @@ Artwork resolution runs as part of Library indexing and uses this priority:
 
 3 Folder artwork
 
-4 Future providers (not fetched by the foundation)
+4 Cover Art Archive front artwork, when a user explicitly selects **Fetch
+album art** for a Song with an accepted MusicBrainz release ID
+
+5 Future providers
 
 - Spotify
-
-- Cover Art Archive
 
 Supported folder filenames are `cover`, `folder`, `front`, and `album` with
 JPEG, PNG, or WebP extensions. Embedded images are read through Mutagen from
 ID3 APIC, MP4 `covr`, and FLAC picture blocks. Remote `cover_url` values remain
-compatible metadata but are never downloaded by `ArtworkService`.
+compatible metadata but are never downloaded by `ArtworkService`. Cover Art
+Archive downloads use the MusicBrainz release ID, validate that the response is
+a JPEG, PNG, or WebP image, and store the result in the same local cache with
+provider provenance. Downloads are opt-in bulk operations; scanning a library
+never performs remote artwork requests.
 
 Artwork API:
 
@@ -814,10 +819,10 @@ Artwork API:
 - `GET /api/artwork/{id}` returns one resource's metadata and public URL.
 - `GET /api/artwork/{id}/file` serves immutable cached bytes.
 
-The model reserves `provider`, `provider_id`, and `original_url` for future
-Spotify and Cover Art Archive provenance. Manual replacement will create or
+The model stores `provider`, `provider_id`, and `original_url` for Cover Art
+Archive provenance and future providers. Manual replacement will create or
 reuse a content-addressed resource and change an association; it must never
-overwrite shared bytes in place. Remote-provider ingestion and manual upload
+overwrite shared bytes in place. Manual upload
 endpoints are intentionally outside this foundation.
 
 ---

@@ -160,9 +160,14 @@ stored in the browser.
 - Stores reusable content-addressed cache files
 - Serves immutable artwork through Library APIs
 - Repairs missing cache files when a local source is available again
+- Fetches and caches front artwork from the MusicBrainz Cover Art Archive for
+  selected songs that have an accepted MusicBrainz release ID
 
-MusicBrainz Cover Art Archive downloads, Spotify artwork ingestion, and manual
-replacement are intentionally reserved for future provider integrations.
+To fetch online artwork, select songs in **Library → Songs** and choose
+**Fetch album art**. Harmony uses each song's `musicbrainz_release_id`; first
+run MusicBrainz discovery and accept its release-ID suggestion for songs that
+do not yet have one. Spotify artwork ingestion and manual replacement are
+reserved for future provider integrations.
 
 ---
 
@@ -195,6 +200,7 @@ Select multiple Songs and run asynchronous:
 - Pattern-based rename
 - Refresh metadata
 - Refresh artwork cache
+- Fetch album art from Cover Art Archive
 - ZIP export
 
 Operations continue after individual failures and expose per-song progress,
