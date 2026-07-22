@@ -18,8 +18,6 @@ def init_db() -> None:
     # neither necessary nor valid.  Existing databases retain the additive
     # upgrade path below.
     is_fresh = "songs" not in inspect(engine).get_table_names()
-    Base.metadata.create_all(bind=engine)
-
     root = Path(__file__).resolve().parents[2]
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
@@ -27,6 +25,15 @@ def init_db() -> None:
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         if is_fresh:
+            # The historical migration chain begins with Harmony's original
+            # schema, so a truly new database is created from the current ORM
+            # metadata and stamped rather than replaying legacy migrations.
+            Base.metadata.create_all(bind=connection)
             command.stamp(config, "head")
         else:
+            # Do not call create_all before upgrading an existing database.
+            # It would create tables from a later ORM schema (for example,
+            # metadata_suggestions) before Alembic reaches the revision that
+            # owns them, causing the upgrade to fail with "table already
+            # exists" and the container to restart continuously.
             command.upgrade(config, "head")
