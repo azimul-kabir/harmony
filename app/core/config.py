@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     spotify_client_secret: str | None = None
     spotify_genre_fetch_enabled: bool = True
     spotify_genre_max_values: int = 3
+    spotify_genre_max_concurrent_requests: int = 4
     spotify_genre_include_featured_fallback: bool = True
     spotify_genre_merge_featured: bool = False
     spotify_genre_replace_existing: bool = False

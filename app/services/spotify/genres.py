@@ -1,10 +1,14 @@
-"""Non-fatal Spotify artist genre enrichment with safe caching and diagnostics."""
+"""Non-fatal Spotify artist-genre enrichment for Spotify Development Mode.
+
+Spotify artist genres are deprecated and may disappear in a future API revision.
+"""
 from __future__ import annotations
 
 import json
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Callable
@@ -19,6 +23,7 @@ from app.services.spotify.client import get_client
 _ARTIST_ID = re.compile(r"^[A-Za-z0-9]{22}$")
 _TTL_SECONDS = 3600
 _NEGATIVE_TTL_SECONDS = 30
+_AUTH_FAILURE_TTL_SECONDS = 300
 _CACHE: dict[str, tuple[float, list[str]]] = {}
 _IN_FLIGHT: dict[str, threading.Event] = {}
 _CACHE_LOCK = threading.Lock()
@@ -95,7 +100,7 @@ def _valid_artist_id(value: object) -> bool:
 
 
 def _fetch_artists(ids: list[str], *, job_id: int | None, client_factory: Callable = get_client) -> GenreLookupResult:
-    """Fetch unique artist IDs, coalescing concurrent misses and never raising."""
+    """Fetch unique artists individually; Development Mode no longer permits GET /artists?ids."""
     ids = list(dict.fromkeys(artist_id for artist_id in ids if _valid_artist_id(artist_id)))
     now = time.monotonic()
     output: dict[str, list[str]] = {}
@@ -124,31 +129,37 @@ def _fetch_artists(ids: list[str], *, job_id: int | None, client_factory: Callab
     if not owners:
         return GenreLookupResult(output)
 
+    def fetch_one(artist_id: str) -> tuple[str, list[str] | None, GenreLookupError | None]:
+        try:
+            # Development Mode requires the individual GET /v1/artists/{id} endpoint.
+            artist = client_factory().artist(artist_id) or {}
+            values = normalize_genres(artist.get("genres") or [], get_settings().spotify_genre_max_values)
+            return artist_id, values, None
+        except Exception as exc:  # enrichment must never affect the download path
+            return artist_id, None, _classify_error(exc)
+
     error: GenreLookupError | None = None
+    limit = max(1, get_settings().spotify_genre_max_concurrent_requests)
     try:
-        spotify = client_factory()
-        # spotipy.Spotify.artists accepts a list; Spotify permits at most 50 IDs.
-        for start in range(0, len(owners), 50):
-            response = spotify.artists(owners[start:start + 50]) or {}
-            for artist in response.get("artists", []) or []:
-                if isinstance(artist, dict) and artist.get("id") in owners:
-                    values = normalize_genres(artist.get("genres") or [], get_settings().spotify_genre_max_values)
-                    output[artist["id"]] = values
-        # A successful response with no artist / no genres is a valid cacheable result.
-        with _CACHE_LOCK:
-            for artist_id in owners:
-                values = output.get(artist_id, [])
-                output[artist_id] = values
-                _CACHE[artist_id] = (time.monotonic() + _TTL_SECONDS, values)
-    except Exception as exc:  # enrichment must never affect the download path
-        error = _classify_error(exc)
-        # Short negative cache prevents worker stampedes only for retryable outages.
-        if error.retryable:
-            with _CACHE_LOCK:
-                for artist_id in owners:
-                    _CACHE[artist_id] = (time.monotonic() + _NEGATIVE_TTL_SECONDS, [])
-        logger.warning("Spotify genre lookup failed job={} unique_artists={} cache_hits={} cache_misses={} category={} http_status={} retryable={} retry_after={} detail={}",
-            job_id, len(ids), len(output), len(ids) - len(output), error.category, error.http_status, error.retryable, error.retry_after, error.message)
+        with ThreadPoolExecutor(max_workers=limit, thread_name_prefix="spotify-genre") as executor:
+            futures = [executor.submit(fetch_one, artist_id) for artist_id in owners]
+            for future in as_completed(futures):
+                artist_id, values, request_error = future.result()
+                if request_error is None:
+                    output[artist_id] = values or []
+                    with _CACHE_LOCK:
+                        _CACHE[artist_id] = (time.monotonic() + _TTL_SECONDS, output[artist_id])
+                else:
+                    error = error or request_error
+                    # Do not permanently cache outages or credential failures, but suppress
+                    # repeated track-level calls long enough for a task to complete.
+                    ttl = _NEGATIVE_TTL_SECONDS if request_error.retryable else _AUTH_FAILURE_TTL_SECONDS if request_error.category in (GenreFailureCategory.UNAUTHORIZED, GenreFailureCategory.FORBIDDEN) else 0
+                    if ttl:
+                        output[artist_id] = []
+                        with _CACHE_LOCK:
+                            _CACHE[artist_id] = (time.monotonic() + ttl, [])
+                    logger.warning("Spotify genre lookup failed job={} unique_artists={} cache_hits={} cache_misses={} category={} http_status={} retryable={} retry_after={} detail={}",
+                        job_id, len(ids), len(output), len(ids) - len(output), request_error.category, request_error.http_status, request_error.retryable, request_error.retry_after, request_error.message)
     finally:
         with _CACHE_LOCK:
             for artist_id in owners:
@@ -156,7 +167,6 @@ def _fetch_artists(ids: list[str], *, job_id: int | None, client_factory: Callab
                 if event:
                     event.set()
     return GenreLookupResult(output, error)
-
 
 def _classify_error(exc: Exception) -> GenreLookupError:
     if isinstance(exc, SpotifyException):
