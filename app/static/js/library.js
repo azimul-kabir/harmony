@@ -5,6 +5,18 @@ const DEFAULT_BITRATE_RANGES = {
     standard: { min: 192000, max: 319999 },
     compact: { min: null, max: 191999 },
 };
+const DEFAULT_COLLECTIONS = [
+    ["recently-added", "Recently Added", "Music added to the Library Index during the last seven days.", "blue", "recent"],
+    ["recently-downloaded", "Recently Downloaded", "Downloads added during the last seven days.", "cyan", "download"],
+    ["highest-bitrate", "Highest Bitrate", "Tracks at the highest bitrate currently in the Library.", "violet", "quality"],
+    ["missing-artwork", "Missing Artwork", "Tracks that still need a local artwork resource.", "amber", "artwork"],
+    ["missing-metadata", "Missing Metadata", "Tracks missing a title, artist, or album.", "rose", "metadata"],
+    ["recently-modified", "Recently Modified", "Files modified during the last seven days.", "green", "modified"],
+    ["large-albums", "Large Albums", "Tracks from albums containing at least ten indexed songs.", "indigo", "album"],
+    ["favorites", "Favorites", "Ready for a future favorites signal.", "pink", "favorite", true],
+].map(([id, name, description, tone, icon, placeholder = false]) => ({
+    id, name, description, tone, icon, placeholder, song_count: 0,
+}));
 const savedPreferences = readLibraryPreferences();
 
 const libraryState = {
@@ -294,15 +306,32 @@ async function loadLibraryData({ preserveState = false } = {}) {
         const songEndpoint = libraryState.collectionId
             ? `/api/library/collections/${encodeURIComponent(libraryState.collectionId)}/songs`
             : "/api/library/songs";
-        const [songResult, collections, filterOptions] = await Promise.all([
-            fetchJson(`${songEndpoint}?${libraryRequestParams()}`),
+        // Songs are the source for the Songs, Albums, and Artists views. Do
+        // not let auxiliary collections or filter-options requests hide all
+        // three views when one of those optional endpoints is unavailable.
+        const songResult = await fetchJson(`${songEndpoint}?${libraryRequestParams()}`);
+        const [collectionsResult, filterOptionsResult] = await Promise.allSettled([
             fetchJson("/api/library/collections"),
-            libraryState.filterOptions || fetchJson("/api/library/filter-options"),
+            libraryState.filterOptions
+                ? Promise.resolve(libraryState.filterOptions)
+                : fetchJson("/api/library/filter-options"),
         ]);
 
         const songs = Array.isArray(songResult) ? songResult : songResult.items;
         const { albums, artists } = projectSongs(songs);
+        const collections = collectionsResult.status === "fulfilled"
+            ? collectionsResult.value
+            : DEFAULT_COLLECTIONS;
+        const filterOptions = filterOptionsResult.status === "fulfilled"
+            ? filterOptionsResult.value
+            : libraryState.filterOptions;
         Object.assign(libraryState, { songs, albums, artists, collections, filterOptions });
+        if (collectionsResult.status === "rejected") {
+            console.error("Library collections error:", collectionsResult.reason);
+        }
+        if (filterOptionsResult.status === "rejected") {
+            console.error("Library filter options error:", filterOptionsResult.reason);
+        }
         populateFilterOptions();
         updateFilterControls();
         updateCounts();
