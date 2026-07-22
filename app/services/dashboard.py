@@ -1,7 +1,8 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, func, select
 
+from app.core.config import get_settings
 from app.database.models import (
     DownloadJob,
     MetadataSuggestion,
@@ -15,6 +16,81 @@ from app.domain.task import TaskStatus, TaskType
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
+
+
+DASHBOARD_TREND_DAYS = 7
+
+
+def _as_naive_utc(value: datetime) -> datetime:
+    """Keep dashboard comparisons compatible with SQLite's naive timestamps."""
+    return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
+
+
+def get_download_trends(db, *, now: datetime | None = None) -> dict:
+    """Return a fixed, aggregate-only seven-day terminal download summary."""
+    now = _as_naive_utc(now or datetime.now(UTC))
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = today - timedelta(days=DASHBOARD_TREND_DAYS - 1)
+    rows = db.execute(
+        select(
+            func.date(DownloadJob.completed_at),
+            func.coalesce(func.sum(case((DownloadJob.status == JobStatus.COMPLETED.value, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((DownloadJob.status == JobStatus.FAILED.value, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((DownloadJob.status == JobStatus.CANCELLED.value, 1), else_=0)), 0),
+        )
+        .where(
+            DownloadJob.completed_at >= start,
+            DownloadJob.completed_at < today + timedelta(days=1),
+            DownloadJob.status.in_((JobStatus.COMPLETED.value, JobStatus.FAILED.value, JobStatus.CANCELLED.value)),
+        )
+        .group_by(func.date(DownloadJob.completed_at))
+    ).all()
+    by_date = {row[0]: tuple(map(int, row[1:])) for row in rows}
+    daily = []
+    for offset in range(DASHBOARD_TREND_DAYS):
+        day = start + timedelta(days=offset)
+        completed, failed, cancelled = by_date.get(day.date().isoformat(), (0, 0, 0))
+        daily.append({"date": day.date().isoformat(), "completed": completed, "failed": failed, "cancelled": cancelled})
+    completed = sum(day["completed"] for day in daily)
+    failed = sum(day["failed"] for day in daily)
+    cancelled = sum(day["cancelled"] for day in daily)
+    total = completed + failed + cancelled
+    return {"period_days": DASHBOARD_TREND_DAYS, "completed": completed, "failed": failed,
+            "cancelled": cancelled, "success_rate": round(completed / total, 3) if total else 0.0,
+            "completed_today": daily[-1]["completed"], "daily": daily}
+
+
+def get_queue_health(db, *, now: datetime | None = None, configured_workers: int | None = None) -> dict:
+    """Return real-time queue aggregates without exposing download details.
+
+    Harmony has no persisted per-download progress heartbeat, so stalled remains
+    false rather than guessing from `updated_at`, which is not a heartbeat.
+    """
+    now = _as_naive_utc(now or datetime.now(UTC))
+    configured_workers = configured_workers if configured_workers is not None else get_settings().max_parallel_downloads
+    recent = now - timedelta(days=DASHBOARD_TREND_DAYS)
+    row = db.execute(
+        select(
+            func.coalesce(func.sum(case((DownloadJob.status == JobStatus.RUNNING.value, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((DownloadJob.status == JobStatus.QUEUED.value, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((DownloadJob.status == JobStatus.PAUSED.value, 1), else_=0)), 0),
+            func.min(case((DownloadJob.status == JobStatus.QUEUED.value, DownloadJob.created_at), else_=None)),
+            func.min(case((DownloadJob.status == JobStatus.RUNNING.value, DownloadJob.started_at), else_=None)),
+        )
+    ).one()
+    # SQLite stores datetime subtraction as a non-portable value.  Calculate
+    # wait seconds in SQL using Julian days, still over only the bounded window.
+    wait = db.scalar(select(func.avg((func.julianday(DownloadJob.started_at) - func.julianday(DownloadJob.created_at)) * 86400)).where(DownloadJob.started_at.is_not(None), DownloadJob.created_at.is_not(None), DownloadJob.started_at >= recent))
+    active, queued, paused, oldest, longest = row
+    oldest_age = max(0, round((now - _as_naive_utc(oldest)).total_seconds())) if oldest else None
+    longest_age = max(0, round((now - _as_naive_utc(longest)).total_seconds())) if longest else None
+    active = int(active)
+    return {"active_workers": active, "configured_workers": int(configured_workers),
+            "utilization": round(active / configured_workers, 3) if configured_workers else None,
+            "queued_jobs": int(queued), "running_jobs": active, "paused_jobs": int(paused),
+            "oldest_queue_seconds": oldest_age,
+            "average_queue_wait_seconds": max(0, round(float(wait))) if wait is not None else None,
+            "longest_running_seconds": longest_age, "stalled": False}
 
 
 def get_dashboard_stats(db):
@@ -65,6 +141,7 @@ def serialize_dashboard_activity(job: DownloadJob) -> dict:
 
 def get_dashboard_snapshot(db) -> dict:
     """Return the compact, actionable dashboard read model."""
+    snapshot_now = datetime.now(UTC)
     stats = get_dashboard_stats(db)
     analytics = library_analytics.calculate(db)
     available = Song.availability_status == "available"
@@ -105,7 +182,7 @@ def get_dashboard_snapshot(db) -> dict:
         ),
     )
 
-    today = datetime.now(UTC).replace(
+    today = snapshot_now.replace(
         tzinfo=None, hour=0, minute=0, second=0, microsecond=0
     )
     downloads = db.execute(
@@ -207,6 +284,8 @@ def get_dashboard_snapshot(db) -> dict:
             "failed": int(downloads[2]),
             "completed_today": int(downloads[3]),
         },
+        "download_trends": get_download_trends(db, now=snapshot_now),
+        "queue_health": get_queue_health(db, now=snapshot_now),
         "health": {
             "score": health_score,
             "missing_artwork": int(health_row[0]),

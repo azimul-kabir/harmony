@@ -93,6 +93,27 @@ the corresponding services provide an accurate, indexed aggregate.
 The Dashboard also has a bounded download activity timeline. It receives the latest
 download job identifiers, statuses, titles, artists, and display timestamps through the
 existing SSE stream, patches rows by job identifier, and links to Downloads for review.
+
+## Dashboard Download Trends and Queue Health
+
+The Dashboard snapshot also contains compact, privacy-safe operational metrics.
+`download_trends` is a fixed seven-day, chronological history built with grouped
+database aggregation over terminal `completed`, `failed`, and `cancelled`
+downloads. Missing days are zero-filled. Its success rate is `completed /
+(completed + failed + cancelled)` (zero when there are no outcomes), and its
+`completed_today` value is the same completed count shown in the Dashboard
+download KPI.
+
+`queue_health` is real-time aggregate state: active/configured worker
+utilization, queued/running/paused job counts, the oldest queued age, longest
+running age, and average creation-to-start wait for downloads started in the
+same bounded seven-day window. Empty measures are `null`, not guessed values.
+Harmony does not persist a download-progress heartbeat, so its `stalled` value
+is intentionally always `false`; `updated_at` is not treated as a heartbeat.
+
+Both sections travel through the existing Dashboard SSE snapshot and expose
+only counts, durations, dates, and status-derived values. They never serialize
+download URLs, output paths, provider payloads, or errors.
 Download output paths and error diagnostics are deliberately excluded.
 
 ---

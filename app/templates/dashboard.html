@@ -40,6 +40,20 @@
         </article>
     </section>
 
+    <section class="dashboard-operations-grid" aria-label="Download operations">
+        <article class="panel dashboard-operations-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Last 7 days</span><h2>Download Trends</h2></div></div>
+            <div class="dashboard-trends-content">
+                <div id="download-trend-chart" class="download-trend-chart" role="img" aria-label="Download completions over the last seven days"></div>
+                <div class="dashboard-operation-metrics"><div><span>Completed</span><strong id="trend-completed">0</strong></div><div><span>Failed</span><strong id="trend-failed">0</strong></div><div><span>Cancelled</span><strong id="trend-cancelled">0</strong></div><div><span>Success rate</span><strong id="trend-success-rate">—</strong></div></div>
+            </div>
+        </article>
+        <article class="panel dashboard-operations-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Live queue state</span><h2>Queue Health</h2></div><strong id="queue-stalled" class="queue-health-status">Healthy</strong></div>
+            <div class="dashboard-operation-metrics dashboard-queue-health"><div><span>Worker utilization</span><strong id="queue-utilization">—</strong></div><div><span>Queued jobs</span><strong id="health-queued-jobs">0</strong></div><div><span>Running jobs</span><strong id="health-running-jobs">0</strong></div><div><span>Paused jobs</span><strong id="health-paused-jobs">0</strong></div><div><span>Oldest queued job</span><strong id="queue-oldest">—</strong></div><div><span>Longest running</span><strong id="queue-longest-running">—</strong></div><div><span>Average queue wait</span><strong id="queue-average-wait">—</strong></div></div>
+        </article>
+    </section>
+
     <section class="panel dashboard-insights" aria-labelledby="dashboard-insights-title">
         <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Library analytics</span><h2 id="dashboard-insights-title">Library insights</h2></div><a href="/library">Browse library →</a></div>
         <div class="dashboard-insight-metrics">
