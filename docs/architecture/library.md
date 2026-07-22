@@ -831,6 +831,11 @@ metadata.
 
 Artwork is a reusable, content-addressed resource. The `artwork` table owns one
 row per unique image and Songs reference it through nullable `songs.artwork_id`.
+`/database/artwork` is Harmony's private cache only; it is not a music-library
+folder and Navidrome cannot read it. To make canonical artwork visible to
+Navidrome, use the explicit tag-writing action to embed it in supported audio
+files (or export album-folder artwork when that optional workflow is enabled),
+then request a Navidrome rescan.
 The checksum is a SHA-256 digest of the image bytes and is unique, so identical
 embedded or folder images share one database row and one cached file.
 

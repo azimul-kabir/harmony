@@ -22,6 +22,9 @@ from app.database.models import Artwork, Song
 
 FOLDER_ARTWORK_NAMES = ("cover", "folder", "front", "album")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+EMBEDDABLE_IMAGE_MIMES = {"image/jpeg", "image/png"}
+MAX_EMBEDDED_ARTWORK_BYTES = 15 * 1024 * 1024
+MAX_EMBEDDED_ARTWORK_DIMENSION = 10_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +100,25 @@ class ArtworkService:
             cache_path,
         )
         return artwork
+
+    def validated_cached_bytes(self, artwork: Artwork | None) -> tuple[bytes, str] | None:
+        """Return safe embeddable cache bytes without exposing its private path."""
+        if artwork is None:
+            return None
+        try:
+            data = Path(artwork.cache_path).read_bytes()
+        except OSError:
+            return None
+        mime = _recognized_image_mime(data)
+        if mime not in EMBEDDABLE_IMAGE_MIMES or len(data) > MAX_EMBEDDED_ARTWORK_BYTES:
+            return None
+        try:
+            width, height = _image_dimensions(data, mime)
+        except (ValueError, struct.error):
+            return None
+        if not data or not width or not height or max(width, height) > MAX_EMBEDDED_ARTWORK_DIMENSION:
+            return None
+        return data, mime
 
     def fetch_musicbrainz_release_artwork(
         self,
@@ -295,4 +317,20 @@ def _extension_for_mime(mime_type: str) -> str:
 def _image_dimensions(data: bytes, mime_type: str) -> tuple[int | None, int | None]:
     if mime_type == "image/png" and len(data) >= 24:
         return struct.unpack(">II", data[16:24])
+    if mime_type == "image/jpeg" and data.startswith(b"\xff\xd8"):
+        pos = 2
+        while pos + 9 < len(data):
+            if data[pos] != 0xFF:
+                raise ValueError("Malformed JPEG")
+            while pos < len(data) and data[pos] == 0xFF:
+                pos += 1
+            marker = data[pos]; pos += 1
+            if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                continue
+            length = int.from_bytes(data[pos:pos + 2], "big")
+            if length < 7 or pos + length > len(data):
+                raise ValueError("Malformed JPEG")
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                return int.from_bytes(data[pos + 5:pos + 7], "big"), int.from_bytes(data[pos + 3:pos + 5], "big")
+            pos += length
     return None, None
