@@ -120,6 +120,11 @@ def process_job(
         # A queued job may predate genre support; resolve safely at execution.
         if not track.genre:
             enrich_tracks([track], job_id=job.id)
+            # Persist successful pre-flight enrichment for retries and future jobs.
+            if track.genre:
+                job.genre = track.genre
+                job.genre_provenance = track.genre_provenance
+                db.commit()
         output_file = download_track(track)
         if track.genre:
             write_genres(output_file, track.genre.split(";"))
