@@ -28,6 +28,7 @@ OPERATIONS = {
     "rename",
     "refresh_metadata",
     "refresh_artwork",
+    "fetch_artwork",
     "export",
 }
 TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled"}
@@ -314,6 +315,18 @@ class LibraryBulkWorker:
             return str(source)
         if operation == "refresh_artwork":
             self.artwork.refresh_for_song(db, song)
+            library_events.publish("library.track.updated", path=str(source), song_id=song.id)
+            return str(source)
+        if operation == "fetch_artwork":
+            if not song.musicbrainz_release_id:
+                raise ValueError("This song has no MusicBrainz release ID")
+            artwork = self.artwork.fetch_musicbrainz_release_artwork(
+                db, song.musicbrainz_release_id
+            )
+            song.artwork = artwork
+            song.artwork_id = artwork.id
+            song.artwork_status = artwork.source
+            song.cover_url = f"/api/artwork/{artwork.id}/file"
             library_events.publish("library.track.updated", path=str(source), song_id=song.id)
             return str(source)
         if operation == "export":

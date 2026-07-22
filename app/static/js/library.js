@@ -902,6 +902,11 @@ const bulkActions = {
         message: "Harmony will re-read embedded and folder artwork and repair local cache associations.",
         confirm: "Refresh artwork",
     },
+    fetch_artwork: {
+        title: "Fetch album art from Cover Art Archive?",
+        message: "Harmony will use each song's MusicBrainz release ID to download and cache the release's front artwork. Songs without a release ID will be reported as errors.",
+        confirm: "Fetch album art",
+    },
     export: {
         title: "Export selected songs?",
         message: "Harmony will create a ZIP archive in the background and provide a download when it is ready.",

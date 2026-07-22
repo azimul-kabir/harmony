@@ -6,6 +6,9 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import struct
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+from uuid import UUID
 
 from mutagen import File
 from mutagen.flac import Picture
@@ -26,6 +29,9 @@ class ArtworkCandidate:
     data: bytes
     mime_type: str
     source: str
+    provider: str | None = None
+    provider_id: str | None = None
+    original_url: str | None = None
 
 
 class ArtworkService:
@@ -78,6 +84,9 @@ class ArtworkService:
             width=width,
             height=height,
             file_size=len(candidate.data),
+            provider=candidate.provider,
+            provider_id=candidate.provider_id,
+            original_url=candidate.original_url,
         )
         db.add(artwork)
         db.flush()
@@ -88,6 +97,53 @@ class ArtworkService:
             cache_path,
         )
         return artwork
+
+    def fetch_musicbrainz_release_artwork(
+        self,
+        db: Session,
+        release_id: str,
+    ) -> Artwork:
+        """Download and cache the Cover Art Archive front image for a release."""
+        try:
+            release_id = str(UUID(release_id))
+        except (TypeError, ValueError, AttributeError) as error:
+            raise ValueError("A valid MusicBrainz release ID is required") from error
+
+        existing = db.scalar(
+            select(Artwork).where(
+                Artwork.provider == "cover_art_archive",
+                Artwork.provider_id == release_id,
+            )
+        )
+        if existing is not None and Path(existing.cache_path).is_file():
+            return existing
+
+        settings = get_settings()
+        url = f"{settings.cover_art_archive_base_url.rstrip('/')}/release/{release_id}/front"
+        try:
+            request = Request(url, headers={"Accept": "image/jpeg, image/png, image/webp"})
+            with urlopen(request, timeout=settings.cover_art_archive_timeout_seconds) as response:
+                data = response.read(settings.cover_art_archive_max_bytes + 1)
+                original_url = response.geturl()
+        except (HTTPError, URLError, OSError) as error:
+            raise ValueError("Cover Art Archive could not provide front artwork for this release") from error
+
+        if not data or len(data) > settings.cover_art_archive_max_bytes:
+            raise ValueError("Cover Art Archive returned an invalid artwork file")
+        mime_type = _recognized_image_mime(data)
+        if mime_type is None:
+            raise ValueError("Cover Art Archive returned an unsupported artwork format")
+        return self.cache(
+            db,
+            ArtworkCandidate(
+                data=data,
+                mime_type=mime_type,
+                source="remote",
+                provider="cover_art_archive",
+                provider_id=release_id,
+                original_url=original_url,
+            ),
+        )
 
     def refresh_for_song(self, db: Session, song: Song) -> Artwork | None:
         """Re-read local artwork sources, repairing the cache when necessary."""
@@ -217,6 +273,16 @@ def _sniff_mime(data: bytes, extension: str | None = None) -> str:
     if extension == ".webp":
         return "image/webp"
     return "image/jpeg"
+
+
+def _recognized_image_mime(data: bytes) -> str | None:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def _extension_for_mime(mime_type: str) -> str:

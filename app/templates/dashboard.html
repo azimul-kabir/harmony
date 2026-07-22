@@ -2,27 +2,36 @@
 {% block title %}Dashboard{% endblock %} 
 
 {% block content %} 
-<h1>Dashboard</h1> 
+<header class="dashboard-header">
+    <div><span class="library-eyebrow">Control Center</span><h1>Dashboard</h1></div>
+    <div class="dashboard-header-actions"><a class="btn-secondary" href="/library/health">Library Health</a><button id="btn-sync-all" class="btn-primary" type="button">↻ Sync All</button></div>
+</header>
 
 <div class="dashboard-grid">
-    <!-- Top Row: Overview Cards -->
-    <section class="overview-cards">
-        <div class="dashboard-card">
-            <h3>Songs</h3>
-            <p id="card-songs">{{ stats.songs }}</p>
-        </div>
-        <div class="dashboard-card">
-            <h3>Total Downloads</h3>
-            <p id="card-downloads">{{ stats.downloads }}</p>
-        </div>
-        <div class="dashboard-card">
-            <h3>Sources</h3>
-            <p id="card-sources">{{ stats.sources }}</p>
-        </div>
-        <div class="dashboard-card">
-            <h3>Failed Jobs</h3>
-            <p id="card-failed">{{ stats.failed }}</p>
-        </div>
+    <section class="dashboard-kpis" aria-label="Library overview">
+        <a href="/library" class="dashboard-kpi"><span>Songs</span><strong id="kpi-songs">{{ stats.songs }}</strong></a>
+        <a href="/library?view=albums" class="dashboard-kpi"><span>Albums</span><strong id="kpi-albums">—</strong></a>
+        <a href="/library?view=artists" class="dashboard-kpi"><span>Artists</span><strong id="kpi-artists">—</strong></a>
+        <a href="/sources" class="dashboard-kpi"><span>Sources</span><strong id="kpi-sources">{{ stats.sources }}</strong></a>
+        <a href="/playlists" class="dashboard-kpi"><span>Playlists</span><strong id="kpi-playlists">—</strong></a>
+        <a href="/library" class="dashboard-kpi"><span>Storage</span><strong id="kpi-storage">—</strong></a>
+        <a href="/library/health" class="dashboard-kpi dashboard-kpi-health"><span>Health</span><strong id="kpi-health">—</strong></a>
+        <a href="/downloads?status=failed" class="dashboard-kpi dashboard-kpi-danger"><span>Failed</span><strong id="kpi-failed">{{ stats.failed }}</strong></a>
+    </section>
+
+    <section class="dashboard-summary-grid" aria-label="Dashboard summaries">
+        <article class="panel dashboard-summary-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Download queue</span><h2>Downloads</h2></div><a href="/downloads">Open queue →</a></div>
+            <div class="dashboard-queue-metrics"><div><span>Running</span><strong id="queue-running">0</strong></div><div><span>Queued</span><strong id="queue-queued">0</strong></div><div><span>Today</span><strong id="queue-today">0</strong></div><div><span>Failed</span><strong id="queue-failed">0</strong></div></div>
+        </article>
+        <article class="panel dashboard-summary-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Library maintenance</span><h2>Library health</h2></div><a href="/library/health">View health →</a></div>
+            <div class="dashboard-health-content"><strong id="health-score">—</strong><div><p>Missing artwork <a id="health-artwork-link" href="/library"> <b id="health-artwork">0</b></a></p><p>Missing metadata <a href="/library/health"><b id="health-metadata">0</b></a></p><p>Missing files <a href="/library/health"><b id="health-files">0</b></a></p><p>Suggestions pending <a href="/library/health"><b id="health-suggestions">0</b></a></p></div></div>
+        </article>
+        <article class="panel dashboard-summary-card dashboard-collections-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Smart collections</span><h2>At a glance</h2></div><a href="/library">Open library →</a></div>
+            <div id="dashboard-collections" class="dashboard-collections"><p class="empty-state">Loading collections…</p></div>
+        </article>
     </section>
 
     <!-- NEW: Download Workers -->
@@ -46,7 +55,7 @@
         </div>
     </section>
 
-    <!-- Bottom Row: Split -->
+    <!-- Bottom Row: Activity and quick actions -->
     <div class="bottom-split">
         <section class="panel" style="padding: 0; overflow: hidden;">
             <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
@@ -57,10 +66,11 @@
             </div>
         </section>
         
-        <section class="panel">
-            <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: var(--text-main);">Quick Actions</h3>
+        <section class="panel dashboard-actions">
+            <h3>Quick Actions</h3>
             <div class="quick-actions-grid">
-                <button id="btn-sync-all" class="btn-primary" style="width: 100%;">↻ Sync All Sources</button>
+                <a class="btn-secondary" href="/library/health">Run library maintenance</a>
+                <a class="btn-secondary" href="/library?missing_artwork=true">Review missing artwork</a>
             </div>
         </section>
     </div>

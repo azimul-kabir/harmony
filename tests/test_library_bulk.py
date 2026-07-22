@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from app.database.models import BulkOperationItem, Song
+from app.database.models import Artwork, BulkOperationItem, Song
 from app.database.session import SessionLocal
 from app.services.library_bulk import LibraryBulkWorker, create_bulk_task
 
@@ -119,3 +119,38 @@ def test_bulk_delete_retains_song_provenance_as_missing(tmp_path):
         assert not Path(song.path).exists()
         assert song.availability_status == "missing"
         assert db.get(Song, song.id) is not None
+
+
+def test_bulk_fetch_artwork_uses_musicbrainz_release_id(tmp_path, monkeypatch):
+    with SessionLocal() as db:
+        song = _songs(db, tmp_path, 1)[0]
+        song.musicbrainz_release_id = "24b78a62-5b88-4f3b-9bfc-1e1db47c50ad"
+        artwork = Artwork(
+            checksum="a" * 64,
+            cache_path=str(tmp_path / "cover.jpg"),
+            source="remote",
+            mime_type="image/jpeg",
+            file_size=1,
+            provider="cover_art_archive",
+            provider_id=song.musicbrainz_release_id,
+        )
+        (tmp_path / "cover.jpg").write_bytes(b"x")
+        db.add(artwork)
+        db.commit()
+        item = BulkOperationItem(song_id=song.id, original_path=song.path, status="queued")
+        worker = LibraryBulkWorker()
+        worker.settings = SimpleNamespace(music_path=str(tmp_path), download_path=str(tmp_path))
+        monkeypatch.setattr(
+            worker.artwork,
+            "fetch_musicbrainz_release_artwork",
+            lambda database, release_id: artwork,
+        )
+
+        result = worker._apply(db, item, "fetch_artwork", {}, None)
+        db.commit()
+        db.refresh(song)
+
+        assert result == song.path
+        assert song.artwork_id == artwork.id
+        assert song.artwork_status == "remote"
+        assert song.cover_url == f"/api/artwork/{artwork.id}/file"
