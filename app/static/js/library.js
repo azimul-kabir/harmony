@@ -463,11 +463,56 @@ async function openMetadataReview(songId) {
     dialog.dataset.songId = String(songId);
     dialog.showModal();
     document.getElementById("metadata-discover").onclick = () => discoverMetadataMatch(songId);
-    document.getElementById("metadata-apply-accepted").onclick = async () => {
-        const response = await fetch(`/api/library/songs/${songId}/metadata/apply`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({initiated_by:"library-ui"})});
-        const result = await response.json();
-        document.getElementById("metadata-review-status").textContent = response.ok ? `Application queued (job ${result.job_id}). Library metadata updated; audio file tags were NOT modified.` : (result.message || "Metadata application could not be queued.");
-    };
+    document.getElementById("metadata-select-eligible").onclick = () => document.querySelectorAll("[data-accepted-field]:not(:disabled)").forEach((item) => { item.checked = true; });
+    document.getElementById("metadata-clear-selection").onclick = () => document.querySelectorAll("[data-accepted-field]").forEach((item) => { item.checked = false; });
+    document.getElementById("metadata-preview-accepted").onclick = () => previewMetadataApplication(songId);
+    document.getElementById("metadata-apply-selected").onclick = () => submitMetadataApplication(songId, false);
+    document.getElementById("metadata-apply-accepted").onclick = () => submitMetadataApplication(songId, true);
+    await loadMetadataReview(songId);
+}
+
+function selectedAcceptedSuggestions(allEligible) {
+    const fields = [...document.querySelectorAll("[data-accepted-field]:not(:disabled)")];
+    return (allEligible ? fields : fields.filter((item) => item.checked)).map((item) => Number(item.dataset.acceptedField));
+}
+
+async function previewMetadataApplication(songId) {
+    const ids = selectedAcceptedSuggestions(false);
+    const target = document.getElementById("metadata-application-preview");
+    if (!ids.length) { target.textContent = "Select one or more eligible accepted fields first."; return; }
+    const response = await fetch(`/api/library/songs/${songId}/metadata/application-preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: ids, initiated_by: "library-ui" }) });
+    const preview = await response.json();
+    if (!response.ok) { target.textContent = preview.error?.message || "Preview unavailable."; return; }
+    const stale = preview.operations.some((item) => item.status === "stale");
+    document.getElementById("metadata-force-control").hidden = !stale;
+    preview.operations.filter((item) => ["invalid", "unsupported"].includes(item.status)).forEach((item) => {
+        const input = document.querySelector(`[data-accepted-field="${item.suggestion_id}"]`);
+        if (input) { input.checked = false; input.disabled = true; }
+    });
+    target.innerHTML = preview.operations.map((item) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small>${item.status === "stale" ? `<small>Expected ${escapeHtml(metadataValue(item.expected_current_value))}; current canonical value differs.</small>` : ""}</article>`).join("");
+}
+
+async function submitMetadataApplication(songId, allEligible) {
+    const ids = selectedAcceptedSuggestions(allEligible);
+    const status = document.getElementById("metadata-review-status");
+    if (!ids.length) { status.textContent = "No eligible accepted fields are selected."; return; }
+    const force = document.getElementById("metadata-force").checked;
+    const response = await fetch(`/api/library/songs/${songId}/metadata/apply-selected`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: ids, force, force_confirmation: force, initiated_by: "library-ui" }) });
+    const result = await response.json();
+    if (!response.ok) { status.textContent = result.error?.message || "Metadata application could not be queued."; return; }
+    status.textContent = `Application queued (job ${result.job_id}).`;
+    await pollMetadataApplication(result.job_id, songId);
+}
+
+async function pollMetadataApplication(jobId, songId) {
+    const status = document.getElementById("metadata-review-status");
+    let task = await fetchJson(`/api/tasks/jobs/${jobId}`);
+    while (["queued", "running", "cancelling"].includes(task.status)) {
+        status.textContent = `${task.status.replaceAll("_", " ")} · ${task.processed_items}/${task.total_items}.`;
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        task = await fetchJson(`/api/tasks/jobs/${jobId}`);
+    }
+    status.textContent = task.status === "completed" ? "Library metadata updated. Audio-file tags were not modified." : `Metadata application ${task.status.replaceAll("_", " ")}; see task ${jobId} for details.`;
     await loadMetadataReview(songId);
 }
 
@@ -572,6 +617,14 @@ async function loadMetadataReview(songId) {
                 <small><b>Conflicting evidence:</b> ${escapeHtml(evidenceText(item.conflicting_evidence))}</small>
                 <div><button class="btn-primary" data-metadata-action="accept" data-suggestion-id="${item.id}">Accept</button><button class="btn-secondary" data-metadata-action="reject" data-suggestion-id="${item.id}">Reject</button></div>
             </article>`).join("") || '<p class="library-search-status">No pending suggestions.</p>';
+        const accepted = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "accepted");
+        const acceptedTarget = document.getElementById("metadata-accepted");
+        acceptedTarget.innerHTML = accepted.map((item) => `
+            <article class="metadata-suggestion-card">
+                <header><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(item.provider)} · ${escapeHtml(item.confidence_level)}${item.confidence === null ? "" : ` (${Math.round(item.confidence * 100)}%)`}</span></header>
+                <p class="metadata-proposed">${escapeHtml(metadataValue(item.current_value))} <span aria-hidden="true">→</span> <strong>${escapeHtml(metadataValue(item.suggested_value))}</strong></p>
+                <label><input type="checkbox" data-accepted-field="${item.id}"> Select this field for preview or application</label><small>Validation and stale state are verified by Preview before application.</small>
+            </article>`).join("") || '<p class="library-search-status">No accepted suggestions are available.</p>';
         document.getElementById("metadata-history").innerHTML = history.items.map((item) => `
             <article><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(metadataValue(item.previous_value))} → ${escapeHtml(metadataValue(item.new_value))}</span><small>${escapeHtml(item.change_source)} · ${new Date(item.changed_at).toLocaleString()}</small></article>`).join("") || '<p class="library-search-status">No applied-change history.</p>';
         document.querySelectorAll("[data-metadata-action]").forEach((button) => button.addEventListener("click", () => reviewMetadataSuggestion(button)));
