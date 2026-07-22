@@ -138,3 +138,37 @@ def test_existing_database_retries_interrupted_metadata_health_migration(
         .scalar_one()
         == "20260722_0015"
     )
+
+
+def test_existing_database_retries_interrupted_metadata_health_indexes_migration(
+    tmp_path, monkeypatch
+):
+    """A restart after the 0011 SQLite DDL must complete the upgrade."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'interrupted-health-indexes.db'}")
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs ("
+            "id INTEGER PRIMARY KEY, path VARCHAR NOT NULL UNIQUE, "
+            "filename VARCHAR NOT NULL, modified_time INTEGER, created_at DATETIME)"
+        )
+        config.attributes["connection"] = connection
+        command.upgrade(config, "20260722_0011")
+        # Reproduce a container exit after the DDL completed but before
+        # Alembic persisted the migration revision.
+        connection.execute(
+            text("UPDATE alembic_version SET version_num = '20260721_0010'")
+        )
+
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+
+    assert (
+        engine.connect()
+        .execute(text("SELECT version_num FROM alembic_version"))
+        .scalar_one()
+        == "20260722_0015"
+    )
