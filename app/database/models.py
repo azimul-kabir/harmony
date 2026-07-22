@@ -77,7 +77,12 @@ class Song(Base):
         index=True,
     )
     musicbrainz_release_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    musicbrainz_release_group_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     musicbrainz_artist_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    musicbrainz_release_artist_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    # Canonical index values only.  They are deliberately not audio tag state.
+    release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    original_release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     compilation: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -151,6 +156,35 @@ class MetadataHistory(Base):
     audio_file_modified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     reversible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     reversal_of_history_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_history.id", ondelete="SET NULL"), nullable=True)
+    suggestion_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_suggestions.id", ondelete="SET NULL"), nullable=True, index=True)
+    discovery_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    match_result_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    application_batch_id: Mapped[int | None] = mapped_column(ForeignKey("metadata_application_batches.id", ondelete="SET NULL"), nullable=True, index=True)
+    forced: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    stale_override_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class MetadataApplicationBatch(Base):
+    """Durable, database-only canonical metadata application audit boundary."""
+    __tablename__ = "metadata_application_batches"
+    __table_args__ = (Index("ix_metadata_application_batches_status_created", "status", "created_at"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_scope: Mapped[str] = mapped_column(String(40), nullable=False, default="song")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="queued")
+    total_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    applied_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unchanged_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    stale_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    invalid_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unsupported_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    forced_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    initiated_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    error_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class MetadataDiscovery(Base):
