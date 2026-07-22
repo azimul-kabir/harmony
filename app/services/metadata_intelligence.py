@@ -8,12 +8,17 @@ from typing import Any
 import re
 import unicodedata
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.time import utcnow_naive
-from app.database.models import MetadataHistory, MetadataSuggestion, Song, MetadataApplicationBatch
+from app.database.models import (MetadataApplicationBatch, MetadataApplicationLock,
+    MetadataDiscoveryLock, MetadataHistory, MetadataSuggestion, Song, Task)
+from app.domain.task import TaskStatus, TaskType
+from app.services.task_service import create_task, record_item_failure
+from app.services.library_search import library_search
+from app.services.metadata_health import metadata_health
 
 ENTITY_TYPES = frozenset({"song", "album", "artist"})
 METADATA_FIELDS = frozenset({
@@ -288,11 +293,112 @@ class MetadataApplicationService:
             operations.append({"suggestion_id":s.id,"field_name":s.field_name,"current_value":current,"expected_current_value":expected,"proposed_value":proposed,"normalized_equal":self._normal(current)==self._normal(proposed),"status":status,"applicability":status=="applicable","validation_error":validation,"reversible":status=="applicable"})
         return {"target_entity_type":"song", "target_entity_id":song_id, "selected_suggestion_ids":[s.id for s in suggestions], "canonical_snapshot":canonical, "operations":operations, "created_at":utcnow_naive(), "initiated_by":initiated_by}
 
-    def apply_selected(self, db: Session, song_id: int, suggestion_ids: list[int] | None = None, *, force: bool = False, force_confirmation: bool = False, stale_override_reason: str | None = None, initiated_by: str | None = None, atomic: bool = True) -> dict[str, Any]:
-        if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required", "Force application requires explicit confirmation.", 409)
+     def _reserve(self, db: Session, song_ids: list[int], task: Task) -> None:
+        # Discovery and application are mutually exclusive per Song, never globally.
+        conflict = db.scalar(select(MetadataDiscoveryLock.task_id).where(MetadataDiscoveryLock.song_id.in_(song_ids)))
+        if conflict:
+            raise MetadataServiceError("metadata_application_conflict", f"Song is reserved by metadata discovery job {conflict}.", 409)
+        for song_id in song_ids:
+            db.add(MetadataApplicationLock(song_id=song_id, task_id=task.id))
+        try:
+            db.flush()
+        except IntegrityError as exc:
+            db.rollback()
+            owner = db.scalar(select(MetadataApplicationLock.task_id).where(MetadataApplicationLock.song_id.in_(song_ids)))
+            raise MetadataServiceError("metadata_application_conflict", f"Song is reserved by metadata application job {owner}.", 409) from exc
+
+    def submit(self, db: Session, song_ids: list[int], *, suggestion_ids: list[int] | None = None,
+               rollback_history_ids: list[int] | None = None, force: bool = False,
+               force_confirmation: bool = False, stale_override_reason: str | None = None,
+               initiated_by: str | None = None) -> dict[str, Any]:
+        if force and not force_confirmation:
+            raise MetadataServiceError("force_confirmation_required", "Force application requires explicit confirmation.", 409)
+        ids = sorted(set(song_ids))
+        if not ids or len(ids) > 500:
+            raise MetadataServiceError("metadata_application_scope_invalid", "Select between one and 500 Songs.")
+        if len(set(db.scalars(select(Song.id).where(Song.id.in_(ids))).all())) != len(ids):
+            raise MetadataServiceError("song_not_found", "One or more Songs were not found.", 404)
+        action = "metadata_rollback" if rollback_history_ids else "metadata_application"
+        batch = MetadataApplicationBatch(entity_scope="song", status="queued", initiated_by=initiated_by)
+        db.add(batch); db.flush()
+        payload = {"action": action, "song_ids": ids, "suggestion_ids": suggestion_ids,
+                   "history_ids": rollback_history_ids, "force": force,
+                   "stale_override_reason": stale_override_reason, "batch_id": batch.id,
+                   "counters": {"fields": {key: 0 for key in ("applied", "unchanged", "stale", "invalid", "unsupported", "failed", "forced")},
+                                "rollbacks": {"reversed": 0, "conflicts": 0}}}
+        task = create_task(db, name="Rollback Library Metadata" if rollback_history_ids else "Apply Library Metadata",
+            spotify_url=f"library://metadata/{action}/{batch.id}", task_type=TaskType.LIBRARY_MAINTENANCE,
+            total_items=len(ids), operation_payload=json.dumps(payload, separators=(",", ":")),
+            initiated_by=initiated_by, resumable=False, commit=False)
+        batch.job_id = task.id
+        self._reserve(db, ids, task)
+        db.commit(); db.refresh(task)
+        return {"job_id": task.id, "batch_id": batch.id, "status": task.status,
+                "message": "Metadata application queued. Audio-file tags will not be modified."}
+
+    def release_locks(self, db: Session, task_id: int) -> None:
+        db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task_id))
+
+    def _refresh_derived(self, db: Session, song_id: int, job_id: int) -> dict[str, int]:
+        library_search.index_song(db, song_id)
+        issues = len(metadata_health.analyze_song(db, song_id, job_id))
+        song = db.get(Song, song_id)
+        # Reconcile only the old/current projections that contain this Song.
+        if song and song.album:
+            try: metadata_health.analyze_album(db, metadata_health.album_key(song), job_id)
+            except LookupError: pass
+        if song and song.artist:
+            try: metadata_health.analyze_artist(db, metadata_health.artist_key(song.artist), job_id)
+            except LookupError: pass
+        return {"issues": issues, "search_refreshed": 1}
+
+    def process_task(self, db: Session, task: Task) -> None:
+        payload = json.loads(task.operation_payload or "{}")
+        batch = db.get(MetadataApplicationBatch, payload["batch_id"])
+        if batch is None: raise RuntimeError("Application batch is missing")
+        batch.status = "running"; batch.started_at = batch.started_at or utcnow_naive()
+        task.status = TaskStatus.RUNNING.value; task.started_at = task.started_at or utcnow_naive(); db.commit()
+        try:
+            for song_id in payload["song_ids"]:
+                db.refresh(task)
+                if task.status in (TaskStatus.CANCELLING.value, TaskStatus.CANCELLED.value):
+                    task.status = TaskStatus.CANCELLED.value; break
+                task.current_item = f"Song {song_id}"
+                try:
+                    if payload["action"] == "metadata_rollback":
+                        history_ids = [x for x in (payload.get("history_ids") or [])
+                                       if (history := db.get(MetadataHistory, x)) is not None and history.entity_id == song_id]
+                        for history_id in history_ids:
+                            result = self.rollback(db, history_id, force=payload["force"], force_confirmation=True, initiated_by=batch.initiated_by, job_id=task.id, batch_id=batch.id)
+                            if result["status"] == "rolled_back": payload["counters"]["rollbacks"]["reversed"] += 1
+                    else:
+                        result = self.apply_selected(db, song_id, payload.get("suggestion_ids"), force=payload["force"], force_confirmation=True, stale_override_reason=payload.get("stale_override_reason"), initiated_by=batch.initiated_by, batch=batch, job_id=task.id)
+                        for op in result["operations"]:
+                            key = "applied" if op["status"] == "applied" else op["status"]
+                            if key in payload["counters"]["fields"]: payload["counters"]["fields"][key] += 1
+                    self._refresh_derived(db, song_id, task.id)
+                    task.completed_items += 1
+                except MetadataServiceError as exc:
+                    task.failed_items += 1; batch.failed_fields += 1
+                    record_item_failure(db, task, str(song_id), exc.code.upper()[:80], exc.message)
+                except Exception:
+                    task.failed_items += 1; batch.failed_fields += 1
+                    record_item_failure(db, task, str(song_id), "METADATA_APPLICATION_FAILED", "Canonical metadata could not be updated")
+                task.operation_payload = json.dumps(payload, separators=(",", ":")); db.commit()
+            if task.status == TaskStatus.RUNNING.value:
+                task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items or batch.stale_fields or batch.invalid_fields or batch.unsupported_fields else TaskStatus.COMPLETED.value
+            batch.status = task.status if task.status != TaskStatus.RUNNING.value else "completed"
+            batch.completed_at = utcnow_naive(); task.completed_at = utcnow_naive(); task.current_item = None; db.commit()
+        finally:
+            self.release_locks(db, task.id); db.commit()
+
+    def apply_selected(self, db: Session, song_id: int, suggestion_ids: list[int] | None = None, *, force: bool = False, force_confirmation: bool = False, stale_override_reason: str | None = None, initiated_by: str | None = None, atomic: bool = True, batch: MetadataApplicationBatch | None = None, job_id: int | None = None) -> dict[str, Any]:   
+         if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required", "Force application requires explicit confirmation.", 409)
         plan=self.build_preview(db,song_id,suggestion_ids,initiated_by=initiated_by)
         if not plan["operations"]: raise MetadataServiceError("no_applicable_suggestions", "No accepted suggestions were selected.",409)
-        batch=MetadataApplicationBatch(entity_scope="song",status="running",total_fields=len(plan["operations"]),initiated_by=initiated_by,started_at=utcnow_naive());db.add(batch);db.flush()
+        batch=batch or MetadataApplicationBatch(entity_scope="song",status="running",total_fields=0,initiated_by=initiated_by,started_at=utcnow_naive())
+        if batch.id is None: db.add(batch); db.flush()
+        batch.total_fields += len(plan["operations"])
         song=db.get(Song,song_id); assert song is not None
         results=[]
         for operation in plan["operations"]:
@@ -306,11 +412,13 @@ class MetadataApplicationService:
                 results.append(operation); continue
             suggestion=db.get(MetadataSuggestion, operation["suggestion_id"]); assert suggestion is not None
             setattr(song,FIELD_COLUMNS.get(operation["field_name"],operation["field_name"]),operation["proposed_value"])
-            metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=operation["field_name"],previous_value=operation["current_value"],new_value=operation["proposed_value"],provider=suggestion.provider,provider_entity_id=suggestion.provider_entity_id,confidence=suggestion.confidence,job_id=None,change_source="metadata_application",audio_file_modified=False,reversible=True,reversal_of_history_id=None,suggestion_id=suggestion.id,discovery_id=suggestion.discovery_id,match_result_id=suggestion.match_result_id,application_batch_id=batch.id,forced=bool(operation.get("forced")),stale_override_reason=stale_override_reason if operation.get("forced") else None)
+            metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=operation["field_name"],previous_value=operation["current_value"],new_value=operation["proposed_value"],provider=suggestion.provider,provider_entity_id=suggestion.provider_entity_id,confidence=suggestion.confidence,job_id=job_id,change_source="metadata_application",audio_file_modified=False,reversible=True,reversal_of_history_id=None,suggestion_id=suggestion.id,discovery_id=suggestion.discovery_id,match_result_id=suggestion.match_result_id,application_batch_id=batch.id,forced=bool(operation.get("forced")),stale_override_reason=stale_override_reason if operation.get("forced") else None)
             suggestion.status="applied"; suggestion.applied_at=utcnow_naive(); batch.applied_fields += 1
             if operation.get("forced"): batch.forced_fields += 1
             operation["status"]="applied"; results.append(operation)
-        batch.status="completed" if not any(x["status"] in {"stale","invalid","unsupported"} for x in results) else "completed_with_errors";batch.completed_at=utcnow_naive();db.flush()
+        if job_id is None:
+            batch.status="completed" if not any(x["status"] in {"stale","invalid","unsupported"} for x in results) else "completed_with_errors";batch.completed_at=utcnow_naive()
+        db.flush()
         return {"batch_id":batch.id,"status":batch.status,"operations":results,"message":"Library metadata updated. Audio-file tags were not modified."}
 
     def rollback_preview(self, db: Session, history_id: int) -> dict[str, Any]:
@@ -322,13 +430,13 @@ class MetadataApplicationService:
         current=getattr(song,FIELD_COLUMNS.get(history.field_name,history.field_name)); expected=_json_load(history.new_value)
         return {"history_id":history.id,"field_name":history.field_name,"current_value":current,"restore_value":_json_load(history.previous_value),"status":"applicable" if self._normal(current)==self._normal(expected) else "stale","reversible":True}
 
-    def rollback(self, db: Session, history_id: int, *, force: bool=False, force_confirmation: bool=False, initiated_by: str|None=None) -> dict[str, Any]:
+    def rollback(self, db: Session, history_id: int, *, force: bool=False, force_confirmation: bool=False, initiated_by: str|None=None, job_id: int | None = None, batch_id: int | None = None) -> dict[str, Any]:
         if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required","Force rollback requires explicit confirmation.",409)
         preview=self.rollback_preview(db,history_id)
         if preview["status"] == "stale" and not force: raise MetadataServiceError("rollback_conflict","Canonical metadata has changed since this history entry.",409)
         history=db.get(MetadataHistory,history_id); song=db.get(Song,history.entity_id); assert history and song
         setattr(song,FIELD_COLUMNS.get(history.field_name,history.field_name),preview["restore_value"])
-        metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=history.field_name,previous_value=preview["current_value"],new_value=preview["restore_value"],provider="rollback",provider_entity_id=None,confidence=None,job_id=None,change_source="metadata_rollback",audio_file_modified=False,reversible=True,reversal_of_history_id=history.id,forced=force)
+        metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=history.field_name,previous_value=preview["current_value"],new_value=preview["restore_value"],provider="rollback",provider_entity_id=None,confidence=None,job_id=job_id,change_source="metadata_rollback",audio_file_modified=False,reversible=True,reversal_of_history_id=history.id,application_batch_id=batch_id,forced=force)
         db.flush(); return {**preview,"status":"rolled_back","message":"Library metadata updated. Audio-file tags were not modified."}
 
 
