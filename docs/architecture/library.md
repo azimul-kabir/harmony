@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
 > Version: 1.6.0 (Metadata Intelligence foundation)
-> Status: In development
-> Last Updated: 2026-07-21
+> Status: Released in v1.6.0
+> Last Updated: 2026-07-22
 
 ---
 
