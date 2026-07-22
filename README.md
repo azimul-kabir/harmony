@@ -180,10 +180,18 @@ stored in the browser.
   selected songs that have an accepted MusicBrainz release ID
 
 To fetch online artwork, select songs in **Library → Songs** and choose
-**Fetch album art**. Harmony uses each song's `musicbrainz_release_id`; first
-run MusicBrainz discovery and accept its release-ID suggestion for songs that
-do not yet have one. Spotify artwork ingestion and manual replacement are
-reserved for future provider integrations.
+**Fetch album art**. Harmony uses the canonical `musicbrainz_release_id`
+(MusicBrainz **Album Id**) for Cover Art Archive's `/release/{id}/front`
+lookup. A `musicbrainz_release_group_id` is a different identifier and is
+never sent to that endpoint. First apply the MusicBrainz release-ID suggestion
+to canonical metadata for songs that do not yet have one. A valid cached
+artwork result satisfies a normal fetch without another network request.
+
+**Refresh artwork** only re-indexes embedded/folder artwork and repairs
+Harmony's cache association. **Write canonical tags** (with artwork embedding
+enabled) modifies the audio file. Navidrome sees cover art only after that
+embed step, or when artwork has been exported into the music library; the
+Harmony cache itself is not a Navidrome media file.
 
 ---
 

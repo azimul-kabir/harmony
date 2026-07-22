@@ -57,6 +57,22 @@ def _parse_bool(value):
     return None
 
 
+def _tag_value(tags: Any, *names: str):
+    """Read a known external-ID tag across Vorbis/MP4 and ID3 TXXX forms."""
+    for name in names:
+        value = tags.get(name) if hasattr(tags, "get") else None
+        if value is not None:
+            return _first(value)
+    # ID3 stores the user-visible names written by file_tag_writer as TXXX
+    # frames.  This is indexing/repair logic, not artwork-fetch lookup.
+    if getattr(tags, "getall", None):
+        requested = {name.casefold() for name in names}
+        for frame in tags.getall("TXXX"):
+            if str(getattr(frame, "desc", "")).casefold() in requested:
+                return _first(getattr(frame, "text", None))
+    return None
+
+
 def read_metadata(file_path: str | Path) -> dict:
     path = Path(file_path)
 
@@ -99,12 +115,21 @@ def read_metadata(file_path: str | Path) -> dict:
         # External IDs
         "spotify_track_id": _first(tags.get("spotify_track_id")),
         "spotify_album_id": _first(tags.get("spotify_album_id")),
-        "musicbrainz_recording_id": _first(
-            tags.get("musicbrainz_recordingid")
-            or tags.get("musicbrainz_trackid")
+        "musicbrainz_recording_id": _tag_value(
+            tags, "musicbrainz_recordingid", "musicbrainz_trackid", "MusicBrainz Track Id"
         ),
-        "musicbrainz_release_id": _first(tags.get("musicbrainz_albumid")),
-        "musicbrainz_artist_id": _first(tags.get("musicbrainz_artistid")),
+        "musicbrainz_release_id": _tag_value(
+            tags, "musicbrainz_albumid", "MusicBrainz Album Id"
+        ),
+        "musicbrainz_release_group_id": _tag_value(
+            tags, "musicbrainz_releasegroupid", "MusicBrainz Release Group Id"
+        ),
+        "musicbrainz_artist_id": _tag_value(
+            tags, "musicbrainz_artistid", "MusicBrainz Artist Id"
+        ),
+        "musicbrainz_release_artist_id": _tag_value(
+            tags, "musicbrainz_albumartistid", "MusicBrainz Album Artist Id"
+        ),
         "compilation": _parse_bool(_first(tags.get("compilation") or easy.get("compilation"))),
         "isrc": _first(tags.get("isrc")),
     }

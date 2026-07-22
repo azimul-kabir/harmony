@@ -16,7 +16,7 @@ from app.core.time import utcnow_naive
 from app.database.models import BulkOperationItem, Song, Task
 from app.database.session import SessionLocal
 from app.domain.task import TaskStatus, TaskType
-from app.services.artwork import ArtworkService
+from app.services.artwork import ArtworkFetchSkipped, ArtworkService
 from app.services.library_events import library_events
 from app.services.library_scanner import index_file
 from app.services.task_service import create_task, record_item_failure
@@ -31,7 +31,7 @@ OPERATIONS = {
     "fetch_artwork",
     "export",
 }
-TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled"}
+TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled", "skipped"}
 INVALID_FILENAME = re.compile(r"[\\/:*?\"<>|\x00-\x1f]")
 
 
@@ -215,6 +215,19 @@ class LibraryBulkWorker:
                     item.result_path = self._apply(db, item, operation, options, archive)
                     item.status = "completed"
                     task.completed_items += 1
+                except ArtworkFetchSkipped as error:
+                    # Missing/invalid provider metadata is actionable but is not a
+                    # filesystem or provider failure.  Keep it visible as a
+                    # structured skipped item rather than masking it as a generic
+                    # file-operation error.
+                    item.status = "skipped"
+                    item.error = str(error)
+                    task.skipped_items += 1
+                    logger.info(
+                        "Artwork operation={} song_id={} resolver_outcome={} identifier_source={} provider_response=skipped",
+                        operation, item.song_id, error.resolution.outcome,
+                        error.resolution.source_field,
+                    )
                 except Exception as error:
                     db.rollback()
                     # Filesystem operations cannot be rolled back by SQLite.
@@ -318,10 +331,8 @@ class LibraryBulkWorker:
             library_events.publish("library.track.updated", path=str(source), song_id=song.id)
             return str(source)
         if operation == "fetch_artwork":
-            if not song.musicbrainz_release_id:
-                raise ValueError("This song has no MusicBrainz release ID")
-            artwork = self.artwork.fetch_musicbrainz_release_artwork(
-                db, song.musicbrainz_release_id
+            artwork, _resolution, _cache_hit = self.artwork.fetch_for_song(
+                db, song, force_remote=bool(options.get("force_remote", False))
             )
             song.artwork = artwork
             song.artwork_id = artwork.id
