@@ -1293,3 +1293,51 @@ aggregate progress, and publish `library.health.updated` after completion. API:
 The `/library/health` dashboard consumes only these APIs. Future metadata repair
 and duplicate detection should register checks and actions behind the same
 service/API boundaries, preserving the dashboard layout.
+
+---
+
+# Canonical Metadata Application
+
+Accepted metadata is applied only to canonical `Song` database columns by a
+durable `library_maintenance` Task. The application service never opens an
+audio file, writes tags, downloads artwork, calls a provider, or accepts a
+suggestion. Each submitted scope receives an application batch and a per-Song
+reservation. Reservations prevent overlapping application, rollback, and
+discovery scopes, while unrelated Songs can proceed independently.
+
+The request transaction creates the Task, batch, and reservations, then
+returns. The maintenance worker performs one Song at a time, commits each Song
+and its immutable `MetadataHistory` record, refreshes that Song's FTS row, and
+runs only scoped health/projection reconciliation. Cancellation is cooperative
+between Songs. Terminal Tasks release reservations; queued cancellation and
+restart recovery also update the linked batch to `cancelled` or `interrupted`.
+Application batches use `completed`, `completed_with_errors`, `cancelled`,
+`failed`, and `interrupted`. Rollback batches use `rolled_back` or
+`partially_rolled_back`; rollback creates a new reversal history row and never
+edits or deletes the original row.
+
+Stable API surface:
+
+- `GET|POST /api/library/songs/{song_id}/metadata/application-preview` previews
+  all accepted or explicitly selected suggestions without queuing work.
+- `POST /api/library/songs/{song_id}/metadata/apply` and
+  `POST /api/library/songs/{song_id}/metadata/apply-selected` queue application.
+- `POST /api/metadata/applications/apply` queues accepted metadata for an
+  explicit selected-Song scope.
+- `GET /api/metadata/batches`, `GET /api/metadata/batches/{batch_id}`, and
+  `GET /api/metadata/batches/{batch_id}/results` expose paginated batch data.
+- `GET /api/metadata/history` and `GET /api/metadata/history/{history_id}`
+  expose read-only, paginated audit history.
+- `GET /api/metadata/history/{history_id}/rollback-preview`,
+  `POST /api/metadata/history/{history_id}/rollback`, and
+  `POST /api/metadata/batches/{batch_id}/rollback` provide reversible rollback.
+- `GET /api/metadata/application/capabilities` advertises supported fields;
+  `GET /api/tasks/jobs/{task_id}` and `POST /api/tasks/jobs/{task_id}/cancel`
+  are authoritative for progress and cancellation.
+
+Errors use `{ "error": { "code", "message" } }`. Application callers can
+rely on `song_not_found`, `suggestion_not_found`, `application_conflict`,
+`stale_suggestion`, `invalid_metadata_value`, `unsupported_metadata_field`,
+`no_applicable_suggestions`, `history_not_found`, `rollback_not_reversible`,
+`rollback_conflict`, and `force_confirmation_required`. Conflict messages name
+the active Task when one is available without exposing paths or provider data.
