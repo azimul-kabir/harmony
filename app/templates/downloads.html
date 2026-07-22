@@ -102,6 +102,14 @@
         </table>
     </div>
 </div>
+<div id="download-details-backdrop" class="download-details-backdrop" hidden></div>
+<aside id="download-details-drawer" class="download-details-drawer" role="dialog" aria-modal="true" aria-labelledby="download-details-title" aria-hidden="true" tabindex="-1" hidden>
+    <header class="download-details-header">
+        <div><span class="library-eyebrow">Download details</span><h2 id="download-details-title">Download details</h2></div>
+        <button id="download-details-close" class="download-details-close" type="button" aria-label="Close download details">×</button>
+    </header>
+    <div id="download-details-content" class="download-details-content" aria-live="polite"></div>
+</aside>
 {% endblock %} 
 
 {% block scripts %} 
