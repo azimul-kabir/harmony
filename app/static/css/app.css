@@ -1868,3 +1868,4 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .download-selection-toolbar button { min-height: 44px; }
 .download-history-row.is-selected { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
 @media (max-width: 700px) { .download-selection-toolbar { padding: 12px 16px; align-items: stretch; } .download-selection-toolbar strong { width: 100%; } .download-selection-toolbar button { flex: 1 1 140px; } }
+.download-outcome-reason { display: block; margin-top: 3px; color: var(--text-muted); max-width: 24rem; overflow-wrap: anywhere; }

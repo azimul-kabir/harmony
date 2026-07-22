@@ -21,7 +21,9 @@ TERMINAL = frozenset((JobStatus.COMPLETED.value, JobStatus.FAILED.value,
 def capabilities(job: DownloadJob) -> dict[str, bool]:
     """Expose action permissions derived from the authoritative job state."""
     return {
-        "retry": job.status in (JobStatus.FAILED.value, JobStatus.CANCELLED.value),
+        # Old rows predate structured retryability.  Treat their unknown failure
+        # classification as retryable rather than silently removing a legacy tool.
+        "retry": job.status == JobStatus.FAILED.value and (bool(job.retryable) or not job.reason_code),
         "cancel": job.status in (JobStatus.QUEUED.value, JobStatus.RUNNING.value),
         "pause": False,
         "resume": False,

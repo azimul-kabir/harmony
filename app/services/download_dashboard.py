@@ -37,18 +37,53 @@ def _timestamp(value: datetime | None) -> str | None:
 def _job_columns():
     return load_only(DownloadJob.id, DownloadJob.task_id, DownloadJob.status, DownloadJob.title,
                      DownloadJob.artist, DownloadJob.album, DownloadJob.created_at,
-                     DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at)
+                     DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at,
+                     DownloadJob.reason_code, DownloadJob.reason_message, DownloadJob.failure_stage,
+                     DownloadJob.provider, DownloadJob.retryable, DownloadJob.technical_detail,
+                     DownloadJob.error, DownloadJob.error_message)
+
+
+def _legacy_reason(job: DownloadJob, status: str) -> tuple[str | None, str | None]:
+    """Read old rows conservatively; do not rewrite history based on guesses."""
+    if job.reason_code or job.reason_message:
+        return job.reason_code, job.reason_message
+    text = (job.error_message or job.error or "").lower()
+    if status == "failed" and "already exists" in text:
+        return "already_exists", "The destination file already existed."
+    if status == "failed":
+        return "legacy_failure", "This older download failed; no structured reason was recorded."
+    return None, None
+
+
+def _safe_detail(value: str | None) -> str | None:
+    if not value:
+        return None
+    # Diagnostics are intentionally type/category-only in current workers; defend
+    # legacy values from tokens, URLs and unrestricted paths as well.
+    import re
+    value = re.sub(r"(?i)(token|password|cookie|authorization)=?[^\s&]+", r"\1=[redacted]", value)
+    value = re.sub(r"https?://\S+", "[remote URL redacted]", value)
+    value = re.sub(r"(?:[A-Za-z]:)?/[^\s]+", "[path redacted]", value)
+    return value[:240]
+
+
+def serialize_outcome(job: DownloadJob) -> dict:
+    status = normalized_status(job.status)
+    code, message = _legacy_reason(job, status)
+    return {"status": status, "reason_code": code, "reason_message": message,
+            "failure_stage": job.failure_stage, "provider": job.provider,
+            "retryable": bool(job.retryable) if status == "failed" else False,
+            "finished_at": _timestamp(job.completed_at),
+            "technical_detail": _safe_detail(job.technical_detail)}
 
 
 def _history_job(job: DownloadJob) -> dict:
-    status = normalized_status(job.status)
-    # Do not expose raw downloader exceptions; this concise category is safe to render.
-    error_category = "Download failed" if status == "failed" else None
-    return {"id": job.id, "task_id": job.task_id, "status": status, "title": job.title,
+    outcome = serialize_outcome(job)
+    return {"id": job.id, "task_id": job.task_id, "title": job.title,
             "artist": job.artist, "album": job.album, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "completed_at": _timestamp(job.completed_at),
-            "updated_at": _timestamp(job.updated_at), "error_category": error_category,
-            "capabilities": capabilities(job)}
+            "updated_at": _timestamp(job.updated_at), "error_category": outcome["reason_message"],
+            **outcome, "capabilities": capabilities(job)}
 
 
 def _history_order():
@@ -108,13 +143,15 @@ def download_details(job: DownloadJob) -> dict:
         key, label = terminal
         events.append((job.completed_at, 2, {"key": key, "label": label, "occurred_at": _timestamp(job.completed_at), "status": "completed", "description": None}))
     events.sort(key=lambda item: (item[0], item[1]))
+    outcome = serialize_outcome(job)
     return {"id": job.id, "task_id": job.task_id, "title": job.title, "artist": job.artist, "album": job.album,
             "source": "Spotify", "status": status, "stage": _stage(status),
             "progress": 100 if status == "completed" else None, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "finished_at": _timestamp(job.completed_at),
             "queue_wait_seconds": _duration_seconds(job.created_at, job.started_at),
             "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at), "retry_count": 0,
-            "can_cancel": status in ("queued", "running"), "can_retry": False,
+            "can_cancel": status in ("queued", "running"), "can_retry": status == "failed" and bool(job.retryable),
+            **outcome,
             "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]]}
 
 
