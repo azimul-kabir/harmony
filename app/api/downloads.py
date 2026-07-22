@@ -18,7 +18,7 @@ from app.services.playlist_download import download_playlist
 from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
 from app.domain.download import JobStatus
-from app.services.download_dashboard import TERMINAL_STATUSES, get_download_snapshot
+from app.services.download_dashboard import TERMINAL_STATUSES, download_details, get_download_snapshot
 
 router = APIRouter(
     prefix="/api/downloads",
@@ -65,6 +65,15 @@ def clear_history(db: Session = Depends(get_db)):
 def download_snapshot(db: Session = Depends(get_db)):
     """Bounded, privacy-safe queue state for the Downloads page."""
     return get_download_snapshot(db)
+
+
+@router.get("/{job_id}")
+def get_download_details(job_id: int, db: Session = Depends(get_db)):
+    """Return one privacy-safe download details record."""
+    job = db.get(DownloadJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Download not found.")
+    return download_details(job)
 
 
 @router.post("/{job_id}/cancel")

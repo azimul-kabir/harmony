@@ -15,6 +15,7 @@ TERMINAL_STATUSES = (
 )
 QUEUE_LIMIT = 25
 HISTORY_LIMIT = 100
+DETAIL_EVENT_LIMIT = 3
 
 
 def _timestamp(value: datetime | None) -> str | None:
@@ -32,6 +33,72 @@ def _job_columns():
 def _history_job(job: DownloadJob) -> dict:
     return {"id": job.id, "status": job.status, "title": job.title,
             "artist": job.artist, "album": job.album}
+
+
+def _duration_seconds(start: datetime | None, end: datetime | None) -> int | None:
+    """Return a non-negative duration only when both persisted times exist."""
+    if start is None or end is None:
+        return None
+    seconds = int((end - start).total_seconds())
+    return max(0, seconds)
+
+
+def _stage(status: str) -> str:
+    return {
+        JobStatus.QUEUED.value: "Queued",
+        JobStatus.RUNNING.value: "Downloading",
+        JobStatus.PAUSED.value: "Paused",
+        JobStatus.COMPLETED.value: "Completed",
+        JobStatus.FAILED.value: "Failed",
+        JobStatus.CANCELLED.value: "Cancelled",
+        JobStatus.SKIPPED.value: "Skipped",
+    }.get(status, "Unknown")
+
+
+def download_details(job: DownloadJob) -> dict:
+    """Serialize one job without leaking downloader, provider, or filesystem data.
+
+    Download jobs persist only their request, start, and terminal timestamps.  The
+    timeline intentionally contains only those facts; pipeline sub-stages are not
+    inferred from a job's current status.
+    """
+    events: list[tuple[datetime, int, dict]] = []
+    if job.created_at is not None:
+        events.append((job.created_at, 0, {"key": "queued", "label": "Queued",
+                       "occurred_at": _timestamp(job.created_at), "status": "completed",
+                       "description": None}))
+    if job.started_at is not None:
+        events.append((job.started_at, 1, {"key": "started", "label": "Started",
+                       "occurred_at": _timestamp(job.started_at), "status": "completed",
+                       "description": None}))
+    terminal = {
+        JobStatus.COMPLETED.value: ("completed", "Completed"),
+        JobStatus.FAILED.value: ("failed", "Failed"),
+        JobStatus.CANCELLED.value: ("cancelled", "Cancelled"),
+        JobStatus.SKIPPED.value: ("skipped", "Skipped"),
+    }.get(job.status)
+    if terminal is not None and job.completed_at is not None:
+        key, label = terminal
+        events.append((job.completed_at, 2, {"key": key, "label": label,
+                       "occurred_at": _timestamp(job.completed_at), "status": "completed",
+                       "description": None}))
+    events.sort(key=lambda item: (item[0], item[1]))
+
+    return {
+        "id": job.id, "title": job.title, "artist": job.artist, "album": job.album,
+        # The provider is fixed by this download flow. Never serialize source_url.
+        "source": "Spotify", "status": job.status, "stage": _stage(job.status),
+        "progress": 100 if job.status == JobStatus.COMPLETED.value else None,
+        "created_at": _timestamp(job.created_at), "started_at": _timestamp(job.started_at),
+        "finished_at": _timestamp(job.completed_at),
+        "queue_wait_seconds": _duration_seconds(job.created_at, job.started_at),
+        "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at),
+        "retry_count": 0,
+        "can_cancel": job.status in (JobStatus.QUEUED.value, JobStatus.RUNNING.value),
+        # Harmony does not have a retry endpoint for individual downloads yet.
+        "can_retry": False,
+        "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]],
+    }
 
 
 def get_download_snapshot(db: Session, *, queue_limit: int = QUEUE_LIMIT,

@@ -38,6 +38,22 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
 
 - Download tracks, albums, and playlists
 - Multi-worker concurrent downloads
+
+### Download details
+
+The Downloads page includes a read-only details drawer for every visible job. It
+shows available track metadata, status/stage, request/start/finish times,
+timestamp-derived queue and processing durations, and the retry count. On
+desktop it slides in from the right; on mobile it becomes a full-width panel
+with a sticky header. Cancel remains available only for queued or running jobs;
+no additional destructive or filesystem actions are provided.
+
+The event timeline is deliberately limited to persisted lifecycle facts: queued
+(created), started, and a completed, failed, cancelled, or skipped terminal
+timestamp when present. Harmony does not persist intermediate downloader,
+metadata, artwork, finalization, pause/resume, or retry transitions, so the
+drawer does not invent them. The details API never exposes output or temporary
+paths, provider URLs/payloads, credentials, command lines, or raw errors.
 - Automatic retry support
 - Live download progress
 - Configurable audio quality (128 / 256 / 320 kbps)
