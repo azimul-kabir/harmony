@@ -14,74 +14,97 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Older bootstrap releases could create the current ORM tables before
-    # Alembic advanced its marker.  The presence of this revision's terminal
-    # table means that schema is already in place, so stamp through it rather
-    # than rebuilding SQLite batch tables and restarting forever.
-    if "metadata_application_batches" in sa.inspect(op.get_bind()).get_table_names():
-        return
+    # SQLite DDL can outlive an interrupted Alembic run.  Check every
+    # independent additive change: the application-batch table may exist
+    # while the Song columns do not (or vice versa), so no single table is a
+    # reliable proxy for this entire revision having completed.
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    song_columns = {column["name"] for column in inspector.get_columns("songs")}
+    song_indexes = {index["name"] for index in inspector.get_indexes("songs")}
     with op.batch_alter_table("songs") as batch:
-        batch.add_column(
-            sa.Column("musicbrainz_release_group_id", sa.String(), nullable=True)
+        for column in (
+            sa.Column("musicbrainz_release_group_id", sa.String(), nullable=True),
+            sa.Column("musicbrainz_release_artist_id", sa.String(), nullable=True),
+            sa.Column("release_date", sa.String(10), nullable=True),
+            sa.Column("original_release_date", sa.String(10), nullable=True),
+        ):
+            if column.name not in song_columns:
+                batch.add_column(column)
+        if "ix_songs_musicbrainz_release_group_id" not in song_indexes:
+            batch.create_index(
+                "ix_songs_musicbrainz_release_group_id",
+                ["musicbrainz_release_group_id"],
+            )
+        if "ix_songs_musicbrainz_release_artist_id" not in song_indexes:
+            batch.create_index(
+                "ix_songs_musicbrainz_release_artist_id",
+                ["musicbrainz_release_artist_id"],
+            )
+
+    if "metadata_application_batches" not in inspector.get_table_names():
+        op.create_table(
+            "metadata_application_batches",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("entity_scope", sa.String(40), nullable=False),
+            sa.Column("status", sa.String(40), nullable=False),
+            sa.Column("total_fields", sa.Integer(), nullable=False),
+            sa.Column("applied_fields", sa.Integer(), nullable=False),
+            sa.Column("unchanged_fields", sa.Integer(), nullable=False),
+            sa.Column("stale_fields", sa.Integer(), nullable=False),
+            sa.Column("invalid_fields", sa.Integer(), nullable=False),
+            sa.Column("unsupported_fields", sa.Integer(), nullable=False),
+            sa.Column("failed_fields", sa.Integer(), nullable=False),
+            sa.Column("forced_fields", sa.Integer(), nullable=False),
+            sa.Column("initiated_by", sa.String(120)),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("started_at", sa.DateTime()),
+            sa.Column("completed_at", sa.DateTime()),
+            sa.Column(
+                "job_id", sa.Integer(), sa.ForeignKey("tasks.id", ondelete="SET NULL")
+            ),
+            sa.Column("error_metadata", sa.Text()),
         )
-        batch.add_column(
-            sa.Column("musicbrainz_release_artist_id", sa.String(), nullable=True)
+    batch_indexes = {
+        index["name"]
+        for index in sa.inspect(bind).get_indexes("metadata_application_batches")
+    }
+    if "ix_metadata_application_batches_status_created" not in batch_indexes:
+        op.create_index(
+            "ix_metadata_application_batches_status_created",
+            "metadata_application_batches",
+            ["status", "created_at"],
         )
-        batch.add_column(sa.Column("release_date", sa.String(10), nullable=True))
-        batch.add_column(
-            sa.Column("original_release_date", sa.String(10), nullable=True)
-        )
-        batch.create_index(
-            "ix_songs_musicbrainz_release_group_id", ["musicbrainz_release_group_id"]
-        )
-        batch.create_index(
-            "ix_songs_musicbrainz_release_artist_id", ["musicbrainz_release_artist_id"]
-        )
-    op.create_table(
-        "metadata_application_batches",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("entity_scope", sa.String(40), nullable=False),
-        sa.Column("status", sa.String(40), nullable=False),
-        sa.Column("total_fields", sa.Integer(), nullable=False),
-        sa.Column("applied_fields", sa.Integer(), nullable=False),
-        sa.Column("unchanged_fields", sa.Integer(), nullable=False),
-        sa.Column("stale_fields", sa.Integer(), nullable=False),
-        sa.Column("invalid_fields", sa.Integer(), nullable=False),
-        sa.Column("unsupported_fields", sa.Integer(), nullable=False),
-        sa.Column("failed_fields", sa.Integer(), nullable=False),
-        sa.Column("forced_fields", sa.Integer(), nullable=False),
-        sa.Column("initiated_by", sa.String(120)),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("started_at", sa.DateTime()),
-        sa.Column("completed_at", sa.DateTime()),
-        sa.Column(
-            "job_id", sa.Integer(), sa.ForeignKey("tasks.id", ondelete="SET NULL")
-        ),
-        sa.Column("error_metadata", sa.Text()),
-    )
-    op.create_index(
-        "ix_metadata_application_batches_status_created",
-        "metadata_application_batches",
-        ["status", "created_at"],
-    )
+    history_columns = {
+        column["name"] for column in sa.inspect(bind).get_columns("metadata_history")
+    }
+    history_indexes = {
+        index["name"] for index in sa.inspect(bind).get_indexes("metadata_history")
+    }
     with op.batch_alter_table("metadata_history") as batch:
         # SQLite batch operations require named constraints.  These nullable
         # audit references are indexed but intentionally unconstrained so old
         # retained history remains migration-safe.
-        batch.add_column(sa.Column("suggestion_id", sa.Integer()))
-        batch.add_column(sa.Column("discovery_id", sa.Integer()))
-        batch.add_column(sa.Column("match_result_id", sa.Integer()))
-        batch.add_column(sa.Column("application_batch_id", sa.Integer()))
-        batch.add_column(
-            sa.Column("forced", sa.Boolean(), nullable=False, server_default=sa.false())
-        )
-        batch.add_column(sa.Column("stale_override_reason", sa.String(500)))
-        batch.create_index("ix_metadata_history_suggestion_id", ["suggestion_id"])
-        batch.create_index("ix_metadata_history_discovery_id", ["discovery_id"])
-        batch.create_index("ix_metadata_history_match_result_id", ["match_result_id"])
-        batch.create_index(
-            "ix_metadata_history_application_batch_id", ["application_batch_id"]
-        )
+        for column in (
+            sa.Column("suggestion_id", sa.Integer()),
+            sa.Column("discovery_id", sa.Integer()),
+            sa.Column("match_result_id", sa.Integer()),
+            sa.Column("application_batch_id", sa.Integer()),
+            sa.Column(
+                "forced", sa.Boolean(), nullable=False, server_default=sa.false()
+            ),
+            sa.Column("stale_override_reason", sa.String(500)),
+        ):
+            if column.name not in history_columns:
+                batch.add_column(column)
+        for name, columns in (
+            ("ix_metadata_history_suggestion_id", ["suggestion_id"]),
+            ("ix_metadata_history_discovery_id", ["discovery_id"]),
+            ("ix_metadata_history_match_result_id", ["match_result_id"]),
+            ("ix_metadata_history_application_batch_id", ["application_batch_id"]),
+        ):
+            if name not in history_indexes:
+                batch.create_index(name, columns)
 
 
 def downgrade() -> None:
