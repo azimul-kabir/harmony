@@ -1,6 +1,7 @@
 import asyncio
 import json
-from fastapi import APIRouter, Depends, Request
+from datetime import UTC, datetime
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -58,6 +59,26 @@ def clear_history(db: Session = Depends(get_db)):
     )
     db.commit()
     return {"status": "success"}
+
+
+@router.get("/snapshot")
+def download_snapshot(db: Session = Depends(get_db)):
+    """Bounded, privacy-safe queue state for the Downloads page."""
+    return get_download_snapshot(db)
+
+
+@router.post("/{job_id}/cancel")
+def cancel_download(job_id: int, db: Session = Depends(get_db)):
+    """Cancel a queued or running download using the worker's existing flow."""
+    job = db.get(DownloadJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Download not found.")
+    if job.status not in (JobStatus.QUEUED.value, JobStatus.RUNNING.value):
+        raise HTTPException(status_code=409, detail="Download is no longer active.")
+    job.status = JobStatus.CANCELLED.value
+    job.completed_at = datetime.now(UTC)
+    db.commit()
+    return {"status": JobStatus.CANCELLED.value, "id": job.id}
 
 # Inside app/api/downloads.py, update the stream_downloads_data function payload:
 

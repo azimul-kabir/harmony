@@ -101,3 +101,20 @@ Songs; requests never silently apply provider values.
 Use `GET /api/metadata/discoveries/capabilities` and
 `GET /api/metadata/application/capabilities` to obtain the supported entity
 types, fields, thresholds, and request limits before integrating a client.
+
+## Downloads queue snapshot
+
+`GET /api/downloads/snapshot` returns the bounded read model used by the Downloads
+Operations Center. `counts` contains separate `running`, `queued`, `paused`,
+`completed`, `failed`, and `cancelled` totals. `active`, `queued`, and `paused`
+lists are capped at 25 entries; the recent-history list is capped at 100.
+
+Waiting entries are ordered exactly as the download worker claims them: oldest
+`created_at`, then stable job ID. Running entries are ordered by `started_at`,
+then ID. Queue positions are supplied only for this bounded waiting order.
+The response intentionally excludes provider URLs, output paths, task payloads,
+filesystem metadata, and raw errors. Progress, transfer speed, byte counts,
+ETA, pipeline stage, and worker identities are omitted because Harmony does not
+persist reliable values for them. Failed history filtering includes cancelled
+jobs, matching the Dashboard attention link; `/downloads?status=cancelled`
+remains available for cancelled-only history.
