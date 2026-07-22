@@ -1,5 +1,6 @@
 import time
 import threading
+import json
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,8 @@ from app.domain.task import TaskStatus
 from app.domain.track import Track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
+from app.services.spotify.genres import enrich_tracks
+from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
 from app.services.playlist_manager import export_all_m3us
 from app.services.task_service import (
@@ -110,13 +113,22 @@ def process_job(
             cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
             spotify_track_id=job.spotify_track_id, 
             spotify_url=job.source_url, 
+            genre=job.genre,
+            spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
+            genre_provenance=job.genre_provenance,
         )
+        # A queued job may predate genre support; resolve safely at execution.
+        if not track.genre:
+            enrich_tracks([track], job_id=job.id)
         output_file = download_track(track)
+        if track.genre:
+            write_genres(output_file, track.genre.split(";"))
         
         library_file = import_downloaded_track(
             db=db,
             downloaded_file=output_file,
             cover_url=job.cover_url,  # <-- NEW: Pass to library import manager
+            genre_provenance=track.genre_provenance,
         )
         job.output_file = str(library_file)
         job.error = None

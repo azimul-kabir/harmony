@@ -1,4 +1,5 @@
 from app.domain.track import Track
+import json
 
 from datetime import UTC, datetime
 
@@ -29,6 +30,9 @@ def create_job(
         disc=track.disc,
         year=track.year,
         isrc=track.isrc,
+        genre=track.genre,
+        spotify_artist_ids=json.dumps(track.spotify_artist_ids),
+        genre_provenance=track.genre_provenance,
         status=JobStatus.QUEUED.value,
     )
 

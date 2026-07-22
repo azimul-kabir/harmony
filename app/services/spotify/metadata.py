@@ -5,6 +5,7 @@ from app.services.spotify.client import get_client
 from app.domain.playlist import Playlist
 from spotipy.exceptions import SpotifyException
 from app.core.logging import logger
+from app.services.spotify.genres import enrich_tracks
 
 
 def resolve_track(spotify_url: str) -> Track:
@@ -24,7 +25,9 @@ def resolve_track(spotify_url: str) -> Track:
     if data is None:
         raise RuntimeError(f"Spotify returned no metadata for {spotify_url}")
 
-    return _track_from_spotify(data, fallback_url=spotify_url)
+    tracks = [_track_from_spotify(data, fallback_url=spotify_url)]
+    enrich_tracks(tracks)
+    return tracks[0]
 
 
 def resolve_album(
@@ -65,6 +68,7 @@ def resolve_album(
 
     for item in tracks_data.get("items", []):
         artists = [artist["name"] for artist in (item.get("artists") or [])]
+        artist_ids = [artist.get("id") for artist in (item.get("artists") or []) if artist.get("id")]
 
         external_urls = item.get("external_urls") or {}
 
@@ -73,6 +77,7 @@ def resolve_album(
                 title=item.get("name"),
                 artist=", ".join(artists),
                 artists=artists,
+                spotify_artist_ids=artist_ids,
                 album=album.get("name"),
                 album_artist=", ".join(album_artists),
                 track=item.get("track_number"),
@@ -87,6 +92,7 @@ def resolve_album(
             )
         )
 
+    enrich_tracks(tracks)
     return tracks
 
 
@@ -145,6 +151,7 @@ def resolve_playlist(
         else:
             results = None
 
+    enrich_tracks(tracks)
     return Playlist(
         name=playlist_info.get("name", "Unknown Playlist"),
         url=spotify_url,
@@ -163,6 +170,7 @@ def _track_from_spotify(
         raise RuntimeError("Spotify returned incomplete track metadata.")
 
     artists = [artist["name"] for artist in (data.get("artists") or [])]
+    artist_ids = [artist.get("id") for artist in (data.get("artists") or []) if artist.get("id")]
 
     album_artists = [artist["name"] for artist in (album.get("artists") or [])]
 
@@ -178,6 +186,7 @@ def _track_from_spotify(
         title=data.get("name"),
         artist=", ".join(artists),
         artists=artists,
+        spotify_artist_ids=artist_ids,
         album=album.get("name"),
         album_artist=", ".join(album_artists),
         track=data.get("track_number"),

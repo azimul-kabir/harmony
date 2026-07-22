@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
+    spotify_genre_fetch_enabled: bool = True
+    spotify_genre_max_values: int = 3
+    spotify_genre_include_featured_fallback: bool = True
+    spotify_genre_merge_featured: bool = False
+    spotify_genre_replace_existing: bool = False
 
     audio_providers: str = "youtube-music,youtube"
 

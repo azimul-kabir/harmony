@@ -43,6 +43,7 @@ class Song(Base):
     disc_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     genre: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    genre_provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     codec: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
@@ -425,6 +426,9 @@ class DownloadJob(Base):
     disc: Mapped[int | None] = mapped_column(Integer, nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True)
+    genre: Mapped[str | None] = mapped_column(String, nullable=True)
+    spotify_artist_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+    genre_provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     # Album artwork URL
     cover_url: Mapped[str | None] = mapped_column(String, nullable=True)
