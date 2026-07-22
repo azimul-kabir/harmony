@@ -38,6 +38,7 @@ from app.web.providers import router as providers_page_router
 from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
+from app.services.settings_service import initialize_defaults
 
 settings = get_settings()
 
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
     init_db()
     db = SessionLocal()
     try:
+        initialize_defaults(db)
         recover_library_jobs(db)
         cleanup_library_jobs(db)
     finally:

@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from app.database.models import AppSetting
+from app.core.config import get_settings
 
 DEFAULT_SETTINGS = [
     {"key": "timezone", "value": "Asia/Dhaka", "type": "string", "category": "general"},
@@ -10,14 +11,18 @@ DEFAULT_SETTINGS = [
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
     {"key": "m3u_export_folder", "value": "/music/Playlists", "type": "string", "category": "playlists"},
-    {"key": "theme", "value": "auto", "type": "string", "category": "appearance"}
+    {"key": "theme", "value": "auto", "type": "string", "category": "appearance"},
+    {"key": "spotify_genre_enrichment_enabled", "value": "false", "type": "boolean", "category": "spotify"},
 ]
 
 def initialize_defaults(db: Session):
     for setting in DEFAULT_SETTINGS:
         exists = db.query(AppSetting).filter(AppSetting.key == setting["key"]).first()
         if not exists:
-            db.add(AppSetting(**setting))
+            value = setting["value"]
+            if setting["key"] == "spotify_genre_enrichment_enabled":
+                value = str(get_settings().spotify_genre_enrichment_enabled).lower()
+            db.add(AppSetting(**(setting | {"value": value})))
     db.commit()
 
 def get_settings_by_category(db: Session, category: str):
