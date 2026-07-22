@@ -463,6 +463,11 @@ async function openMetadataReview(songId) {
     dialog.dataset.songId = String(songId);
     dialog.showModal();
     document.getElementById("metadata-discover").onclick = () => discoverMetadataMatch(songId);
+    document.getElementById("metadata-apply-accepted").onclick = async () => {
+        const response = await fetch(`/api/library/songs/${songId}/metadata/apply`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({initiated_by:"library-ui"})});
+        const result = await response.json();
+        document.getElementById("metadata-review-status").textContent = response.ok ? `Application queued (job ${result.job_id}). Library metadata updated; audio file tags were NOT modified.` : (result.message || "Metadata application could not be queued.");
+    };
     await loadMetadataReview(songId);
 }
 
