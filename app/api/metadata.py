@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from app.database.models import MetadataApplicationBatch, MetadataHistory
+from app.database.models import MetadataApplicationBatch, MetadataHistory, Song
+from app.services.file_tag_writer import preview as tag_preview, write_song
 
 from app.database.session import get_db
 from app.services.metadata_intelligence import APPLICABLE_FIELDS, metadata_service, metadata_application_service, serialize_history, serialize_suggestion
@@ -25,6 +26,10 @@ class ApplicationRequest(BaseModel):
     stale_override_reason: str | None = Field(default=None, max_length=500)
     initiated_by: str | None = Field(default=None, max_length=120)
     atomic: bool = True
+
+
+class TagWriteRequest(BaseModel):
+    song_ids: list[int] = Field(min_length=1, max_length=5000)
 
 
 def _page(items: list[Any], total: int, limit: int, offset: int) -> dict[str, Any]:
@@ -66,6 +71,42 @@ def preview_accepted_application(song_id: int, db: Session = Depends(get_db)):
 @router.post("/api/library/songs/{song_id}/metadata/application-preview")
 def preview_selected_application(song_id: int, request: ApplicationRequest, db: Session = Depends(get_db)):
     return metadata_application_service.build_preview(db, song_id, request.suggestion_ids, initiated_by=request.initiated_by)
+
+
+@router.get("/api/library/songs/{song_id}/metadata/tag-preview", summary="Preview canonical tags before modifying an audio file")
+def preview_file_tags(song_id: int, db: Session = Depends(get_db)):
+    song = db.get(Song, song_id)
+    if song is None:
+        from app.services.metadata_intelligence import MetadataServiceError
+        raise MetadataServiceError("metadata_song_not_found", "Song not found.", 404)
+    return tag_preview(song)
+
+
+@router.post("/api/library/songs/{song_id}/metadata/write-tags", summary="Explicitly write canonical metadata to one audio file")
+def write_file_tags(song_id: int, db: Session = Depends(get_db)):
+    song = db.get(Song, song_id)
+    if song is None:
+        from app.services.metadata_intelligence import MetadataServiceError
+        raise MetadataServiceError("metadata_song_not_found", "Song not found.", 404)
+    return write_song(db, song)
+
+
+@router.post("/api/library/metadata/write-tags", summary="Explicitly write canonical metadata for selected audio files")
+def write_selected_file_tags(request: TagWriteRequest, db: Session = Depends(get_db)):
+    totals = {key: 0 for key in ("succeeded", "skipped", "unsupported", "missing", "failed")}
+    for song_id in dict.fromkeys(request.song_ids):
+        song = db.get(Song, song_id)
+        if song is None:
+            totals["missing"] += 1
+            continue
+        result = write_song(db, song)
+        status = result["status"]
+        if status == "succeeded": totals["succeeded"] += 1
+        elif status == "unsupported" or result.get("reason") == "unsupported": totals["unsupported"] += 1
+        elif result.get("reason") == "missing_or_unsafe": totals["missing"] += 1
+        elif status == "skipped": totals["skipped"] += 1
+        else: totals["failed"] += 1
+    return {"totals": totals}
 
 
 @router.post("/api/library/songs/{song_id}/metadata/apply")
