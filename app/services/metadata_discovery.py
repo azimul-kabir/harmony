@@ -88,6 +88,10 @@ def song_searches(song: Song) -> list[tuple[str, str, str | None]]:
 
 class MetadataDiscoveryService:
     def _reserve(self, db: Session, song_ids: list[int], task: Task) -> None:
+        from app.database.models import MetadataApplicationLock
+        application_owner = db.scalar(select(MetadataApplicationLock.task_id).where(MetadataApplicationLock.song_id.in_(song_ids)))
+        if application_owner:
+            raise MetadataServiceError("discovery_conflict", f"One or more Songs have active metadata application. Active job {application_owner}.", 409)
         for song_id in song_ids: db.add(MetadataDiscoveryLock(song_id=song_id,task_id=task.id))
         try: db.flush()
         except IntegrityError as exc:
