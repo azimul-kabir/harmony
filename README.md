@@ -60,6 +60,11 @@ paths, provider URLs/payloads, credentials, command lines, or raw errors.
 - SpotDL integration
 - Background download queue
 - Automatic library import
+- Spotify genres are retrieved automatically from Spotify **artist** metadata
+  (Spotify track and album objects do not provide genres). They are inherited
+  artist genres and can be broad; Harmony writes them to downloaded files so a
+  Navidrome rescan can see them. Manual metadata and approved MusicBrainz
+  metadata remain higher-priority sources.
 
 ---
 

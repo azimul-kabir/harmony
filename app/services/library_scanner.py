@@ -88,6 +88,10 @@ def index_file(
         return IndexResult(path=path_string, status="unchanged", song_id=song.id)
 
     metadata = read_metadata(path)
+    # A watcher must never erase a richer canonical genre merely because an
+    # external editor removed (or cannot represent) the embedded tag.
+    if song is not None and song.genre and not metadata.get("genre"):
+        metadata["genre"] = song.genre
     metadata.update(
         {
             "path": path_string,

@@ -20,6 +20,7 @@ def import_download(
     downloaded_file: str | Path,
     download_source: str = "filesystem",
     cover_url: str | None = None,
+    genre_provenance: str | None = None,
 ) -> Path:
     """
     Import a downloaded file into the Harmony library.
@@ -74,7 +75,7 @@ def import_download(
 
         logger.info("Updating library database...")
 
-        index_file(
+        indexed = index_file(
             db,
             destination,
             force=True,
@@ -82,6 +83,11 @@ def import_download(
             download_source=download_source,
             commit=False,
         )
+        if genre_provenance and indexed.song_id:
+            from app.database.models import Song
+            song = db.get(Song, indexed.song_id)
+            if song is not None:
+                song.genre_provenance = genre_provenance
 
         db.commit()
 

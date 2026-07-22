@@ -7,12 +7,14 @@ def import_downloaded_track(
     db: Session,
     downloaded_file: Path,
     cover_url: str | None = None,  # <-- NEW: Accept the cover URL
+    genre_provenance: str | None = None,
 ) -> Path:
     destination = import_download(
         db=db,
         downloaded_file=downloaded_file,
         download_source="spotdl",
         cover_url=cover_url,
+        genre_provenance=genre_provenance,
     )
 
     return destination
