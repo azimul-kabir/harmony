@@ -2,6 +2,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import inspect
 
 from app.database.base import Base
 from app.database.database import engine
@@ -11,8 +12,12 @@ from app.database import models  # noqa: F401
 
 
 def init_db() -> None:
-    # Preserve the existing first-start experience, then let Alembic apply
-    # additive upgrades to both new and existing installations.
+    # A brand-new installation is bootstrapped from the current ORM schema and
+    # stamped at head.  The migration chain deliberately starts from Harmony's
+    # pre-existing ``songs`` table, so running it against an empty database is
+    # neither necessary nor valid.  Existing databases retain the additive
+    # upgrade path below.
+    is_fresh = "songs" not in inspect(engine).get_table_names()
     Base.metadata.create_all(bind=engine)
 
     root = Path(__file__).resolve().parents[2]
@@ -21,4 +26,7 @@ def init_db() -> None:
 
     with engine.begin() as connection:
         config.attributes["connection"] = connection
-        command.upgrade(config, "head")
+        if is_fresh:
+            command.stamp(config, "head")
+        else:
+            command.upgrade(config, "head")
