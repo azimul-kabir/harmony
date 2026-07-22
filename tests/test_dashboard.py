@@ -15,10 +15,50 @@ from app.database.models import (
 from app.domain.download import JobStatus
 from app.domain.task import TaskStatus, TaskType
 from app.services.dashboard import (
+    get_download_trends,
     get_dashboard_snapshot,
     get_dashboard_stats,
+    get_queue_health,
     serialize_dashboard_activity,
 )
+
+
+def test_dashboard_download_trends_and_queue_health_are_bounded_and_aggregate_only():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    now = datetime(2026, 7, 22, 12, 0)
+    with Session(engine) as db:
+        db.add_all([
+            DownloadJob(spotify_url="complete", title="job", artist="artist", status="completed", completed_at=datetime(2026, 7, 22, 8), created_at=datetime(2026, 7, 22, 7), started_at=datetime(2026, 7, 22, 7, 5)),
+            DownloadJob(spotify_url="failed", title="job", artist="artist", status="failed", completed_at=datetime(2026, 7, 20, 8)),
+            DownloadJob(spotify_url="cancelled", title="job", artist="artist", status="cancelled", completed_at=datetime(2026, 7, 17, 8)),
+            DownloadJob(spotify_url="old", title="job", artist="artist", status="completed", completed_at=datetime(2026, 7, 15, 8)),
+            DownloadJob(spotify_url="queued", title="job", artist="artist", status="queued", created_at=datetime(2026, 7, 22, 11, 53)),
+            DownloadJob(spotify_url="running", title="job", artist="artist", status="running", created_at=datetime(2026, 7, 22, 10), started_at=datetime(2026, 7, 22, 10, 10)),
+            DownloadJob(spotify_url="paused", title="job", artist="artist", status="paused"),
+        ])
+        db.commit()
+        trends = get_download_trends(db, now=now)
+        assert trends["period_days"] == 7
+        assert [bucket["date"] for bucket in trends["daily"]] == ["2026-07-16", "2026-07-17", "2026-07-18", "2026-07-19", "2026-07-20", "2026-07-21", "2026-07-22"]
+        assert trends["completed"] == trends["completed_today"] == 1
+        assert trends["failed"] == trends["cancelled"] == 1
+        assert trends["success_rate"] == round(1 / 3, 3)
+        assert trends["daily"][2] == {"date": "2026-07-18", "completed": 0, "failed": 0, "cancelled": 0}
+        health = get_queue_health(db, now=now, configured_workers=4)
+        assert health == {"active_workers": 1, "configured_workers": 4, "utilization": 0.25, "queued_jobs": 1, "running_jobs": 1, "paused_jobs": 1, "oldest_queue_seconds": 420, "average_queue_wait_seconds": 450, "longest_running_seconds": 6600, "stalled": False}
+
+
+def test_queue_health_uses_null_durations_when_no_matching_jobs():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        health = get_queue_health(db, now=datetime(2026, 7, 22), configured_workers=0)
+        assert health["utilization"] is None
+        assert health["oldest_queue_seconds"] is None
+        assert health["average_queue_wait_seconds"] is None
+        assert health["longest_running_seconds"] is None
+        assert health["stalled"] is False
 from app.services.library_analytics import library_analytics
 
 

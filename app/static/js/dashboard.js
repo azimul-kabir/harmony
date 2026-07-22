@@ -39,6 +39,54 @@ function formatDuration(seconds) {
     return `${minutes}:${String(totalSeconds % 60).padStart(2, "0")}`;
 }
 
+function formatQueueDuration(seconds) {
+    return seconds === null || seconds === undefined ? "—" : formatDuration(seconds);
+}
+
+function renderDownloadTrends(trends) {
+    setText("trend-completed", Number(trends.completed || 0).toLocaleString());
+    setText("trend-failed", Number(trends.failed || 0).toLocaleString());
+    setText("trend-cancelled", Number(trends.cancelled || 0).toLocaleString());
+    setText("trend-success-rate", `${Math.round(Number(trends.success_rate || 0) * 100)}%`);
+    const chart = document.getElementById("download-trend-chart");
+    if (!chart) return;
+    const daily = Array.isArray(trends.daily) ? trends.daily.slice(-7) : [];
+    const maximum = Math.max(1, ...daily.map((day) => Number(day.completed || 0)));
+    const existing = new Map(Array.from(chart.children).map((bar) => [bar.dataset.date, bar]));
+    daily.forEach((day) => {
+        let bar = existing.get(day.date);
+        if (!bar) {
+            bar = document.createElement("div"); bar.className = "download-trend-bar"; bar.dataset.date = day.date;
+            const value = document.createElement("span"); value.className = "download-trend-value";
+            const column = document.createElement("div"); column.className = "download-trend-column";
+            const label = document.createElement("span"); label.className = "download-trend-label";
+            bar.append(value, column, label);
+        }
+        const completed = Number(day.completed || 0), failed = Number(day.failed || 0), cancelled = Number(day.cancelled || 0);
+        const [value, column, label] = bar.children;
+        value.textContent = completed.toLocaleString();
+        column.style.height = `${Math.max(completed ? 10 : 2, Math.round(completed / maximum * 100))}%`;
+        column.classList.toggle("has-attention", failed + cancelled > 0);
+        bar.title = `${day.date}: ${completed} completed, ${failed} failed, ${cancelled} cancelled`;
+        label.textContent = day.date.slice(5);
+        chart.appendChild(bar); existing.delete(day.date);
+    });
+    existing.forEach((bar) => bar.remove());
+}
+
+function renderQueueHealth(health) {
+    const workers = Number(health.active_workers || 0), configured = Number(health.configured_workers || 0);
+    setText("queue-utilization", health.utilization === null || health.utilization === undefined ? "—" : `${workers}/${configured} (${Math.round(Number(health.utilization) * 100)}%)`);
+    setText("health-queued-jobs", Number(health.queued_jobs || 0).toLocaleString());
+    setText("health-running-jobs", Number(health.running_jobs || 0).toLocaleString());
+    setText("health-paused-jobs", Number(health.paused_jobs || 0).toLocaleString());
+    setText("queue-oldest", formatQueueDuration(health.oldest_queue_seconds));
+    setText("queue-longest-running", formatQueueDuration(health.longest_running_seconds));
+    setText("queue-average-wait", formatQueueDuration(health.average_queue_wait_seconds));
+    const stalled = document.getElementById("queue-stalled");
+    if (stalled) { stalled.textContent = health.stalled ? "Stalled" : "Healthy"; stalled.classList.toggle("is-stalled", Boolean(health.stalled)); }
+}
+
 function renderAlbumInsight(id, album, detail) {
     const element = document.getElementById(id);
     if (!element) return;
@@ -73,6 +121,8 @@ function renderDashboard(snapshot) {
     setText("queue-queued", Number(downloads.queued || 0).toLocaleString());
     setText("queue-today", Number(downloads.completed_today || 0).toLocaleString());
     setText("queue-failed", Number(downloads.failed || 0).toLocaleString());
+    renderDownloadTrends(snapshot.download_trends || {});
+    renderQueueHealth(snapshot.queue_health || {});
 
     const health = snapshot.health || {};
     setText("health-score", `${Number(health.score || 0)}%`);
