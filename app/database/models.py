@@ -437,6 +437,14 @@ class DownloadJob(Base):
     output_file: Mapped[str | None] = mapped_column(String, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Public outcome fields are deliberately short and structured.  `error` keeps
+    # server-side diagnostics and is never returned verbatim by the API.
+    reason_code: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    reason_message: Mapped[str | None] = mapped_column(String, nullable=True)
+    failure_stage: Mapped[str | None] = mapped_column(String, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    technical_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -13,6 +13,7 @@ from app.database.crud_downloads import (
 from app.database.models import DownloadJob
 from app.database.session import SessionLocal
 from app.domain.download import JobStatus
+from app.domain.download_outcome import DownloadCancelled, DownloadFailed, DownloadOutcome, DownloadSkipped, classify_unexpected
 from app.domain.task import TaskStatus
 from app.domain.track import Track
 from app.exceptions.library import DuplicateTrackError
@@ -76,6 +77,7 @@ def process_job(
         # If the user clicked Cancel, mark it cancelled and stop execution.
         if job.task.status == TaskStatus.CANCELLED.value:
             logger.info("Task was CANCELLED. Aborting job #{}.", job.id)
+            _record_outcome(db, job, JobStatus.CANCELLED, "cancelled_before_start", "The parent task was cancelled before this download started.", "preflight", "harmony", False)
             update_status(db=db, job=job, status=JobStatus.CANCELLED)
             return
             
@@ -99,6 +101,7 @@ def process_job(
         )
         
     job.error = None
+    job.error_message = None
     db.commit()
     
     output_file = None
@@ -119,7 +122,11 @@ def process_job(
         )
         # A queued job may predate genre support; resolve safely at execution.
         if not track.genre:
-            enrich_tracks([track], job_id=job.id)
+            # Enrichment is optional; a provider outage must not fail audio.
+            try:
+                enrich_tracks([track], job_id=job.id)
+            except Exception:
+                logger.warning("Optional genre enrichment failed for job #{}", job.id)
             # Persist successful pre-flight enrichment for retries and future jobs.
             if track.genre:
                 job.genre = track.genre
@@ -127,7 +134,10 @@ def process_job(
                 db.commit()
         output_file = download_track(track)
         if track.genre:
-            write_genres(output_file, track.genre.split(";"))
+            try:
+                write_genres(output_file, track.genre.split(";"))
+            except Exception:
+                logger.warning("Optional genre tagging failed for job #{}", job.id)
         
         library_file = import_downloaded_track(
             db=db,
@@ -139,6 +149,7 @@ def process_job(
         job.error = None
         db.commit()
         
+        _record_outcome(db, job, JobStatus.COMPLETED, "completed", "Download completed.", "complete", "spotdl", False)
         update_status(
             db=db,
             job=job,
@@ -162,8 +173,11 @@ def process_job(
             library_file,
         )
         
-        # Auto-Export M3U so Navidrome immediately sees the newly imported track
-        export_all_m3us(db)
+        # This is post-download maintenance: never turn a terminal success into a failure.
+        try:
+            export_all_m3us(db)
+        except Exception:
+            logger.warning("Playlist export failed after completed job #{}", job.id)
         
     except DuplicateTrackError as ex:
         logger.info(
@@ -173,49 +187,35 @@ def process_job(
         if output_file is not None and output_file.exists():
             output_file.unlink()
             
-        job.output_file = None
-        job.error = None
-        db.commit()
-        
-        update_status(
-            db=db,
-            job=job,
-            status=JobStatus.SKIPPED,
-        )
-        
-        if job.task is not None:
-            set_current_item(
-                db=db,
-                task=job.task,
-                item=None,
-            )
-            increment_skipped(
-                db=db,
-                task=job.task,
-            )
-            
+        _finish_with_outcome(db, job, JobStatus.SKIPPED, DownloadSkipped("duplicate_in_library", "This track is already in your library.", "preflight", technical_detail=type(ex).__name__))
+    except DownloadSkipped as outcome:
+        _finish_with_outcome(db, job, JobStatus.SKIPPED, outcome)
+    except DownloadCancelled as outcome:
+        _finish_with_outcome(db, job, JobStatus.CANCELLED, outcome)
+    except DownloadFailed as outcome:
+        _finish_with_outcome(db, job, JobStatus.FAILED, outcome)
     except Exception as ex:
-        job.error = str(ex)
-        db.commit()
-        
-        update_status(
-            db=db,
-            job=job,
-            status=JobStatus.FAILED,
-        )
-        
-        if job.task is not None:
-            set_current_item(
-                db=db,
-                task=job.task,
-                item=None,
-            )
-            increment_failed(
-                db=db,
-                task=job.task,
-            )
-            
-        logger.exception(
-            "Job #{} failed",
-            job.id,
-        )
+        # Typed outcomes above deliberately precede this broad safety net.
+        outcome = classify_unexpected(ex)
+        _finish_with_outcome(db, job, JobStatus.SKIPPED if isinstance(outcome, DownloadSkipped) else JobStatus.FAILED, outcome)
+        if not isinstance(outcome, DownloadSkipped):
+            logger.exception("Job #{} failed", job.id)
+
+
+def _record_outcome(db, job, status, code, message, stage, provider, retryable, technical_detail=None):
+    """Persist a terminal outcome once; callers must not overwrite it later."""
+    if job.status in {JobStatus.COMPLETED.value, JobStatus.SKIPPED.value, JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
+        return
+    job.reason_code, job.reason_message = code, message
+    job.failure_stage, job.provider, job.retryable = stage, provider, retryable
+    job.technical_detail = technical_detail
+    db.commit()
+    logger.info("download_terminal download_id={} status={} reason_code={} stage={} provider={} retryable={}", job.id, status.value, code, stage, provider, retryable)
+
+
+def _finish_with_outcome(db, job, status, outcome):
+    _record_outcome(db, job, status, outcome.reason_code, outcome.message, outcome.stage, outcome.provider, outcome.retryable, outcome.technical_detail)
+    update_status(db=db, job=job, status=status)
+    if job.task is not None:
+        set_current_item(db=db, task=job.task, item=None)
+        {JobStatus.SKIPPED: increment_skipped, JobStatus.FAILED: increment_failed}.get(status, lambda **_: None)(db=db, task=job.task)
