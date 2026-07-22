@@ -42,3 +42,62 @@ never raw tracebacks or authentication data.
 These endpoints use the same persistent jobs and retain their existing response
 fields. Bulk operations are `delete`, `move`, `rename`, `refresh_metadata`,
 `refresh_artwork`, and `export`.
+
+## Metadata Intelligence API
+
+Metadata Intelligence uses the same durable Task lifecycle for discovery and
+application work. The public discovery and application scope in v1.6.0 is
+Songs; requests never silently apply provider values.
+
+### Provider diagnostics
+
+- `GET /api/providers/capabilities` lists configured metadata provider
+  capabilities.
+- `GET /api/providers/status` reports provider availability and cache-aware
+  operational status.
+- `POST /api/providers/test-search` and `POST /api/providers/lookup` provide
+  bounded MusicBrainz diagnostics. Provider failures return a clean structured
+  error response with a retryability flag.
+
+### Health, discovery, and suggestions
+
+- `POST /api/metadata/discoveries/songs/{song_id}` starts discovery for one
+  Song; `POST /api/metadata/discoveries/songs` accepts an explicit Song scope.
+- `POST /api/metadata/discoveries/health-rules` and
+  `POST /api/metadata/discoveries/health-issues` submit discovery from metadata
+  health findings.
+- `GET /api/metadata/discoveries` lists durable discovery records;
+  `GET /api/metadata/discoveries/{discovery_id}` returns the selected candidate
+  and explainable matching evidence.
+- `POST /api/metadata/discoveries/{discovery_id}/select` explicitly selects a
+  result. Ambiguous or low-confidence results require the corresponding
+  confirmation flag. `DELETE /api/metadata/discoveries/{discovery_id}/selection`
+  clears a selection.
+- `POST /api/metadata/discoveries/{discovery_id}/suggestions` creates
+  reviewable per-field suggestions from the selected candidate.
+- `GET /api/metadata/suggestions/pending` lists suggestions; individual
+  suggestion details, acceptance, and rejection are available at
+  `/api/metadata/suggestions/{suggestion_id}` and its `/accept` and `/reject`
+  actions.
+
+### Application, history, and rollback
+
+- `GET /api/library/songs/{song_id}/metadata` returns canonical values and
+  review state. Song-scoped suggestion and history lists are available through
+  `/metadata/suggestions` and `/metadata/history`.
+- `GET` or `POST /api/library/songs/{song_id}/metadata/application-preview`
+  previews accepted or explicitly selected changes without writing them.
+- `POST /api/library/songs/{song_id}/metadata/apply` queues accepted changes;
+  `/apply-selected` queues an explicit suggestion selection. Batch submission
+  is available at `POST /api/metadata/applications/apply`.
+- `GET /api/metadata/batches`, `/api/metadata/batches/{batch_id}`, and
+  `/api/metadata/batches/{batch_id}/results` expose durable application
+  outcomes. `POST /api/metadata/batches/{batch_id}/rollback` queues reversible
+  changes from a completed batch.
+- `GET /api/metadata/history` lists audited changes. A single history entry can
+  be previewed or rolled back at `/api/metadata/history/{history_id}` and its
+  `/rollback-preview` and `/rollback` actions.
+
+Use `GET /api/metadata/discoveries/capabilities` and
+`GET /api/metadata/application/capabilities` to obtain the supported entity
+types, fields, thresholds, and request limits before integrating a client.
