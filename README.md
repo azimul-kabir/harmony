@@ -227,6 +227,21 @@ apply only the changes you review and accept.
 Metadata discovery and application currently support Songs. Album and Artist
 matching remains an internal foundation for future releases.
 
+### Repair missing genres
+
+Harmony indexes the genre tag already present in an audio file; it deliberately
+does not guess or silently overwrite genres while scanning. A **Refresh
+metadata** or **Rebuild Index** therefore fills `genre` only when the file
+itself contains a genre tag (for example ID3 `TCON`, Vorbis `GENRE`, or MP4
+`©gen`).
+
+To enrich untagged songs from MusicBrainz, open **Library Health**, run
+**Metadata Analysis**, then find the **Missing genre** issues and choose
+**Discover match**. In the linked Song review, select a viable provider match,
+generate suggestions, accept the **Genre** suggestion, preview it, and apply
+it. Harmony records that canonical Library change in its history and does not
+write the audio file's tags; tag-writing remains a separate future workflow.
+
 ---
 
 ## 📂 Automatic M3U Export

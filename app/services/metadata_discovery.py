@@ -31,7 +31,8 @@ MAX_JSON_BYTES = 8192
 SUPPORTED_HEALTH_RULES = frozenset({
     "missing_musicbrainz_recording_id", "missing_musicbrainz_release_id", "missing_musicbrainz_artist_id",
     "missing_title", "placeholder_title", "filename_derived_title", "missing_artist", "placeholder_artist",
-    "missing_album", "placeholder_album", "suspicious_whitespace", "inconsistent_capitalization",
+    "missing_album", "placeholder_album", "missing_genre", "suspicious_whitespace",
+    "inconsistent_capitalization",
 })
 
 

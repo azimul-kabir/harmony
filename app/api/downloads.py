@@ -2,7 +2,7 @@ import asyncio
 import json
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, delete
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.api.schemas.download import DownloadRequest
@@ -17,6 +17,7 @@ from app.services.playlist_download import download_playlist
 from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
 from app.domain.download import JobStatus
+from app.services.download_dashboard import TERMINAL_STATUSES, get_download_snapshot
 
 router = APIRouter(
     prefix="/api/downloads",
@@ -51,9 +52,7 @@ def clear_history(db: Session = Depends(get_db)):
     db.execute(
         delete(DownloadJob).where(
             DownloadJob.status.in_([
-                JobStatus.COMPLETED.value, 
-                JobStatus.FAILED.value, 
-                JobStatus.SKIPPED.value
+                *TERMINAL_STATUSES,
             ])
         )
     )
@@ -72,24 +71,7 @@ async def stream_downloads_data(request: Request):
                         
             db = SessionLocal()
             try:
-                jobs = db.execute(
-                    select(DownloadJob)
-                    .order_by(DownloadJob.id.desc())
-                    .limit(100)
-                ).scalars().all()
-                                
-                payload = [
-                    {
-                        "id": job.id,
-                        "status": job.status,
-                        "title": job.title,
-                        "artist": job.artist,
-                        "album": job.album,
-                        "spotify_url": job.spotify_url,
-                        "cover_url": job.cover_url  # <-- NEW: Expose the artwork
-                    }
-                    for job in jobs
-                ]
+                payload = get_download_snapshot(db)
                                 
                 yield f"data: {json.dumps(payload)}\n\n"
             finally:

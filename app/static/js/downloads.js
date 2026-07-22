@@ -1,6 +1,25 @@
 let currentJobs = [];
-let currentFilter = 'ALL';
+const DOWNLOAD_FILTERS = new Set(["ALL", "ACTIVE", "COMPLETED", "FAILED"]);
+const requestedStatus = new URLSearchParams(window.location.search).get("status")?.toUpperCase();
+let currentFilter = DOWNLOAD_FILTERS.has(requestedStatus) ? requestedStatus : "ALL";
 let searchQuery = '';
+
+function setDownloadText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = Number(value || 0).toLocaleString();
+}
+
+function setDownloadFilter(filter) {
+    currentFilter = DOWNLOAD_FILTERS.has(filter) ? filter : "ALL";
+    document.querySelectorAll(".filter-tab").forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.filter === currentFilter);
+    });
+    const url = new URL(window.location.href);
+    if (currentFilter === "ALL") url.searchParams.delete("status");
+    else url.searchParams.set("status", currentFilter.toLowerCase());
+    window.history.replaceState({}, "", url);
+    renderFilteredDownloads();
+}
 
 // 1. Smart URL Validation
 const urlInput = document.getElementById("spotify-url");
@@ -47,23 +66,34 @@ async function queueSpotifyUrl(url, resultElement) {
         if (!response.ok) throw new Error(data.detail || "Download failed.");
         
         if (data.summary) {
-            resultElement.innerHTML = `
-                <div class="success-message">
-                    <strong>Playlist queued successfully</strong><br>
-                    ${data.summary.playlist_name}<br><br>
-                    Queued: ${data.summary.queued}<br>
-                    Already queued: ${data.summary.already_queued}<br>
-                    Already owned: ${data.summary.owned}
-                </div>
-            `;
+            showDownloadResult(resultElement, "success", [
+                "Playlist queued successfully",
+                data.summary.playlist_name,
+                `Queued: ${data.summary.queued}`,
+                `Already queued: ${data.summary.already_queued}`,
+                `Already owned: ${data.summary.owned}`,
+            ]);
         } else if (data.status === "owned") {
-            resultElement.innerHTML = `<div class="success-message">This track already exists in your library.</div>`;
+            showDownloadResult(resultElement, "success", ["This track already exists in your library."]);
         } else {
-            resultElement.innerHTML = `<div class="success-message">Download queued successfully.</div>`;
+            showDownloadResult(resultElement, "success", ["Download queued successfully."]);
         }
     } catch (error) {
-        resultElement.innerHTML = `<div class="error-message">${error.message}</div>`;
+        showDownloadResult(resultElement, "error", [error.message || "Download failed."]);
     }
+}
+
+function showDownloadResult(container, type, lines) {
+    const message = document.createElement("div");
+    message.className = type === "error" ? "error-message" : "success-message";
+    const visibleLines = lines.filter((line) => line != null && line !== "");
+    visibleLines.forEach((line, index) => {
+        const text = document.createElement(index === 0 && type === "success" ? "strong" : "span");
+        text.textContent = String(line);
+        message.appendChild(text);
+        if (index < visibleLines.length - 1) message.appendChild(document.createElement("br"));
+    });
+    container.replaceChildren(message);
 }
 
 // 3. Client-Side Rendering & Filtering
@@ -91,46 +121,88 @@ function renderFilteredDownloads() {
         );
     }
 
+    const jobIds = new Set(filtered.map((job) => String(job.id)));
+    tbody.querySelectorAll("tr[data-download-id]").forEach((row) => {
+        if (!jobIds.has(row.dataset.downloadId)) row.remove();
+    });
+
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center empty-state" style="padding: 40px;">No downloads found matching your criteria.</td></tr>`;
+        const empty = document.createElement("tr");
+        empty.innerHTML = '<td colspan="5" class="text-center empty-state" style="padding: 40px;">No downloads found matching your criteria.</td>';
+        tbody.replaceChildren(empty);
+        updateVisibleDownloadCount(0);
         return;
     }
 
-// Inside app/static/js/downloads.js, update the tbody.innerHTML map logic inside renderFilteredDownloads():
+    tbody.querySelectorAll("tr:not([data-download-id])").forEach((row) => row.remove());
+    filtered.forEach((job) => patchDownloadRow(tbody, job));
+    updateVisibleDownloadCount(filtered.length);
+}
 
-    tbody.innerHTML = filtered.map(job => {
-        const status = (job.status || '').toUpperCase();
-        const isFailed = status === 'FAILED' || status === 'CANCELLED';
-        
-        let statusHtml = `<span class="badge badge-${status.toLowerCase()}">${status}</span>`;
-        if (status === 'RUNNING') {
-            statusHtml = `<span class="badge badge-running"><span class="spinner" style="width:10px; height:10px; border-width:2px; margin-right:4px;"></span> Downloading</span>`;
-        }
+function updateVisibleDownloadCount(visible) {
+    const label = document.getElementById("downloads-visible-count");
+    if (!label) return;
+    label.textContent = `${visible.toLocaleString()} of ${currentJobs.length.toLocaleString()} recent downloads shown`;
+}
 
-        const actionHtml = isFailed 
-            ? `<button class="btn-retry" onclick="retryJob('${job.spotify_url}')">  Retry</button>` 
-            : ``;
+function patchDownloadRow(tbody, job) {
+    let row = tbody.querySelector(`tr[data-download-id="${job.id}"]`);
+    if (!row) {
+        row = document.createElement("tr");
+        row.dataset.downloadId = String(job.id);
+        row.innerHTML = '<td class="download-status-cell"></td><td><div class="download-song-cell"></div></td><td class="download-artist-cell"></td><td class="download-album-cell"></td><td class="download-actions-cell"></td>';
+        tbody.appendChild(row);
+    }
+    const status = String(job.status || "").toUpperCase();
+    const isFailed = ["FAILED", "CANCELLED"].includes(status);
+    const statusCell = row.querySelector(".download-status-cell");
+    statusCell.replaceChildren();
+    const badge = document.createElement("span");
+    badge.className = `badge badge-${status.toLowerCase()}`;
+    badge.textContent = status === "RUNNING" ? "Downloading" : status || "Unknown";
+    statusCell.appendChild(badge);
 
-        // NEW: Artwork HTML Generation
-        const coverImg = job.cover_url
-            ? `<img src="${job.cover_url}" alt="Cover" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`
-            : `<div style="width: 40px; height: 40px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
-
-        return `
-            <tr>
-                <td style="padding-left: 24px; vertical-align: middle;">${statusHtml}</td>
-                <td style="font-weight: 600; color: var(--text-main);">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        ${coverImg}
-                        <span style="font-size: 1.05rem;">${job.title ?? ""}</span>
-                    </div>
-                </td>
-                <td style="color: var(--text-muted); vertical-align: middle;">${job.artist ?? ""}</td>
-                <td style="color: var(--text-muted); vertical-align: middle;">${job.album ?? ""}</td>
-                <td style="text-align: right; padding-right: 24px; vertical-align: middle;">${actionHtml}</td>
-            </tr>
-        `;
-    }).join("");
+    const songCell = row.querySelector(".download-song-cell");
+    songCell.replaceChildren();
+    if (job.cover_url) {
+        const image = document.createElement("img");
+        image.className = "download-artwork";
+        image.src = job.cover_url;
+        image.alt = "";
+        songCell.appendChild(image);
+    } else {
+        const placeholder = document.createElement("span");
+        placeholder.className = "download-artwork-placeholder";
+        placeholder.textContent = "♫";
+        placeholder.setAttribute("aria-hidden", "true");
+        songCell.appendChild(placeholder);
+    }
+    const details = document.createElement("div");
+    details.style.minWidth = "0";
+    const title = document.createElement("strong");
+    title.className = "download-title";
+    title.textContent = job.title || "Unknown title";
+    details.appendChild(title);
+    if (isFailed && job.error) {
+        const error = document.createElement("small");
+        error.className = "download-error";
+        error.title = job.error;
+        error.textContent = job.error;
+        details.appendChild(error);
+    }
+    songCell.appendChild(details);
+    row.querySelector(".download-artist-cell").textContent = job.artist || "—";
+    row.querySelector(".download-album-cell").textContent = job.album || "—";
+    const actions = row.querySelector(".download-actions-cell");
+    actions.replaceChildren();
+    if (isFailed && job.spotify_url) {
+        const retry = document.createElement("button");
+        retry.className = "btn-retry";
+        retry.type = "button";
+        retry.textContent = "Retry";
+        retry.addEventListener("click", () => retryJob(job.spotify_url));
+        actions.appendChild(retry);
+    }
 }
 
 // 4. Action Handlers
@@ -144,16 +216,18 @@ window.retryJob = async function(url) {
 document.getElementById("clear-history-btn")?.addEventListener("click", async () => {
     if (!confirm("Are you sure you want to clear all completed and failed history?")) return;
     const response = await fetch("/api/downloads/clear", { method: "POST" });
-    if (!response.ok) alert("Failed to clear history.");
+    const result = document.getElementById("download-result");
+    if (!response.ok) {
+        showDownloadResult(result, "error", ["Failed to clear history."]);
+        return;
+    }
+    showDownloadResult(result, "success", ["Completed, failed, skipped, and cancelled history cleared."]);
 });
 
 // 5. Filter Listeners
 document.querySelectorAll(".filter-tab").forEach(tab => {
     tab.addEventListener("click", (e) => {
-        document.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
-        e.target.classList.add("active");
-        currentFilter = e.target.dataset.filter;
-        renderFilteredDownloads();
+        setDownloadFilter(e.target.dataset.filter);
     });
 });
 
@@ -168,7 +242,13 @@ function connectDownloadsSSE() {
     const eventSource = new EventSource("/api/downloads/stream");
     
     eventSource.onmessage = function(event) {
-        currentJobs = JSON.parse(event.data);
+        const snapshot = JSON.parse(event.data);
+        currentJobs = snapshot.jobs || [];
+        const summary = snapshot.summary || {};
+        setDownloadText("downloads-running", summary.running);
+        setDownloadText("downloads-queued", summary.queued);
+        setDownloadText("downloads-completed", summary.completed);
+        setDownloadText("downloads-attention", summary.attention);
         renderFilteredDownloads();
     };
     
@@ -177,4 +257,9 @@ function connectDownloadsSSE() {
     };
 }
 
+document.querySelectorAll("[data-summary-filter]").forEach((card) => {
+    card.addEventListener("click", () => setDownloadFilter(card.dataset.summaryFilter));
+});
+
+setDownloadFilter(currentFilter);
 connectDownloadsSSE();

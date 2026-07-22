@@ -349,6 +349,13 @@ provenance, and suppresses an equivalent pending suggestion. Field failures are
 reported separately without removing successful field suggestions. It never
 accepts or applies a suggestion.
 
+Genre indexing reads the genre tag already present in the local audio file and
+never infers a genre during scans or refreshes. The `missing_genre` health rule
+is a supported Song discovery scope: an operator may explicitly discover a
+candidate, select it, generate and accept a genre suggestion, then apply the
+canonical database change. This preserves the no-silent-overwrite policy and
+does not write audio-file tags.
+
 ### Durable discovery jobs and locking
 
 Starting discovery creates the `Task`, per-Song `MetadataDiscovery` rows, and
@@ -985,6 +992,16 @@ Definitions:
 future integrations. The Library page loads it independently from song/filter
 queries and refreshes it after rescans and Library watcher events. Analytics
 therefore remain global when a user narrows the current Library view.
+
+The Dashboard's compact snapshot reuses these analytics under its `analytics`
+member for recently-added, genre, bitrate, duration, and album-insight cards.
+It does not duplicate aggregate queries or access the filesystem; the SSE
+stream only adds transient queue, worker, task, and activity state.
+
+The same Dashboard snapshot includes at most three recent terminal Library
+Maintenance or Library Bulk jobs. These are durable task summaries without
+paths, item details, or raw errors, giving operators a direct health-page route
+to investigate partial or failed maintenance work.
 
 Composite indexes on availability/album/album-artist and
 availability/year/album support grouped album insights for large libraries.

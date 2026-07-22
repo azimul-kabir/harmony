@@ -33,6 +33,28 @@ function formatBytes(bytes) {
     return `${(bytes / (1024 ** index)).toFixed(index < 3 ? 0 : 1)} ${units[index]}`;
 }
 
+function formatDuration(seconds) {
+    const totalSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+    const minutes = Math.floor(totalSeconds / 60);
+    return `${minutes}:${String(totalSeconds % 60).padStart(2, "0")}`;
+}
+
+function renderAlbumInsight(id, album, detail) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    const title = element.querySelector("strong");
+    const subtitle = element.querySelector("small");
+    if (!album) {
+        element.href = "/library";
+        title.textContent = "No album data";
+        subtitle.textContent = "—";
+        return;
+    }
+    element.href = `/library?album=${encodeURIComponent(album.name)}`;
+    title.textContent = album.name;
+    subtitle.textContent = detail(album);
+}
+
 function renderDashboard(snapshot) {
     if (!snapshot) return;
     const kpis = snapshot.kpis || {};
@@ -59,7 +81,40 @@ function renderDashboard(snapshot) {
     setText("health-suggestions", Number(health.pending_suggestions || 0).toLocaleString());
     const artworkLink = document.getElementById("health-artwork-link");
     if (artworkLink) artworkLink.href = "/library?missing_artwork=true";
+    const analytics = snapshot.analytics || {};
+    setText("insight-recently-added", Number(analytics.recently_added || 0).toLocaleString());
+    setText("insight-genres", Number(analytics.genres || 0).toLocaleString());
+    setText("insight-bitrate", analytics.average_bitrate ? `${Math.round(analytics.average_bitrate / 1000)} kbps` : "—");
+    setText("insight-duration", analytics.average_duration ? formatDuration(analytics.average_duration) : "—");
+    renderAlbumInsight("insight-largest-album", analytics.largest_album, (album) => `${Number(album.song_count || 0).toLocaleString()} songs`);
+    renderAlbumInsight("insight-newest-album", analytics.newest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
+    renderAlbumInsight("insight-oldest-album", analytics.oldest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
+    renderMaintenance(snapshot.maintenance || []);
     renderCollections(snapshot.collections || []);
+}
+
+function renderMaintenance(jobs) {
+    const container = document.getElementById("dashboard-maintenance-list");
+    if (!container) return;
+    container.replaceChildren();
+    if (!jobs.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "No completed maintenance jobs yet.";
+        container.appendChild(empty);
+        return;
+    }
+    jobs.forEach((job) => {
+        const item = document.createElement("article");
+        item.className = `dashboard-maintenance-item status-${String(job.status || "").toLowerCase()}`;
+        const name = document.createElement("strong");
+        name.textContent = job.name || "Library maintenance";
+        const detail = document.createElement("small");
+        const processed = Number(job.completed || 0) + Number(job.failed || 0) + Number(job.skipped || 0);
+        detail.textContent = `${String(job.status || "unknown").replaceAll("_", " ")} · ${processed}/${Number(job.total || 0)}${job.error_code ? ` · ${job.error_code}` : ""}`;
+        item.append(name, detail);
+        container.appendChild(item);
+    });
 }
 
 function renderCollections(collections) {

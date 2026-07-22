@@ -10,8 +10,10 @@ from app.database.models import (
     Playlist,
     Song,
     SyncSource,
+    Task,
 )
 from app.domain.download import JobStatus
+from app.domain.task import TaskStatus, TaskType
 from app.services.dashboard import get_dashboard_snapshot, get_dashboard_stats
 from app.services.library_analytics import library_analytics
 
@@ -55,6 +57,9 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     artist="Artist",
                     album="Album",
                     artwork_status="missing",
+                    genre="Rock",
+                    bitrate=320000,
+                    duration=245,
                 ),
                 Song(
                     path="/music/lost.mp3",
@@ -101,6 +106,17 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     confidence_level="high",
                     status="pending",
                 ),
+                Task(
+                    name="Refresh Library",
+                    spotify_url="library://maintenance/refresh",
+                    task_type=TaskType.LIBRARY_MAINTENANCE.value,
+                    status=TaskStatus.COMPLETED_WITH_ERRORS.value,
+                    total_items=3,
+                    completed_items=2,
+                    failed_items=1,
+                    error_code="INDEX_ERROR",
+                    completed_at=now,
+                ),
             ]
         )
         db.commit()
@@ -130,6 +146,31 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
             "missing_files": 1,
             "pending_suggestions": 1,
         }
+        assert snapshot["analytics"] == {
+            "genres": 1,
+            "average_bitrate": 320000,
+            "average_duration": 245.0,
+            "recently_added": 1,
+            "largest_album": {
+                "name": "Album",
+                "artist": "Artist",
+                "song_count": 1,
+                "storage_bytes": 0,
+                "year": None,
+            },
+            "newest_album": None,
+            "oldest_album": None,
+        }
+        assert snapshot["maintenance"] == [{
+            "id": 1,
+            "name": "Refresh Library",
+            "status": "completed_with_errors",
+            "completed": 2,
+            "failed": 1,
+            "skipped": 0,
+            "total": 3,
+            "error_code": "INDEX_ERROR",
+        }]
         assert [item["id"] for item in snapshot["collections"]] == [
             "recently-added",
             "missing-artwork",
