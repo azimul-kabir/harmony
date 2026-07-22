@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, load_only
 
 from app.database.models import DownloadJob
 from app.domain.download import JobStatus
+from app.services.download_bulk import capabilities
 
 
 TERMINAL_STATUSES = (
@@ -32,7 +33,8 @@ def _job_columns():
 
 def _history_job(job: DownloadJob) -> dict:
     return {"id": job.id, "status": job.status, "title": job.title,
-            "artist": job.artist, "album": job.album}
+            "artist": job.artist, "album": job.album,
+            "capabilities": capabilities(job)}
 
 
 def _duration_seconds(start: datetime | None, end: datetime | None) -> int | None:

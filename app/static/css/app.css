@@ -694,11 +694,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         position: relative;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
-    #downloads-body tr td:nth-child(1) { position: absolute; bottom: 16px; left: 16px; width: auto; margin: 0; } 
-    #downloads-body tr td:nth-child(2) { font-size: 1.05rem; margin-bottom: 2px; font-weight: 600; color: var(--text-main); word-break: break-word; } 
-    #downloads-body tr td:nth-child(3) { font-size: 0.9rem; color: var(--text-muted); word-break: break-word; } 
-    #downloads-body tr td:nth-child(4) { display: none; } 
-    #downloads-body tr td:nth-child(5) { position: absolute; bottom: 16px; right: 16px; width: auto; } 
+    #downloads-body tr td:nth-child(1) { position: absolute; top: 16px; right: 16px; width: auto; margin: 0; }
+    #downloads-body tr td:nth-child(2) { position: absolute; bottom: 16px; left: 16px; width: auto; margin: 0; }
+    #downloads-body tr td:nth-child(3) { font-size: 1.05rem; margin-bottom: 2px; font-weight: 600; color: var(--text-main); word-break: break-word; }
+    #downloads-body tr td:nth-child(4) { font-size: 0.9rem; color: var(--text-muted); word-break: break-word; }
+    #downloads-body tr td:nth-child(5) { display: none; }
+    #downloads-body tr td:nth-child(6) { position: absolute; bottom: 16px; right: 16px; width: auto; }
 
     /* Library Table */
     #library-body tr {
@@ -1860,3 +1861,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .download-detail-actions { display: flex; gap: 8px; margin-top: 20px; }
 .download-details-button { min-height: 44px; }
 @media (max-width: 640px) { .download-details-drawer { width: 100vw; max-width: none; border-left: 0; } }
+
+.download-selection-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border-color); }
+.download-selection-toolbar strong { margin-right: auto; }
+.download-selection-toolbar button { min-height: 44px; }
+.download-history-row.is-selected { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+@media (max-width: 700px) { .download-selection-toolbar { padding: 12px 16px; align-items: stretch; } .download-selection-toolbar strong { width: 100%; } .download-selection-toolbar button { flex: 1 1 140px; } }

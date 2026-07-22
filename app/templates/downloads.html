@@ -4,7 +4,6 @@
 {% block content %} 
 <div class="downloads-header">
     <div><span class="library-eyebrow">Download queue</span><h1>Command Center</h1></div>
-    <button id="clear-history-btn" class="btn-danger" style="padding: 8px 14px; font-size: 0.85rem;">Clear History</button>
 </div>
 
 <section class="downloads-summary" aria-label="Download queue summary">
@@ -29,7 +28,7 @@
         >
         <button type="submit" id="download-submit-btn" class="btn-primary" style="padding: 10px 16px; font-size: 0.95rem; border-radius: 6px;">Download</button>
     </form>
-    <div id="download-result"></div>
+    <div id="download-result" role="status" aria-live="polite"></div>
 </div>
 
 <section class="download-queue-panel panel" aria-labelledby="active-downloads-heading">
@@ -61,11 +60,22 @@
             <small id="downloads-visible-count" class="downloads-visible-count" aria-live="polite"></small>
         </div>
     </div>
+    <div id="download-selection-toolbar" class="download-selection-toolbar" hidden aria-label="Selected downloads actions">
+        <strong id="download-selected-count" aria-live="polite">0 selected</strong>
+        <button type="button" id="select-visible-downloads" class="btn-secondary">Select visible</button>
+        <button type="button" id="clear-download-selection" class="btn-secondary">Clear selection</button>
+        <button type="button" data-bulk-action="retry" class="btn-primary">Retry selected</button>
+        <button type="button" data-bulk-action="cancel" class="btn-danger">Cancel selected</button>
+        <button type="button" data-bulk-action="clear_history" class="btn-secondary">Clear selected history</button>
+        <button type="button" data-bulk-action="clear_completed_history" class="btn-secondary">Clear all completed</button>
+        <button type="button" data-bulk-action="clear_failed_cancelled_history" class="btn-secondary">Clear failed/cancelled</button>
+    </div>
     <div class="table-responsive">
         <table class="table command-table" style="border-radius: 0; margin: 0;">
             <thead>
                 <tr>
-                    <th style="width: 120px; padding-left: 24px;">Status</th>
+                    <th style="width: 48px; padding-left: 24px;"><input id="select-visible-downloads-checkbox" type="checkbox" aria-label="Select all visible downloads"></th>
+                    <th style="width: 120px;">Status</th>
                     <th>Song</th>
                     <th>Artist</th>
                     <th>Album</th>
@@ -74,7 +84,7 @@
             </thead>
             <tbody id="downloads-body">
                 <tr>
-                    <td colspan="5" style="padding: 0;">
+                    <td colspan="6" style="padding: 0;">
                         <div class="skeleton-row">
                             <div class="skeleton skeleton-text" style="width: 80px; height: 24px; border-radius: 999px;"></div>
                             <div class="skeleton-row-content" style="margin-left: 16px;">
