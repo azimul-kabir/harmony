@@ -229,6 +229,9 @@ class LibraryMaintenanceWorker:
                 self._metadata_analysis(db, task)
             elif action == "metadata_discovery":
                 self._metadata_discovery(db, task)
+            elif action in {"metadata_application", "metadata_rollback"}:
+                from app.services.metadata_intelligence import metadata_application_service
+                metadata_application_service.process_task(db, task)
             else:
                 raise ValueError(f"Unknown maintenance action: {action}")
         except Exception:
