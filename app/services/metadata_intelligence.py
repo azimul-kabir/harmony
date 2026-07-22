@@ -293,11 +293,11 @@ class MetadataApplicationService:
             operations.append({"suggestion_id":s.id,"field_name":s.field_name,"current_value":current,"expected_current_value":expected,"proposed_value":proposed,"normalized_equal":self._normal(current)==self._normal(proposed),"status":status,"applicability":status=="applicable","validation_error":validation,"reversible":status=="applicable"})
         return {"target_entity_type":"song", "target_entity_id":song_id, "selected_suggestion_ids":[s.id for s in suggestions], "canonical_snapshot":canonical, "operations":operations, "created_at":utcnow_naive(), "initiated_by":initiated_by}
 
-     def _reserve(self, db: Session, song_ids: list[int], task: Task) -> None:
+    def _reserve(self, db: Session, song_ids: list[int], task: Task) -> None:
         # Discovery and application are mutually exclusive per Song, never globally.
         conflict = db.scalar(select(MetadataDiscoveryLock.task_id).where(MetadataDiscoveryLock.song_id.in_(song_ids)))
         if conflict:
-            raise MetadataServiceError("metadata_application_conflict", f"Song is reserved by metadata discovery job {conflict}.", 409)
+            raise MetadataServiceError("application_conflict", f"Song is reserved by metadata discovery job {conflict}.", 409)
         for song_id in song_ids:
             db.add(MetadataApplicationLock(song_id=song_id, task_id=task.id))
         try:
@@ -305,7 +305,7 @@ class MetadataApplicationService:
         except IntegrityError as exc:
             db.rollback()
             owner = db.scalar(select(MetadataApplicationLock.task_id).where(MetadataApplicationLock.song_id.in_(song_ids)))
-            raise MetadataServiceError("metadata_application_conflict", f"Song is reserved by metadata application job {owner}.", 409) from exc
+            raise MetadataServiceError("application_conflict", f"Song is reserved by metadata application job {owner}.", 409) from exc
 
     def submit(self, db: Session, song_ids: list[int], *, suggestion_ids: list[int] | None = None,
                rollback_history_ids: list[int] | None = None, force: bool = False,
@@ -380,6 +380,8 @@ class MetadataApplicationService:
                     task.completed_items += 1
                 except MetadataServiceError as exc:
                     task.failed_items += 1; batch.failed_fields += 1
+                    if payload["action"] == "metadata_rollback" and exc.code == "rollback_conflict":
+                        payload["counters"]["rollbacks"]["conflicts"] += 1
                     record_item_failure(db, task, str(song_id), exc.code.upper()[:80], exc.message)
                 except Exception:
                     task.failed_items += 1; batch.failed_fields += 1
@@ -387,13 +389,18 @@ class MetadataApplicationService:
                 task.operation_payload = json.dumps(payload, separators=(",", ":")); db.commit()
             if task.status == TaskStatus.RUNNING.value:
                 task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items or batch.stale_fields or batch.invalid_fields or batch.unsupported_fields else TaskStatus.COMPLETED.value
-            batch.status = task.status if task.status != TaskStatus.RUNNING.value else "completed"
+            if task.status == TaskStatus.CANCELLED.value:
+                batch.status = "cancelled"
+            elif payload["action"] == "metadata_rollback":
+                batch.status = "partially_rolled_back" if task.failed_items or payload["counters"]["rollbacks"]["conflicts"] else "rolled_back"
+            else:
+                batch.status = task.status
             batch.completed_at = utcnow_naive(); task.completed_at = utcnow_naive(); task.current_item = None; db.commit()
         finally:
             self.release_locks(db, task.id); db.commit()
 
     def apply_selected(self, db: Session, song_id: int, suggestion_ids: list[int] | None = None, *, force: bool = False, force_confirmation: bool = False, stale_override_reason: str | None = None, initiated_by: str | None = None, atomic: bool = True, batch: MetadataApplicationBatch | None = None, job_id: int | None = None) -> dict[str, Any]:   
-         if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required", "Force application requires explicit confirmation.", 409)
+        if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required", "Force application requires explicit confirmation.", 409)
         plan=self.build_preview(db,song_id,suggestion_ids,initiated_by=initiated_by)
         if not plan["operations"]: raise MetadataServiceError("no_applicable_suggestions", "No accepted suggestions were selected.",409)
         batch=batch or MetadataApplicationBatch(entity_scope="song",status="running",total_fields=0,initiated_by=initiated_by,started_at=utcnow_naive())
