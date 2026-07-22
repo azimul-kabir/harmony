@@ -673,19 +673,20 @@ async function previewFileTags(songId) {
         const preview = await fetchJson(`/api/library/songs/${songId}/metadata/tag-preview`);
         button.disabled = !preview.available;
         target.innerHTML = preview.available
-            ? preview.fields.map((field) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(field.field.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(field.current))} → ${escapeHtml(metadataValue(field.canonical))}</p><small>${field.will_change ? "Will change" : "Already matches"}</small></article>`).join("")
+            ? preview.fields.map((field) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(field.field.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(field.current))} → ${escapeHtml(metadataValue(field.canonical))}</p><small>${field.will_change ? "Will change" : "Already matches"}</small></article>`).join("") + `<article class="metadata-suggestion-card"><strong>Cached canonical artwork</strong><p>${escapeHtml(preview.artwork.status)}</p><label><input id="metadata-embed-artwork" type="checkbox" ${preview.artwork.canonical_available ? "checked" : "disabled"}> Embed canonical artwork in this audio file</label><small>Harmony's private cached artwork is distinct from artwork embedded in the file.</small></article>`
             : "<p class=\"library-search-status\">Tags cannot be written: the file is missing, unsafe, unsupported, or canonical metadata is unavailable.</p>";
     } catch (_) { button.disabled = true; target.textContent = "Tag preview is unavailable."; }
 }
 
 async function writeFileTags(songId) {
-    if (!window.confirm("This will modify the audio file's embedded tags. Continue?")) return;
+    const embedArtwork = document.getElementById("metadata-embed-artwork")?.checked ?? false;
+    if (!window.confirm(`This will modify the audio file's embedded tags${embedArtwork ? " and artwork" : ""}. Continue?`)) return;
     const status = document.getElementById("metadata-review-status");
     const button = document.getElementById("metadata-write-tags"); button.disabled = true;
     try {
-        const response = await fetch(`/api/library/songs/${songId}/metadata/write-tags`, { method: "POST" });
+        const response = await fetch(`/api/library/songs/${songId}/metadata/write-tags`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ embed_artwork: embedArtwork }) });
         const result = await response.json();
-        status.textContent = result.status === "succeeded" ? "Canonical tags were written to the audio file." : "Tags were not written; the file was left unchanged.";
+        status.textContent = result.status === "succeeded" ? (result.artwork === "embedded" ? "Tags and artwork written." : "Canonical tags were written to the audio file.") : "Tags were not written; the file was left unchanged.";
         await previewFileTags(songId);
     } catch (_) { status.textContent = "Harmony could not write tags to this audio file."; button.disabled = false; }
 }
@@ -993,12 +994,12 @@ function showBulkDialog(operation) {
 
 async function startBulkOperation(operation, optionValue) {
     if (operation === "write_tags") {
-        const response = await fetch("/api/library/metadata/write-tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song_ids: [...libraryState.selectedSongs] }) });
+        const response = await fetch("/api/library/metadata/write-tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song_ids: [...libraryState.selectedSongs], embed_artwork: true }) });
         if (!response.ok) throw new Error("Unable to write canonical tags.");
         const result = await response.json();
         document.getElementById("library-bulk-progress").hidden = false;
         document.getElementById("library-bulk-progress-title").textContent = "Canonical tag writing finished";
-        document.getElementById("library-bulk-progress-detail").textContent = `Tag writing finished: ${result.totals.succeeded} succeeded, ${result.totals.skipped} skipped, ${result.totals.unsupported} unsupported, ${result.totals.missing} missing, ${result.totals.failed} failed.`;
+        document.getElementById("library-bulk-progress-detail").textContent = `Tag writing finished: ${result.totals.succeeded} succeeded, ${result.totals.skipped} skipped, ${result.totals.unsupported} unsupported, ${result.totals.missing} missing, ${result.totals.failed} failed. Artwork: ${result.totals.artwork_embedded} embedded, ${result.totals.artwork_unchanged} unchanged, ${result.totals.artwork_unavailable} unavailable, ${result.totals.artwork_unsupported} unsupported, ${result.totals.artwork_failed} failed.`;
         await loadLibrary();
         return;
     }

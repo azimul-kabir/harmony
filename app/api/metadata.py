@@ -30,6 +30,11 @@ class ApplicationRequest(BaseModel):
 
 class TagWriteRequest(BaseModel):
     song_ids: list[int] = Field(min_length=1, max_length=5000)
+    embed_artwork: bool = True
+
+
+class TagWriteOptions(BaseModel):
+    embed_artwork: bool = True
 
 
 def _page(items: list[Any], total: int, limit: int, offset: int) -> dict[str, Any]:
@@ -83,29 +88,36 @@ def preview_file_tags(song_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/api/library/songs/{song_id}/metadata/write-tags", summary="Explicitly write canonical metadata to one audio file")
-def write_file_tags(song_id: int, db: Session = Depends(get_db)):
+def write_file_tags(song_id: int, request: TagWriteOptions | None = None, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
     if song is None:
         from app.services.metadata_intelligence import MetadataServiceError
         raise MetadataServiceError("metadata_song_not_found", "Song not found.", 404)
-    return write_song(db, song)
+    return write_song(db, song, embed_artwork=True if request is None else request.embed_artwork)
 
 
 @router.post("/api/library/metadata/write-tags", summary="Explicitly write canonical metadata for selected audio files")
 def write_selected_file_tags(request: TagWriteRequest, db: Session = Depends(get_db)):
-    totals = {key: 0 for key in ("succeeded", "skipped", "unsupported", "missing", "failed")}
+    totals = {key: 0 for key in ("succeeded", "skipped", "unsupported", "missing", "failed", "artwork_embedded", "artwork_unchanged", "artwork_unavailable", "artwork_unsupported", "artwork_failed")}
     for song_id in dict.fromkeys(request.song_ids):
         song = db.get(Song, song_id)
         if song is None:
             totals["missing"] += 1
             continue
-        result = write_song(db, song)
+        result = write_song(db, song, embed_artwork=request.embed_artwork)
         status = result["status"]
         if status == "succeeded": totals["succeeded"] += 1
         elif status == "unsupported" or result.get("reason") == "unsupported": totals["unsupported"] += 1
         elif result.get("reason") == "missing_or_unsafe": totals["missing"] += 1
         elif status == "skipped": totals["skipped"] += 1
         else: totals["failed"] += 1
+        if status == "succeeded":
+            artwork = result.get("artwork", "unchanged")
+            if artwork == "embedded": totals["artwork_embedded"] += 1
+            elif artwork == "unavailable": totals["artwork_unavailable"] += 1
+            elif artwork == "unsupported": totals["artwork_unsupported"] += 1
+            else: totals["artwork_unchanged"] += 1
+        elif result.get("reason") == "Artwork verification failed.": totals["artwork_failed"] += 1
     return {"totals": totals}
 
 

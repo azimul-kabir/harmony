@@ -13,12 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from mutagen import File
-from mutagen.id3 import ID3, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX
+from mutagen.id3 import APIC, ID3, TALB, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TXXX
+from mutagen.flac import FLAC, Picture
 from mutagen.mp3 import MP3
 
 from app.core.config import get_settings
 from app.database.models import MetadataHistory, Song
 from app.services.library_scanner import index_file
+from app.services.artwork import ArtworkService
 
 _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
@@ -75,25 +77,51 @@ def _id3_values(path: Path) -> dict[str, Any]:
     return out
 
 
+def _embedded_artwork(path: Path) -> bytes | None:
+    if path.suffix.lower() == ".mp3":
+        covers = [item for item in ID3(path).getall("APIC") if item.type == 3]
+        return bytes(covers[0].data) if covers else None
+    if path.suffix.lower() == ".flac":
+        covers = [item for item in FLAC(path).pictures if item.type == 3]
+        return bytes(covers[0].data) if covers else None
+    return None
+
+
+def _artwork_preview(song: Song, path: Path | None) -> dict[str, Any]:
+    if song.artwork is None:
+        return {"status": "no canonical artwork", "canonical_available": False, "will_change": False}
+    cached = ArtworkService().validated_cached_bytes(song.artwork)
+    if cached is None:
+        return {"status": "cached artwork missing or unreadable", "canonical_available": False, "will_change": False}
+    if path is None or path.suffix.lower() not in {".mp3", ".flac"}:
+        return {"status": "artwork unsupported for this format", "canonical_available": True, "will_change": False}
+    current = _embedded_artwork(path)
+    if current == cached[0]:
+        status = "embedded artwork already matches"
+    else:
+        status = "embedded artwork will be added" if current is None else "embedded artwork will be replaced"
+    return {"status": status, "canonical_available": True, "will_change": current != cached[0]}
+
+
 def preview(song: Song) -> dict[str, Any]:
     try:
         path = _safe_path(song)
         if path.suffix.lower() != ".mp3":
             audio = File(path, easy=True)
             if audio is None:
-                return {"available": False, "reason": "unsupported", "fields": []}
+                return {"available": False, "reason": "unsupported", "fields": [], "artwork": _artwork_preview(song, None)}
             current = {"title": (audio.tags or {}).get("title", [None])[0], "artist": (audio.tags or {}).get("artist", [None])[0], "album_artist": (audio.tags or {}).get("albumartist", [None])[0], "album": (audio.tags or {}).get("album", [None])[0], "track": (audio.tags or {}).get("tracknumber", [None])[0], "disc": (audio.tags or {}).get("discnumber", [None])[0], "release_date": (audio.tags or {}).get("date", [None])[0]}
             current.update({key: None for key in _MB})
         else:
             current = _id3_values(path)
     except TagWriteError:
-        return {"available": False, "reason": "missing_or_unsafe", "fields": []}
+        return {"available": False, "reason": "missing_or_unsafe", "fields": [], "artwork": _artwork_preview(song, None)}
     except Exception:
-        return {"available": False, "reason": "unsupported", "fields": []}
+        return {"available": False, "reason": "unsupported", "fields": [], "artwork": _artwork_preview(song, None)}
     desired = _canonical(song)
     return {"available": any(value not in (None, "") for value in desired.values()), "reason": None,
             "fields": [{"field": key, "current": current.get(key), "canonical": desired[key], "will_change": str(current.get(key) or "") != str(desired[key] or "")} for key in _FIELDS],
-            "artwork": {"current": song.artwork_status == "embedded", "canonical_available": bool(song.artwork_id), "will_change": False}}
+            "artwork": _artwork_preview(song, path)}
 
 
 def _write_mp3(path: Path, values: dict[str, Any]) -> None:
@@ -131,7 +159,28 @@ def _write_generic(path: Path, values: dict[str, Any]) -> None:
     audio.save()
 
 
-def write_song(db, song: Song) -> dict[str, Any]:
+def _write_artwork(path: Path, data: bytes, mime: str) -> None:
+    if path.suffix.lower() == ".mp3":
+        audio = MP3(path)
+        if audio.tags is None: audio.add_tags()
+        # Delete only front covers, retaining artist/booklet/other APIC frames.
+        audio.tags.setall("APIC", [item for item in audio.tags.getall("APIC") if item.type != 3])
+        audio.tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=data))
+        audio.save()
+    else:
+        raise TagWriteError("Artwork embedding is not supported for this audio format.")
+
+
+def _write_flac_artwork(path: Path, data: bytes, mime: str) -> None:
+    audio = FLAC(path)
+    others = [item for item in audio.pictures if item.type != 3]
+    audio.clear_pictures()
+    for picture in others: audio.add_picture(picture)
+    picture = Picture(); picture.type = 3; picture.mime = mime; picture.desc = "Cover"; picture.data = data
+    audio.add_picture(picture); audio.save()
+
+
+def write_song(db, song: Song, *, embed_artwork: bool = True) -> dict[str, Any]:
     check = preview(song)
     if not check["available"]:
         return {"status": "skipped", "reason": check["reason"]}
@@ -151,17 +200,34 @@ def write_song(db, song: Song) -> dict[str, Any]:
         if path.suffix.lower() == ".mp3": _write_mp3(path, values)
         elif path.suffix.lower() in {".flac", ".m4a", ".ogg", ".opus"}: _write_generic(path, values)
         else: return {"status": "unsupported"}
+        artwork_result = "unchanged"
+        if embed_artwork and check["artwork"]["will_change"]:
+            cached = ArtworkService().validated_cached_bytes(song.artwork)
+            if cached is None:
+                artwork_result = "unavailable"
+            elif path.suffix.lower() == ".flac":
+                _write_flac_artwork(path, *cached); artwork_result = "embedded"
+            elif path.suffix.lower() == ".mp3":
+                _write_artwork(path, *cached); artwork_result = "embedded"
+        elif embed_artwork and check["artwork"]["status"] == "cached artwork missing or unreadable":
+            artwork_result = "unavailable"
+        elif embed_artwork and check["artwork"]["status"] == "artwork unsupported for this format":
+            artwork_result = "unsupported"
         # Ensure a scanner using second-granularity timestamps sees this write.
         os.utime(path, ns=(before.st_atime_ns, max(before.st_mtime_ns + 1_000_000_000, path.stat().st_mtime_ns)))
         reread = preview(song)
         changed = [item["field"] for item in reread["fields"] if item["canonical"] not in (None, "") and item["will_change"]]
         if changed:
             raise TagWriteError("Tag verification failed.")
+        if artwork_result == "embedded" and reread["artwork"]["status"] != "embedded artwork already matches":
+            raise TagWriteError("Artwork verification failed.")
         index_file(db, path, force=True, commit=False)
         for field in [item["field"] for item in check["fields"] if item["will_change"]]:
             db.add(MetadataHistory(entity_type="song", entity_id=song.id, field_name=field, previous_value=None, new_value=None, provider="file_tag_write", change_source="file_tag_write", audio_file_modified=True, reversible=False))
+        if artwork_result == "embedded":
+            db.add(MetadataHistory(entity_type="song", entity_id=song.id, field_name="artwork", previous_value=None, new_value="embedded", provider="file_tag_write", change_source="file_tag_write", audio_file_modified=True, reversible=False))
         db.commit()
-        return {"status": "succeeded", "changed_fields": [x["field"] for x in check["fields"] if x["will_change"]]}
+        return {"status": "succeeded", "changed_fields": [x["field"] for x in check["fields"] if x["will_change"]], "artwork": artwork_result}
     except Exception as exc:
         db.rollback()
         if backup_name:
