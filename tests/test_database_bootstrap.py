@@ -174,6 +174,45 @@ def test_existing_database_retries_interrupted_metadata_health_indexes_migration
     )
 
 
+def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
+    tmp_path, monkeypatch
+):
+    """A pre-created application table must not skip the rest of revision 0014."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'partial-application.db'}")
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs ("
+            "id INTEGER PRIMARY KEY, path VARCHAR NOT NULL UNIQUE, "
+            "filename VARCHAR NOT NULL, modified_time INTEGER, created_at DATETIME)"
+        )
+        config.attributes["connection"] = connection
+        command.upgrade(config, "20260722_0013")
+        database_init.Base.metadata.tables["metadata_application_batches"].create(
+            bind=connection
+        )
+
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+
+    song_columns = {column["name"] for column in inspect(engine).get_columns("songs")}
+    assert {
+        "musicbrainz_release_group_id",
+        "musicbrainz_release_artist_id",
+        "release_date",
+        "original_release_date",
+    } <= song_columns
+    assert (
+        engine.connect()
+        .execute(text("SELECT version_num FROM alembic_version"))
+        .scalar_one()
+        == "20260722_0015"
+    )
+
+
 def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
     tmp_path, monkeypatch
 ):
