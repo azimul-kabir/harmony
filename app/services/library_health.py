@@ -6,7 +6,7 @@ import itertools
 from pathlib import Path
 import threading
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -240,6 +240,16 @@ class LibraryMaintenanceWorker:
             task = db.get(Task, task.id)
             task.failed_items = max(1, task.total_items - task.completed_items)
             task.status = TaskStatus.FAILED.value
+            if action in {"metadata_application", "metadata_rollback"}:
+                from app.database.models import MetadataApplicationBatch, MetadataApplicationLock
+                payload = json.loads(task.operation_payload or "{}")
+                batch_id = payload.get("batch_id")
+                if isinstance(batch_id, int):
+                    batch = db.get(MetadataApplicationBatch, batch_id)
+                    if batch is not None:
+                        batch.status = "failed"
+                        batch.completed_at = utcnow_naive()
+                db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
         else:
             if task.status == TaskStatus.RUNNING.value:
                 task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items else TaskStatus.COMPLETED.value
