@@ -81,7 +81,10 @@ def serialize_song(
         "codec": song.codec,
         "sample_rate": song.sample_rate,
         "file_size": song.file_size,
-        "artwork_status": song.artwork_status,
+        # Earlier installations can retain NULL values from before these
+        # fields became required.  Keep the Library read model valid so one
+        # legacy row cannot make the entire index endpoint return a 500.
+        "artwork_status": song.artwork_status or "missing",
         "artwork_id": song.artwork_id,
         "artwork": serialize_artwork(song.artwork) if song.artwork else None,
         "cover_url": artwork_url(song.artwork_id) or song.cover_url,
@@ -89,11 +92,11 @@ def serialize_song(
         "recently_added": date_added >= cutoff,
         "last_modified": song.last_modified,
         "last_indexed_at": song.last_indexed_at,
-        "availability_status": song.availability_status,
+        "availability_status": song.availability_status or "available",
         "spotify_track_id": song.spotify_track_id,
         "musicbrainz_recording_id": song.musicbrainz_recording_id,
         "isrc": song.isrc,
-        "download_source": song.download_source,
+        "download_source": song.download_source or "filesystem",
         "playlist_sources": playlist_sources or [],
     }
 
