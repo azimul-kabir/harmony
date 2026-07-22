@@ -66,6 +66,7 @@ function renderDashboard(snapshot) {
     setText("kpi-storage", formatBytes(kpis.storage_bytes));
     setText("kpi-health", `${Number(kpis.health_score || 0)}%`);
     setText("kpi-failed", Number(kpis.failed_jobs || 0).toLocaleString());
+    renderAttention(snapshot.attention || {});
 
     const downloads = snapshot.downloads || {};
     setText("queue-running", Number(downloads.running || 0).toLocaleString());
@@ -91,6 +92,91 @@ function renderDashboard(snapshot) {
     renderAlbumInsight("insight-oldest-album", analytics.oldest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
     renderMaintenance(snapshot.maintenance || []);
     renderCollections(snapshot.collections || []);
+}
+
+function renderAttention(attention) {
+    const container = document.getElementById("dashboard-attention-list");
+    const empty = document.getElementById("dashboard-attention-empty");
+    if (!container || !empty) return;
+
+    const items = Array.isArray(attention.items) ? attention.items : [];
+    const total = Number(attention.total_count || 0);
+    setText("attention-total", `${total.toLocaleString()} ${total === 1 ? "issue" : "issues"}`);
+    empty.hidden = items.length > 0;
+
+    const existing = new Map(
+        Array.from(container.children).map((element) => [element.dataset.attentionKey, element])
+    );
+    items.forEach((issue) => {
+        let row = existing.get(issue.key);
+        if (!row) {
+            row = document.createElement("article");
+            row.dataset.attentionKey = issue.key;
+            const severity = document.createElement("span");
+            severity.className = "dashboard-attention-severity";
+            const content = document.createElement("div");
+            content.className = "dashboard-attention-content";
+            const title = document.createElement("strong");
+            const description = document.createElement("span");
+            description.className = "dashboard-attention-description";
+            content.append(title, description);
+            const count = document.createElement("strong");
+            count.className = "dashboard-attention-count";
+            const link = document.createElement("a");
+            link.className = "btn-secondary dashboard-attention-action";
+            const recovery = document.createElement("button");
+            recovery.className = "btn-secondary dashboard-attention-recovery";
+            recovery.type = "button";
+            row.append(severity, content, count, link, recovery);
+        }
+        row.className = `dashboard-attention-item severity-${issue.severity}`;
+        const [severity, content, count, link, recovery] = row.children;
+        severity.textContent = issue.severity;
+        content.querySelector("strong").textContent = issue.title;
+        content.querySelector("span").textContent = issue.description;
+        count.textContent = Number(issue.count || 0).toLocaleString();
+        link.href = issue.href;
+        link.textContent = issue.action_label;
+        link.setAttribute("aria-label", `${issue.action_label} ${issue.title}`);
+        recovery.hidden = !issue.recovery_action;
+        if (issue.recovery_action) {
+            recovery.textContent = issue.recovery_label;
+            recovery.setAttribute("aria-label", `${issue.recovery_label} for ${issue.title}`);
+            recovery.onclick = () => runAttentionRecovery(issue.recovery_action, recovery);
+        } else {
+            recovery.onclick = null;
+        }
+        container.appendChild(row);
+        existing.delete(issue.key);
+    });
+    existing.forEach((row) => row.remove());
+}
+
+const ATTENTION_RECOVERY_ENDPOINTS = {
+    verify_files: "/api/library/health/actions/verify",
+    analyze_metadata: "/api/library/health/metadata/analyze",
+    refresh_library: "/api/library/health/actions/refresh",
+};
+
+async function runAttentionRecovery(action, button) {
+    const endpoint = ATTENTION_RECOVERY_ENDPOINTS[action];
+    if (!endpoint || button.disabled) return;
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "Queued";
+    try {
+        const response = await fetch(endpoint, { method: "POST" });
+        if (!response.ok) throw new Error("Unable to queue recovery action.");
+    } catch (error) {
+        button.textContent = "Try again";
+        button.disabled = false;
+        console.error("Dashboard recovery action failed:", error);
+        return;
+    }
+    setTimeout(() => {
+        button.disabled = false;
+        button.textContent = originalLabel;
+    }, 1500);
 }
 
 function renderMaintenance(jobs) {
@@ -194,46 +280,83 @@ function renderWorkers(workers, maxWorkers) {
     container.innerHTML = html;
 }
 
+function activityDetails(status) {
+    const normalized = String(status || "unknown").toLowerCase();
+    const labels = {
+        completed: "Downloaded",
+        failed: "Failed",
+        running: "Downloading",
+        queued: "Queued",
+        skipped: "Skipped",
+        paused: "Paused",
+        cancelled: "Cancelled",
+    };
+    return { status: normalized, label: labels[normalized] || "Updated" };
+}
+
+function formatActivityTime(value) {
+    if (!value) return "Recently";
+    const date = new Date(value.endsWith("Z") ? value : `${value}Z`);
+    if (Number.isNaN(date.getTime())) return "Recently";
+    const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
+    if (seconds < 60) return "Just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+}
+
 function renderActivity(jobs) {
     const container = document.getElementById("recent-activity");
     if (!container) return;
 
     if (!jobs || jobs.length === 0) {
-        container.innerHTML = "<p class='empty-state'>No recent activity.</p>";
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "No recent download activity.";
+        container.replaceChildren(empty);
         return;
     }
 
-    container.innerHTML = jobs.map(job => {
-        const status = (job.status ?? "").toUpperCase();
-        let icon = " ";
-        let label = status;
-
-        switch (status) {
-            case "COMPLETED": icon = " "; label = "Downloaded"; break;
-            case "FAILED": icon = " "; label = "Failed"; break;
-            case "RUNNING": icon = " "; label = "Downloading"; break;
-            case "QUEUED": icon = " "; label = "Queued"; break;
-            case "SKIPPED": icon = " "; label = "Skipped"; break;
-            case "PAUSED": icon = " "; label = "Paused"; break;
-            case "CANCELLED": icon = " "; label = "Cancelled"; break;
+    const existing = new Map(
+        Array.from(container.querySelectorAll("[data-activity-id]")).map((row) => [row.dataset.activityId, row])
+    );
+    jobs.forEach((job) => {
+        const key = String(job.id);
+        let row = existing.get(key);
+        if (!row) {
+            row = document.createElement("a");
+            row.dataset.activityId = key;
+            const marker = document.createElement("span");
+            marker.className = "activity-marker";
+            const content = document.createElement("div");
+            content.className = "activity-content";
+            const title = document.createElement("strong");
+            const artist = document.createElement("span");
+            artist.className = "activity-artist";
+            content.append(title, artist);
+            const meta = document.createElement("div");
+            meta.className = "activity-meta";
+            const status = document.createElement("span");
+            const time = document.createElement("time");
+            meta.append(status, time);
+            row.append(marker, content, meta);
         }
-
-        // NEW: Artwork HTML Generation
-        const coverImg = job.cover_url
-            ? `<img src="${job.cover_url}" alt="Cover" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; margin-right: 12px;">`
-            : `<div style="width: 36px; height: 36px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
-
-        return `
-            <div class="activity-item">
-                <div class="activity-badge">${icon} ${label}</div>
-                <div style="display: flex; align-items: center; min-width: 0;">
-                    ${coverImg}
-                    <div class="activity-title" title="${job.title ?? "Unknown"}">${job.title ?? "Unknown Title"}</div>
-                </div>
-                <div class="activity-artist" title="${job.artist ?? "Unknown"}">${job.artist ?? "Unknown Artist"}</div>
-            </div>
-        `;
-    }).join("");
+        const details = activityDetails(job.status);
+        row.className = `activity-item activity-${details.status}`;
+        row.href = ["failed", "cancelled"].includes(details.status) ? "/downloads?status=failed" : "/downloads";
+        const [marker, content, meta] = row.children;
+        marker.setAttribute("aria-hidden", "true");
+        content.querySelector("strong").textContent = job.title || "Unknown title";
+        content.querySelector("span").textContent = job.artist || "Unknown artist";
+        meta.querySelector("span").textContent = details.label;
+        const time = meta.querySelector("time");
+        time.dateTime = job.event_at || "";
+        time.textContent = formatActivityTime(job.event_at);
+        row.setAttribute("aria-label", `${details.label}: ${job.title || "Unknown title"}`);
+        container.appendChild(row);
+        existing.delete(key);
+    });
+    existing.forEach((row) => row.remove());
 }
 
 function taskStatus(status) {

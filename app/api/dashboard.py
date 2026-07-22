@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models import DownloadJob, Task
 from app.database.session import get_db, SessionLocal
-from app.services.dashboard import get_dashboard_snapshot
+from app.services.dashboard import get_dashboard_snapshot, serialize_dashboard_activity
 from app.domain.task import TaskStatus
 from app.domain.download import JobStatus
 from app.core.config import get_settings
@@ -33,14 +33,7 @@ def dashboard_activity(db: Session = Depends(get_db)):
         .scalars()
         .all()
     )
-    return [
-        {
-            "status": job.status,
-            "title": job.title,
-            "artist": job.artist,
-        }
-        for job in jobs
-    ]
+    return [serialize_dashboard_activity(job) for job in jobs]
 
 
 # Inside app/api/dashboard.py, update the stream_dashboard_data function:
@@ -66,16 +59,7 @@ async def stream_dashboard_data(request: Request):
                     .scalars()
                     .all()
                 )
-                # NEW: Add cover_url
-                activity = [
-                    {
-                        "status": j.status,
-                        "title": j.title,
-                        "artist": j.artist,
-                        "cover_url": j.cover_url,
-                    }
-                    for j in jobs
-                ]
+                activity = [serialize_dashboard_activity(job) for job in jobs]
 
                 tasks = (
                     db.execute(
