@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.api.schemas.download import DownloadRequest
+from app.api.schemas.download import DownloadBulkRequest, DownloadRequest
 from app.database.models import DownloadJob
 from app.database.session import get_db, SessionLocal
 from app.exceptions.download import TrackAlreadyExistsError
@@ -19,6 +19,7 @@ from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
 from app.domain.download import JobStatus
 from app.services.download_dashboard import TERMINAL_STATUSES, download_details, get_download_snapshot
+from app.services.download_bulk import run_bulk_action
 
 router = APIRouter(
     prefix="/api/downloads",
@@ -59,6 +60,15 @@ def clear_history(db: Session = Depends(get_db)):
     )
     db.commit()
     return {"status": "success"}
+
+
+@router.post("/bulk")
+def bulk_downloads(request: DownloadBulkRequest, db: Session = Depends(get_db)):
+    """Perform only allowlisted, state-aware operations on bounded records."""
+    try:
+        return run_bulk_action(db, request.action, request.download_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get("/snapshot")
