@@ -69,6 +69,14 @@ def _safe_detail(value: str | None) -> str | None:
 
 def serialize_outcome(job: DownloadJob) -> dict:
     status = normalized_status(job.status)
+    # These columns describe a *terminal* outcome.  In particular, do not let a
+    # partially populated row make a queued/running job look as though it failed.
+    # This also makes the serializer safe for jobs created before a worker has
+    # recorded any outcome fields.
+    if status not in TERMINAL_STATUSES:
+        return {"status": status, "reason_code": None, "reason_message": None,
+                "failure_stage": None, "provider": None, "retryable": False,
+                "finished_at": None, "technical_detail": None}
     code, message = _legacy_reason(job, status)
     return {"status": status, "reason_code": code, "reason_message": message,
             "failure_stage": job.failure_stage, "provider": job.provider,

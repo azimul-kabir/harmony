@@ -20,9 +20,10 @@ from app.services.spotify.url import spotify_resource
 from app.domain.download import JobStatus
 from app.services.download_dashboard import (
     TERMINAL_STATUSES, download_counts, download_details, download_history,
-    get_download_snapshot,
+    get_download_snapshot, serialize_outcome,
 )
 from app.services.download_bulk import run_bulk_action
+from app.core.logging import logger
 
 router = APIRouter(
     prefix="/api/downloads",
@@ -31,25 +32,58 @@ router = APIRouter(
 
 @router.post("", status_code=201)
 def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
-    resource, _ = spotify_resource(request.url)
+    """Create durable queued work and return only safe, JSON API errors.
 
-    if resource == "track":
-        track = resolve_track(request.url)
-        try:
-            result = enqueue_track(db=db, track=track)
-            return {"status": result.status.value, "job_id": result.job_id}
-        except TrackAlreadyExistsError:
-            return {"status": "owned"}
+    Workers poll persisted jobs, so there is no in-process task dispatch which
+    can make this request appear to fail after the database commit.  Keep the
+    post-commit response deliberately small and guard the optional serializer:
+    a presentation defect must never convert a successfully queued job into a
+    misleading 500 response.
+    """
+    try:
+        resource, _ = spotify_resource(request.url.strip())
+        if resource == "track":
+            track = resolve_track(request.url)
+            try:
+                result = enqueue_track(db=db, track=track)
+            except TrackAlreadyExistsError:
+                return {"status": "owned"}
 
-    if resource == "album":
-        enqueue_album(db=db, spotify_url=request.url)
-        return {"status": "queued"}
+            response = {"status": result.status.value, "job_id": result.job_id}
+            # Validate the newly persisted job against the common outcome
+            # serializer.  It must accept empty terminal fields for queued work.
+            try:
+                job = db.get(DownloadJob, result.job_id)
+                if job is not None:
+                    response["outcome"] = serialize_outcome(job)
+            except Exception:
+                # The commit already succeeded.  Return a valid acknowledgement
+                # rather than reporting a false failure and encouraging retries.
+                logger.exception("Queued download #{} could not be serialized", result.job_id)
+            return response
 
-    if resource == "playlist":
-        summary = download_playlist(db=db, url=request.url)
-        return {"status": "queued", "summary": summary}
+        if resource == "album":
+            results = enqueue_album(db=db, spotify_url=request.url)
+            return {"status": "queued", "job_ids": [result.job_id for result in results]}
 
-    raise ValueError("Unsupported Spotify URL.")
+        if resource == "playlist":
+            summary = download_playlist(db=db, url=request.url)
+            return {"status": "queued", "summary": summary}
+    except ValueError as exc:
+        # URL parsing and provider validation are user-input errors, never a
+        # plain-text 500.  Do not expose provider internals to the browser.
+        raise HTTPException(status_code=422, detail={"code": "invalid_spotify_url", "message": str(exc)}) from None
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("Unable to queue Spotify download")
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "download_queue_unavailable", "message": "Harmony could not queue this download. Please try again."},
+        ) from None
+
+    raise HTTPException(status_code=422, detail={"code": "unsupported_spotify_url", "message": "This Spotify URL type is not supported."})
 
 @router.post("/clear", status_code=200)
 def clear_history(db: Session = Depends(get_db)):
