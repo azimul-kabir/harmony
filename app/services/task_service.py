@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.database.models import MetadataDiscovery, MetadataDiscoveryLock, Task, TaskItemFailure, SyncSource
+from app.database.models import MetadataApplicationLock, MetadataDiscovery, MetadataDiscoveryLock, Task, TaskItemFailure, SyncSource
 from sqlalchemy import select, delete, update
 from app.domain.task import (
     TaskStatus,
@@ -199,6 +199,7 @@ def cancel_task(
             task.completed_at = utcnow_naive()
             task.current_item = None
             db.execute(delete(MetadataDiscoveryLock).where(MetadataDiscoveryLock.task_id == task.id))
+            db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
             db.execute(update(MetadataDiscovery).where(MetadataDiscovery.job_id==task.id,
                 MetadataDiscovery.status.in_(("queued","running"))).values(status="cancelled",completed_at=utcnow_naive()))
         db.commit()
@@ -253,6 +254,7 @@ def recover_library_jobs(db: Session) -> int:
         task.recovery_metadata = '{"reason":"process_restart"}'
         if not task.resumable:
             db.execute(delete(MetadataDiscoveryLock).where(MetadataDiscoveryLock.task_id == task.id))
+            db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
             db.execute(update(MetadataDiscovery).where(MetadataDiscovery.job_id==task.id,
                 MetadataDiscovery.status.in_(("queued","running"))).values(status="failed",completed_at=utcnow_naive(),error_metadata='[{"code":"process_restart"}]'))
     db.commit()
