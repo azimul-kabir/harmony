@@ -47,7 +47,8 @@ def _load(value: str | None) -> Any: return json.loads(value) if value else None
 def canonical_snapshot(song: Song) -> str:
     values=(song.title,song.artist,song.album_artist,song.album,song.duration,song.track,song.track_total,
         song.disc,song.disc_total,song.year,song.isrc,song.musicbrainz_recording_id,song.musicbrainz_release_id,
-        song.musicbrainz_artist_id,song.compilation,song.metadata_hash)
+        song.musicbrainz_artist_id,song.musicbrainz_release_group_id,song.musicbrainz_release_artist_id,
+        song.release_date,song.original_release_date,song.compilation,song.metadata_hash)
     return hashlib.sha256(_dump(values).encode()).hexdigest()
 
 
