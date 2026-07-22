@@ -5,13 +5,15 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+import re
+import unicodedata
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.time import utcnow_naive
-from app.database.models import MetadataHistory, MetadataSuggestion, Song
+from app.database.models import MetadataHistory, MetadataSuggestion, Song, MetadataApplicationBatch
 
 ENTITY_TYPES = frozenset({"song", "album", "artist"})
 METADATA_FIELDS = frozenset({
@@ -26,6 +28,9 @@ CONFIDENCE_LEVELS = frozenset({"exact", "high", "medium", "low", "rejected"})
 CURRENT_STATUSES = ("accepted", "applied")
 MAX_VALUE_BYTES = 4096
 MAX_EVIDENCE_BYTES = 8192
+APPLICABLE_FIELDS = METADATA_FIELDS - {"artwork_source"}
+FIELD_COLUMNS = {"track_number": "track", "total_tracks": "track_total", "disc_number": "disc", "total_discs": "disc_total"}
+MAX_TEXT_LENGTH = 500
 
 
 @dataclass
@@ -79,9 +84,12 @@ class MetadataService:
             "album": song.album, "track_number": song.track, "disc_number": song.disc,
             "total_tracks": song.track_total, "total_discs": song.disc_total,
             "year": song.year, "genre": song.genre, "isrc": song.isrc,
+            "release_date": song.release_date, "original_release_date": song.original_release_date,
             "musicbrainz_recording_id": song.musicbrainz_recording_id,
             "musicbrainz_release_id": song.musicbrainz_release_id,
+            "musicbrainz_release_group_id": song.musicbrainz_release_group_id,
             "musicbrainz_artist_id": song.musicbrainz_artist_id,
+            "musicbrainz_release_artist_id": song.musicbrainz_release_artist_id,
             "artwork_source": song.artwork.source if song.artwork else None,
         })
         return {field: values[field] for field in sorted(values)}
@@ -230,6 +238,103 @@ class MetadataService:
                 "fields": [{"field_name": field, "current_value": comparison["current"][field], "suggestions": grouped[field]} for field in sorted(grouped)]}
 
 
+class MetadataApplicationService:
+    """The only writer for accepted suggestions; it never touches files or tags."""
+    def _normal(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
+        return value
+
+    def _validate(self, field: str, value: Any, canonical: dict[str, Any]) -> str | None:
+        if field not in APPLICABLE_FIELDS:
+            return "unsupported_metadata_field"
+        if value is None: return None
+        if field in {"track_number", "total_tracks", "disc_number", "total_discs", "year"}:
+            if isinstance(value, bool) or not isinstance(value, int): return "invalid_metadata_value"
+            if field == "year" and not 1000 <= value <= utcnow_naive().year + 1: return "invalid_metadata_value"
+            if field != "year" and value < 1: return "invalid_metadata_value"
+            number = canonical.get("track_number" if field == "total_tracks" else "disc_number")
+            if field in {"total_tracks", "total_discs"} and number is not None and value < number: return "invalid_metadata_value"
+        elif field in {"release_date", "original_release_date"}:
+            if not isinstance(value, str) or not re.fullmatch(r"\d{4}(-\d{2}(-\d{2})?)?", value): return "invalid_metadata_value"
+        elif field.startswith("musicbrainz_"):
+            if not isinstance(value, str) or len(value) > 255 or not re.fullmatch(r"[0-9a-fA-F-]{8,64}", value): return "invalid_metadata_value"
+        elif field == "isrc":
+            if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}", value): return "invalid_metadata_value"
+        elif not isinstance(value, str) or len(value) > MAX_TEXT_LENGTH:
+            return "invalid_metadata_value"
+        return None
+
+    def build_preview(self, db: Session, song_id: int, suggestion_ids: list[int] | None = None, *, initiated_by: str | None = None) -> dict[str, Any]:
+        song = db.get(Song, song_id)
+        if song is None: raise MetadataServiceError("song_not_found", "Song not found.", 404)
+        query = select(MetadataSuggestion).where(MetadataSuggestion.entity_type == "song", MetadataSuggestion.entity_id == song_id)
+        if suggestion_ids is None: query = query.where(MetadataSuggestion.status == "accepted")
+        else: query = query.where(MetadataSuggestion.id.in_(suggestion_ids))
+        suggestions = list(db.scalars(query.order_by(MetadataSuggestion.id)).all())
+        found = {s.id for s in suggestions}
+        if suggestion_ids and found != set(suggestion_ids): raise MetadataServiceError("suggestion_not_found", "One or more suggestions were not found.", 404)
+        canonical = metadata_service.canonical_metadata(db, "song", song_id); operations=[]
+        for s in suggestions:
+            expected, proposed = _json_load(s.current_value), _json_load(s.suggested_value)
+            current = canonical[s.field_name]
+            validation = self._validate(s.field_name, proposed, canonical)
+            if s.status != "accepted": status = "already_applied" if s.status == "applied" else "superseded"
+            elif validation == "unsupported_metadata_field": status = "unsupported"
+            elif validation: status = "invalid"
+            elif self._normal(current) == self._normal(proposed): status = "unchanged"
+            elif self._normal(current) != self._normal(expected): status = "stale"
+            else: status = "applicable"
+            operations.append({"suggestion_id":s.id,"field_name":s.field_name,"current_value":current,"expected_current_value":expected,"proposed_value":proposed,"normalized_equal":self._normal(current)==self._normal(proposed),"status":status,"applicability":status=="applicable","validation_error":validation,"reversible":status=="applicable"})
+        return {"target_entity_type":"song", "target_entity_id":song_id, "selected_suggestion_ids":[s.id for s in suggestions], "canonical_snapshot":canonical, "operations":operations, "created_at":utcnow_naive(), "initiated_by":initiated_by}
+
+    def apply_selected(self, db: Session, song_id: int, suggestion_ids: list[int] | None = None, *, force: bool = False, force_confirmation: bool = False, stale_override_reason: str | None = None, initiated_by: str | None = None, atomic: bool = True) -> dict[str, Any]:
+        if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required", "Force application requires explicit confirmation.", 409)
+        plan=self.build_preview(db,song_id,suggestion_ids,initiated_by=initiated_by)
+        if not plan["operations"]: raise MetadataServiceError("no_applicable_suggestions", "No accepted suggestions were selected.",409)
+        batch=MetadataApplicationBatch(entity_scope="song",status="running",total_fields=len(plan["operations"]),initiated_by=initiated_by,started_at=utcnow_naive());db.add(batch);db.flush()
+        song=db.get(Song,song_id); assert song is not None
+        results=[]
+        for operation in plan["operations"]:
+            status=operation["status"]
+            if status == "stale" and force: status="applicable"; operation["forced"]=True
+            if status != "applicable":
+                if status == "unchanged": batch.unchanged_fields += 1
+                elif status == "stale": batch.stale_fields += 1
+                elif status == "invalid": batch.invalid_fields += 1
+                elif status == "unsupported": batch.unsupported_fields += 1
+                results.append(operation); continue
+            suggestion=db.get(MetadataSuggestion, operation["suggestion_id"]); assert suggestion is not None
+            setattr(song,FIELD_COLUMNS.get(operation["field_name"],operation["field_name"]),operation["proposed_value"])
+            metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=operation["field_name"],previous_value=operation["current_value"],new_value=operation["proposed_value"],provider=suggestion.provider,provider_entity_id=suggestion.provider_entity_id,confidence=suggestion.confidence,job_id=None,change_source="metadata_application",audio_file_modified=False,reversible=True,reversal_of_history_id=None,suggestion_id=suggestion.id,discovery_id=suggestion.discovery_id,match_result_id=suggestion.match_result_id,application_batch_id=batch.id,forced=bool(operation.get("forced")),stale_override_reason=stale_override_reason if operation.get("forced") else None)
+            suggestion.status="applied"; suggestion.applied_at=utcnow_naive(); batch.applied_fields += 1
+            if operation.get("forced"): batch.forced_fields += 1
+            operation["status"]="applied"; results.append(operation)
+        batch.status="completed" if not any(x["status"] in {"stale","invalid","unsupported"} for x in results) else "completed_with_errors";batch.completed_at=utcnow_naive();db.flush()
+        return {"batch_id":batch.id,"status":batch.status,"operations":results,"message":"Library metadata updated. Audio-file tags were not modified."}
+
+    def rollback_preview(self, db: Session, history_id: int) -> dict[str, Any]:
+        history=db.get(MetadataHistory,history_id)
+        if history is None: raise MetadataServiceError("history_not_found","Metadata history not found.",404)
+        if not history.reversible: raise MetadataServiceError("rollback_not_reversible","This metadata change is not reversible.",409)
+        song=db.get(Song,history.entity_id)
+        if song is None: raise MetadataServiceError("song_not_found","Song not found.",404)
+        current=getattr(song,FIELD_COLUMNS.get(history.field_name,history.field_name)); expected=_json_load(history.new_value)
+        return {"history_id":history.id,"field_name":history.field_name,"current_value":current,"restore_value":_json_load(history.previous_value),"status":"applicable" if self._normal(current)==self._normal(expected) else "stale","reversible":True}
+
+    def rollback(self, db: Session, history_id: int, *, force: bool=False, force_confirmation: bool=False, initiated_by: str|None=None) -> dict[str, Any]:
+        if force and not force_confirmation: raise MetadataServiceError("force_confirmation_required","Force rollback requires explicit confirmation.",409)
+        preview=self.rollback_preview(db,history_id)
+        if preview["status"] == "stale" and not force: raise MetadataServiceError("rollback_conflict","Canonical metadata has changed since this history entry.",409)
+        history=db.get(MetadataHistory,history_id); song=db.get(Song,history.entity_id); assert history and song
+        setattr(song,FIELD_COLUMNS.get(history.field_name,history.field_name),preview["restore_value"])
+        metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=history.field_name,previous_value=preview["current_value"],new_value=preview["restore_value"],provider="rollback",provider_entity_id=None,confidence=None,job_id=None,change_source="metadata_rollback",audio_file_modified=False,reversible=True,reversal_of_history_id=history.id,forced=force)
+        db.flush(); return {**preview,"status":"rolled_back","message":"Library metadata updated. Audio-file tags were not modified."}
+
+
+metadata_application_service = MetadataApplicationService()
+
+
 def serialize_suggestion(item: MetadataSuggestion) -> dict[str, Any]:
     return {column: getattr(item, column) for column in (
         "id", "entity_type", "entity_id", "field_name", "provider", "provider_entity_id",
@@ -244,7 +349,8 @@ def serialize_history(item: MetadataHistory) -> dict[str, Any]:
     data = {column: getattr(item, column) for column in (
         "id", "entity_type", "entity_id", "field_name", "provider", "provider_entity_id",
         "confidence", "changed_at", "job_id", "change_source", "audio_file_modified",
-        "reversible", "reversal_of_history_id"
+        "reversible", "reversal_of_history_id", "suggestion_id", "discovery_id", "match_result_id",
+        "application_batch_id", "forced", "stale_override_reason"
     )}
     data.update(previous_value=_json_load(item.previous_value), new_value=_json_load(item.new_value))
     return data
