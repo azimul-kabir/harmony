@@ -251,6 +251,18 @@ class MetadataDiscoveryLock(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
 
+class MetadataApplicationLock(Base):
+    """Per-Song canonical metadata write reservation.
+
+    Kept separate from discovery locks for migration compatibility; both
+    tables are always checked by the reservation services.
+    """
+    __tablename__ = "metadata_application_locks"
+    song_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+
+
 class ProviderCacheEntry(Base):
     """Persistent provider cache containing normalized domain data, never raw payloads."""
     __tablename__ = "provider_cache_entries"
