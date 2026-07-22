@@ -37,6 +37,63 @@ class ArtworkCandidate:
     original_url: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class MusicBrainzReleaseResolution:
+    """The safe, canonical input to a Cover Art Archive release request."""
+
+    release_id: str | None
+    source_field: str | None
+    outcome: str
+    legacy_fallback_used: bool = False
+    release_group_id: str | None = None
+
+    @property
+    def resolved(self) -> bool:
+        return self.outcome == "resolved"
+
+
+def resolve_musicbrainz_release_id(song: Song) -> MusicBrainzReleaseResolution:
+    """Resolve only Harmony's canonical *release* identifier.
+
+    ``Song.musicbrainz_release_id`` is the canonical value populated by metadata
+    application and indexing.  There is no separate legacy release-ID column in
+    the current schema, so this deliberately does not infer an ID from a release
+    group, provider match, suggestion, or audio tag.
+    """
+    value = song.musicbrainz_release_id
+    if not value or not value.strip():
+        return MusicBrainzReleaseResolution(
+            None,
+            None,
+            "release_group_only" if song.musicbrainz_release_group_id else "canonical_release_id_missing",
+            release_group_id=song.musicbrainz_release_group_id,
+        )
+    try:
+        release_id = str(UUID(value.strip()))
+    except (ValueError, AttributeError):
+        return MusicBrainzReleaseResolution(
+            None, "songs.musicbrainz_release_id", "invalid_release_id",
+            release_group_id=song.musicbrainz_release_group_id,
+        )
+    return MusicBrainzReleaseResolution(
+        release_id, "songs.musicbrainz_release_id", "resolved",
+        release_group_id=song.musicbrainz_release_group_id,
+    )
+
+
+class ArtworkFetchSkipped(ValueError):
+    """A user-actionable non-error outcome for a remote artwork request."""
+
+    def __init__(self, resolution: MusicBrainzReleaseResolution):
+        self.resolution = resolution
+        messages = {
+            "canonical_release_id_missing": "Canonical MusicBrainz release ID is missing; apply canonical metadata before fetching artwork.",
+            "release_group_only": "Only a MusicBrainz release-group ID is available; Cover Art Archive release lookup requires a release ID.",
+            "invalid_release_id": "The canonical MusicBrainz release ID is not a valid UUID.",
+        }
+        super().__init__(messages.get(resolution.outcome, "Artwork fetch was skipped."))
+
+
 class ArtworkService:
     """Detect, deduplicate, and persist local artwork resources."""
 
@@ -94,10 +151,9 @@ class ArtworkService:
         db.add(artwork)
         db.flush()
         logger.info(
-            "Cached {} artwork {} at {}",
+            "Cached {} artwork {}",
             candidate.source,
             artwork.id,
-            cache_path,
         )
         return artwork
 
@@ -124,6 +180,8 @@ class ArtworkService:
         self,
         db: Session,
         release_id: str,
+        *,
+        force_remote: bool = False,
     ) -> Artwork:
         """Download and cache the Cover Art Archive front image for a release."""
         try:
@@ -137,7 +195,7 @@ class ArtworkService:
                 Artwork.provider_id == release_id,
             )
         )
-        if existing is not None and Path(existing.cache_path).is_file():
+        if existing is not None and Path(existing.cache_path).is_file() and not force_remote:
             return existing
 
         settings = get_settings()
@@ -166,6 +224,33 @@ class ArtworkService:
                 original_url=original_url,
             ),
         )
+
+    def fetch_for_song(
+        self, db: Session, song: Song, *, force_remote: bool = False
+    ) -> tuple[Artwork, MusicBrainzReleaseResolution, bool]:
+        """Fetch canonical provider artwork, preserving a valid cached result.
+
+        A cache hit satisfies the ordinary fetch action even when a provider ID
+        is now unavailable.  Forced remote refreshes resolve and validate the
+        canonical release ID before issuing a request.
+        """
+        cached = self.validated_cached_bytes(song.artwork)
+        if cached is not None and not force_remote:
+            resolution = resolve_musicbrainz_release_id(song)
+            logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=cache_hit", song.id, resolution.outcome, resolution.source_field)
+            return song.artwork, resolution, True  # type: ignore[return-value]
+        resolution = resolve_musicbrainz_release_id(song)
+        if not resolution.resolved:
+            logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=not_requested cache={}", song.id, resolution.outcome, resolution.source_field, "miss" if cached is None else "hit")
+            raise ArtworkFetchSkipped(resolution)
+        if force_remote:
+            artwork = self.fetch_musicbrainz_release_artwork(
+                db, resolution.release_id, force_remote=True
+            )
+        else:
+            artwork = self.fetch_musicbrainz_release_artwork(db, resolution.release_id)
+        logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=success cache=miss", song.id, resolution.outcome, resolution.source_field)
+        return artwork, resolution, False
 
     def refresh_for_song(self, db: Session, song: Song) -> Artwork | None:
         """Re-read local artwork sources, repairing the cache when necessary."""

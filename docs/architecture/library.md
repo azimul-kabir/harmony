@@ -864,10 +864,19 @@ Supported folder filenames are `cover`, `folder`, `front`, and `album` with
 JPEG, PNG, or WebP extensions. Embedded images are read through Mutagen from
 ID3 APIC, MP4 `covr`, and FLAC picture blocks. Remote `cover_url` values remain
 compatible metadata but are never downloaded by `ArtworkService`. Cover Art
-Archive downloads use the MusicBrainz release ID, validate that the response is
+Archive downloads use the canonical MusicBrainz **release ID**
+(`songs.musicbrainz_release_id`, also written as `MusicBrainz Album Id`), validate that the response is
 a JPEG, PNG, or WebP image, and store the result in the same local cache with
 provider provenance. Downloads are opt-in bulk operations; scanning a library
 never performs remote artwork requests.
+
+The MusicBrainz release-group ID is not interchangeable with a release ID and
+is never sent to the Cover Art Archive release endpoint. A normal fetch uses a
+valid cached canonical artwork resource without making a provider request;
+otherwise it reports a structured skipped result when canonical release metadata
+is missing or invalid. Refreshing artwork re-indexes embedded/folder sources and
+the Harmony cache only. Writing canonical tags is the separate operation that
+embeds cached artwork in an audio file, which is the form Navidrome can observe.
 
 Artwork API:
 
