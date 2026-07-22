@@ -125,6 +125,18 @@ app.include_router(providers_router)
 app.include_router(providers_page_router)
 
 
+@app.exception_handler(Exception)
+async def unhandled_api_error_handler(request: Request, exc: Exception):
+    """Never return Starlette's plain-text 500 response from an API route."""
+    logger.exception("Unhandled request error for {}", request.url.path)
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=500,
+            content={"error": {"code": "internal_error", "message": "Harmony could not complete this request. Please try again."}},
+        )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+
 @app.exception_handler(MetadataServiceError)
 async def metadata_error_handler(request: Request, exc: MetadataServiceError):
     return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": exc.message}})

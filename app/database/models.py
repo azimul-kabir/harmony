@@ -443,7 +443,11 @@ class DownloadJob(Base):
     reason_message: Mapped[str | None] = mapped_column(String, nullable=True)
     failure_stage: Mapped[str | None] = mapped_column(String, nullable=True)
     provider: Mapped[str | None] = mapped_column(String, nullable=True)
-    retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Keep the ORM declaration aligned with 20260722_0017: queued rows get a
+    # non-terminal ``False`` default both through SQLAlchemy and directly in SQL.
+    retryable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("0")
+    )
     technical_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)
