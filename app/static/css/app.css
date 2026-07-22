@@ -287,7 +287,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-panel-heading h2, .dashboard-actions h3 { margin: 2px 0 0; font-size: 1.1rem; }
 .dashboard-panel-heading a { color: var(--primary); font-size: .82rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .dashboard-queue-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.dashboard-queue-metrics div { padding: 10px; background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: 8px; }
+.dashboard-queue-metrics > * { padding: 10px; background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: 8px; }
+.dashboard-queue-metrics a { color: var(--text-main); text-decoration: none; }
+.dashboard-queue-metrics a:hover { border-color: var(--primary); }
 .dashboard-queue-metrics strong { display: block; font-size: 1.25rem; margin-top: 3px; }
 .dashboard-health-content { display: flex; gap: 18px; align-items: center; }
 .dashboard-health-content > strong { color: var(--success); font-size: 2.3rem; }
@@ -298,8 +300,42 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-collections a:last-child { border-bottom: 0; }
 .dashboard-collections a:hover { color: var(--primary); }
 .dashboard-actions { padding: 18px; }
+.dashboard-maintenance { padding: 18px; }
+.dashboard-maintenance-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dashboard-maintenance-item { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface-alt); min-width: 0; }
+.dashboard-maintenance-item strong, .dashboard-maintenance-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-maintenance-item strong { font-size: .95rem; }
+.dashboard-maintenance-item small { margin-top: 5px; color: var(--text-muted); }
+.dashboard-maintenance-item.status-failed, .dashboard-maintenance-item.status-completed_with_errors { border-color: var(--danger); }
+.dashboard-insights { padding: 18px; }
+.dashboard-insight-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.dashboard-insight-metrics > div, .dashboard-album-insight { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface-alt); }
+.dashboard-insight-metrics span, .dashboard-album-insight span { display: block; color: var(--text-muted); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.dashboard-insight-metrics strong { display: block; margin-top: 5px; font-size: 1.25rem; }
+.dashboard-album-insights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.dashboard-album-insight { color: var(--text-main); text-decoration: none; min-width: 0; }
+.dashboard-album-insight:hover { border-color: var(--primary); }
+.dashboard-album-insight strong, .dashboard-album-insight small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-album-insight strong { margin-top: 6px; }
+.dashboard-album-insight small { margin-top: 3px; color: var(--text-muted); }
 .bottom-split { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-lg); align-items: start; }
 .quick-actions-grid { display: flex; flex-direction: column; gap: 12px; }
+
+/* Downloads command center */
+.downloads-header { display: flex; justify-content: space-between; align-items: end; gap: var(--space-md); margin-bottom: var(--space-md); flex-wrap: wrap; }
+.downloads-header h1 { margin: 2px 0 0; font-size: 1.6rem; }
+.downloads-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: var(--space-md); }
+.downloads-summary-card { appearance: none; cursor: pointer; text-align: left; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface); color: var(--text-main); box-shadow: var(--shadow); }
+.downloads-summary-card:hover, .downloads-summary-card:focus-visible { border-color: var(--primary); }
+.downloads-summary-card span { display: block; color: var(--text-muted); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.downloads-summary-card strong { display: block; margin-top: 5px; color: var(--primary); font-size: 1.45rem; line-height: 1; }
+.downloads-summary-attention strong { color: var(--danger); }
+.download-song-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.download-artwork, .download-artwork-placeholder { width: 40px; height: 40px; border-radius: 6px; flex: 0 0 auto; object-fit: cover; }
+.download-artwork-placeholder { display: grid; place-items: center; border: 1px solid var(--border-color); background: var(--bg-surface-hover); color: var(--text-muted); }
+.download-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.05rem; }
+.download-error { display: block; max-width: 220px; margin-top: 3px; color: var(--danger); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.downloads-visible-count { display: block; margin-top: 7px; color: var(--text-muted); font-size: .8rem; }
 
 /* Recent Activity List */
 .activity-list { display: flex; flex-direction: column; gap: 8px; }
@@ -319,6 +355,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (max-width: 900px) {
     .dashboard-summary-grid { grid-template-columns: 1fr; }
+    .dashboard-insight-metrics, .dashboard-album-insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-maintenance-list { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
@@ -326,7 +364,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .dashboard-header-actions { width: 100%; }
     .dashboard-header-actions > * { flex: 1; text-align: center; }
     .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-insight-metrics, .dashboard-album-insights { grid-template-columns: 1fr; }
     .bottom-split { grid-template-columns: 1fr; }
+    .downloads-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Source Cards */

@@ -10,7 +10,7 @@ from app.domain.metadata.provider import CandidatePage, ExternalId, RecordingCan
 from app.providers.metadata.errors import ProviderError
 from app.services.library_health import LibraryMaintenanceWorker
 from app.database.session import SessionLocal
-from app.services.metadata_discovery import MAX_RETAINED, metadata_discovery_service, song_searches
+from app.services.metadata_discovery import MAX_RETAINED, SUPPORTED_HEALTH_RULES, metadata_discovery_service, song_searches
 from app.services.metadata_intelligence import MetadataServiceError
 from app.services.task_service import cancel_task, recover_library_jobs
 from app.main import app
@@ -27,6 +27,11 @@ def test_search_strategy_is_ordered_and_bounded():
         labels=[x[0] for x in song_searches(song)]
         assert labels[:3]==["existing_provider_id","isrc","exact_title_artist"]
         assert len(labels)<=6 and labels.index("title_artist_album")>labels.index("exact_title_artist")
+
+
+def test_missing_genre_health_issues_support_metadata_discovery():
+    """Genre repair follows the same explicit review flow as other Song metadata."""
+    assert "missing_genre" in SUPPORTED_HEALTH_RULES
 
 
 def test_single_and_batch_submission_persist_discoveries_and_deduplicate_ids():

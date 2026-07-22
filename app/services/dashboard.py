@@ -8,8 +8,10 @@ from app.database.models import (
     Playlist,
     Song,
     SyncSource,
+    Task,
 )
 from app.domain.download import JobStatus
+from app.domain.task import TaskStatus, TaskType
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
@@ -138,6 +140,25 @@ def get_dashboard_snapshot(db) -> dict:
         for collection_id in collection_ids
         if (definition := collection_engine.get(collection_id)) is not None
     ]
+    maintenance = db.scalars(
+        select(Task)
+        .where(
+            Task.task_type.in_(
+                (TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value)
+            ),
+            Task.status.in_(
+                (
+                    TaskStatus.CANCELLED.value,
+                    TaskStatus.COMPLETED.value,
+                    TaskStatus.COMPLETED_WITH_ERRORS.value,
+                    TaskStatus.FAILED.value,
+                    TaskStatus.INTERRUPTED.value,
+                )
+            ),
+        )
+        .order_by(Task.completed_at.desc(), Task.id.desc())
+        .limit(3)
+    ).all()
 
     return {
         "stats": stats,
@@ -164,5 +185,30 @@ def get_dashboard_snapshot(db) -> dict:
             "missing_files": int(missing_files),
             "pending_suggestions": int(suggestions_pending),
         },
+        # Keep richer dashboard insights owned by LibraryAnalyticsService.  The
+        # dashboard must not introduce its own filesystem access or grouping
+        # queries for facts that other Library consumers need.
+        "analytics": {
+            "genres": int(analytics["genres"] or 0),
+            "average_bitrate": int(analytics["average_bitrate"] or 0),
+            "average_duration": float(analytics["average_duration"] or 0),
+            "recently_added": int(analytics["recently_added"] or 0),
+            "largest_album": analytics["largest_album"],
+            "newest_album": analytics["newest_album"],
+            "oldest_album": analytics["oldest_album"],
+        },
+        "maintenance": [
+            {
+                "id": task.id,
+                "name": task.name,
+                "status": task.status,
+                "completed": task.completed_items,
+                "failed": task.failed_items,
+                "skipped": task.skipped_items,
+                "total": task.total_items,
+                "error_code": task.error_code,
+            }
+            for task in maintenance
+        ],
         "collections": collections,
     }

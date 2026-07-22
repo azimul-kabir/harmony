@@ -2,10 +2,17 @@
 {% block title %}Downloads{% endblock %} 
 
 {% block content %} 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-    <h1 style="margin: 0; font-size: 1.6rem;">Command Center</h1>
+<div class="downloads-header">
+    <div><span class="library-eyebrow">Download queue</span><h1>Command Center</h1></div>
     <button id="clear-history-btn" class="btn-danger" style="padding: 8px 14px; font-size: 0.85rem;">Clear History</button>
 </div>
+
+<section class="downloads-summary" aria-label="Download queue summary">
+    <button type="button" class="downloads-summary-card" data-summary-filter="ACTIVE"><span>Running</span><strong id="downloads-running">—</strong></button>
+    <button type="button" class="downloads-summary-card" data-summary-filter="ACTIVE"><span>Queued</span><strong id="downloads-queued">—</strong></button>
+    <button type="button" class="downloads-summary-card" data-summary-filter="COMPLETED"><span>Completed</span><strong id="downloads-completed">—</strong></button>
+    <button type="button" class="downloads-summary-card downloads-summary-attention" data-summary-filter="FAILED"><span>Needs attention</span><strong id="downloads-attention">—</strong></button>
+</section>
 
 <!-- Compact Download Form -->
 <div class="panel" style="padding: 12px; margin-bottom: 16px;">
@@ -33,6 +40,7 @@
         </div>
         <div style="padding-bottom: 16px;">
             <input type="text" id="search-input" class="search-input" placeholder="Search song, artist, album..." style="padding: 10px 14px; font-size: 0.9rem;">
+            <small id="downloads-visible-count" class="downloads-visible-count" aria-live="polite"></small>
         </div>
     </div>
     <div class="table-responsive">
