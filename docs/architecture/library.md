@@ -72,6 +72,29 @@ REST API
 Web UI
 ```
 
+## Dashboard Attention Center
+
+The Dashboard exposes a bounded, navigation-oriented **Needs Attention** summary.
+It combines source-of-truth library health metrics, failed download totals, pending
+metadata suggestions, and terminal Library Maintenance or Library Bulk task outcomes.
+Items with no affected records are omitted. Critical issues are shown before warnings,
+then informational items; their order within a severity is a fixed operational priority,
+not a count-based ranking.
+
+The panel links to existing review screens and exposes only explicitly allowlisted,
+non-destructive recovery actions: verify indexed files, queue metadata analysis, and
+refresh the library index. The browser maps these stable action keys to existing APIs;
+bulk retry, deletion, cache clearing, and metadata application remain unavailable here.
+Its contract contains only typed counts, labels, and navigation URLs: filesystem paths,
+task payloads, provider responses, and raw task errors are never sent to the Dashboard.
+Source availability, duplicate candidates, and album completeness are not listed until
+the corresponding services provide an accurate, indexed aggregate.
+
+The Dashboard also has a bounded download activity timeline. It receives the latest
+download job identifiers, statuses, titles, artists, and display timestamps through the
+existing SSE stream, patches rows by job identifier, and links to Downloads for review.
+Download output paths and error diagnostics are deliberately excluded.
+
 ---
 
 # Library Domain Model

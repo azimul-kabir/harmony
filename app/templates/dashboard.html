@@ -19,6 +19,12 @@
         <a href="/downloads?status=failed" class="dashboard-kpi dashboard-kpi-danger"><span>Failed</span><strong id="kpi-failed">{{ stats.failed }}</strong></a>
     </section>
 
+    <section class="panel dashboard-attention" aria-labelledby="dashboard-attention-title">
+        <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Operational overview</span><h2 id="dashboard-attention-title">Needs Attention</h2></div><strong id="attention-total" class="dashboard-attention-total">0 issues</strong></div>
+        <div id="dashboard-attention-empty" class="dashboard-attention-empty"><strong>Everything looks healthy</strong><span>No current library, download, source, or maintenance issues need attention.</span></div>
+        <div id="dashboard-attention-list" class="dashboard-attention-list" aria-live="polite"></div>
+    </section>
+
     <section class="dashboard-summary-grid" aria-label="Dashboard summaries">
         <article class="panel dashboard-summary-card">
             <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Download queue</span><h2>Downloads</h2></div><a href="/downloads">Open queue →</a></div>
@@ -78,8 +84,9 @@
     <!-- Bottom Row: Activity and quick actions -->
     <div class="bottom-split">
         <section class="panel" style="padding: 0; overflow: hidden;">
-            <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
-                <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Recent Activity</h3>
+            <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+                <div><span class="library-eyebrow">Download history</span><h2 style="margin: 2px 0 0; font-size: 1.1rem;">Activity timeline</h2></div>
+                <a href="/downloads" class="dashboard-panel-link">Open downloads →</a>
             </div>
             <div id="recent-activity" class="activity-list" style="padding: 24px;">
                 <p class="empty-state">No recent activity.</p>

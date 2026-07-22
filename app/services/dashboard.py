@@ -35,7 +35,9 @@ def get_dashboard_stats(db):
     failed = (
         db.scalar(
             select(func.count(DownloadJob.id)).where(
-                DownloadJob.status == JobStatus.FAILED.value
+                DownloadJob.status.in_(
+                    (JobStatus.FAILED.value, JobStatus.CANCELLED.value)
+                )
             )
         )
         or 0
@@ -49,13 +51,25 @@ def get_dashboard_stats(db):
     }
 
 
+def serialize_dashboard_activity(job: DownloadJob) -> dict:
+    """Return a bounded, display-safe download event for the Dashboard timeline."""
+    event_at = job.completed_at or job.started_at or job.created_at
+    return {
+        "id": job.id,
+        "status": job.status,
+        "title": job.title,
+        "artist": job.artist,
+        "event_at": event_at.isoformat() if event_at else None,
+    }
+
+
 def get_dashboard_snapshot(db) -> dict:
     """Return the compact, actionable dashboard read model."""
     stats = get_dashboard_stats(db)
     analytics = library_analytics.calculate(db)
     available = Song.availability_status == "available"
     missing_metadata = missing_metadata_expression()
-    health = db.execute(
+    health_row = db.execute(
         select(
             func.coalesce(
                 func.sum(case((Song.artwork_status == "missing", 1), else_=0)), 0
@@ -80,8 +94,8 @@ def get_dashboard_snapshot(db) -> dict:
                     1
                     - (
                         (
-                            int(health[0]) * 0.30
-                            + int(health[1]) * 0.50
+                            int(health_row[0]) * 0.30
+                            + int(health_row[1]) * 0.50
                             + missing_files * 0.20
                         )
                         / max(total_songs + missing_files, 1)
@@ -110,7 +124,15 @@ def get_dashboard_snapshot(db) -> dict:
             ),
             func.coalesce(
                 func.sum(
-                    case((DownloadJob.status == JobStatus.FAILED.value, 1), else_=0)
+                    case(
+                        (
+                            DownloadJob.status.in_(
+                                (JobStatus.FAILED.value, JobStatus.CANCELLED.value)
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
                 ),
                 0,
             ),
@@ -126,6 +148,13 @@ def get_dashboard_snapshot(db) -> dict:
             )
         )
         or 0
+    )
+    attention = _get_attention_summary(
+        failed_downloads=stats["failed"],
+        missing_files=int(missing_files),
+        missing_artwork=int(health_row[0]),
+        pending_suggestions=int(suggestions_pending),
+        task_counts=_attention_task_counts(db),
     )
     playlist_count = db.scalar(select(func.count(Playlist.id))) or 0
     collection_ids = (
@@ -180,11 +209,12 @@ def get_dashboard_snapshot(db) -> dict:
         },
         "health": {
             "score": health_score,
-            "missing_artwork": int(health[0]),
-            "missing_metadata": int(health[1]),
+            "missing_artwork": int(health_row[0]),
+            "missing_metadata": int(health_row[1]),
             "missing_files": int(missing_files),
             "pending_suggestions": int(suggestions_pending),
         },
+        "attention": attention,
         # Keep richer dashboard insights owned by LibraryAnalyticsService.  The
         # dashboard must not introduce its own filesystem access or grouping
         # queries for facts that other Library consumers need.
@@ -211,4 +241,154 @@ def get_dashboard_snapshot(db) -> dict:
             for task in maintenance
         ],
         "collections": collections,
+    }
+
+
+_ATTENTION_DEFINITIONS = (
+    # Order is operational priority within a severity; do not sort by count.
+    (
+        "failed_downloads",
+        "critical",
+        "Failed downloads",
+        "/downloads?status=failed",
+        "Review",
+        None,
+        None,
+    ),
+    (
+        "missing_files",
+        "critical",
+        "Missing library files",
+        "/library/health",
+        "Review",
+        "verify_files",
+        "Verify files",
+    ),
+    (
+        "maintenance_jobs",
+        "warning",
+        "Library maintenance jobs",
+        "/library/health",
+        "Review",
+        None,
+        None,
+    ),
+    (
+        "bulk_jobs",
+        "warning",
+        "Library bulk jobs",
+        "/library/health",
+        "Review",
+        None,
+        None,
+    ),
+    (
+        "pending_metadata",
+        "warning",
+        "Pending metadata suggestions",
+        "/library/health",
+        "Review",
+        "analyze_metadata",
+        "Analyze metadata",
+    ),
+    (
+        "missing_artwork",
+        "info",
+        "Missing artwork",
+        "/library?missing_artwork=true",
+        "Review",
+        "refresh_library",
+        "Refresh library",
+    ),
+)
+
+
+def _attention_task_counts(db) -> dict[str, int]:
+    """Count only terminal task outcomes that require a recovery review."""
+    needs_review = (
+        TaskStatus.FAILED.value,
+        TaskStatus.COMPLETED_WITH_ERRORS.value,
+        TaskStatus.INTERRUPTED.value,
+    )
+    row = db.execute(
+        select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Task.task_type == TaskType.LIBRARY_MAINTENANCE.value, 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(
+                    case((Task.task_type == TaskType.LIBRARY_BULK.value, 1), else_=0)
+                ),
+                0,
+            ),
+        ).where(
+            Task.task_type.in_(
+                (TaskType.LIBRARY_MAINTENANCE.value, TaskType.LIBRARY_BULK.value)
+            ),
+            Task.status.in_(needs_review),
+        )
+    ).one()
+    return {"maintenance_jobs": int(row[0]), "bulk_jobs": int(row[1])}
+
+
+def _get_attention_summary(
+    *,
+    failed_downloads: int,
+    missing_files: int,
+    missing_artwork: int,
+    pending_suggestions: int,
+    task_counts: dict[str, int],
+) -> dict:
+    """Create a privacy-safe, navigation-only Dashboard attention contract."""
+    counts = {
+        "failed_downloads": failed_downloads,
+        "missing_files": missing_files,
+        "maintenance_jobs": task_counts["maintenance_jobs"],
+        "bulk_jobs": task_counts["bulk_jobs"],
+        "pending_metadata": pending_suggestions,
+        "missing_artwork": missing_artwork,
+    }
+    items = []
+    for (
+        key,
+        severity,
+        title,
+        href,
+        action_label,
+        recovery_action,
+        recovery_label,
+    ) in _ATTENTION_DEFINITIONS:
+        count = int(counts[key])
+        if count:
+            noun = "item" if count == 1 else "items"
+            verb = "requires" if count == 1 else "require"
+            items.append(
+                {
+                    "key": key,
+                    "severity": severity,
+                    "count": count,
+                    "title": title,
+                    "description": f"{count} {noun} {verb} attention",
+                    "href": href,
+                    "action_label": action_label,
+                    "recovery_action": recovery_action,
+                    "recovery_label": recovery_label,
+                }
+            )
+    severity_counts = {
+        severity: sum(item["count"] for item in items if item["severity"] == severity)
+        for severity in ("critical", "warning", "info")
+    }
+    return {
+        "total_count": sum(item["count"] for item in items),
+        "critical_count": severity_counts["critical"],
+        "warning_count": severity_counts["warning"],
+        "info_count": severity_counts["info"],
+        "items": items,
     }
