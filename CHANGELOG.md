@@ -14,6 +14,71 @@ The format is based on **Keep a Changelog**, and this project follows **Semantic
 
 ---
 
+## [v1.6.0] - 2026-07-22
+
+Harmony v1.6.0 introduces **Metadata Intelligence**: a provider-neutral,
+review-first workflow for diagnosing, discovering, applying, auditing, and
+reversing library metadata changes. The initial public discovery provider is
+MusicBrainz, while Harmony remains the authority for every applied change.
+
+### Added
+
+- **Metadata Health Engine:** Added durable, provider-neutral health rules for
+  missing, inconsistent, and malformed metadata, with severity, evidence,
+  status, and safe repair guidance exposed in the Library Health experience.
+- **MusicBrainz Provider Foundation:** Added rate-limited, retry-aware,
+  normalized MusicBrainz search and lookup infrastructure with bounded local
+  caching, provider diagnostics, and configurable timeout, retry, concurrency,
+  request-rate, and cache-TTL settings.
+- **Explainable Metadata Discovery:** Added durable Song discovery jobs that
+  generate bounded search variants, rank candidates deterministically, retain
+  positive/conflicting/unavailable evidence, identify ambiguity, and require
+  explicit confirmation for ambiguous or low-confidence selections.
+- **Reviewable Suggestions:** Added per-field metadata suggestions with
+  confidence, provider provenance, match evidence, review state, and stale
+  canonical-value detection before a change can be applied.
+- **Safe Metadata Application:** Added previews and durable background batches
+  for accepted or selected Song suggestions, including per-Song reservations,
+  stale-value protection, force-confirmation controls, progress reporting, and
+  structured outcomes.
+- **Audit and Rollback:** Added metadata history, batch result views, and
+  reversible rollback previews/actions so each applied field change has an
+  accountable provenance trail.
+- **Metadata APIs:** Added provider diagnostics, discovery, candidate
+  comparison/selection, suggestion review, application, history, batch, and
+  rollback endpoints. Interactive contracts are available at `/docs`.
+
+### Changed
+
+- Extended the Library Index with MusicBrainz release, release-group, artist,
+  release-artist, release-date, original-release-date, track-total,
+  disc-total, and compilation metadata needed for canonical comparisons.
+- Moved long-running metadata discovery and application work onto Harmony's
+  persistent task lifecycle, including durable cancellation and recovery data.
+- Updated Docker dependency installation to use the canonical `pyproject.toml`
+  manifest with cached build stages.
+
+### Upgrade
+
+- This release includes Alembic revisions `20260721_0009` through
+  `20260722_0015`. They create metadata intelligence, health, provider-cache,
+  discovery, application-audit, and application-lock tables, and add Library
+  Song metadata columns and indexes.
+- Back up the persistent SQLite database before deploying. Start Harmony
+  normally after deployment; Alembic applies the migrations automatically.
+- Review `.env.example` before deployment if you need to tune MusicBrainz
+  traffic or discovery-batch bounds. The defaults are conservative for the
+  public MusicBrainz service.
+
+### Documentation
+
+- Expanded the Library architecture with metadata health, provider boundaries,
+  deterministic matching, discovery, application, rollback, and operational
+  contracts.
+- Added dedicated v1.6.0 release notes with deployment and validation steps.
+
+---
+
 ## [v1.5.0] - 2026-07-21
 
 Harmony v1.5.0 establishes the Library Foundation as the canonical index for
