@@ -213,6 +213,39 @@ def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
     )
 
 
+def test_existing_database_repairs_missing_song_columns_when_incorrectly_at_head(
+    tmp_path, monkeypatch
+):
+    """A mistakenly stamped v1.6 database must not remain permanently broken."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'stamped-incomplete.db'}")
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs ("
+            "id INTEGER PRIMARY KEY, path VARCHAR NOT NULL UNIQUE, "
+            "filename VARCHAR NOT NULL, modified_time INTEGER, created_at DATETIME)"
+        )
+        config.attributes["connection"] = connection
+        command.upgrade(config, "20260722_0013")
+        connection.execute(
+            text("UPDATE alembic_version SET version_num = '20260722_0015'")
+        )
+
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+
+    song_columns = {column["name"] for column in inspect(engine).get_columns("songs")}
+    assert {
+        "musicbrainz_release_group_id",
+        "musicbrainz_release_artist_id",
+        "release_date",
+        "original_release_date",
+    } <= song_columns
+
+
 def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
     tmp_path, monkeypatch
 ):
