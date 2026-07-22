@@ -14,6 +14,7 @@
             <button class="settings-tab" data-target="downloads">Downloads</button>
             <button class="settings-tab" data-target="playlists">Playlists</button>
             <button class="settings-tab" data-target="appearance">Appearance</button>
+            <button class="settings-tab" data-target="spotify">Spotify</button>
             <button class="settings-tab" data-target="system">System</button>
         </div>
     </div>
@@ -126,6 +127,24 @@
                     <button type="submit" class="btn-primary">Save Changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
+            </form>
+        </div>
+
+        <!-- Spotify genre enrichment -->
+        <div class="settings-section" id="tab-spotify" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 8px;">Spotify</h2>
+            <form class="settings-form" data-category="spotify">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="spotify_genre_enrichment_enabled" style="width: 18px; height: 18px;" {% if spotify.spotify_genre_enrichment_enabled %}checked{% endif %}>
+                        Spotify genre enrichment
+                    </label>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Use Spotify artist metadata as an optional genre source.</p>
+                </div>
+                <div id="spotify-credential-status" style="display: {% if spotify.spotify_genre_enrichment_enabled %}block{% else %}none{% endif %}; color: var(--text-muted); font-size: 0.85rem;">
+                    Credentials configured: <strong>{{ 'yes' if spotify_credentials_configured else 'no' }}</strong>. Set <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in the environment; secrets are never displayed here.
+                </div>
+                <div style="margin-top: 32px;"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span></div>
             </form>
         </div>
 
@@ -332,6 +351,10 @@
                 setTimeout(() => status.style.display = 'none', 3000);
             }
         });
+    });
+    const spotifyToggle = document.querySelector('[name="spotify_genre_enrichment_enabled"]');
+    if (spotifyToggle) spotifyToggle.addEventListener('change', () => {
+        document.getElementById('spotify-credential-status').style.display = spotifyToggle.checked ? 'block' : 'none';
     });
 </script>
 {% endblock %}

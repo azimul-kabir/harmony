@@ -60,10 +60,11 @@ paths, provider URLs/payloads, credentials, command lines, or raw errors.
 - SpotDL integration
 - Background download queue
 - Automatic library import
-- Spotify genres are retrieved automatically from Spotify **artist** metadata
-  (Spotify track and album objects do not provide genres). They are inherited
-  artist genres and can be broad; Harmony writes them to downloaded files so a
-  Navidrome rescan can see them. Manual metadata and approved MusicBrainz
+- Spotify artist-genre enrichment is optional and disabled by default. When
+  enabled, Harmony uses Spotify **artist** metadata (track and album objects do
+  not provide genres). MusicBrainz and embedded file metadata remain available
+  without Spotify. Spotify genre data can be empty or unavailable, and Spotify
+  failures never block a download. Manual metadata and approved MusicBrainz
   metadata remain higher-priority sources.
 
 ---
@@ -430,11 +431,15 @@ Create your local environment.
 cp .env.example .env.local
 ```
 
-Configure Spotify credentials.
+Spotify artist-genre enrichment is optional. It is disabled by default, so
+credentials are not required for downloads, metadata resolution, tagging, or
+library indexing. Enable it only when you want Spotify artist metadata to be
+an additional genre source:
 
 ```env
-SPOTIFY_CLIENT_ID=your_client_id
-SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_GENRE_ENRICHMENT_ENABLED=false
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
 ```
 
 Review the storage paths before starting, especially when using Docker or a

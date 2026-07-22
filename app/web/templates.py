@@ -28,6 +28,7 @@ def template_context(**kwargs):
     try:
         appearance = settings_service.get_settings_by_category(db, "appearance")
         general = settings_service.get_settings_by_category(db, "general")
+        spotify = settings_service.get_settings_by_category(db, "spotify")
     finally:
         db.close()
 
@@ -49,6 +50,7 @@ def template_context(**kwargs):
         "page": "",
         "appearance": appearance,
         "general": general,
+        "spotify": spotify,
         "datetime_fmt": datetime_fmt, # Passed to the templates!
         **kwargs,
     }

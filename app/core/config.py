@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
-    spotify_genre_fetch_enabled: bool = True
+    # Artist genres are supplementary metadata only.  Keep the provider opt-in
+    # so normal downloads never need Spotify credentials or a Spotify request.
+    spotify_genre_enrichment_enabled: bool = False
     spotify_genre_max_values: int = 3
     spotify_genre_max_concurrent_requests: int = 4
     spotify_genre_include_featured_fallback: bool = True

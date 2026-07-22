@@ -17,6 +17,8 @@ from spotipy.exceptions import SpotifyException
 
 from app.core.config import get_settings
 from app.core.logging import logger
+from app.database.models import AppSetting
+from app.database.session import SessionLocal
 from app.domain.track import Track
 from app.services.spotify.client import get_client
 
@@ -30,6 +32,8 @@ _CACHE_LOCK = threading.Lock()
 
 
 class GenreFailureCategory(StrEnum):
+    DISABLED = "disabled"
+    CREDENTIALS_MISSING = "credentials_missing"
     UNAUTHORIZED = "unauthorized"
     FORBIDDEN = "forbidden"
     NOT_FOUND = "not_found"
@@ -78,11 +82,13 @@ def normalize_genres(values: list[str], maximum: int) -> list[str]:
 
 def enrich_tracks(tracks: list[Track], *, job_id: int | None = None) -> list[GenreResult]:
     settings = get_settings()
-    if not settings.spotify_genre_fetch_enabled:
-        return [GenreResult([], "genre_skipped_disabled") for _ in tracks]
     # Only 22-character Spotify artist IDs are ever sent to the artist endpoint.
     ids = list(dict.fromkeys(artist_id for track in tracks for artist_id in track.spotify_artist_ids if _valid_artist_id(artist_id)))
     lookup = _fetch_artists(ids, job_id=job_id)
+    if lookup.error and lookup.error.category == GenreFailureCategory.DISABLED:
+        # Do not turn an existing embedded or user-selected value into an empty
+        # Spotify result, and do not change its provenance while disabled.
+        return [GenreResult([], "genre_skipped_disabled") for _ in tracks]
     results: list[GenreResult] = []
     for track in tracks:
         result = resolve_track_genre(track, lookup.artists)
@@ -101,6 +107,15 @@ def _valid_artist_id(value: object) -> bool:
 
 def _fetch_artists(ids: list[str], *, job_id: int | None, client_factory: Callable = get_client) -> GenreLookupResult:
     """Fetch unique artists individually; Development Mode no longer permits GET /artists?ids."""
+    # This is intentionally the shared, first entry point for every artist
+    # lookup (downloads, refreshes, bulk work, and the diagnostic command).
+    # It must run before cache work, client construction, or authentication.
+    settings = get_settings()
+    if not _genre_enrichment_enabled(settings.spotify_genre_enrichment_enabled):
+        return GenreLookupResult({}, GenreLookupError(GenreFailureCategory.DISABLED, None, False))
+    if not settings.spotify_client_id or not settings.spotify_client_secret:
+        logger.warning("Spotify genre enrichment is enabled but Spotify credentials are not configured; continuing without Spotify genres")
+        return GenreLookupResult({}, GenreLookupError(GenreFailureCategory.CREDENTIALS_MISSING, None, False))
     ids = list(dict.fromkeys(artist_id for artist_id in ids if _valid_artist_id(artist_id)))
     now = time.monotonic()
     output: dict[str, list[str]] = {}
@@ -133,13 +148,13 @@ def _fetch_artists(ids: list[str], *, job_id: int | None, client_factory: Callab
         try:
             # Development Mode requires the individual GET /v1/artists/{id} endpoint.
             artist = client_factory().artist(artist_id) or {}
-            values = normalize_genres(artist.get("genres") or [], get_settings().spotify_genre_max_values)
+            values = normalize_genres(artist.get("genres") or [], settings.spotify_genre_max_values)
             return artist_id, values, None
         except Exception as exc:  # enrichment must never affect the download path
             return artist_id, None, _classify_error(exc)
 
     error: GenreLookupError | None = None
-    limit = max(1, get_settings().spotify_genre_max_concurrent_requests)
+    limit = max(1, settings.spotify_genre_max_concurrent_requests)
     try:
         with ThreadPoolExecutor(max_workers=limit, thread_name_prefix="spotify-genre") as executor:
             futures = [executor.submit(fetch_one, artist_id) for artist_id in owners]
@@ -167,6 +182,21 @@ def _fetch_artists(ids: list[str], *, job_id: int | None, client_factory: Callab
                 if event:
                     event.set()
     return GenreLookupResult(output, error)
+
+
+def _genre_enrichment_enabled(configured_default: bool) -> bool:
+    """Use the persistent Settings toggle when present, otherwise the env default."""
+    db = SessionLocal()
+    try:
+        try:
+            setting = db.get(AppSetting, "spotify_genre_enrichment_enabled")
+        except Exception:
+            # The diagnostic also runs before a database is bootstrapped. The
+            # environment default remains authoritative in that situation.
+            return configured_default
+        return configured_default if setting is None else setting.value.casefold() in ("true", "1", "yes", "on")
+    finally:
+        db.close()
 
 def _classify_error(exc: Exception) -> GenreLookupError:
     if isinstance(exc, SpotifyException):
