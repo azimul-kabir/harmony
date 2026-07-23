@@ -50,7 +50,11 @@ async function loadMetadataIssues() {
     const severity = document.getElementById("metadata-severity")?.value || "";
     const query = document.getElementById("metadata-search")?.value || "";
     const entityType = document.getElementById("metadata-entity")?.value || "";
-    const data = await healthJson(`/api/library/health/metadata/issues?status=${encodeURIComponent(status)}&severity=${encodeURIComponent(severity)}&entity_type=${encodeURIComponent(entityType)}&search=${encodeURIComponent(query)}&limit=50`);
+    const params = new URLSearchParams({ status, limit: "50" });
+    if (severity) params.set("severity", severity);
+    if (entityType) params.set("entity_type", entityType);
+    if (query) params.set("search", query);
+    const data = await healthJson(`/api/library/health/metadata/issues?${params}`);
     const target = document.getElementById("metadata-issues");
     const items = data.items;
     target.innerHTML = items.length ? items.map((item) => {
