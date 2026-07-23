@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database.models import Task
@@ -7,7 +7,7 @@ from app.domain.task import TaskType
 from app.services.library_health import HEALTH_ACTIONS, library_health
 from app.services.task_service import cancel_task
 from app.services.task_progress import get_typed_task, serialize_task_progress
-from app.api.schemas.library import LibraryHealthResponse, TaskProgressResponse
+from app.api.schemas.library import LibraryHealthIssuesResponse, LibraryHealthResponse, TaskProgressResponse
 
 
 router = APIRouter(prefix="/api/library/health", tags=["library", "health"])
@@ -28,6 +28,21 @@ def _get_task(db: Session, task_id: int) -> Task:
 )
 def health_snapshot(db: Session = Depends(get_db)):
     return library_health.calculate(db)
+
+
+@router.get("/issues/{check_id}", response_model=LibraryHealthIssuesResponse, summary="List actionable Library health issues")
+def health_issues(check_id: str, db: Session = Depends(get_db), limit: int = Query(100, ge=1, le=100), offset: int = Query(0, ge=0)):
+    try:
+        return library_health.issues(db, check_id, limit, offset)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.post("/issues/{issue_id}/discover", summary="Discover metadata candidates without changing a song")
+def discover_issue_match(issue_id: str):
+    # No metadata-provider candidate API is configured in Harmony yet.  This endpoint
+    # deliberately does not download, mutate tags, or expose an opaque internal ID.
+    return {"outcome": "provider_unavailable", "message": "Metadata lookup is temporarily unavailable. No song metadata was changed."}
 
 
 @router.post(

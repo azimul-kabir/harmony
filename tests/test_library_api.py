@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.api.library import _serialize_song, list_collections
+from app.api.library import _serialize_song, list_collections, list_missing_files
 from app.database.base import Base
 from app.database.models import Song
 
@@ -87,3 +87,27 @@ def test_song_response_falls_back_when_a_legacy_song_has_no_created_at():
 
     assert response["date_added"] == indexed_at
     assert response["recently_added"] is True
+
+
+def test_missing_file_review_payload_identifies_the_song_without_exposing_path_in_the_health_ui_contract():
+    with _session() as db:
+        db.add(Song(
+            path="/private/music/Queen/A Night at the Opera/03 - Bohemian Rhapsody.flac",
+            filename="03 - Bohemian Rhapsody.flac",
+            title="Bohemian Rhapsody",
+            artist="Queen",
+            album="A Night at the Opera",
+            track=3,
+            disc=1,
+            availability_status="missing",
+        ))
+        db.commit()
+
+        payload = list_missing_files(db=db, limit=None, offset=0)
+
+    assert payload[0]["id"]
+    assert payload[0]["title"] == "Bohemian Rhapsody"
+    assert payload[0]["artist"] == "Queen"
+    assert payload[0]["album"] == "A Night at the Opera"
+    assert payload[0]["filename"] == "03 - Bohemian Rhapsody.flac"
+    assert payload[0]["availability_status"] == "missing"

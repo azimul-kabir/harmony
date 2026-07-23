@@ -6,6 +6,7 @@ const DEFAULT_BITRATE_RANGES = {
     compact: { min: null, max: 191999 },
 };
 const savedPreferences = readLibraryPreferences();
+const initialLibraryParams = new URLSearchParams(window.location.search);
 
 const libraryState = {
     songs: [],
@@ -32,6 +33,8 @@ const libraryState = {
         missing_metadata: Boolean(savedPreferences.filters?.missing_metadata),
     },
     filterPanelOpen: Boolean(savedPreferences.filterPanelOpen),
+    includeMissing: initialLibraryParams.get("include_missing") === "1",
+    reviewSongId: Number(initialLibraryParams.get("song_id")) || null,
     query: "",
     collectionId: null,
     searchTotal: 0,
@@ -149,6 +152,7 @@ function libraryRequestParams({ query = null, limit = null } = {}) {
     ["downloaded_today", "recently_added", "missing_artwork", "missing_metadata"].forEach((field) => {
         if (libraryState.filters[field]) params.set(field, "true");
     });
+    if (libraryState.includeMissing) params.set("include_missing", "true");
     return params.toString();
 }
 
@@ -303,6 +307,17 @@ async function loadLibraryData({ preserveState = false } = {}) {
         const songs = Array.isArray(songResult) ? songResult : songResult.items;
         const { albums, artists } = projectSongs(songs);
         Object.assign(libraryState, { songs, albums, artists, collections, filterOptions });
+        if (libraryState.reviewSongId) {
+            const targetIndex = songs.findIndex((song) => song.id === libraryState.reviewSongId);
+            if (targetIndex < 0) {
+                errorBox.textContent = "This song is no longer in the Library Index. It may have been removed since the issue was reported.";
+                errorBox.hidden = false;
+                libraryState.reviewSongId = null;
+            } else {
+                libraryState.view = "songs";
+                libraryState.pages.songs = Math.floor(targetIndex / libraryState.pageSize) + 1;
+            }
+        }
         populateFilterOptions();
         updateFilterControls();
         updateCounts();
@@ -410,7 +425,7 @@ function renderSongs() {
         body.innerHTML = emptyTable("No songs match this view.");
     } else {
         body.innerHTML = page.items.map((song) => `
-            <tr class="${libraryState.selectedSongs.has(song.id) ? "is-selected" : ""}">
+            <tr data-song-row="${song.id}" class="${libraryState.selectedSongs.has(song.id) ? "is-selected" : ""}${libraryState.reviewSongId === song.id ? " is-review-target" : ""}" ${libraryState.reviewSongId === song.id ? 'tabindex="-1" aria-label="Song selected for review"' : ""}>
                 <td class="library-select-cell" data-label="Select"><input type="checkbox" data-select-song="${song.id}" aria-label="Select ${escapeAttribute(song.title || song.filename)}" ${libraryState.selectedSongs.has(song.id) ? "checked" : ""}></td>
                 <td data-label="Title">
                     <div class="library-song-title">
@@ -438,6 +453,13 @@ function renderSongs() {
         });
     });
     updateBulkSelection(page.items);
+
+    if (libraryState.reviewSongId && page.items.some((song) => song.id === libraryState.reviewSongId)) {
+        const target = body.querySelector(`[data-song-row="${libraryState.reviewSongId}"]`);
+        target?.focus({preventScroll: true});
+        target?.scrollIntoView({behavior: "smooth", block: "center"});
+        libraryState.reviewSongId = null;
+    }
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
 }
