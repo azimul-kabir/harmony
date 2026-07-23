@@ -4,11 +4,13 @@
     <form id="download-form">
         <input
             id="spotify-url"
-            name="spotify_url"
+            name="url"
             type="url"
-            placeholder="Paste a Spotify track, album or playlist URL"
+            placeholder="Paste a Spotify or YouTube Music URL"
             required
         >
+
+        <p class="form-hint">YouTube Music availability depends on public YouTube access and yt-dlp.</p>
 
         <button type="submit">
             Download

@@ -1,6 +1,7 @@
 from fastapi.templating import Jinja2Templates
 from zoneinfo import ZoneInfo
 from datetime import datetime
+from pathlib import Path
 
 from app.core.config import get_settings
 from app.database.session import SessionLocal
@@ -22,6 +23,15 @@ def format_tz(value, tz_str="UTC", fmt="%b %d, %H:%M"):
 
 templates.env.filters["format_tz"] = format_tz
 settings = get_settings()
+
+
+def _static_version(path: str) -> str:
+    """Return a deployment-specific cache key for a bundled static asset."""
+    try:
+        return str((Path("app/static") / path).stat().st_mtime_ns)
+    except OSError:
+        # Rendering a page must not fail if an asset is absent during a deploy.
+        return settings.app_version
 
 def template_context(**kwargs):
     db = SessionLocal()
@@ -47,6 +57,7 @@ def template_context(**kwargs):
     return {
         "app_name": settings.app_name,
         "version": settings.app_version,
+        "app_js_version": _static_version("js/app.js"),
         "page": "",
         "appearance": appearance,
         "general": general,

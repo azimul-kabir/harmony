@@ -9,6 +9,8 @@ DEFAULT_SETTINGS = [
     {"key": "audio_quality", "value": "128k", "type": "string", "category": "downloads"},
     {"key": "download_workers", "value": "4", "type": "int", "category": "downloads"},
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
+    {"key": "youtube_music_enabled", "value": "true", "type": "boolean", "category": "downloads"},
+    {"key": "default_download_source", "value": "spotify", "type": "string", "category": "downloads"},
     {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
     {"key": "m3u_export_folder", "value": "/music/Playlists", "type": "string", "category": "playlists"},
     {"key": "theme", "value": "auto", "type": "string", "category": "appearance"},

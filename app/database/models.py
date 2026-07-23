@@ -416,6 +416,8 @@ class DownloadJob(Base):
     task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     task = relationship("Task", back_populates="jobs")
     spotify_url: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    source_provider: Mapped[str] = mapped_column(String(80), nullable=False, default="spotify", server_default="spotify", index=True)
+    source_item_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     artist: Mapped[str] = mapped_column(String, nullable=False)
     spotify_track_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)

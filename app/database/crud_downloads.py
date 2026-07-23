@@ -18,7 +18,10 @@ def create_job(
 ) -> DownloadJob:
     job = DownloadJob(
         task_id=task_id,
-        spotify_url=track.spotify_url,
+        spotify_url=track.source_url or track.spotify_url,
+        source_provider=track.source_provider,
+        source_item_id=track.source_item_id,
+        source_url=track.source_url or track.spotify_url,
         spotify_track_id=track.spotify_track_id,
         spotify_album_id=track.spotify_album_id,
         title=track.title,

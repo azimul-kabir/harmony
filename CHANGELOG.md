@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add an opt-in YouTube Music download source using public URLs and yt-dlp.
+
 All notable changes to Harmony are documented in this file.
 
 The format is based on **Keep a Changelog**, and this project follows **Semantic Versioning**.
