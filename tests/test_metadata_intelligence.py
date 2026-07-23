@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.database.models import MetadataHistory, MetadataSuggestion, Song
 from app.database.session import SessionLocal
 from app.main import app
-from app.services.metadata_intelligence import MetadataServiceError, metadata_service
+from app.services.metadata_intelligence import MetadataServiceError, metadata_service, serialize_history
 
 
 def add_song(db, *, title="Original"):
@@ -92,6 +92,23 @@ def test_missing_song_retains_suggestions_and_history():
         assert db.get(MetadataSuggestion, suggestion.id) is not None
         assert db.get(MetadataHistory, history.id) is not None
         assert metadata_service.get_history(db, "song", song.id)[0][0].new_value == '"Original"'
+
+
+def test_legacy_plain_text_history_values_serialize_without_error():
+    with SessionLocal() as db:
+        song = add_song(db)
+        history = metadata_service.record_history(
+            db, entity_type="song", entity_id=song.id, field_name="artwork",
+            previous_value="embedded", new_value="missing", provider="file_tag_write",
+            provider_entity_id=None, confidence=1, job_id=None, change_source="manual",
+            audio_file_modified=False, reversible=True, reversal_of_history_id=None,
+        )
+        db.commit()
+
+        serialized = serialize_history(history)
+
+    assert serialized["previous_value"] == "embedded"
+    assert serialized["new_value"] == "missing"
 
 
 def test_metadata_api_errors_pagination_review_and_library_compatibility():

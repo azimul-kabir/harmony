@@ -61,7 +61,18 @@ def _json_dump(value: Any, *, limit: int) -> str | None:
 
 
 def _json_load(value: str | None) -> Any:
-    return None if value is None else json.loads(value)
+    """Decode stored JSON while preserving values written by older releases.
+
+    Metadata history predates JSON-encoded values, so existing databases can
+    contain plain strings such as ``embedded``.  Returning those strings keeps
+    the history API available instead of turning one legacy record into a 500.
+    """
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return value
 
 
 class MetadataService:

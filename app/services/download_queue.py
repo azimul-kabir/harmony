@@ -165,7 +165,10 @@ def _can_enqueue(
     if track.spotify_url is None:
         return False
 
-    if song is not None:
+    # Deleted library tracks deliberately retain their database row for audit
+    # history.  They must not, however, reserve their Spotify/ISRC identity:
+    # the file is gone and the user should be able to download it again.
+    if song is not None and song.availability_status != "missing":
         return False
 
     if _track_destination_exists(track):
