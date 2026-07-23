@@ -61,7 +61,7 @@ async function loadMetadataIssues() {
         const destination = item.entity_type === "song" && item.song_id
             ? `<a class="btn-secondary" href="/library?song=${item.song_id}&metadata=review">Review song</a>`
             : item.entity_type === "album" && item.album_key
-                ? `<a class="btn-secondary" href="/library?view=albums&album=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
+                ? `<a class="btn-secondary" href="/library?view=albums&album_key=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
         const action = item.status === "ignored"
             ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>`
             : item.status === "open" ? `<button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>` : "";
