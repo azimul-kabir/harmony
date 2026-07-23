@@ -14,12 +14,6 @@ services:
 
     restart: unless-stopped
 
-    environment:
-      SPOTIFY_GENRE_ENRICHMENT_ENABLED: "false"
-      SPOTIFY_CLIENT_ID: ""
-      SPOTIFY_CLIENT_SECRET: ""
-      YOUTUBE_MUSIC_ENABLED: "true"
-
     command: >
       uvicorn app.main:app
       --host 0.0.0.0
