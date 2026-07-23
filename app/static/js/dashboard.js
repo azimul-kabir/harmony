@@ -177,10 +177,14 @@ function renderAttention(attention) {
             const recovery = document.createElement("button");
             recovery.className = "btn-secondary dashboard-attention-recovery";
             recovery.type = "button";
-            row.append(severity, content, count, link, recovery);
+            const controls = document.createElement("div");
+            controls.className = "dashboard-attention-controls";
+            controls.append(link, recovery);
+            row.append(severity, content, count, controls);
         }
         row.className = `dashboard-attention-item severity-${issue.severity}`;
-        const [severity, content, count, link, recovery] = row.children;
+        const [severity, content, count, controls] = row.children;
+        const [link, recovery] = controls.children;
         severity.textContent = issue.severity;
         content.querySelector("strong").textContent = issue.title;
         content.querySelector("span").textContent = issue.description;
