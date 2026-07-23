@@ -333,7 +333,7 @@ _ATTENTION_DEFINITIONS = (
         "missing_files",
         "critical",
         "Missing library files",
-        "/library/health#health-checks",
+        "/library?availability=missing",
         "Review",
         "verify_files",
         "Verify files",

@@ -46,6 +46,9 @@ const libraryState = {
     filterPanelOpen: Boolean(savedPreferences.filterPanelOpen),
     query: "",
     requestedAlbumKey: null,
+    requestedSongId: null,
+    requestedMetadataReviewSongId: null,
+    requestedAvailability: null,
     collectionId: null,
     searchTotal: 0,
     searchRequest: 0,
@@ -162,6 +165,7 @@ function libraryRequestParams({ query = null, limit = null } = {}) {
     ["downloaded_today", "recently_added", "missing_artwork", "missing_metadata"].forEach((field) => {
         if (libraryState.filters[field]) params.set(field, "true");
     });
+    if (libraryState.requestedAvailability === "missing") params.set("include_missing", "true");
     return params.toString();
 }
 
@@ -355,6 +359,11 @@ async function loadLibraryData({ preserveState = false } = {}) {
             applyFilters();
             renderActiveView();
         }
+        if (libraryState.requestedMetadataReviewSongId) {
+            const songId = libraryState.requestedMetadataReviewSongId;
+            libraryState.requestedMetadataReviewSongId = null;
+            await openMetadataReview(songId);
+        }
     } catch (error) {
         console.error("Library load error:", error);
         errorBox.textContent = "Harmony could not load the Library Index. Try again in a moment.";
@@ -373,7 +382,9 @@ function applyFilters() {
             .some((value) => String(value || "").toLocaleLowerCase().includes(query)));
     }
 
-    libraryState.filteredSongs = songs;
+    libraryState.filteredSongs = songs.filter((song) =>
+        (!libraryState.requestedSongId || song.id === libraryState.requestedSongId) &&
+        (!libraryState.requestedAvailability || song.availability_status === libraryState.requestedAvailability));
     libraryState.filteredAlbums = libraryState.albums.filter((album) =>
         (!query || [album.album, album.artist].some((value) => String(value || "").toLocaleLowerCase().includes(query))) &&
         (!libraryState.requestedAlbumKey || album.metadata_key === libraryState.requestedAlbumKey));
@@ -1224,11 +1235,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const requestedView = params.get("view");
     const requestedAlbumKey = params.get("album_key");
+    const requestedSongId = Number(params.get("song"));
+    const requestedAvailability = params.get("availability");
     if (requestedAlbumKey) {
         libraryState.requestedAlbumKey = requestedAlbumKey;
         Object.assign(libraryState.filters, { artist: "", album: "", genre: "", codec: "", bitrate: "", downloaded_today: false, recently_added: false, missing_artwork: false, missing_metadata: false });
     }
     if (["songs", "albums", "artists", "collections"].includes(requestedView)) libraryState.view = requestedView;
+    if (Number.isInteger(requestedSongId) && requestedSongId > 0) {
+        libraryState.requestedSongId = requestedSongId;
+        libraryState.view = "songs";
+        if (params.get("metadata") === "review") libraryState.requestedMetadataReviewSongId = requestedSongId;
+    }
+    if (requestedAvailability === "missing") {
+        libraryState.requestedAvailability = requestedAvailability;
+        libraryState.view = "songs";
+    }
     document.getElementById("library-sort").value = libraryState.sort;
     updateFilterControls();
     switchView(libraryState.view);
