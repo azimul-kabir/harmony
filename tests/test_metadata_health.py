@@ -100,3 +100,102 @@ def test_filter_pagination_summary_and_score_inputs():
         assert {"rule", "severity", "status", "entity_type", "album", "artist"} <= set(summary["counts"])
         assert 0 <= summary["score"]["score"] <= 100
         assert summary["score"]["diagnostic_only"] is True
+
+
+def test_metadata_summary_and_score_share_included_open_record_scope():
+    with SessionLocal() as db:
+        available = song("/music/available.mp3", genre=None)
+        missing = song("/music/missing.mp3", genre=None)
+        db.add_all([available, missing]); db.commit()
+        metadata_health.analyze_song(db, available.id)
+        metadata_health.analyze_song(db, missing.id)
+        db.commit()
+        missing.availability_status = "missing"
+        ignored = db.scalar(select(MetadataIssue).where(MetadataIssue.song_id == available.id, MetadataIssue.rule_id == "missing_genre"))
+        metadata_health.set_status(db, ignored.id, "ignored")
+        db.commit()
+        summary = metadata_health.summary(db)
+        severity_total = sum(row["count"] for row in summary["counts"]["severity"])
+        assert severity_total == summary["score"]["inputs"]["included_open_issues"]
+        assert summary["counts"]["status"] == [{"value": "open", "count": severity_total}]
+        assert summary["score"]["inputs"]["ignored_issues"] >= 1
+        assert summary["score"]["score"] < 100
+
+
+def test_metadata_score_boundaries_and_severity_penalties():
+    with SessionLocal() as db:
+        assert metadata_health.score(db)["score"] == 100
+        song_row = song("/music/scored.mp3")
+        db.add(song_row); db.commit()
+
+        def add_issue(severity: str, number: int) -> None:
+            db.add(MetadataIssue(
+                identity_key=f"score-{severity}-{number}", rule_id="missing_genre", rule_version="1",
+                entity_type="song", entity_id=str(song_row.id), song_id=song_row.id,
+                severity=severity, status="open", title="Missing genre", explanation="Missing genre",
+            ))
+            db.commit()
+
+        add_issue("warning", 1)
+        warning_score = metadata_health.score(db)["score"]
+        assert 0 <= warning_score < 100
+        add_issue("error", 1)
+        error_score = metadata_health.score(db)["score"]
+        assert error_score <= warning_score
+        add_issue("critical", 1)
+        critical_score = metadata_health.score(db)["score"]
+        assert critical_score <= error_score
+        for number in range(2, 20):
+            add_issue("critical", number)
+        assert metadata_health.score(db)["score"] == 0
+
+
+def test_full_analysis_resolves_removed_album_and_artist_projections_and_keeps_audit_history():
+    with SessionLocal() as db:
+        row = song("/music/projection.mp3", album="Album", artist="Artist", album_artist="Artist")
+        db.add(row); db.commit()
+        album_key = metadata_health.album_key(row)
+        artist_key = metadata_health.artist_key(row.artist)
+        metadata_health.analyze_full(db); db.commit()
+        album_issue = db.scalar(select(MetadataIssue).where(MetadataIssue.entity_type == "album", MetadataIssue.entity_id == album_key))
+        artist_issue = db.scalar(select(MetadataIssue).where(MetadataIssue.entity_type == "artist", MetadataIssue.entity_id == artist_key))
+        assert album_issue.status == artist_issue.status == "open"
+        row.availability_status = "missing"
+        metadata_health.analyze_full(db); db.commit()
+        db.refresh(album_issue); db.refresh(artist_issue)
+        assert album_issue.status == artist_issue.status == "resolved"
+        assert metadata_health.list(db, status="resolved", limit=50)[1] >= 2
+        row.availability_status = "available"
+        metadata_health.analyze_full(db); db.commit()
+        db.refresh(album_issue); db.refresh(artist_issue)
+        assert album_issue.status == artist_issue.status == "open"
+
+
+def test_full_analysis_does_not_resolve_projections_when_projection_analysis_fails(monkeypatch):
+    with SessionLocal() as db:
+        db.add(MetadataIssue(identity_key="album-stale", rule_id="missing_musicbrainz_release_id", rule_version="1", entity_type="album", entity_id="gone", album_key="gone", severity="info", status="open", title="Album", explanation="Album"))
+        db.commit()
+        monkeypatch.setattr(metadata_health, "analyze_projections", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("analysis failed")))
+        try:
+            metadata_health.analyze_full(db)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("projection failure should be propagated")
+        assert db.scalar(select(MetadataIssue.status).where(MetadataIssue.identity_key == "album-stale")) == "open"
+
+
+def test_included_open_list_matches_score_scope_and_excludes_missing_song_records():
+    with SessionLocal() as db:
+        available = song("/music/included.mp3")
+        missing = song("/music/excluded.mp3", availability_status="missing")
+        db.add_all([available, missing]); db.commit()
+        db.add_all([
+            MetadataIssue(identity_key="included", rule_id="missing_genre", rule_version="1", entity_type="song", entity_id=str(available.id), song_id=available.id, severity="warning", status="open", title="Included", explanation="Included"),
+            MetadataIssue(identity_key="excluded", rule_id="missing_genre", rule_version="1", entity_type="song", entity_id=str(missing.id), song_id=missing.id, severity="warning", status="open", title="Excluded", explanation="Excluded"),
+        ])
+        db.commit()
+        visible, total = metadata_health.list(db, status="open", included_only=True, limit=50)
+        summary = metadata_health.summary(db)
+        assert total == len(visible) == summary["score"]["inputs"]["included_open_issues"] == 1
+        assert visible[0].identity_key == "included"

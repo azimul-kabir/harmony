@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import threading
 import unicodedata
@@ -15,6 +16,7 @@ from typing import Sequence
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.logging import logger
 from app.core.time import utcnow_naive
 from app.database.models import MetadataIssue, Song
 
@@ -363,20 +365,38 @@ class MetadataHealthService:
     _analyze_projections = analyze_projections
 
     def analyze_full(self, db: Session, job_id: int | None = None) -> int:
+        # SessionLocal disables autoflush; reconciliation must inspect pending
+        # index availability changes in the same maintenance transaction.
+        db.flush()
         songs = list(db.scalars(select(Song).where(Song.availability_status == "available")).all())
         all_findings: list[dict] = []
         for song in songs:
             all_findings.extend(self.detect_song(song))
         self.reconcile(db, all_findings, job_id=job_id)
+        # Projection reconciliation must finish before stale projections are
+        # resolved.  An exception leaves existing projection issues untouched.
         self.analyze_projections(db, songs, job_id)
+        current_albums = {self.album_key(song) for song in songs if song.album}
+        current_artists = {self.artist_key(song.artist) for song in songs if song.artist}
         detected = {item["identity_key"] for item in all_findings}
+        resolved_stale = {"song": 0, "album": 0, "artist": 0}
         for issue in db.scalars(select(MetadataIssue).where(MetadataIssue.status == "open")):
             if issue.entity_type == "song" and issue.identity_key not in detected:
                 issue.status, issue.resolved_at = "resolved", utcnow_naive()
+                resolved_stale["song"] += 1
+            elif issue.entity_type == "album" and issue.entity_id not in current_albums:
+                issue.status, issue.resolved_at = "resolved", utcnow_naive()
+                resolved_stale["album"] += 1
+            elif issue.entity_type == "artist" and issue.entity_id not in current_artists:
+                issue.status, issue.resolved_at = "resolved", utcnow_naive()
+                resolved_stale["artist"] += 1
+        if any(resolved_stale.values()):
+            logger.info("Metadata analysis resolved stale issues: songs={}, albums={}, artists={}", resolved_stale["song"], resolved_stale["album"], resolved_stale["artist"])
         return len(songs)
 
     def list(self, db: Session, **filters):
         limit, offset = filters.pop("limit", 50), filters.pop("offset", 0)
+        included_only = filters.pop("included_only", False)
         query = select(MetadataIssue)
         clauses = []
         ranges = {"first_detected_from": ("first_detected_at", ">="), "first_detected_to": ("first_detected_at", "<="),
@@ -396,6 +416,8 @@ class MetadataHealthService:
             clauses.append(or_(MetadataIssue.title.ilike(pattern), MetadataIssue.explanation.ilike(pattern),
                                MetadataIssue.album_key.ilike(pattern), MetadataIssue.artist_key.ilike(pattern)))
         query = query.where(*clauses)
+        if included_only:
+            query = query.where(*self._included_open_issue_clauses())
         total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         rows = list(db.scalars(query.order_by(MetadataIssue.last_detected_at.desc(), MetadataIssue.id.desc())
                                .offset(offset).limit(limit)))
@@ -422,21 +444,47 @@ class MetadataHealthService:
         return self.set_status(db, issue_id, "resolved")
 
     def summary(self, db: Session) -> dict:
+        """Summarize the same included open issue records used by ``score``.
+
+        Counts are issue *records*, not grouped rules or affected songs.  This
+        prevents historical resolved/ignored rows from being presented as the
+        severity population for a current score.
+        """
         dimensions = {}
+        included = self.included_open_issue_query()
         for name, column in (("rule", MetadataIssue.rule_id), ("severity", MetadataIssue.severity),
-                             ("status", MetadataIssue.status), ("entity_type", MetadataIssue.entity_type),
+                             ("entity_type", MetadataIssue.entity_type),
                              ("album", MetadataIssue.album_key), ("artist", MetadataIssue.artist_key)):
-            rows = db.execute(select(column, func.count()).group_by(column)).all()
+            rows = db.execute(included.with_only_columns(column, func.count()).group_by(column)).all()
             dimensions[name] = [{"value": value, "count": count} for value, count in rows if value is not None]
+        dimensions["status"] = [{"value": "open", "count": int(db.scalar(select(func.count()).select_from(included.subquery())) or 0)}]
         return {"counts": dimensions, "score": self.score(db)}
+
+    @staticmethod
+    def _included_open_issue_clauses():
+        """Open records relevant to the current indexed library.
+
+        Ignored and resolved records are historical diagnostics. Song records
+        for missing files are stale and excluded; album/artist records are
+        current projections reconciled by analysis and remain included.
+        """
+        available_ids = select(Song.id).where(Song.availability_status == "available")
+        return (
+            MetadataIssue.status == "open",
+            or_(MetadataIssue.entity_type != "song", MetadataIssue.song_id.in_(available_ids)),
+        )
+
+    @classmethod
+    def included_open_issue_query(cls):
+        """Canonical current issue scope for lists, summaries, and scores."""
+        return select(MetadataIssue).where(*cls._included_open_issue_clauses())
+
+    def included_open_issue_count(self, db: Session) -> int:
+        return int(db.scalar(select(func.count()).select_from(self.included_open_issue_query().subquery())) or 0)
 
     def score(self, db: Session) -> dict:
         weights = {"info": 0.25, "warning": 2.0, "error": 6.0, "critical": 12.0}
-        available_ids = select(Song.id).where(Song.availability_status == "available")
-        rows = list(db.scalars(select(MetadataIssue).where(
-            MetadataIssue.status == "open",
-            or_(MetadataIssue.entity_type != "song", MetadataIssue.song_id.in_(available_ids)),
-        )))
+        rows = list(db.scalars(self.included_open_issue_query()))
         grouped: Counter[tuple[str, str]] = Counter()
         by_severity = Counter()
         for issue in rows:
@@ -447,7 +495,8 @@ class MetadataHealthService:
         penalty = round(sum(min(value, entity_cap) for value in grouped.values()), 2)
         available = int(db.scalar(select(func.count()).select_from(Song).where(Song.availability_status == "available")) or 0)
         budget = max(available * 10.0, 1.0)
-        score = max(0, min(100, round(100 * (1 - min(penalty, budget) / budget))))
+        # Floor prevents a non-zero included penalty from displaying as 100.
+        score = max(0, min(100, math.floor(100 * (1 - min(penalty, budget) / budget))))
         ignored = int(db.scalar(select(func.count()).select_from(MetadataIssue).where(MetadataIssue.status == "ignored")) or 0)
         return {"score": score, "inputs": {"available_songs": available, "included_open_issues": len(rows),
                 "ignored_issues": ignored, "issues_by_severity": dict(by_severity), "weighted_penalty": penalty,

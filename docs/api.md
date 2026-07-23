@@ -61,6 +61,11 @@ Songs; requests never silently apply provider values.
 
 ### Health, discovery, and suggestions
 
+- `GET /api/library/health/metadata/issues?status=open&included_only=true`
+  returns only current included open metadata issue records. This is the
+  Library Health Open-view scope and matches metadata score and summary totals.
+  Omitting `included_only` preserves the broader audit-history list.
+
 - `POST /api/metadata/discoveries/songs/{song_id}` starts discovery for one
   Song; `POST /api/metadata/discoveries/songs` accepts an explicit Song scope.
 - `POST /api/metadata/discoveries/health-rules` and
