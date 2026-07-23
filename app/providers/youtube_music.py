@@ -7,11 +7,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from app.core.config import get_settings
+from app.database.session import SessionLocal
 from app.domain.track import Track
 from app.providers.download_source import SourceResult
-from app.database.session import SessionLocal
-from app.services import settings_service
 from app.services.download_processes import download_processes
+from app.services import settings_service
 
 _SUFFIX = re.compile(r"\s*[\[(](?:official (?:audio|video)|lyrics?|lyric video|visualizer)[^\])]*[\])]\s*$", re.I)
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
