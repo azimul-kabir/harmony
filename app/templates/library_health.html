@@ -35,13 +35,6 @@
                 <small>Repair and duplicate engines will appear here automatically.</small>
             </div>
             <div id="health-check-list" class="health-check-list"></div>
-            <section id="health-issues" class="health-issue-review" hidden aria-live="polite" aria-labelledby="health-issues-title" tabindex="-1">
-                <div class="health-issue-review-heading">
-                    <div><h3 id="health-issues-title">Library issues</h3><p id="health-issues-summary">Loading affected songs…</p></div>
-                    <button id="health-issues-close" class="btn-secondary" type="button">Close</button>
-                </div>
-                <div id="health-issues-list" class="health-issue-list"></div>
-            </section>
         </div>
 
         <aside class="health-actions" aria-labelledby="health-actions-title">
@@ -86,4 +79,4 @@
 </dialog>
 {% endblock %}
 
-{% block scripts %}<script src="/static/js/library_health.js?v={{ version }}"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/library_health.js"></script>{% endblock %}

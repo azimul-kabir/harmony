@@ -69,49 +69,9 @@ function renderHealthChecks(checks) {
             <div><strong>${escapeHealth(check.label)}</strong><small>${check.available ?
                 (check.count ? `${Number(check.count).toLocaleString()} songs need attention` : "No issues detected") :
                 "Provider not installed yet"}</small></div>
-            ${["missing-files", "metadata"].includes(check.id) && check.count ?
-                `<button class="btn-secondary health-review-button" type="button" data-health-review="${escapeHealth(check.id)}" aria-expanded="false">Review ${Number(check.count).toLocaleString()} song${check.count === 1 ? "" : "s"}</button>` :
-                `<span>${check.available ? (check.status === "healthy" ? "Healthy" : "Review") : "Future"}</span>`}
+            <span>${check.available ? (check.status === "healthy" ? "Healthy" : "Review") : "Future"}</span>
         </article>
     `).join("");
-    document.querySelectorAll("[data-health-review]").forEach((button) => {
-        button.addEventListener("click", () => showHealthIssues(button.dataset.healthReview, button));
-    });
-}
-
-async function showHealthIssues(checkId, trigger) {
-    const panel = document.getElementById("health-issues");
-    const summary = document.getElementById("health-issues-summary");
-    const list = document.getElementById("health-issues-list");
-    panel.hidden = false;
-    trigger.setAttribute("aria-expanded", "true");
-    summary.textContent = "Loading affected songs…";
-    list.innerHTML = "";
-    panel.focus();
-    panel.scrollIntoView({behavior: "smooth", block: "nearest"});
-    try {
-        const result = await healthJson(`/api/library/health/issues/${encodeURIComponent(checkId)}?limit=100`);
-        summary.textContent = result.total ? `${result.total.toLocaleString()} affected ${result.total === 1 ? "song" : "songs"}. Showing ${result.items.length.toLocaleString()}.` : "No current issues were found. This record may already be resolved.";
-        list.innerHTML = result.items.map((issue) => {
-            const reviewUrl = `/library?song_id=${encodeURIComponent(issue.entity_id)}${issue.availability === "missing" ? "&include_missing=1" : ""}`;
-            const detected = issue.detected_value || "Blank or unavailable";
-            return `<article class="health-issue-song"><div class="health-issue-content"><strong>${escapeHealth(issue.title)}</strong><span>Artist: ${escapeHealth(issue.artist)} · Album: ${escapeHealth(issue.album)}</span><small>File: ${escapeHealth(issue.filename)} · ${escapeHealth(issue.field)}</small><p><b>Problem:</b> ${escapeHealth(issue.explanation)}<br><b>Detected value:</b> ${escapeHealth(detected)}<br><b>Next step:</b> ${escapeHealth(issue.recommended_action)}</p></div><div class="health-issue-actions"><a class="btn-primary" href="${reviewUrl}">Review song</a>${issue.check_id === "metadata" ? `<button class="btn-secondary" type="button" data-discover-issue="${escapeHealth(issue.id)}">Discover match</button>` : ""}</div></article>`;
-        }).join("");
-        list.querySelectorAll("[data-discover-issue]").forEach((button) => button.addEventListener("click", () => discoverIssueMatch(button)));
-    } catch (error) {
-        summary.textContent = `Harmony could not load the affected songs: ${error.message}`;
-    }
-}
-
-async function discoverIssueMatch(button) {
-    button.disabled = true;
-    button.textContent = "Searching metadata providers…";
-    try {
-        const result = await healthJson(`/api/library/health/issues/${encodeURIComponent(button.dataset.discoverIssue)}/discover`, {method: "POST"});
-        button.textContent = result.message || "No reliable metadata match was found.";
-    } catch (_error) {
-        button.textContent = "Metadata lookup failed. Please try again.";
-    }
 }
 
 function showHealthConfirmation(action) {
@@ -202,9 +162,5 @@ document.getElementById("health-task-cancel").addEventListener("click", async ()
 document.getElementById("health-task-dismiss").addEventListener("click", () => {
     document.getElementById("health-task").hidden = true;
     healthState.taskId = null;
-});
-document.getElementById("health-issues-close").addEventListener("click", () => {
-    document.getElementById("health-issues").hidden = true;
-    document.querySelectorAll("[data-health-review]").forEach((button) => button.setAttribute("aria-expanded", "false"));
 });
 document.addEventListener("DOMContentLoaded", loadHealth);

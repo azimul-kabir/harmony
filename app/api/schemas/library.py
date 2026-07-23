@@ -61,13 +61,6 @@ class HealthCheckResponse(BaseModel):
     available: bool
 
 
-class LibraryHealthIssuesResponse(BaseModel):
-    items: list[dict[str, Any]]
-    total: int
-    limit: int
-    offset: int
-
-
 class LibraryHealthResponse(BaseModel):
     songs: int
     albums: int
