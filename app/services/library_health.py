@@ -76,6 +76,13 @@ class LibraryHealthService:
                 "available": True,
             },
             {
+                "id": "missing-files",
+                "label": "Missing indexed files",
+                "count": int(missing_files),
+                "status": "healthy" if not missing_files else "attention",
+                "available": True,
+            },
+            {
                 "id": "duplicates",
                 "label": "Duplicate detection",
                 "count": None,
@@ -115,6 +122,44 @@ class LibraryHealthService:
             resource_key="library-files" if action in {"refresh", "rebuild", "verify", "clear_artwork"} else None,
         )
         return task
+
+    def metadata_issues(self, db: Session, limit: int = 200) -> list[dict]:
+        """Return current, safe metadata issue records for the legacy detail API."""
+        songs = db.scalars(select(Song).where(Song.availability_status == "available", missing_metadata_expression()).order_by(Song.artist, Song.album, Song.filename).limit(limit)).all()
+        issues = []
+        for song in songs:
+            for field, value in (("title", song.title), ("artist", song.artist), ("album", song.album)):
+                if value not in (None, ""):
+                    continue
+                issues.append({"id": f"missing_{field}:song:{song.id}", "rule_code": f"missing_{field}", "label": f"Missing {field}", "severity": "warning", "entity_type": "song", "state": "open", "entity": {"song_id": song.id, "title": song.title or song.filename or "Untitled track", "artist": song.artist or "Unknown artist", "album": song.album or "Unknown album", "track_number": song.track, "disc_number": song.disc, "availability": song.availability_status, "indexed_file": song.filename or "Unknown file"}, "problem": f"Harmony could not find a {field} value in this song's indexed metadata.", "field": field, "detected_value": value or "Not set", "suggested_value": None, "recommended_action": "Review the song metadata, then update the file tags and run Refresh Library."})
+        return issues
+
+    def issues(self, db: Session, check_id: str, limit: int = 100, offset: int = 0) -> dict:
+        """Return safe, actionable issue records; never expose absolute host paths."""
+        if check_id == "missing-files":
+            statement = select(Song).where(Song.availability_status == "missing").order_by(Song.id)
+            total = db.scalar(select(func.count(Song.id)).where(Song.availability_status == "missing")) or 0
+            field_for = lambda _song: ("availability", "Indexed file is not currently on disk")
+        elif check_id == "metadata":
+            statement = select(Song).where(Song.availability_status == "available", missing_metadata_expression()).order_by(Song.id)
+            total = db.scalar(select(func.count(Song.id)).where(Song.availability_status == "available", missing_metadata_expression())) or 0
+            field_for = lambda song: next(((field, "This required library field is blank.") for field in ("title", "artist", "album") if not getattr(song, field)), ("metadata", "Core metadata is incomplete."))
+        else:
+            raise ValueError("Library health issue type not found")
+        songs = db.scalars(statement.offset(offset).limit(limit)).all()
+        items = []
+        for song in songs:
+            field, explanation = field_for(song)
+            items.append({
+                "id": f"{check_id}:song:{song.id}:{field}", "check_id": check_id, "entity_type": "song",
+                "entity_id": song.id, "state": "open", "title": song.title or song.filename or "Untitled track",
+                "artist": song.artist or "Unknown artist", "album": song.album or "Unknown album",
+                "track_number": song.track, "disc_number": song.disc, "availability": song.availability_status,
+                "filename": song.filename or "Unknown file", "field": field, "detected_value": getattr(song, field, None),
+                "recommended_action": "Review this song in the Library." if check_id == "missing-files" else "Review the song or search for metadata candidates before applying a correction.",
+                "explanation": explanation,
+            })
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 class LibraryMaintenanceWorker:
