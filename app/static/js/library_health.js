@@ -50,14 +50,18 @@ async function loadMetadataIssues() {
     const severity = document.getElementById("metadata-severity")?.value || "";
     const query = document.getElementById("metadata-search")?.value || "";
     const entityType = document.getElementById("metadata-entity")?.value || "";
-    const data = await healthJson(`/api/library/health/metadata/issues?status=${encodeURIComponent(status)}&severity=${encodeURIComponent(severity)}&entity_type=${encodeURIComponent(entityType)}&search=${encodeURIComponent(query)}&limit=50`);
+    const params = new URLSearchParams({ status, limit: "50" });
+    if (severity) params.set("severity", severity);
+    if (entityType) params.set("entity_type", entityType);
+    if (query) params.set("search", query);
+    const data = await healthJson(`/api/library/health/metadata/issues?${params}`);
     const target = document.getElementById("metadata-issues");
     const items = data.items;
     target.innerHTML = items.length ? items.map((item) => {
         const destination = item.entity_type === "song" && item.song_id
             ? `<a class="btn-secondary" href="/library?song=${item.song_id}&metadata=review">Review song</a>`
             : item.entity_type === "album" && item.album_key
-                ? `<a class="btn-secondary" href="/library?view=albums&album=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
+                ? `<a class="btn-secondary" href="/library?view=albums&album_key=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
         const action = item.status === "ignored"
             ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>`
             : item.status === "open" ? `<button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>` : "";

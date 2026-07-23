@@ -86,6 +86,13 @@ class LibraryHealthService:
                 "status": "unavailable",
                 "available": False,
             },
+            {
+                "id": "missing_files",
+                "label": "Missing indexed files",
+                "count": int(missing_files),
+                "status": "healthy" if not missing_files else "attention",
+                "available": True,
+            },
         ]
         return {
             "songs": songs,
