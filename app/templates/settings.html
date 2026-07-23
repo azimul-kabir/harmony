@@ -16,6 +16,7 @@
             <button class="settings-tab" data-target="appearance">Appearance</button>
             <button class="settings-tab" data-target="spotify">Spotify</button>
             <button class="settings-tab" data-target="system">System</button>
+            <a class="settings-tab settings-submenu-link" href="/developers/providers">Provider diagnostics</a>
         </div>
     </div>
 
@@ -236,6 +237,7 @@
         font-weight: 600; 
         color: var(--primary); 
     }
+    .settings-submenu-link { box-sizing: border-box; text-decoration: none; }
 
     /* Input Styles */
     .responsive-input {
@@ -326,7 +328,7 @@
 {% block scripts %}
 <script>
     // Tab switching logic
-    document.querySelectorAll('.settings-tab').forEach(tab => {
+    document.querySelectorAll('.settings-tab[data-target]').forEach(tab => {
         tab.addEventListener('click', (e) => {
             document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');

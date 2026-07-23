@@ -82,7 +82,7 @@ async function loadMetadataIssues() {
     document.getElementById("metadata-severity-counts").textContent = ["critical", "error", "warning", "info"].map((key) => `${key}: ${severityCounts[key] || 0}`).join(" · ");
     const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count).slice(0, 8);
     document.getElementById("metadata-rule-counts").textContent = ruleCounts.length
-        ? `Most frequent: ${ruleCounts.map((row) => `${row.value.replaceAll("_", " ")} (${row.count})`).join(" · ")}`
+        ? `Most frequent: ${ruleCounts[0].value.replaceAll("_", " ")} (${ruleCounts[0].count})${ruleCounts.length > 1 ? ` · +${ruleCounts.length - 1} more` : ""}`
         : "No rule counts yet.";
 }
 

@@ -12,9 +12,25 @@ from app.providers.youtube_music import YouTubeMusicSource, clean_title
 def test_detects_public_youtube_music_and_standard_fallback_urls():
     source = YouTubeMusicSource()
     assert source.detect_url("https://music.youtube.com/watch?v=abc1234") == ("track", "abc1234")
+    assert source.detect_url("music.youtube.com/watch?v=abc1234") == ("track", "abc1234")
     assert source.detect_url("https://music.youtube.com/playlist?list=PLabc") == ("playlist", "PLabc")
     assert source.detect_url("https://www.youtube.com/watch?v=abc1234") == ("track", "abc1234")
     assert source.detect_url("https://www.youtube.com/channel/channel") is None
+
+
+def test_resolve_uses_regular_watch_url_for_youtube_music_track(monkeypatch):
+    source = YouTubeMusicSource()
+    targets: list[str] = []
+
+    def run_json(target, *, flat=False):
+        targets.append(target)
+        return {"id": "abc1234", "title": "Song", "uploader": "Artist"}
+
+    monkeypatch.setattr(source, "_run_json", run_json)
+    tracks = source.resolve("music.youtube.com/watch?v=abc1234")
+
+    assert targets == ["https://www.youtube.com/watch?v=abc1234"]
+    assert tracks[0].source_url == "https://www.youtube.com/watch?v=abc1234"
 
 
 def test_metadata_cleanup_only_removes_known_presentation_suffixes():

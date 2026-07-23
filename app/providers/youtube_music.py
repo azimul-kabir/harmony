@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 
 from app.core.config import get_settings
+from app.core.logging import logger
 from app.database.session import SessionLocal
 from app.domain.track import Track
 from app.providers.download_source import SourceResult
@@ -24,6 +25,17 @@ def clean_title(value: str | None) -> str:
     return _SUFFIX.sub("", value or "").strip()
 
 
+def normalize_url(url: str) -> str:
+    """Give public URLs without a scheme the same treatment as the FAB UI."""
+    value = url.strip()
+    return value if "://" in value else f"https://{value}"
+
+
+def watch_url(item_id: str) -> str:
+    """Use the broadly supported watch endpoint for yt-dlp extraction."""
+    return f"https://www.youtube.com/watch?v={item_id}"
+
+
 class YouTubeMusicSource:
     identifier = "youtube_music"
     display_name = "YouTube Music"
@@ -36,7 +48,7 @@ class YouTubeMusicSource:
         return max(1, self.settings.youtube_music_max_playlist_items)
 
     def detect_url(self, url: str) -> tuple[str, str] | None:
-        parsed = urlparse(url)
+        parsed = urlparse(normalize_url(url))
         host = parsed.netloc.lower().removeprefix("www.")
         query = parse_qs(parsed.query)
         if host == "music.youtube.com":
@@ -82,7 +94,7 @@ class YouTubeMusicSource:
             artist = artist[:-8]
         thumbs = data.get("thumbnails") or []
         artwork = thumbs[-1].get("url") if thumbs else data.get("thumbnail")
-        canonical_url = f"https://music.youtube.com/watch?v={item_id}" if _VIDEO_ID.fullmatch(item_id) else data.get("webpage_url")
+        canonical_url = watch_url(item_id) if _VIDEO_ID.fullmatch(item_id) else data.get("webpage_url")
         return SourceResult(self.identifier, item_id, item_type, title, artist, data.get("album"), data.get("album_artist"), data.get("duration"), data.get("release_year") or data.get("year"), data.get("track_number"), data.get("disc_number"), data.get("age_limit") == 18, artwork, canonical_url, data.get("playlist_count"))
 
     def search(self, query: str, limit: int = 20) -> list[SourceResult]:
@@ -92,11 +104,17 @@ class YouTubeMusicSource:
         return [self._result(entry) for entry in entries if entry and entry.get("id")]
 
     def resolve(self, url: str) -> list[Track]:
-        detected = self.detect_url(url)
+        target = normalize_url(url)
+        detected = self.detect_url(target)
         if not detected:
             raise ValueError("Unsupported YouTube Music URL.")
         item_type, _ = detected
-        data = self._run_json(url, flat=item_type != "track")
+        # ``music.youtube.com`` is useful for identifying user input, but the
+        # regular watch endpoint is more reliably handled by yt-dlp.
+        item_type, item_id = detected
+        if item_type == "track":
+            target = watch_url(item_id)
+        data = self._run_json(target, flat=item_type != "track")
         entries = data.get("entries") if item_type != "track" else [data]
         if item_type != "track" and len(entries or []) > self.max_collection_items:
             raise ValueError(f"YouTube playlist exceeds the {self.max_collection_items}-track limit.")
@@ -116,6 +134,11 @@ class YouTubeMusicSource:
         target = track.source_url or track.spotify_url
         if not target:
             raise ValueError("YouTube Music track is missing its source URL.")
+        detected = self.detect_url(target)
+        if detected and detected[0] == "track":
+            target = watch_url(detected[1])
+        else:
+            target = normalize_url(target)
         output = Path(output_dir)
         with tempfile.TemporaryDirectory(dir=output) as temporary:
             template = str(Path(temporary) / "%(title)s.%(ext)s")
@@ -175,6 +198,10 @@ class YouTubeMusicSource:
                     download_processes.unregister(job_id, process)
             result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
             if result.returncode:
+                # Keep yt-dlp's actionable diagnostics in the server log while
+                # returning a stable, non-sensitive message to the browser.
+                detail = (result.stderr or result.stdout).strip()
+                logger.warning("YouTube Music download failed for job #{}: {}", job_id, detail[-2000:] or "yt-dlp exited without output")
                 raise ValueError("YouTube Music could not download this track. It may be unavailable.")
             files = sorted(Path(temporary).glob("*.mp3"), key=lambda file: file.stat().st_mtime, reverse=True)
             if not files:
