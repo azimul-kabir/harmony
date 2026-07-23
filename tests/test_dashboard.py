@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from app.database.base import Base
 from datetime import UTC, datetime
@@ -7,6 +8,7 @@ from datetime import UTC, datetime
 from app.database.models import (
     DownloadJob,
     MetadataSuggestion,
+    MetadataIssue,
     Playlist,
     Song,
     SyncSource,
@@ -21,6 +23,8 @@ from app.services.dashboard import (
     get_queue_health,
     serialize_dashboard_activity,
 )
+from app.database.session import SessionLocal
+from app.web.templates import template_context, templates
 
 
 def test_dashboard_download_trends_and_queue_health_are_bounded_and_aggregate_only():
@@ -150,6 +154,11 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     confidence_level="high",
                     status="pending",
                 ),
+                MetadataIssue(
+                    identity_key="dashboard-open-metadata", rule_id="missing_genre", rule_version="1",
+                    entity_type="song", entity_id="1", song_id=1, severity="warning", status="open",
+                    title="Missing genre", explanation="Missing genre",
+                ),
                 Task(
                     name="Refresh Library",
                     spotify_url="library://maintenance/refresh",
@@ -191,6 +200,9 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
             "pending_suggestions": 1,
         }
         assert snapshot["attention"] == {
+            "healthy": False,
+            "headline": "Items need attention",
+            "message": "5 current items across 5 categories need attention.",
             "total_count": 5,
             "critical_count": 2,
             "warning_count": 2,
@@ -233,9 +245,9 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     "key": "pending_metadata",
                     "severity": "warning",
                     "count": 1,
-                    "title": "Pending metadata suggestions",
+                    "title": "Open metadata issues",
                     "description": "1 item requires attention",
-                    "href": "/library/health",
+                    "href": "/library/health?metadata_status=open#metadata-issues-title",
                     "action_label": "Review",
                     "recovery_action": "analyze_metadata",
                     "recovery_label": "Analyze metadata",
@@ -253,6 +265,13 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                 },
             ],
         }
+        attention = snapshot["attention"]
+        assert attention["total_count"] == sum(item["count"] for item in attention["items"])
+        assert attention["healthy"] == (not attention["items"] and attention["total_count"] == 0)
+        for severity in ("critical", "warning", "info"):
+            assert attention[f"{severity}_count"] == sum(
+                item["count"] for item in attention["items"] if item["severity"] == severity
+            )
         assert snapshot["analytics"] == {
             "genres": 1,
             "average_bitrate": 320000,
@@ -320,6 +339,9 @@ def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failure
         attention = get_dashboard_snapshot(db)["attention"]
 
         assert attention == {
+            "healthy": False,
+            "headline": "Items need attention",
+            "message": "1 current items across 1 categories need attention.",
             "total_count": 1,
             "critical_count": 0,
             "warning_count": 1,
@@ -358,10 +380,43 @@ def test_dashboard_failed_attention_matches_downloads_failed_filter():
 
         snapshot = get_dashboard_snapshot(db)
 
-        assert snapshot["kpis"]["failed_jobs"] == 1
-        assert snapshot["downloads"]["failed"] == 1
-        assert snapshot["attention"]["items"][0]["key"] == "failed_downloads"
-        assert snapshot["attention"]["items"][0]["count"] == 1
+        assert snapshot["kpis"]["failed_jobs"] == 0
+        assert snapshot["downloads"]["failed"] == 0
+        assert snapshot["attention"]["healthy"] is True
+        assert snapshot["attention"]["items"] == []
+
+
+def test_dashboard_attention_contract_is_healthy_only_when_normalized_items_are_empty():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        healthy = get_dashboard_snapshot(db)["attention"]
+        assert healthy["healthy"] is True
+        assert healthy["total_count"] == 0
+        assert healthy["items"] == []
+        db.add(DownloadJob(spotify_url="spotify:track:failed", title="Failed", artist="Artist", status="failed"))
+        db.commit()
+        attention = get_dashboard_snapshot(db)["attention"]
+        assert attention["healthy"] is False
+        assert attention["total_count"] == sum(item["count"] for item in attention["items"])
+        assert attention["headline"] == "Items need attention"
+
+
+def test_initial_dashboard_html_uses_the_same_attention_snapshot_as_the_api():
+    with SessionLocal() as db:
+        db.add(DownloadJob(spotify_url="spotify:track:failed", title="Failed", artist="Artist", status="failed"))
+        db.commit()
+    with SessionLocal() as db:
+        snapshot = get_dashboard_snapshot(db)["attention"]
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+    response = templates.TemplateResponse(
+        "dashboard.html", template_context(request=request, stats={}, dashboard_snapshot={"attention": snapshot}, page="dashboard")
+    )
+    html = response.body.decode()
+    assert snapshot["healthy"] is False
+    assert f'>{snapshot["total_count"]} issue<' in html
+    assert 'data-attention-key="failed_downloads"' in html
+    assert "Everything looks healthy" not in html
 
 
 def test_dashboard_activity_serialization_is_timestamped_and_privacy_safe():

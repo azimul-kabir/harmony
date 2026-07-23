@@ -420,6 +420,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .downloads-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+@media (max-width: 380px) {
+    .dashboard-attention-controls { grid-template-columns: 1fr; grid-column: 1 / -1; }
+}
+
 /* Source Cards */
 .sources-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }
 .source-card { background: var(--bg-surface); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 16px; }

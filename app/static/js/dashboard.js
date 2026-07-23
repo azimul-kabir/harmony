@@ -18,6 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Server-rendered attention cards are actionable before the first SSE
+    // event arrives. Subsequent patches replace this handler per card.
+    document.querySelectorAll("[data-attention-recovery]").forEach((button) => {
+        const action = button.dataset.attentionRecovery;
+        if (action) button.onclick = () => runAttentionRecovery(action, button);
+    });
+
     connectSSE();
 });
 
@@ -151,8 +158,13 @@ function renderAttention(attention) {
 
     const items = Array.isArray(attention.items) ? attention.items : [];
     const total = Number(attention.total_count || 0);
+    // The server owns the state decision; do not independently infer healthy
+    // from a partially received stream payload.
+    const healthy = attention.healthy === true;
     setText("attention-total", `${total.toLocaleString()} ${total === 1 ? "issue" : "issues"}`);
-    empty.hidden = items.length > 0;
+    setText("dashboard-attention-headline", attention.headline || (healthy ? "Everything looks healthy" : "Items need attention"));
+    setText("dashboard-attention-message", attention.message || "");
+    empty.hidden = !healthy;
 
     const existing = new Map(
         Array.from(container.children).map((element) => [element.dataset.attentionKey, element])
@@ -196,8 +208,10 @@ function renderAttention(attention) {
         if (issue.recovery_action) {
             recovery.textContent = issue.recovery_label;
             recovery.setAttribute("aria-label", `${issue.recovery_label} for ${issue.title}`);
+            recovery.dataset.attentionRecovery = issue.recovery_action;
             recovery.onclick = () => runAttentionRecovery(issue.recovery_action, recovery);
         } else {
+            recovery.dataset.attentionRecovery = "";
             recovery.onclick = null;
         }
         container.appendChild(row);

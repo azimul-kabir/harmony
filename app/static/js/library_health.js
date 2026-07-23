@@ -51,6 +51,7 @@ async function loadMetadataIssues() {
     const query = document.getElementById("metadata-search")?.value || "";
     const entityType = document.getElementById("metadata-entity")?.value || "";
     const params = new URLSearchParams({ status, limit: "50" });
+    if (status === "open") params.set("included_only", "true");
     if (severity) params.set("severity", severity);
     if (entityType) params.set("entity_type", entityType);
     if (query) params.set("search", query);
@@ -77,12 +78,12 @@ async function loadMetadataIssues() {
         button.textContent=`Discovery queued (job ${result.job.id})`;button.disabled=true;
     });
     const summary = await healthJson("/api/library/health/metadata/summary");
-    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issues · ${summary.score.inputs.ignored_issues} ignored (diagnostic only).`;
+    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issue records · ${summary.score.inputs.ignored_issues} ignored historical records (diagnostic only). Warnings reduce this score.`;
     const severityCounts = Object.fromEntries((summary.counts.severity || []).map((row) => [row.value, row.count]));
     document.getElementById("metadata-severity-counts").textContent = ["critical", "error", "warning", "info"].map((key) => `${key}: ${severityCounts[key] || 0}`).join(" · ");
-    const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count).slice(0, 8);
+    const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value))).slice(0, 8);
     document.getElementById("metadata-rule-counts").textContent = ruleCounts.length
-        ? `Most frequent: ${ruleCounts[0].value.replaceAll("_", " ")} (${ruleCounts[0].count})${ruleCounts.length > 1 ? ` · +${ruleCounts.length - 1} more` : ""}`
+        ? `Most frequent included rule: ${ruleCounts[0].value.replaceAll("_", " ")} (${ruleCounts[0].count} issue records)${ruleCounts.length > 1 ? ` · +${ruleCounts.length - 1} more rules` : ""}`
         : "No rule counts yet.";
 }
 
@@ -206,7 +207,12 @@ document.getElementById("health-task-dismiss").addEventListener("click", () => {
     document.getElementById("health-task").hidden = true;
     healthState.taskId = null;
 });
-document.addEventListener("DOMContentLoaded", loadHealth);
+document.addEventListener("DOMContentLoaded", () => {
+    const requestedStatus = new URLSearchParams(window.location.search).get("metadata_status");
+    const status = document.getElementById("metadata-status");
+    if (requestedStatus && status && [...status.options].some((option) => option.value === requestedStatus)) status.value = requestedStatus;
+    loadHealth();
+});
 document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
 document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);
 document.getElementById("metadata-severity")?.addEventListener("change", loadMetadataIssues);

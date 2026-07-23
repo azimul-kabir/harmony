@@ -16,9 +16,11 @@ from app.domain.task import TaskStatus, TaskType
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
+from app.services.metadata_health import metadata_health
 
 
 DASHBOARD_TREND_DAYS = 7
+ATTENTION_DOWNLOAD_STATUSES = (JobStatus.FAILED.value,)
 
 
 def _as_naive_utc(value: datetime) -> datetime:
@@ -111,9 +113,7 @@ def get_dashboard_stats(db):
     failed = (
         db.scalar(
             select(func.count(DownloadJob.id)).where(
-                DownloadJob.status.in_(
-                    (JobStatus.FAILED.value, JobStatus.CANCELLED.value)
-                )
+                DownloadJob.status.in_(ATTENTION_DOWNLOAD_STATUSES)
             )
         )
         or 0
@@ -203,9 +203,7 @@ def get_dashboard_snapshot(db) -> dict:
                 func.sum(
                     case(
                         (
-                            DownloadJob.status.in_(
-                                (JobStatus.FAILED.value, JobStatus.CANCELLED.value)
-                            ),
+                            DownloadJob.status.in_(ATTENTION_DOWNLOAD_STATUSES),
                             1,
                         ),
                         else_=0,
@@ -218,19 +216,16 @@ def get_dashboard_snapshot(db) -> dict:
             ),
         )
     ).one()
+    included_metadata_issues = metadata_health.included_open_issue_count(db)
     suggestions_pending = (
-        db.scalar(
-            select(func.count(MetadataSuggestion.id)).where(
-                MetadataSuggestion.status == "pending"
-            )
-        )
+        db.scalar(select(func.count(MetadataSuggestion.id)).where(MetadataSuggestion.status == "pending"))
         or 0
     )
     attention = _get_attention_summary(
         failed_downloads=stats["failed"],
         missing_files=int(missing_files),
         missing_artwork=int(health_row[0]),
-        pending_suggestions=int(suggestions_pending),
+        pending_suggestions=included_metadata_issues,
         task_counts=_attention_task_counts(db),
     )
     playlist_count = db.scalar(select(func.count(Playlist.id))) or 0
@@ -364,8 +359,8 @@ _ATTENTION_DEFINITIONS = (
     (
         "pending_metadata",
         "warning",
-        "Pending metadata suggestions",
-        "/library/health",
+        "Open metadata issues",
+        "/library/health?metadata_status=open#metadata-issues-title",
         "Review",
         "analyze_metadata",
         "Analyze metadata",
@@ -465,6 +460,16 @@ def _get_attention_summary(
         for severity in ("critical", "warning", "info")
     }
     return {
+        # `healthy` is deliberately derived from `items`, not from a second
+        # collection of counters.  Consumers must use it rather than inventing
+        # their own empty-state rule.
+        "healthy": not items,
+        "headline": "Everything looks healthy" if not items else "Items need attention",
+        "message": (
+            "No current library, download, source, or maintenance issues need attention."
+            if not items
+            else f"{sum(item['count'] for item in items)} current items across {len(items)} categories need attention."
+        ),
         "total_count": sum(item["count"] for item in items),
         "critical_count": severity_counts["critical"],
         "warning_count": severity_counts["warning"],

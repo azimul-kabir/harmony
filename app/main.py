@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
 from app.database.session import SessionLocal
-from app.services.dashboard import get_dashboard_stats
+from app.services.dashboard import get_dashboard_snapshot
 from app.services.library_watcher import LibraryWatcher
 from app.services.library_bulk import library_bulk_worker
 from app.services.library_health import library_maintenance_worker
@@ -147,12 +147,13 @@ async def metadata_error_handler(request: Request, exc: MetadataServiceError):
 def home(request: Request):
     db = SessionLocal()
     try:
-        stats = get_dashboard_stats(db)
+        snapshot = get_dashboard_snapshot(db)
         return templates.TemplateResponse(
             "dashboard.html",
             template_context(
                 request=request,
-                stats=stats,
+                stats=snapshot["stats"],
+                dashboard_snapshot=snapshot,
                 page="dashboard",
             ),
         )

@@ -20,9 +20,21 @@
     </section>
 
     <section class="panel dashboard-attention" aria-labelledby="dashboard-attention-title">
-        <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Operational overview</span><h2 id="dashboard-attention-title">Needs Attention</h2></div><strong id="attention-total" class="dashboard-attention-total">0 issues</strong></div>
-        <div id="dashboard-attention-empty" class="dashboard-attention-empty"><strong>Everything looks healthy</strong><span>No current library, download, source, or maintenance issues need attention.</span></div>
-        <div id="dashboard-attention-list" class="dashboard-attention-list" aria-live="polite"></div>
+        <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Operational overview</span><h2 id="dashboard-attention-title">Needs Attention</h2></div><strong id="attention-total" class="dashboard-attention-total">{{ dashboard_snapshot.attention.total_count }} {{ 'issue' if dashboard_snapshot.attention.total_count == 1 else 'issues' }}</strong></div>
+        <div id="dashboard-attention-empty" class="dashboard-attention-empty"{% if not dashboard_snapshot.attention.healthy %} hidden{% endif %}><strong id="dashboard-attention-headline">{{ dashboard_snapshot.attention.headline }}</strong><span id="dashboard-attention-message">{{ dashboard_snapshot.attention.message }}</span></div>
+        <div id="dashboard-attention-list" class="dashboard-attention-list" aria-live="polite">
+            {% for issue in dashboard_snapshot.attention["items"] %}
+            <article class="dashboard-attention-item severity-{{ issue.severity }}" data-attention-key="{{ issue.key }}">
+                <span class="dashboard-attention-severity">{{ issue.severity }}</span>
+                <div class="dashboard-attention-content"><strong>{{ issue.title }}</strong><span class="dashboard-attention-description">{{ issue.description }}</span></div>
+                <strong class="dashboard-attention-count">{{ issue.count }}</strong>
+                <div class="dashboard-attention-controls">
+                    <a class="btn-secondary dashboard-attention-action" href="{{ issue.href }}" aria-label="{{ issue.action_label }} {{ issue.title }}">{{ issue.action_label }}</a>
+                    <button class="btn-secondary dashboard-attention-recovery" type="button"{% if not issue.recovery_action %} hidden{% endif %} data-attention-recovery="{{ issue.recovery_action or '' }}" aria-label="{{ issue.recovery_label or '' }} for {{ issue.title }}">{{ issue.recovery_label or '' }}</button>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
     </section>
 
     <section class="dashboard-summary-grid" aria-label="Dashboard summaries">
