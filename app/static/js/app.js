@@ -69,13 +69,14 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Smart Form URL Parsing Verification
+        // Accept the public URL forms supported by the server-side provider registry.
         modalInput.addEventListener("input", (e) => {
             const val = e.target.value.trim();
-            if (val.length > 0 && !val.includes("open.spotify.com")) {
+            const supported = /^(https?:\/\/)?(open\.spotify\.com|music\.youtube\.com|(?:www\.|m\.)?youtube\.com|youtu\.be)\//i.test(val);
+            if (val.length > 0 && !supported) {
                 modalInput.style.borderColor = "var(--danger)";
                 modalSubmit.disabled = true;
-                modalSubmit.textContent = "Invalid Spotify URL";
+                modalSubmit.textContent = "Unsupported URL";
             } else {
                 modalInput.style.borderColor = "var(--border-input)";
                 modalSubmit.disabled = false;

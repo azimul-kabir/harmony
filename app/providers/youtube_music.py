@@ -6,10 +6,14 @@ import tempfile
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+
 from app.core.config import get_settings
+from app.database.session import SessionLocal
 from app.domain.track import Track
 from app.providers.download_source import SourceResult
+from app.services import settings_service
 from app.services.download_processes import download_processes
+
 
 _SUFFIX = re.compile(r"\s*[\[(](?:official (?:audio|video)|lyrics?|lyric video|visualizer)[^\])]*[\])]\s*$", re.I)
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
@@ -115,7 +119,38 @@ class YouTubeMusicSource:
         output = Path(output_dir)
         with tempfile.TemporaryDirectory(dir=output) as temporary:
             template = str(Path(temporary) / "%(title)s.%(ext)s")
-            command = [self.settings.yt_dlp_path, "--no-playlist", "-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", self.settings.youtube_music_audio_quality, "--embed-metadata", "--embed-thumbnail", "-o", template, target]
+            db = SessionLocal()
+            try:
+                quality = settings_service.get_settings_by_category(
+                    db,
+                    "downloads",
+                ).get(
+                    "audio_quality",
+                    self.settings.youtube_music_audio_quality,
+                )
+            finally:
+                db.close()
+
+            command = [
+                self.settings.yt_dlp_path,
+                "--no-playlist",
+                "-f",
+                "bestaudio/best",
+                "-x",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                quality,
+                "--embed-metadata",
+                "--convert-thumbnails",
+                "jpg",
+                "--postprocessor-args",
+                "ThumbnailsConvertor+ffmpeg_o:-vf crop=min(iw\\,ih):min(iw\\,ih)",
+                "--embed-thumbnail",
+                "-o",
+                template,
+                target,
+            ]
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
             if job_id is not None and not download_processes.register(job_id, process):
                 try:
