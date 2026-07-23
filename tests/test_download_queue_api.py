@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from app.api import downloads
 from app.api.schemas.download import DownloadRequest
-from app.database.models import DownloadJob
+from app.database.models import DownloadJob, Song
 from app.database.session import SessionLocal
 from app.domain.track import Track
 from app.services.download_dashboard import serialize_outcome
@@ -77,6 +77,29 @@ def test_serializer_failure_after_commit_keeps_success_and_single_job(monkeypatc
     try:
         assert response == {"status": "created", "job_id": response["job_id"]}
         assert db.query(DownloadJob).count() == 1
+    finally:
+        db.close()
+
+
+def test_track_post_allows_redownload_of_a_deleted_library_track(monkeypatch):
+    url = "https://open.spotify.com/track/deleted-track"
+    monkeypatch.setattr(downloads, "resolve_track", lambda _: track(url))
+    db = SessionLocal()
+    try:
+        db.add(Song(
+            path="/music/Artist/Album/Track deleted-track.mp3",
+            filename="Track deleted-track.mp3", title="Track deleted-track",
+            artist="Artist", album="Album", spotify_track_id="deleted-track",
+            availability_status="missing",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    response, db = call_queue(url)
+    try:
+        assert response["status"] == "created"
+        assert db.get(DownloadJob, response["job_id"]) is not None
     finally:
         db.close()
 
