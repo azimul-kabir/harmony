@@ -40,7 +40,7 @@ def _job_columns():
                      DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at,
                      DownloadJob.reason_code, DownloadJob.reason_message, DownloadJob.failure_stage,
                      DownloadJob.provider, DownloadJob.retryable, DownloadJob.technical_detail,
-                     DownloadJob.error, DownloadJob.error_message)
+                     DownloadJob.error, DownloadJob.error_message, DownloadJob.source_provider)
 
 
 def _legacy_reason(job: DownloadJob, status: str) -> tuple[str | None, str | None]:
@@ -153,7 +153,7 @@ def download_details(job: DownloadJob) -> dict:
     events.sort(key=lambda item: (item[0], item[1]))
     outcome = serialize_outcome(job)
     return {"id": job.id, "task_id": job.task_id, "title": job.title, "artist": job.artist, "album": job.album,
-            "source": "Spotify", "status": status, "stage": _stage(status),
+            "source": "YouTube Music" if job.source_provider == "youtube_music" else "Spotify", "status": status, "stage": _stage(status),
             "progress": 100 if status == "completed" else None, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "finished_at": _timestamp(job.completed_at),
             "queue_wait_seconds": _duration_seconds(job.created_at, job.started_at),

@@ -116,6 +116,9 @@ def process_job(
             cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
             spotify_track_id=job.spotify_track_id, 
             spotify_url=job.source_url, 
+            source_provider=job.source_provider or "spotify",
+            source_item_id=job.source_item_id,
+            source_url=job.source_url,
             genre=job.genre,
             spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
             genre_provenance=job.genre_provenance,
@@ -132,24 +135,31 @@ def process_job(
                 job.genre = track.genre
                 job.genre_provenance = track.genre_provenance
                 db.commit()
-        output_file = download_track(track)
+        output_file = download_track(track, job.id)
+        if _cancelled(db, job, output_file):
+            return
         if track.genre:
             try:
                 write_genres(output_file, track.genre.split(";"))
             except Exception:
                 logger.warning("Optional genre tagging failed for job #{}", job.id)
+        if _cancelled(db, job, output_file):
+            return
         
         library_file = import_downloaded_track(
             db=db,
             downloaded_file=output_file,
             cover_url=job.cover_url,  # <-- NEW: Pass to library import manager
             genre_provenance=track.genre_provenance,
+            download_source=track.source_provider,
         )
+        if _cancelled(db, job, None):
+            return
         job.output_file = str(library_file)
         job.error = None
         db.commit()
         
-        _record_outcome(db, job, JobStatus.COMPLETED, "completed", "Download completed.", "complete", "spotdl", False)
+        _record_outcome(db, job, JobStatus.COMPLETED, "completed", "Download completed.", "complete", job.source_provider or "spotdl", False)
         update_status(
             db=db,
             job=job,
@@ -213,7 +223,22 @@ def _record_outcome(db, job, status, code, message, stage, provider, retryable, 
     logger.info("download_terminal download_id={} status={} reason_code={} stage={} provider={} retryable={}", job.id, status.value, code, stage, provider, retryable)
 
 
+def _cancelled(db, job, output_file):
+    db.refresh(job)
+    if job.status != JobStatus.CANCELLED.value:
+        return False
+    if output_file is not None and output_file.exists():
+        try:
+            output_file.unlink()
+        except OSError:
+            logger.warning("Cancelled job #{} output cleanup failed", job.id)
+    return True
+
+
 def _finish_with_outcome(db, job, status, outcome):
+    db.refresh(job)
+    if job.status == JobStatus.CANCELLED.value:
+        return
     _record_outcome(db, job, status, outcome.reason_code, outcome.message, outcome.stage, outcome.provider, outcome.retryable, outcome.technical_detail)
     update_status(db=db, job=job, status=status)
     if job.task is not None:
