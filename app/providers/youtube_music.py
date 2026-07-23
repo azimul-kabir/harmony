@@ -167,8 +167,6 @@ class YouTubeMusicSource:
                 "--embed-metadata",
                 "--convert-thumbnails",
                 "jpg",
-                "--postprocessor-args",
-                "ThumbnailsConvertor+ffmpeg_o:-vf crop=min(iw\\,ih):min(iw\\,ih)",
                 "--embed-thumbnail",
                 "-o",
                 template,
