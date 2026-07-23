@@ -33,6 +33,11 @@ class Track:
     spotify_album_id: str | None = None
     spotify_url: str | None = None
     isrc: str | None = None
+    # Download-source identity is deliberately provider neutral.  The Spotify
+    # fields above remain for compatibility with existing libraries.
+    source_provider: str = "spotify"
+    source_item_id: str | None = None
+    source_url: str | None = None
 
     # Local library
     path: str | None = None

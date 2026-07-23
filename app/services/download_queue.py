@@ -30,8 +30,11 @@ def enqueue_track(
             "Track already exists or is already queued."
         )
 
-    spotify_url = track.spotify_url
-    assert spotify_url is not None
+    source_url = track.source_url or track.spotify_url
+    if source_url is None:
+        raise ValueError("Track is missing a source URL.")
+    # Legacy task column retains a URL for all providers.
+    spotify_url = source_url
 
     if task_id is None:
         task = create_task(
@@ -162,7 +165,8 @@ def _can_enqueue(
         isrc=track.isrc,
     )
 
-    if track.spotify_url is None:
+    source_url = track.source_url or track.spotify_url
+    if source_url is None:
         return False
 
     if song is not None:
@@ -173,7 +177,7 @@ def _can_enqueue(
 
     existing_job = find_active_job_by_spotify_url(
         db=db,
-        spotify_url=track.spotify_url,
+        spotify_url=source_url,
     )
 
     if existing_job is not None:

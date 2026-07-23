@@ -39,6 +39,7 @@ from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
 from app.services.settings_service import initialize_defaults
+from app.services.download_processes import download_processes
 
 settings = get_settings()
 
@@ -85,6 +86,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        download_processes.begin_shutdown()
         library_bulk_worker.stop()
         library_maintenance_worker.stop()
         await close_providers()

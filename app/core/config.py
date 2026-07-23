@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     spotdl_path: str = "spotdl"
+    yt_dlp_path: str = "yt-dlp"
+    youtube_music_enabled: bool = True
+    default_download_source: str = "spotify"
+    youtube_music_timeout_seconds: int = 300
+    youtube_music_audio_quality: str = "0"
+    youtube_music_max_playlist_items: int = 500
+    youtube_music_max_search_results: int = 25
+    youtube_music_max_queue_items: int = 500
     use_official_spotify_api: bool = False
     spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
