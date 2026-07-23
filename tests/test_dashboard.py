@@ -225,7 +225,7 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     "count": 1,
                     "title": "Missing library files",
                     "description": "1 item requires attention",
-                    "href": "/library/health#health-checks",
+                    "href": "/library?availability=missing",
                     "action_label": "Review",
                     "recovery_action": "verify_files",
                     "recovery_label": "Verify files",
