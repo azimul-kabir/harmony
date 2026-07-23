@@ -1,4 +1,9 @@
 const healthState = { taskId: null, timer: null };
+const healthCheckDestinations = {
+    artwork: "/library?missing_artwork=true",
+    metadata: "/library?missing_metadata=true",
+    missing_files: "/library?availability=missing",
+};
 const actionCopy = {
     refresh: ["Refresh Library?", "Harmony will scan the music folder incrementally and reconcile missing files."],
     rebuild: ["Rebuild the Library Index?", "Harmony will re-read metadata for every music file and rebuild indexed search."],
@@ -113,9 +118,19 @@ function renderHealthChecks(checks) {
             <div><strong>${escapeHealth(check.label)}</strong><small>${check.available ?
                 (check.count ? `${Number(check.count).toLocaleString()} songs need attention` : "No issues detected") :
                 "Provider not installed yet"}</small></div>
-            <span>${check.available ? (check.status === "healthy" ? "Healthy" : "Review") : "Future"}</span>
+            ${renderHealthCheckAction(check)}
         </article>
     `).join("");
+}
+
+function renderHealthCheckAction(check) {
+    if (!check.available) return "<span>Future</span>";
+    if (check.status === "healthy") return "<span>Healthy</span>";
+
+    const destination = healthCheckDestinations[check.id];
+    return destination
+        ? `<a class="btn-secondary health-check-action" href="${destination}" aria-label="Review ${escapeHealth(check.label)}">Review</a>`
+        : "<span>Review</span>";
 }
 
 function showHealthConfirmation(action) {
