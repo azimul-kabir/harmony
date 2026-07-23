@@ -41,6 +41,7 @@ def test_metadata_cleanup_only_removes_known_presentation_suffixes():
 def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path, monkeypatch):
     events: list[str] = []
     created: list[Path] = []
+    commands: list[list[str]] = []
     real_temporary_directory = tempfile.TemporaryDirectory
 
     class RecordingTemporaryDirectory(real_temporary_directory):
@@ -58,7 +59,11 @@ def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path,
 
     process = TimedOutProcess()
     monkeypatch.setattr(youtube_music.tempfile, "TemporaryDirectory", RecordingTemporaryDirectory)
-    monkeypatch.setattr(youtube_music.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        youtube_music.subprocess,
+        "Popen",
+        lambda command, **kwargs: commands.append(command) or process,
+    )
     monkeypatch.setattr(youtube_music.download_processes, "register", lambda job_id, value: events.append("register") or True)
     def cancel(job_id):
         assert events == ["register", "communicate"]
@@ -72,3 +77,5 @@ def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path,
     assert "123" not in str(error.value)
     assert events == ["register", "communicate", "cancel", "unregister"]
     assert len(created) == 1 and not created[0].exists()
+    assert "--postprocessor-args" not in commands[0]
+    assert commands[0][commands[0].index("--convert-thumbnails") + 1] == "jpg"
