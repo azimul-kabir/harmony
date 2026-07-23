@@ -17,6 +17,8 @@ from app.services.download_queue import (
 from app.services.playlist_download import download_playlist
 from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
+from app.providers.download_sources import detect_source, get_source
+from app.core.config import get_settings
 from app.domain.download import JobStatus
 from app.services.download_dashboard import (
     TERMINAL_STATUSES, download_counts, download_details, download_history,
@@ -24,11 +26,20 @@ from app.services.download_dashboard import (
 )
 from app.services.download_bulk import run_bulk_action
 from app.core.logging import logger
+from app.services.download_processes import download_processes
+from dataclasses import asdict
+from app.services import settings_service
 
 router = APIRouter(
     prefix="/api/downloads",
     tags=["downloads"],
 )
+
+
+def _youtube_music_enabled(db: Session) -> bool:
+    settings_service.initialize_defaults(db)
+    saved = settings_service.get_settings_by_category(db, "downloads")
+    return bool(get_settings().youtube_music_enabled and saved.get("youtube_music_enabled", True))
 
 @router.post("", status_code=201)
 def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
@@ -41,6 +52,29 @@ def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
     misleading 500 response.
     """
     try:
+        source = detect_source(request.url.strip())
+        if source is not None:
+            if not _youtube_music_enabled(db):
+                raise HTTPException(status_code=403, detail={"code": "provider_disabled", "message": "YouTube Music downloads are disabled in Settings."})
+            resource, _ = source.detect_url(request.url.strip()) or ("unsupported", "")
+            if resource == "artist":
+                raise HTTPException(status_code=422, detail={"code": "unsupported_youtube_music_url", "message": "Artist URLs cannot be downloaded directly. Choose a song, album, or playlist."})
+            tracks = source.resolve(request.url.strip())
+            if len(tracks) > get_settings().youtube_music_max_queue_items:
+                raise HTTPException(status_code=422, detail={"code": "queue_limit_exceeded", "message": "This collection exceeds Harmony's queue request limit."})
+            if resource == "track":
+                try:
+                    result = enqueue_track(db, tracks[0])
+                except TrackAlreadyExistsError:
+                    return {"status": "owned"}
+                return {"status": result.status.value, "job_id": result.job_id}
+            results = []
+            for track in tracks:
+                try:
+                    results.append(enqueue_track(db, track))
+                except TrackAlreadyExistsError:
+                    continue
+            return {"status": "queued", "job_ids": [result.job_id for result in results]}
         resource, _ = spotify_resource(request.url.strip())
         if resource == "track":
             track = resolve_track(request.url)
@@ -72,6 +106,7 @@ def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
     except ValueError as exc:
         # URL parsing and provider validation are user-input errors, never a
         # plain-text 500.  Do not expose provider internals to the browser.
+        # Preserve the long-standing Spotify validation code for legacy callers.
         raise HTTPException(status_code=422, detail={"code": "invalid_spotify_url", "message": str(exc)}) from None
     except HTTPException:
         raise
@@ -84,6 +119,19 @@ def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
         ) from None
 
     raise HTTPException(status_code=422, detail={"code": "unsupported_spotify_url", "message": "This Spotify URL type is not supported."})
+
+
+@router.get("/search")
+def search_download_source(query: str = Query(min_length=1, max_length=200), provider: str = "youtube_music", limit: int = Query(20, ge=1, le=25), db: Session = Depends(get_db)):
+    """Bounded provider-neutral catalogue search; raw extractor payloads never leave Harmony."""
+    if provider != "youtube_music":
+        raise HTTPException(status_code=422, detail={"code": "unsupported_provider", "message": "This download source does not support catalogue search."})
+    if not _youtube_music_enabled(db):
+        raise HTTPException(status_code=403, detail={"code": "provider_disabled", "message": "YouTube Music downloads are disabled in Settings."})
+    try:
+        return {"provider": provider, "results": [asdict(result) for result in get_source(provider).search(query, limit)]}
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail={"code": "provider_unavailable", "message": str(exc)}) from None
 
 @router.post("/clear", status_code=200)
 def clear_history(db: Session = Depends(get_db)):
@@ -172,4 +220,5 @@ def cancel_download(job_id: int, db: Session = Depends(get_db)):
     job.status = JobStatus.CANCELLED.value
     job.completed_at = datetime.now(UTC)
     db.commit()
+    download_processes.cancel(job_id)
     return {"status": JobStatus.CANCELLED.value, "id": job.id}

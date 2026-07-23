@@ -5,6 +5,7 @@ Revises: 20260722_0016
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision = "20260722_0017"
 down_revision = "20260722_0016"
@@ -13,6 +14,11 @@ depends_on = None
 
 
 def upgrade():
+    inspector = inspect(op.get_bind())
+    if "download_jobs" not in inspector.get_table_names():
+        return
+    if "reason_code" in {column["name"] for column in inspector.get_columns("download_jobs")}:
+        return
     op.add_column("download_jobs", sa.Column("reason_code", sa.String(), nullable=True))
     op.create_index("ix_download_jobs_reason_code", "download_jobs", ["reason_code"])
     op.add_column("download_jobs", sa.Column("reason_message", sa.String(), nullable=True))
