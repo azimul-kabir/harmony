@@ -24,6 +24,7 @@ from app.services.library_predicates import missing_metadata_expression
 from app.services.task_service import create_task, record_item_failure
 from app.services.metadata_health import metadata_health
 from app.services.metadata_discovery import metadata_discovery_service
+from app.services.duplicate_detector import duplicate_detector
 
 
 HEALTH_ACTIONS = {
@@ -56,6 +57,8 @@ class LibraryHealthService:
             select(func.count(Song.id)).where(Song.availability_status == "missing")
         ) or 0
         songs = int(analytics["songs"] or 0)
+        duplicates = duplicate_detector.list(db, limit=1)
+        duplicate_groups = int(duplicates["total"])
         possible = max(songs + missing_files, 1)
         penalty = (
             int(row.missing_artwork) * 0.30
@@ -82,9 +85,9 @@ class LibraryHealthService:
             {
                 "id": "duplicates",
                 "label": "Duplicate detection",
-                "count": None,
-                "status": "unavailable",
-                "available": False,
+                "count": duplicate_groups,
+                "status": "healthy" if not duplicate_groups else "attention",
+                "available": True,
             },
             {
                 "id": "missing_files",
@@ -101,7 +104,7 @@ class LibraryHealthService:
             "storage_bytes": analytics["storage_bytes"],
             "missing_artwork": int(row.missing_artwork),
             "missing_metadata": int(row.missing_metadata),
-            "duplicates": None,
+            "duplicates": duplicate_groups,
             "health_score": score,
             "last_updated": last_updated,
             "checks": checks,

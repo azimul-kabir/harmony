@@ -64,6 +64,17 @@ These endpoints use the same persistent jobs and retain their existing response
 fields. Bulk operations are `delete`, `move`, `rename`, `refresh_metadata`,
 `refresh_artwork`, `fetch_artwork`, `forget_missing`, and `export`.
 
+Duplicate intelligence is read-only:
+
+- `GET /api/library/duplicates` returns paginated candidate groups. Optional
+  `tier` values are `exact`, `strong`, `probable`, and `possible`; missing
+  records are excluded unless `include_missing=true`.
+- `GET /api/library/duplicates/{group_id}` returns one comparison group.
+
+Groups include stable Song IDs, evidence, confidence, quality attributes, and
+a non-binding `recommended_keep_id`. These endpoints never change Library rows
+or audio files.
+
 ## Sources and automation
 
 - `GET /api/sources` lists source state and schedule fields.

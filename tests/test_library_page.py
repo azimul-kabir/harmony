@@ -34,3 +34,5 @@ def test_normal_library_exposes_file_delete_not_forget():
     assert 'id="metadata-manual-form"' in response.text
     assert 'id="metadata-preview-manual"' in response.text
     assert 'id="metadata-apply-manual"' in response.text
+    assert 'id="library-duplicates-open"' in response.text
+    assert 'id="duplicate-review-dialog"' in response.text

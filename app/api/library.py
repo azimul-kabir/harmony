@@ -19,6 +19,7 @@ from app.services.library_filters import (
 )
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
+from app.services.duplicate_detector import TIERS, duplicate_detector
 from app.services.library_catalog import (
     playlist_sources_for_tracks,
     serialize_song,
@@ -47,6 +48,33 @@ class IndexFileRequest(BaseModel):
 @router.get("/analytics", summary="Get Library analytics")
 def get_library_analytics(db: Session = Depends(get_db)):
     return library_analytics.calculate(db)
+
+
+@router.get("/duplicates", summary="List explainable duplicate candidate groups")
+def list_duplicates(
+    db: Session = Depends(get_db),
+    tier: str | None = Query(default=None),
+    include_missing: bool = False,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    if tier is not None and tier not in TIERS:
+        raise HTTPException(status_code=400, detail="Unsupported duplicate tier")
+    return duplicate_detector.list(
+        db, tier=tier, include_missing=include_missing, limit=limit, offset=offset
+    )
+
+
+@router.get("/duplicates/{group_id}", summary="Compare one duplicate candidate group")
+def get_duplicate_group(
+    group_id: str,
+    include_missing: bool = False,
+    db: Session = Depends(get_db),
+):
+    group = duplicate_detector.get(db, group_id, include_missing=include_missing)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Duplicate group not found")
+    return group
 
 
 _playlist_sources = playlist_sources_for_tracks

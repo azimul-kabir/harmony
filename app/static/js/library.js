@@ -81,6 +81,35 @@ async function fetchJson(url) {
     return response.json();
 }
 
+async function loadDuplicateCandidates() {
+    const status = document.getElementById("duplicate-review-status");
+    const target = document.getElementById("duplicate-review-groups");
+    const tier = document.getElementById("duplicate-tier").value;
+    status.textContent = "Analyzing indexed identity signals…";
+    target.innerHTML = "";
+    try {
+        const result = await fetchJson(`/api/library/duplicates?limit=200${tier ? `&tier=${encodeURIComponent(tier)}` : ""}`);
+        status.textContent = `${result.total} candidate ${result.total === 1 ? "group" : "groups"} · ${result.duplicate_songs} indexed songs`;
+        target.innerHTML = result.items.map((group) => `
+            <article class="duplicate-group-card">
+                <header><div><h3>${escapeHtml(group.songs[0]?.title || "Untitled candidates")}</h3><small>${escapeHtml(group.songs[0]?.artist || "Unknown artist")} · ${group.song_count} candidates</small></div><span class="duplicate-tier-badge">${escapeHtml(group.tier)} · ${Math.round(group.confidence * 100)}%</span></header>
+                <p class="duplicate-evidence">${escapeHtml([...new Set(group.evidence.map((item) => item.message))].join(" · "))}</p>
+                <div class="duplicate-song-list">${group.songs.map((song) => `
+                    <div class="duplicate-song-row">
+                        <div class="duplicate-song-copy"><strong>${escapeHtml(song.filename)}</strong><small>${escapeHtml(song.album || "Album unknown")} · ${escapeHtml(song.codec || "codec unknown")}</small>${song.id === group.recommended_keep_id ? '<span class="duplicate-keeper">Suggested keeper — review before resolving</span>' : ""}</div>
+                        <span>${escapeHtml(formatDuration(song.duration))}</span><span>${escapeHtml(formatBitrate(song.bitrate))}</span><span>${escapeHtml(formatBytes(song.file_size))}</span>
+                    </div>`).join("")}</div>
+            </article>`).join("") || '<p class="library-search-status">No duplicate candidates match this tier.</p>';
+    } catch (_) {
+        status.textContent = "Duplicate analysis is unavailable.";
+    }
+}
+
+function openDuplicateReview() {
+    document.getElementById("duplicate-review-dialog").showModal();
+    loadDuplicateCandidates();
+}
+
 async function loadAnalytics() {
     try {
         libraryState.analytics = await fetchJson("/api/library/analytics");
@@ -1177,6 +1206,9 @@ document.getElementById("library-select-page").addEventListener("change", (event
     renderSongs();
 });
 document.getElementById("metadata-review-close").addEventListener("click", () => document.getElementById("metadata-review-dialog").close());
+document.getElementById("library-duplicates-open").addEventListener("click", openDuplicateReview);
+document.getElementById("duplicate-review-close").addEventListener("click", () => document.getElementById("duplicate-review-dialog").close());
+document.getElementById("duplicate-tier").addEventListener("change", loadDuplicateCandidates);
 
 document.getElementById("library-clear-selection").addEventListener("click", clearBulkSelection);
 document.querySelectorAll("[data-bulk-action]").forEach((button) => {

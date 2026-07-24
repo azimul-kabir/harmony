@@ -12,6 +12,7 @@
         </div>
         <div class="library-hero-actions">
         <a class="btn-secondary library-health-link" href="/library/health">Library Health</a>
+        <button id="library-duplicates-open" class="btn-secondary" type="button">Review duplicates</button>
         <button id="btn-rescan" class="btn-secondary library-rescan" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M20 11a8 8 0 1 0-2.34 5.66"></path>
@@ -221,6 +222,18 @@
             <button id="library-bulk-confirm" class="btn-primary" value="default">Confirm</button>
         </div>
     </form>
+</dialog>
+
+<dialog id="duplicate-review-dialog" class="metadata-review-dialog">
+    <div class="metadata-review-shell">
+        <header><div><span class="library-eyebrow">Library Intelligence</span><h2>Duplicate candidates</h2></div><button id="duplicate-review-close" class="btn-secondary" type="button">Close</button></header>
+        <p class="library-search-status">Candidates are read-only. Harmony will never remove a file from this screen.</p>
+        <label class="duplicate-tier-filter">Identity tier
+            <select id="duplicate-tier"><option value="">All tiers</option><option value="exact">Exact</option><option value="strong">Strong</option><option value="probable">Probable</option><option value="possible">Possible</option></select>
+        </label>
+        <p id="duplicate-review-status" class="library-search-status" aria-live="polite"></p>
+        <div id="duplicate-review-groups" class="duplicate-review-groups"></div>
+    </div>
 </dialog>
 
 <dialog id="metadata-review-dialog" class="metadata-review-dialog">

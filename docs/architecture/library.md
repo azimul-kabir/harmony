@@ -1078,29 +1078,28 @@ not recomputed in UI code.
 
 ---
 
-# Duplicate Detection (Future)
+# Duplicate Detection
 
-Detection priority
+Duplicate intelligence is a read-only, index-only service. It never opens,
+fingerprints, moves, or deletes audio files. Candidate groups use conservative,
+explainable tiers:
 
-Spotify ID
+1. `exact`: a shared MusicBrainz recording or Spotify track identity.
+2. `strong`: a shared ISRC.
+3. `probable`: normalized artist/title plus a duration difference of at most
+   three seconds.
+4. `possible`: normalized artist/title/album plus a duration difference of at
+   most ten seconds, or unavailable duration.
 
-↓
+Conflicting external identities prevent fuzzy grouping. Overly broad
+artist/title buckets are bounded and skipped. Each stable group includes its
+evidence, confidence, audio-quality comparison, and a non-binding suggested
+keeper selected by availability, bitrate, sample rate, file size, and metadata
+completeness. Operators must review that recommendation; detection performs no
+resolution action.
 
-MusicBrainz Recording ID
-
-↓
-
-ISRC
-
-↓
-
-Metadata Match
-
-↓
-
-Audio Fingerprint
-
-Duplicate handling is a separate service.
+Audio fingerprinting and safe keep/delete resolution remain future additive
+layers behind this service boundary.
 
 ---
 
@@ -1396,9 +1395,8 @@ API surface:
 
 `LibraryHealthService` provides a reusable, index-only health snapshot. It
 combines the existing analytics aggregates with registered health checks for
-artwork completeness, metadata completeness, and future duplicate detection.
-The duplicate check is explicitly unavailable until a detector exists; clients
-must not treat the placeholder as a zero-duplicate result.
+artwork completeness, metadata completeness, and explainable duplicate
+candidate groups.
 
 The Health Score is a bounded 0–100 completeness indicator. Missing metadata,
 missing artwork, and missing files currently contribute weighted penalties.

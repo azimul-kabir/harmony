@@ -1042,6 +1042,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .metadata-suggestion-card small { display: block; margin: 6px 0; }
 .metadata-suggestion-card > div { display: flex; gap: 8px; margin-top: 12px; }
 .metadata-suggestion-card .btn-primary { padding: 8px 16px; }
+.duplicate-tier-filter { display: grid; gap: 6px; width: min(240px, 100%); margin-top: 18px; color: var(--text-muted); }
+.duplicate-review-groups { display: grid; gap: 16px; margin-top: 16px; }
+.duplicate-group-card { padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-surface-alt); }
+.duplicate-group-card > header { display: flex; justify-content: space-between; gap: 12px; }
+.duplicate-group-card h3 { margin: 0; }
+.duplicate-tier-badge { align-self: flex-start; padding: 4px 9px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 14%, var(--bg-surface)); text-transform: capitalize; }
+.duplicate-evidence { margin: 10px 0; color: var(--text-muted); }
+.duplicate-song-list { display: grid; gap: 8px; }
+.duplicate-song-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-surface); }
+.duplicate-song-row strong, .duplicate-song-row small { display: block; overflow-wrap: anywhere; }
+.duplicate-keeper { color: var(--primary); font-size: .78rem; }
 .metadata-proposed { font-size: 1.05rem; }
 
 @media (max-width: 768px) {
@@ -1049,6 +1060,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .metadata-manual-form { grid-template-columns: 1fr; }
     .metadata-review-shell { padding: 16px; }
     .metadata-suggestion-card header, .metadata-history-list article { flex-direction: column; }
+    .duplicate-group-card > header { flex-direction: column; }
+    .duplicate-song-row { grid-template-columns: 1fr 1fr; }
+    .duplicate-song-copy { grid-column: 1 / -1; }
     .library-songs-table #library-body td:nth-child(7) { grid-column: 1 / -1; padding-left: 56px !important; }
 }
 
