@@ -104,6 +104,25 @@ function renderPlaylistTracks(payload) {
         position.className = "playlist-track-position";
         position.textContent = track.position;
 
+        let art;
+        if (track.cover_url) {
+            art = document.createElement("img");
+            art.className = "playlist-track-artwork";
+            art.src = track.cover_url;
+            art.alt = "";
+            art.loading = "lazy";
+            art.addEventListener("error", () => {
+                const placeholder = document.createElement("span");
+                placeholder.className = "playlist-track-artwork playlist-track-artwork-placeholder";
+                placeholder.textContent = "♪";
+                art.replaceWith(placeholder);
+            }, { once: true });
+        } else {
+            art = document.createElement("span");
+            art.className = "playlist-track-artwork playlist-track-artwork-placeholder";
+            art.textContent = "♪";
+        }
+
         const copy = document.createElement("span");
         copy.className = "playlist-track-copy";
         const title = document.createElement("strong");
@@ -117,7 +136,7 @@ function renderPlaylistTracks(payload) {
         status.textContent = track.selectable
             ? "In library"
             : track.availability === "missing" ? "Already missing" : "Not downloaded";
-        row.append(checkbox, position, copy, status);
+        row.append(checkbox, position, art, copy, status);
         playlistTrackList.appendChild(row);
     });
     updatePlaylistSelection();

@@ -20,6 +20,8 @@
   and automatic refresh of every affected M3U.
 - Allow saved playlists and their generated M3U files to be deleted from the
   Playlists page without removing downloaded songs or their Sources.
+- Show square album artwork beside every song in the playlist Library manager,
+  with download-job artwork and a compact placeholder as fallbacks.
 
 All notable changes to Harmony are documented in this file.
 

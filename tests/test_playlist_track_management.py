@@ -2,7 +2,13 @@ from fastapi.testclient import TestClient
 
 from app.api import playlist as playlist_api
 from app.api.playlist import delete_playlist, playlist_tracks
-from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
+from app.database.models import (
+    DownloadJob,
+    Playlist,
+    PlaylistTrack,
+    Song,
+    SyncSource,
+)
 from app.database.session import SessionLocal
 from app.main import app
 
@@ -44,6 +50,7 @@ def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
                     spotify_track_id="spotify-local",
                     title="Indexed title",
                     artist="Indexed artist",
+                    cover_url="https://images.example/local.jpg",
                     availability_status="available",
                 ),
                 Song(
@@ -53,6 +60,16 @@ def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
                     title="Missing",
                     artist="Artist",
                     availability_status="missing",
+                ),
+                DownloadJob(
+                    spotify_url=(
+                        "https://open.spotify.com/track/"
+                        "spotify-undownloaded"
+                    ),
+                    spotify_track_id="spotify-undownloaded",
+                    title="Not downloaded",
+                    artist="Artist",
+                    cover_url="https://images.example/pending.jpg",
                 ),
             ]
         )
@@ -65,11 +82,17 @@ def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
         assert payload["deletable_count"] == 1
         assert [track["position"] for track in payload["tracks"]] == [1, 2, 3]
         assert payload["tracks"][0]["title"] == "Indexed title"
+        assert payload["tracks"][0]["cover_url"] == (
+            "https://images.example/local.jpg"
+        )
         assert payload["tracks"][0]["selectable"] is True
         assert payload["tracks"][1]["availability"] == "missing"
         assert payload["tracks"][1]["selectable"] is False
         assert payload["tracks"][2]["availability"] == "not_in_library"
         assert payload["tracks"][2]["song_id"] is None
+        assert payload["tracks"][2]["cover_url"] == (
+            "https://images.example/pending.jpg"
+        )
     finally:
         db.close()
 

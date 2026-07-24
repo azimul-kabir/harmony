@@ -8,7 +8,8 @@ from app.api.schemas.comparison import PlaylistComparisonResponse
 from app.api.schemas.playlist import PlaylistImportRequest
 from app.api.schemas.playlist_response import PlaylistResponse
 from app.database.session import get_db
-from app.database.models import Playlist, Song
+from app.database.models import DownloadJob, Playlist, Song
+from app.services.artwork import artwork_url
 from app.services.comparison import compare_with_library
 from app.services.playlist import import_playlist
 from app.services.playlist_download import download_playlist
@@ -40,10 +41,19 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
     songs_by_spotify_id = {
         song.spotify_track_id: song for song in songs
     }
+    jobs = db.scalars(
+        select(DownloadJob)
+        .where(DownloadJob.spotify_track_id.in_(spotify_ids))
+        .order_by(DownloadJob.id.desc())
+    ).all()
+    jobs_by_spotify_id = {}
+    for job in jobs:
+        jobs_by_spotify_id.setdefault(job.spotify_track_id, job)
 
     tracks = []
     for track in playlist.tracks:
         song = songs_by_spotify_id.get(track.spotify_track_id)
+        job = jobs_by_spotify_id.get(track.spotify_track_id)
         tracks.append(
             {
                 "position": track.position + 1,
@@ -55,6 +65,11 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
                 or track.artist
                 or "Unknown artist",
                 "album": (song.album if song else None) or track.album,
+                "cover_url": (
+                    (artwork_url(song.artwork_id) or song.cover_url)
+                    if song
+                    else (job.cover_url if job else None)
+                ),
                 "song_id": song.id if song else None,
                 "availability": (
                     song.availability_status if song else "not_in_library"
