@@ -145,8 +145,8 @@
                     <button type="button" data-bulk-action="refresh_artwork">Refresh artwork</button>
                     <button type="button" data-bulk-action="fetch_artwork">Fetch album art</button>
                     <button type="button" data-bulk-action="export">Export</button>
-                    <button type="button" class="library-bulk-delete" data-bulk-action="delete">Delete</button>
-                    <button type="button" id="library-bulk-forget-missing" class="library-bulk-delete" data-bulk-action="forget_missing" hidden>Forget missing records</button>
+                    <button type="button" id="library-bulk-delete" class="library-bulk-delete" data-bulk-action="delete" {% if request.query_params.get("availability") == "missing" %}hidden{% endif %}>Delete</button>
+                    <button type="button" id="library-bulk-forget-missing" class="library-bulk-delete" data-bulk-action="forget_missing" {% if request.query_params.get("availability") != "missing" %}hidden{% endif %}>Forget missing records</button>
                     <button id="library-clear-selection" type="button" class="btn-secondary">Clear</button>
                 </div>
             </div>

@@ -1326,7 +1326,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .library-filter-count[hidden],
 .library-bulk-toolbar[hidden],
 .library-bulk-progress[hidden],
-.library-bulk-download[hidden] { display: none !important; }
+.library-bulk-download[hidden],
+.library-bulk-actions button[hidden] { display: none !important; }
 
 .library-bulk-toolbar,
 .library-bulk-progress {

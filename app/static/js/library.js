@@ -1258,6 +1258,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (requestedAvailability === "missing") {
         libraryState.requestedAvailability = requestedAvailability;
         libraryState.view = "songs";
+        document.getElementById("library-bulk-delete").hidden = true;
         document.getElementById("library-bulk-forget-missing").hidden = false;
     }
     document.getElementById("library-sort").value = libraryState.sort;
