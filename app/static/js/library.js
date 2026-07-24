@@ -105,11 +105,63 @@ async function loadDuplicateCandidates() {
                     <div class="duplicate-song-row">
                         <div class="duplicate-song-copy"><strong>${escapeHtml(song.filename)}</strong><small>${escapeHtml(song.album || "Album unknown")} · ${escapeHtml(song.codec || "codec unknown")}</small>${song.id === group.recommended_keep_id ? '<span class="duplicate-keeper">Suggested keeper — review before resolving</span>' : ""}</div>
                         <span>${escapeHtml(formatDuration(song.duration))}</span><span>${escapeHtml(formatBitrate(song.bitrate))}</span><span>${escapeHtml(formatBytes(song.file_size))}</span>
+                        <label class="duplicate-keeper-control"><input type="radio" name="duplicate-keeper-${group.id}" value="${song.id}" ${song.id === group.recommended_keep_id ? "checked" : ""}> Keep this file</label>
                     </div>`).join("")}</div>
+                <div class="library-actions"><button class="btn-secondary" type="button" data-preview-duplicate-resolution="${group.id}">Preview resolution</button></div>
+                <div data-duplicate-resolution="${group.id}"></div>
             </article>`).join("") || '<p class="library-search-status">No duplicate candidates match this tier.</p>';
+        target.querySelectorAll("[data-preview-duplicate-resolution]").forEach((button) => {
+            button.addEventListener("click", () => previewDuplicateResolution(button.dataset.previewDuplicateResolution));
+        });
     } catch (_) {
         status.textContent = "Duplicate analysis is unavailable.";
     }
+}
+
+async function previewDuplicateResolution(groupId) {
+    const target = document.querySelector(`[data-duplicate-resolution="${groupId}"]`);
+    const keeper = document.querySelector(`input[name="duplicate-keeper-${groupId}"]:checked`);
+    if (!keeper) { target.textContent = "Choose exactly one file to keep."; return; }
+    target.innerHTML = '<p class="library-search-status">Revalidating this duplicate group…</p>';
+    try {
+        const preview = await fetchJson(`/api/library/duplicates/${groupId}/resolution-preview?keep_song_id=${keeper.value}`);
+        const playlistCount = preview.playlist_impacts.reduce((total, item) => total + item.playlists.length, 0);
+        target.innerHTML = `<article class="metadata-suggestion-card duplicate-resolution-preview">
+            <strong>Resolution preview</strong>
+            <p>Keep Song ${preview.keep_song_id}; remove ${preview.remove_song_ids.length} ${preview.remove_song_ids.length === 1 ? "file" : "files"} and reclaim up to ${escapeHtml(formatBytes(preview.reclaimable_bytes))}.</p>
+            ${playlistCount ? `<p><strong>Playlist impact:</strong> ${playlistCount} saved playlist ${playlistCount === 1 ? "reference" : "references"} may become unavailable.</p>` : ""}
+            ${preview.warnings.map((warning) => `<small>${escapeHtml(warning)}</small>`).join("")}
+            <button class="library-bulk-delete" type="button" data-confirm-duplicate-resolution>Delete non-keepers</button>
+        </article>`;
+        target.querySelector("[data-confirm-duplicate-resolution]").onclick = () => submitDuplicateResolution(preview, target);
+    } catch (error) {
+        target.textContent = error.message;
+    }
+}
+
+async function submitDuplicateResolution(preview, target) {
+    if (!window.confirm(`Permanently delete ${preview.remove_song_ids.length} non-keeper audio ${preview.remove_song_ids.length === 1 ? "file" : "files"}? Library records will remain marked missing.`)) return;
+    const button = target.querySelector("[data-confirm-duplicate-resolution]");
+    button.disabled = true;
+    const response = await fetch(`/api/library/duplicates/${preview.group_id}/resolve`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({...preview, confirm_delete: true, initiated_by: "duplicate-ui"}),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+        target.textContent = result.detail || "Duplicate resolution could not be queued.";
+        return;
+    }
+    let task = await fetchJson(`/api/library/bulk/${result.job_id}`);
+    while (["queued", "running", "cancelling"].includes(task.status)) {
+        target.textContent = `${task.status.replaceAll("_", " ")} · ${task.processed_items}/${task.total_items}`;
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        task = await fetchJson(`/api/library/bulk/${result.job_id}`);
+    }
+    target.textContent = task.status === "completed"
+        ? "Duplicate resolution completed. Removed files remain as missing Library records."
+        : `Duplicate resolution ${task.status.replaceAll("_", " ")}. Review the Library task for details.`;
+    await Promise.all([loadDuplicateCandidates(), loadLibraryData({preserveState: true}), loadAnalytics()]);
 }
 
 function openDuplicateReview() {

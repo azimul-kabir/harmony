@@ -70,10 +70,17 @@ Duplicate intelligence is read-only:
   `tier` values are `exact`, `strong`, `probable`, and `possible`; missing
   records are excluded unless `include_missing=true`.
 - `GET /api/library/duplicates/{group_id}` returns one comparison group.
+- `GET /api/library/duplicates/{group_id}/resolution-preview?keep_song_id=...`
+  revalidates the group and reports the exact removal set, reclaimable bytes,
+  playlist impacts, warnings, and a short-lived confirmation token.
+- `POST /api/library/duplicates/{group_id}/resolve` requires the preview's
+  keeper, exact candidate/removal sets, token, and `confirm_delete=true`, then
+  queues the removals through the durable Library bulk task.
 
 Groups include stable Song IDs, evidence, confidence, quality attributes, and
-a non-binding `recommended_keep_id`. These endpoints never change Library rows
-or audio files.
+a non-binding `recommended_keep_id`. Detection and preview are read-only.
+Resolution deletes only the confirmed non-keeper audio files and retains their
+Library records as missing provenance.
 
 Manual artwork replacement uses multipart uploads:
 

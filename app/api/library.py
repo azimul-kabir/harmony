@@ -3,7 +3,7 @@ from queue import Empty
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
@@ -20,6 +20,7 @@ from app.services.library_filters import (
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.duplicate_detector import TIERS, duplicate_detector
+from app.services.library_bulk import create_bulk_task
 from app.services.library_catalog import (
     playlist_sources_for_tracks,
     serialize_song,
@@ -43,6 +44,15 @@ class IndexFileRequest(BaseModel):
     path: str
     force: bool = False
     download_source: str | None = None
+
+
+class DuplicateResolutionRequest(BaseModel):
+    keep_song_id: int = Field(ge=1)
+    remove_song_ids: list[int] = Field(min_length=1, max_length=99)
+    candidate_song_ids: list[int] = Field(min_length=2, max_length=100)
+    confirmation_token: str = Field(min_length=64, max_length=64)
+    confirm_delete: bool = False
+    initiated_by: str | None = Field(default=None, max_length=120)
 
 
 @router.get("/analytics", summary="Get Library analytics")
@@ -75,6 +85,59 @@ def get_duplicate_group(
     if group is None:
         raise HTTPException(status_code=404, detail="Duplicate group not found")
     return group
+
+
+@router.get("/duplicates/{group_id}/resolution-preview", summary="Preview safe duplicate resolution")
+def preview_duplicate_resolution(
+    group_id: str,
+    keep_song_id: int = Query(ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return duplicate_detector.resolution_preview(db, group_id, keep_song_id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/duplicates/{group_id}/resolve", summary="Queue confirmed duplicate file removal")
+def resolve_duplicate_group(
+    group_id: str,
+    request: DuplicateResolutionRequest,
+    db: Session = Depends(get_db),
+):
+    if not request.confirm_delete:
+        raise HTTPException(status_code=409, detail="Explicit file-deletion confirmation is required")
+    try:
+        preview = duplicate_detector.resolution_preview(db, group_id, request.keep_song_id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if (
+        sorted(set(request.remove_song_ids)) != preview["remove_song_ids"]
+        or sorted(set(request.candidate_song_ids)) != preview["candidate_song_ids"]
+        or request.confirmation_token != preview["confirmation_token"]
+    ):
+        raise HTTPException(status_code=409, detail="Duplicate group changed; review a fresh resolution preview")
+    try:
+        task = create_bulk_task(
+            db,
+            operation="delete",
+            song_ids=preview["remove_song_ids"],
+            options={
+                "duplicate_group_id": group_id,
+                "duplicate_keep_song_id": str(request.keep_song_id),
+            },
+            initiated_by=request.initiated_by,
+            task_name="Resolve Duplicate Group",
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "job_id": task.id,
+        "status": task.status,
+        "keep_song_id": request.keep_song_id,
+        "remove_song_ids": preview["remove_song_ids"],
+        "message": "Duplicate resolution queued as a durable Library deletion task.",
+    }
 
 
 _playlist_sources = playlist_sources_for_tracks

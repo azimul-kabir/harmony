@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.database.models import Song
+from app.database.models import BulkOperationItem, Playlist, PlaylistTrack, Song, Task
 from app.database.session import SessionLocal
 from app.main import app
 from app.services.duplicate_detector import duplicate_detector
@@ -91,3 +91,73 @@ def test_duplicate_api_supports_tier_filter_and_group_lookup():
     assert detail.json()["song_count"] == 2
     assert client.get("/api/library/duplicates?tier=unsafe").status_code == 400
     assert client.get("/api/library/duplicates/dup-missing").status_code == 404
+
+
+def test_resolution_preview_reports_playlist_impact_and_queues_exact_confirmed_set():
+    with SessionLocal() as db:
+        keep = _song(db, "keep", isrc="USABC1234567", bitrate=1000000, file_size=20_000_000)
+        remove = _song(db, "remove", isrc="USABC1234567", bitrate=128000,
+                       file_size=3_000_000, spotify_track_id="spotify-remove")
+        playlist = Playlist(spotify_id="playlist-duplicate", name="Review playlist")
+        db.add(playlist)
+        db.flush()
+        db.add(PlaylistTrack(
+            playlist_id=playlist.id,
+            spotify_track_id=remove.spotify_track_id,
+            position=1,
+        ))
+        db.commit()
+        keep_id, remove_id = keep.id, remove.id
+    client = TestClient(app)
+    group = client.get("/api/library/duplicates").json()["items"][0]
+
+    preview_response = client.get(
+        f"/api/library/duplicates/{group['id']}/resolution-preview?keep_song_id={keep_id}"
+    )
+    assert preview_response.status_code == 200
+    preview = preview_response.json()
+    assert preview["remove_song_ids"] == [remove_id]
+    assert preview["reclaimable_bytes"] == 3_000_000
+    assert preview["playlist_impacts"][0]["playlists"][0]["name"] == "Review playlist"
+
+    rejected = client.post(
+        f"/api/library/duplicates/{group['id']}/resolve",
+        json={**preview, "confirm_delete": False},
+    )
+    assert rejected.status_code == 409
+
+    queued = client.post(
+        f"/api/library/duplicates/{group['id']}/resolve",
+        json={**preview, "confirm_delete": True, "initiated_by": "duplicate-ui"},
+    )
+    assert queued.status_code == 200
+    with SessionLocal() as db:
+        task = db.get(Task, queued.json()["job_id"])
+        items = db.query(BulkOperationItem).filter_by(task_id=task.id).all()
+        assert task.name == "Resolve Duplicate Group"
+        assert task.initiated_by == "duplicate-ui"
+        assert [item.song_id for item in items] == [remove_id]
+        assert db.get(Song, keep_id).availability_status == "available"
+
+
+def test_resolution_rejects_stale_group_after_availability_changes():
+    with SessionLocal() as db:
+        keep = _song(db, "keep", isrc="USABC1234567", bitrate=1000000)
+        remove = _song(db, "remove", isrc="USABC1234567", bitrate=128000)
+        db.commit()
+        keep_id, remove_id = keep.id, remove.id
+    client = TestClient(app)
+    group = client.get("/api/library/duplicates").json()["items"][0]
+    preview = client.get(
+        f"/api/library/duplicates/{group['id']}/resolution-preview?keep_song_id={keep_id}"
+    ).json()
+    with SessionLocal() as db:
+        db.get(Song, remove_id).availability_status = "missing"
+        db.commit()
+
+    response = client.post(
+        f"/api/library/duplicates/{group['id']}/resolve",
+        json={**preview, "confirm_delete": True},
+    )
+    assert response.status_code == 409
+    assert "changed" in response.json()["detail"]

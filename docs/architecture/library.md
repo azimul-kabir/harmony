@@ -1127,8 +1127,23 @@ keeper selected by availability, bitrate, sample rate, file size, and metadata
 completeness. Operators must review that recommendation; detection performs no
 resolution action.
 
-Audio fingerprinting and safe keep/delete resolution remain future additive
-layers behind this service boundary.
+Audio fingerprinting and automatic metadata/identity merging remain future
+additive layers behind this service boundary.
+
+## Duplicate resolution
+
+Resolution is an explicit second phase. The operator chooses a keeper and
+requests a fresh preview. Harmony recomputes the group, returns the complete
+candidate and removal sets, storage estimate, playlist impacts, warnings, and
+a SHA-256 confirmation token bound to that group and keeper.
+
+Submission must echo the exact sets and token with explicit deletion
+confirmation. Any changed membership or availability invalidates the request.
+Accepted work becomes the existing durable Library bulk-delete task and
+inherits its managed-music-root check, item-level outcomes, cancellation,
+restart behavior, M3U refresh, and missing-record provenance. Cached artwork
+is not deleted. Harmony does not silently merge identifiers, playlist
+membership, metadata, or tags into the keeper.
 
 ---
 

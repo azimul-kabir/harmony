@@ -189,5 +189,44 @@ class DuplicateDetector:
             None,
         )
 
+    def resolution_preview(
+        self, db: Session, group_id: str, keep_song_id: int
+    ) -> dict[str, Any]:
+        group = self.get(db, group_id)
+        if group is None:
+            raise ValueError("Duplicate group is missing or has changed.")
+        if len(group["song_ids"]) > 100:
+            raise ValueError("Duplicate group exceeds the safe resolution limit.")
+        if keep_song_id not in group["song_ids"]:
+            raise ValueError("The selected keeper is not in this duplicate group.")
+        remove_ids = sorted(song_id for song_id in group["song_ids"] if song_id != keep_song_id)
+        songs = {item["id"]: item for item in group["songs"]}
+        playlist_impacts = [
+            {
+                "song_id": song_id,
+                "playlists": songs[song_id]["playlist_sources"],
+            }
+            for song_id in remove_ids if songs[song_id]["playlist_sources"]
+        ]
+        identity = f"{group_id}:{keep_song_id}:{','.join(map(str, group['song_ids']))}"
+        return {
+            "group_id": group_id,
+            "tier": group["tier"],
+            "keep_song_id": keep_song_id,
+            "remove_song_ids": remove_ids,
+            "candidate_song_ids": group["song_ids"],
+            "confirmation_token": sha256(identity.encode()).hexdigest(),
+            "reclaimable_bytes": sum(songs[song_id]["file_size"] or 0 for song_id in remove_ids),
+            "playlist_impacts": playlist_impacts,
+            "warnings": [
+                "Deleted files remain as missing Library records with provenance.",
+                "Audio deletion is irreversible from Harmony; cached artwork is retained.",
+                *(
+                    ["One or more removed candidates are referenced by saved playlists."]
+                    if playlist_impacts else []
+                ),
+            ],
+        }
+
 
 duplicate_detector = DuplicateDetector()

@@ -56,6 +56,8 @@ def create_bulk_task(
     operation: str,
     song_ids: list[int],
     options: dict | None = None,
+    initiated_by: str | None = None,
+    task_name: str | None = None,
 ) -> Task:
     if operation not in OPERATIONS:
         raise ValueError(f"Unsupported bulk operation: {operation}")
@@ -79,12 +81,13 @@ def create_bulk_task(
 
     task = create_task(
         db,
-        name=f"Library {operation.replace('_', ' ')}",
+        name=task_name or f"Library {operation.replace('_', ' ')}",
         spotify_url=f"library://bulk/{operation}",
         task_type=TaskType.LIBRARY_BULK,
         total_items=len(songs),
         operation_payload=json.dumps({"operation": operation, "options": options or {}}),
         resource_key="library-files",
+        initiated_by=initiated_by,
         commit=False,
     )
     for song_id in unique_ids:
