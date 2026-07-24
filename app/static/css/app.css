@@ -350,6 +350,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-collections a:last-child { border-bottom: 0; }
 .dashboard-collections a:hover { color: var(--primary); }
 .dashboard-actions { padding: 18px; }
+.dashboard-actions .quick-action-btn,
+.dashboard-actions .btn-secondary {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    box-sizing: border-box;
+    text-decoration: none;
+}
 .dashboard-maintenance { padding: 18px; }
 .dashboard-maintenance-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .dashboard-maintenance-item { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface-alt); min-width: 0; }
@@ -549,6 +557,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .source-actions button.delete-btn:hover { background: var(--error-bg); }
 .page-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; }
 .page-heading h1 { margin: 0; }
+.source-add-panel { margin-bottom: 24px; }
+.source-add-panel > p { margin: 0 0 16px; color: var(--text-muted); font-size: 1.05rem; line-height: 1.5; }
+.source-add-form { margin: 0; }
 .playlist-toolbar { display: flex; align-items: center; gap: 16px; padding: 16px; }
 .playlist-toolbar .search-input { min-width: 0; }
 .playlist-toolbar span { color: var(--text-muted); white-space: nowrap; font-size: .9rem; }
@@ -557,9 +568,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-counts strong, .source-counts strong { display: block; font-size: 1.3rem; color: var(--text-main); }
 .playlist-counts span, .source-counts span { display: block; margin-top: 3px; color: var(--text-muted); font-size: .72rem; }
 .playlist-meta { display: flex; flex-direction: column; gap: 8px; }
+.playlist-meta-row { display: flex; justify-content: space-between; gap: 12px; }
+.playlist-meta-row span { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+.playlist-empty-state { grid-column: 1 / -1; padding: 40px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); }
 .playlist-partial { color: #8a5700; background: #fff3cd; }
 .playlist-actions { flex-wrap: wrap; }
 .playlist-actions .btn-secondary, .source-open-link { flex: 1 1 110px; padding: 10px; border-radius: 6px; font-size: .85rem; font-weight: 600; text-align: center; text-decoration: none; box-sizing: border-box; }
+.playlist-actions .playlist-download-link { color: var(--primary); border-color: var(--primary); }
 .playlist-actions .playlist-delete-btn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, var(--border-color)); }
 .playlist-actions .playlist-delete-btn:hover:not(:disabled) { color: white; background: var(--danger); border-color: var(--danger); }
 .playlist-tracks-dialog { width: min(760px, calc(100vw - 24px)); overflow-x: hidden; }
@@ -1209,7 +1224,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
+    max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
 }
 
@@ -2132,6 +2151,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .metadata-rule-summary { padding: 8px; }
 }
 
+@media (max-width: 480px) {
+    .navidrome-controls > div { display: grid; grid-template-columns: 1fr; }
+    .navidrome-controls button { width: 100%; min-height: 44px; }
+    .dashboard-actions .quick-actions-grid { gap: 9px; }
+    .dashboard-actions .btn-secondary { width: 100%; padding: 12px; }
+}
+
 /* Downloads operations center */
 .downloads-summary-card.active { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent); }
 .download-queue-panel { padding: 18px; margin-bottom: var(--space-md); }
@@ -2154,6 +2180,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .queue-list .queue-item { padding-left: 10px; }
 .download-queue-panel .empty-state { margin: 4px 0; color: var(--text-muted); }
 @media (max-width: 640px) {
+    .page-heading {
+        align-items: stretch;
+        flex-direction: column;
+        margin-bottom: 18px;
+    }
+    .page-heading > .btn-secondary { width: 100%; min-height: 44px; }
+    .source-add-panel { margin-bottom: 16px; }
+    .source-add-panel > p { font-size: .9rem; }
+    .source-add-form input { min-height: 46px; font-size: 16px; }
+    .source-add-form button { min-height: 46px; }
+    .source-card { gap: 13px; padding: 16px; }
+    .source-header { gap: 10px; }
+    .source-header h3 { min-width: 0; overflow-wrap: anywhere; font-size: 1.05rem; }
+    .playlist-toolbar { align-items: stretch; flex-direction: column; gap: 8px; padding: 12px; }
+    .playlist-toolbar .search-input { min-height: 46px; font-size: 16px; }
+    .playlist-toolbar span { align-self: flex-end; }
+    .playlist-counts > div, .source-counts > div { padding: 10px 5px; }
+    .playlist-counts strong, .source-counts strong { font-size: 1.15rem; }
+    .playlist-counts span, .source-counts span { font-size: .65rem; line-height: 1.25; }
+    .playlist-meta-row { align-items: flex-start; }
+    .playlist-actions .btn-secondary,
+    .source-open-link { min-height: 44px; }
+    .playlist-empty-state { padding: 28px 18px; }
     .downloads-header { margin-bottom: 14px; }
     .downloads-header h1 { font-size: 1.75rem; }
     .downloads-summary {
@@ -2179,9 +2228,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .download-ingest-form .btn-primary { width: 100%; }
     .download-history-filters { gap: 10px !important; padding: 12px !important; }
     .download-history-filters .filter-tabs {
+        width: calc(100% + 24px);
+        max-width: none;
         gap: 6px;
         margin: 0 -12px;
         padding: 0 12px 4px;
+        overflow-x: scroll;
+        overscroll-behavior-x: contain;
+        touch-action: pan-x;
+        -webkit-overflow-scrolling: touch;
     }
     .download-history-filters .filter-tab {
         flex: 0 0 auto;
@@ -2230,6 +2285,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (max-width: 640px) { .download-details-drawer { width: 100vw; max-width: none; border-left: 0; } }
 
 .download-selection-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--border-color); }
+.download-selection-toolbar[hidden] { display: none !important; }
 .download-selection-toolbar strong { margin-right: auto; }
 .download-selection-toolbar button { min-height: 44px; }
 .download-history-row.is-selected { outline: 2px solid var(--accent-primary); outline-offset: -2px; }

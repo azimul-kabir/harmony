@@ -3,7 +3,7 @@
 
 {% block content %} 
 <div class="page-heading">
-    <h1 style="margin: 0;">Playlists</h1>
+    <div><span class="library-eyebrow">Local exports</span><h1>Playlists</h1></div>
     <button id="scan-navidrome" class="btn-secondary" type="button">↻ Scan Navidrome</button>
 </div>
 
@@ -16,7 +16,7 @@
 
 <div class="sources-grid">
     {% if not playlists %}
-        <div class="empty-state" style="grid-column: 1 / -1; padding: 40px; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);">
+        <div class="empty-state playlist-empty-state">
             No playlists generated yet. Sync a source to populate your database.
         </div>
     {% endif %}
@@ -40,15 +40,15 @@
             <div><strong>{{ p.track_count - card.exported_count }}</strong><span>Unavailable</span></div>
         </div>
         <div class="source-meta playlist-meta">
-            <div style="display: flex; justify-content: space-between;">
+            <div class="playlist-meta-row">
                 <strong>Last Sync:</strong> 
                 <span>{{ p.last_synced_at | format_tz(general.timezone, datetime_fmt) if p.last_synced_at else 'Never' }}</span>
             </div>
-            <div style="display: flex; justify-content: space-between;">
+            <div class="playlist-meta-row">
                 <strong>M3U:</strong>
                 <span>{{ 'Exported' if card.m3u_exists else 'Missing' }}</span>
             </div>
-            <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <div class="playlist-meta-row">
                 <strong>Navidrome:</strong>
                 {% if p.navidrome_sync_status == 'synced' %}
                     <span>Direct · {{ p.navidrome_synced_track_count }} tracks</span>
@@ -67,7 +67,7 @@
             <a href="{{ card.source.spotify_url if card.source else 'https://open.spotify.com/playlist/' ~ p.spotify_id }}" target="_blank" rel="noopener" class="btn-secondary">
                 Open Spotify
             </a>
-            <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
+            <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary playlist-download-link">
                 Download M3U
             </a>
             <button
