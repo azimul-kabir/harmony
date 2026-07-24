@@ -112,6 +112,18 @@
                 </select>
             </div>
         </div>
+        <details class="library-search-help">
+            <summary>Advanced search syntax</summary>
+            <p>Use fields, quoted phrases, exclusions, and Library Intelligence filters. Terms combine with AND.</p>
+            <div class="library-search-examples">
+                <button type="button" data-search-example='artist:"Miles Davis" -genre:live'>Artist and exclusion</button>
+                <button type="button" data-search-example='title:"Northern Lights"'>Exact phrase</button>
+                <button type="button" data-search-example="has:issues">Open metadata issues</button>
+                <button type="button" data-search-example="is:duplicate">Duplicate candidates</button>
+                <button type="button" data-search-example="missing:artwork">Missing artwork</button>
+            </div>
+            <small>Fields: title, artist, album, genre, playlist, filename, spotify, musicbrainz, isrc. Filters: has:issues, has:artwork, is:duplicate, is:missing, is:available, missing:artwork, missing:metadata.</small>
+        </details>
 
         <section id="library-filter-panel" class="library-filter-panel" aria-label="Library filters" hidden>
             <div class="library-filter-fields">

@@ -806,6 +806,21 @@ The web Library search box queries this API with a debounce and projects the
 ranked Song matches into the Songs, Albums, and Artists views. Collection names
 remain locally filtered UI navigation rather than FTS content.
 
+## Advanced query grammar
+
+Simple whitespace searches retain prefix matching across every FTS field.
+Advanced syntax adds allow-listed field qualifiers, quoted phrases, and
+leading-hyphen exclusions. Special index-only controls filter Songs with open
+metadata issues, artwork presence/absence, missing metadata, availability, or
+membership in an explainable duplicate candidate group.
+
+The parser never passes raw operators or column names through to SQLite. It
+emits escaped FTS phrases, parameterized exclusion subqueries, and fixed SQL
+predicates. Queries are bounded to 200 characters and 20 terms. Duplicate
+membership is derived from the detector and limited to 800 bound Song IDs for
+compatibility with conservative SQLite builds. A control-only query uses
+stable Library sorting because BM25 relevance requires a positive FTS term.
+
 ## Sorting and Filtering
 
 Library listing and FTS search share the immutable `LibraryFilters` query model.

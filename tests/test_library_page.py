@@ -38,3 +38,5 @@ def test_normal_library_exposes_file_delete_not_forget():
     assert 'id="metadata-artwork-remove"' in response.text
     assert 'id="library-duplicates-open"' in response.text
     assert 'id="duplicate-review-dialog"' in response.text
+    assert 'class="library-search-help"' in response.text
+    assert 'data-search-example="is:duplicate"' in response.text

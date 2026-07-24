@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.api.library import search_library
 from app.database.base import Base
-from app.database.models import Playlist, PlaylistTrack, Song
-from app.services.library_search import SearchFilters, library_search
+from app.database.models import MetadataIssue, Playlist, PlaylistTrack, Song
+from app.services.library_search import SearchFilters, SearchQueryError, library_search
 
 
 def _session() -> Session:
@@ -73,6 +73,77 @@ def test_search_covers_every_indexed_field():
         for query in queries:
             page = library_search.search(db, query)
             assert page.song_ids == [first.id], query
+
+
+def test_advanced_search_supports_fields_phrases_and_exclusions():
+    with _session() as db:
+        first, _ = _seed(db)
+        other = Song(
+            path="/music/aurora-rock.flac",
+            filename="aurora-rock.flac",
+            title="Northern Lights Live",
+            artist="Aurora Lane",
+            album="Concert",
+            genre="Rock",
+            duration=240,
+            availability_status="available",
+        )
+        db.add(other)
+        db.flush()
+        library_search.index_song(db, other.id)
+        db.commit()
+
+        assert set(library_search.search(db, 'title:"Northern Lights"').song_ids) == {first.id, other.id}
+        assert library_search.search(db, 'title:"Lights Northern"').song_ids == []
+        assert library_search.search(db, 'artist:Aurora -genre:Rock').song_ids == [first.id]
+        assert library_search.search(db, '-genre:Rock').song_ids == [first.id]
+        assert library_search.search(db, "album:Midnight").song_ids == [first.id]
+
+
+def test_advanced_intelligence_filters_cover_issues_missing_and_duplicates():
+    with _session() as db:
+        first, missing = _seed(db)
+        duplicate = Song(
+            path="/music/isrc-copy.flac",
+            filename="isrc-copy.flac",
+            title="Different local title",
+            artist="Different artist",
+            album="Different album",
+            isrc=first.isrc,
+            availability_status="available",
+        )
+        db.add(duplicate)
+        db.flush()
+        db.add(MetadataIssue(
+            identity_key="search-issue",
+            rule_id="test_rule",
+            entity_type="song",
+            entity_id=str(first.id),
+            song_id=first.id,
+            severity="warning",
+            status="open",
+            title="Test issue",
+            explanation="Search filter coverage",
+        ))
+        library_search.index_song(db, duplicate.id)
+        db.commit()
+
+        assert library_search.search(db, "has:issues").song_ids == [first.id]
+        assert library_search.search(db, "is:missing").song_ids == [missing.id]
+        duplicate_page = library_search.search(db, "is:duplicate")
+        assert set(duplicate_page.song_ids) == {first.id, duplicate.id}
+
+
+def test_advanced_search_rejects_unknown_fields_and_unmatched_quotes():
+    with _session() as db:
+        _seed(db)
+        for query in ("composer:Mozart", 'title:"Northern'):
+            try:
+                library_search.search(db, query)
+            except SearchQueryError:
+                pass
+            else:
+                raise AssertionError(f"expected invalid query to fail: {query}")
 
 
 def test_search_is_incremental_and_excludes_missing_by_default():

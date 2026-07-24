@@ -85,6 +85,21 @@ Manual artwork replacement uses multipart uploads:
 Replacement and removal do not modify embedded audio-file artwork or delete
 shared cached resources.
 
+Advanced Library search remains available through `GET /api/library/search`.
+The `q` value supports:
+
+- field qualifiers: `title`, `artist`, `album`, `genre`, `playlist`,
+  `filename`, `spotify`, `musicbrainz`, and `isrc`;
+- quoted phrases, such as `title:"Northern Lights"`;
+- exclusions, such as `artist:Aurora -genre:live`;
+- intelligence filters: `has:issues`, `has:artwork`, `is:duplicate`,
+  `is:missing`, `is:available`, `missing:artwork`, and `missing:metadata`.
+
+Terms use AND semantics. Queries are bounded to 200 characters and 20 terms.
+Unknown fields, unsupported filters, and unmatched quotes return HTTP 400.
+Duplicate-only filtering is bounded to 800 candidate Songs so it remains
+compatible with conservative SQLite parameter limits.
+
 ## Sources and automation
 
 - `GET /api/sources` lists source state and schedule fields.

@@ -1057,6 +1057,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .duplicate-song-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-surface); }
 .duplicate-song-row strong, .duplicate-song-row small { display: block; overflow-wrap: anywhere; }
 .duplicate-keeper { color: var(--primary); font-size: .78rem; }
+.library-search-help { margin: 0 20px 14px; color: var(--text-muted); }
+.library-search-help summary { cursor: pointer; width: fit-content; color: var(--text-main); }
+.library-search-help p { margin: 10px 0 8px; }
+.library-search-examples { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+.library-search-examples button { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 999px; background: var(--bg-surface-alt); color: var(--text-main); cursor: pointer; }
 .metadata-proposed { font-size: 1.05rem; }
 
 @media (max-width: 768px) {
@@ -1067,6 +1072,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .duplicate-group-card > header { flex-direction: column; }
     .duplicate-song-row { grid-template-columns: 1fr 1fr; }
     .duplicate-song-copy { grid-column: 1 / -1; }
+    .library-search-help { margin-inline: 12px; }
     .library-songs-table #library-body td:nth-child(7) { grid-column: 1 / -1; padding-left: 56px !important; }
 }
 

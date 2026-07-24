@@ -77,7 +77,14 @@ const icons = {
 
 async function fetchJson(url) {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    if (!response.ok) {
+        let message = `Request failed: ${response.status}`;
+        try {
+            const payload = await response.json();
+            message = payload.detail || payload.error?.message || message;
+        } catch (_) { /* Keep the bounded HTTP fallback. */ }
+        throw new Error(message);
+    }
     return response.json();
 }
 
@@ -457,9 +464,9 @@ async function performSearch() {
     } catch (error) {
         if (request !== libraryState.searchRequest) return;
         console.error("Library search error:", error);
-        status.textContent = "Search unavailable";
+        status.textContent = error.message || "Search unavailable";
         const errorBox = document.getElementById("library-error");
-        errorBox.textContent = "Harmony could not search the Library Index. Try again in a moment.";
+        errorBox.textContent = error.message || "Harmony could not search the Library Index. Try again in a moment.";
         errorBox.hidden = false;
     }
 }
@@ -1318,6 +1325,16 @@ document.getElementById("library-search").addEventListener("input", (event) => {
             performSearch();
         }
     }, 180);
+});
+document.querySelectorAll("[data-search-example]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const input = document.getElementById("library-search");
+        input.value = button.dataset.searchExample;
+        libraryState.query = input.value;
+        Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
+        performSearch();
+        input.focus();
+    });
 });
 
 document.getElementById("library-sort").addEventListener("change", (event) => {

@@ -11,7 +11,7 @@ from app.database.models import Song
 from app.services.artwork import artwork_url
 from app.services.library_service import index_library_file, rescan_library
 from app.services.library_events import library_events
-from app.services.library_search import SearchFilters, library_search
+from app.services.library_search import SearchFilters, SearchQueryError, library_search
 from app.services.library_filters import (
     LibraryFilters,
     apply_song_filters,
@@ -157,28 +157,31 @@ def search_library(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
-    page = library_search.search(
-        db,
-        q,
-        filters=SearchFilters(
-            artist=artist,
-            album=album,
-            genre=genre,
-            codec=codec,
-            playlist_id=playlist_id,
-            year=year,
-            min_bitrate=min_bitrate,
-            max_bitrate=max_bitrate,
-            downloaded_today=downloaded_today,
-            recently_added=recently_added,
-            missing_artwork=missing_artwork,
-            missing_metadata=missing_metadata,
-            include_missing=include_missing,
-        ),
-        sort_by=sort_by,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        page = library_search.search(
+            db,
+            q,
+            filters=SearchFilters(
+                artist=artist,
+                album=album,
+                genre=genre,
+                codec=codec,
+                playlist_id=playlist_id,
+                year=year,
+                min_bitrate=min_bitrate,
+                max_bitrate=max_bitrate,
+                downloaded_today=downloaded_today,
+                recently_added=recently_added,
+                missing_artwork=missing_artwork,
+                missing_metadata=missing_metadata,
+                include_missing=include_missing,
+            ),
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+        )
+    except SearchQueryError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     songs = db.scalars(
         with_song_artwork(select(Song).where(Song.id.in_(page.song_ids)))
     ).all()
