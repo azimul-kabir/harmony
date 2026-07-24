@@ -22,7 +22,7 @@ from app.services.download_telemetry import heartbeat_ticker, update_telemetry
 from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
-from app.services.playlist_manager import export_all_m3us
+from app.services.playlist_manager import export_m3us_for_track
 from app.services.task_service import (
     increment_completed,
     increment_failed,
@@ -198,7 +198,7 @@ def process_job(
         
         # This is post-download maintenance: never turn a terminal success into a failure.
         try:
-            export_all_m3us(db)
+            export_m3us_for_track(db, job.spotify_track_id)
         except Exception:
             logger.warning("Playlist export failed after completed job #{}", job.id)
         

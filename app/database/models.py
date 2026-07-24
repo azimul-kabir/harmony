@@ -503,6 +503,12 @@ class PlaylistTrack(Base):
     playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), primary_key=True)
     spotify_track_id: Mapped[str] = mapped_column(String, primary_key=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    artist: Mapped[str | None] = mapped_column(String, nullable=True)
+    album: Mapped[str | None] = mapped_column(String, nullable=True)
+    album_artist: Mapped[str | None] = mapped_column(String, nullable=True)
+    track_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     playlist: Mapped["Playlist"] = relationship(back_populates="tracks")
 

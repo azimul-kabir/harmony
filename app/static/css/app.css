@@ -455,6 +455,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .source-actions button { flex: 1; padding: 10px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; }
 .source-actions button.delete-btn { flex: 0 0 auto; color: var(--danger); background: transparent; border: 1px solid transparent; }
 .source-actions button.delete-btn:hover { background: var(--error-bg); }
+.page-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; }
+.page-heading h1 { margin: 0; }
+.playlist-toolbar { display: flex; align-items: center; gap: 16px; padding: 16px; }
+.playlist-toolbar .search-input { min-width: 0; }
+.playlist-toolbar span { color: var(--text-muted); white-space: nowrap; font-size: .9rem; }
+.playlist-counts, .source-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.playlist-counts > div, .source-counts > div { padding: 12px 8px; border-radius: 8px; background: var(--bg-surface-alt); text-align: center; min-width: 0; }
+.playlist-counts strong, .source-counts strong { display: block; font-size: 1.3rem; color: var(--text-main); }
+.playlist-counts span, .source-counts span { display: block; margin-top: 3px; color: var(--text-muted); font-size: .72rem; }
+.playlist-meta { display: flex; flex-direction: column; gap: 8px; }
+.playlist-partial { color: #8a5700; background: #fff3cd; }
+.playlist-actions { flex-wrap: wrap; }
+.playlist-actions .btn-secondary, .source-open-link { flex: 1 1 110px; padding: 10px; border-radius: 6px; font-size: .85rem; font-weight: 600; text-align: center; text-decoration: none; box-sizing: border-box; }
+.source-outcome { display: flex; flex-wrap: wrap; gap: 6px; color: var(--text-muted); font-size: .78rem; }
+.source-outcome span { padding: 4px 7px; border-radius: 999px; background: var(--bg-surface-alt); }
+.source-outcome .has-failures { color: var(--danger); background: var(--error-bg); }
 
 /* Task Progress */
 .task-progress-container { background: var(--bg-surface-alt); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); }

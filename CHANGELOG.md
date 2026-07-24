@@ -3,6 +3,12 @@
 ## Unreleased
 
 - Add an opt-in YouTube Music download source using public URLs and yt-dlp.
+- Prevent completed downloads from destructively regenerating unrelated M3U
+  playlists, and persist playlist-entry metadata for reliable targeted exports.
+- Export only audio files that currently exist, write M3Us atomically, and log
+  the true available-versus-source track count.
+- Add source and playlist availability summaries, playlist filtering, direct
+  Spotify links, one-click playlist resync, and a Navidrome scan shortcut.
 
 All notable changes to Harmony are documented in this file.
 

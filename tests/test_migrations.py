@@ -165,3 +165,46 @@ def test_download_telemetry_migrates_existing_download_jobs(tmp_path):
         assert connection.execute(
             text("SELECT title FROM download_jobs WHERE id=1")
         ).scalar_one() == "Kept"
+
+
+def test_playlist_metadata_migrates_existing_playlist_tracks(tmp_path):
+    database = tmp_path / "pre-playlist-metadata.db"
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE playlist_tracks ("
+            "playlist_id INTEGER NOT NULL, "
+            "spotify_track_id VARCHAR NOT NULL, "
+            "position INTEGER NOT NULL, "
+            "added_at DATETIME, "
+            "PRIMARY KEY (playlist_id, spotify_track_id))"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO playlist_tracks VALUES (1, 'track-1', 1, '2026-01-01')"
+        )
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.stamp(config, "20260724_0019")
+        command.upgrade(config, "head")
+    columns = {
+        column["name"]
+        for column in inspect(engine).get_columns("playlist_tracks")
+    }
+    assert {
+        "title",
+        "artist",
+        "album",
+        "album_artist",
+        "track_number",
+        "duration",
+    } <= columns
+    with engine.connect() as connection:
+        assert connection.execute(
+            text(
+                "SELECT spotify_track_id FROM playlist_tracks "
+                "WHERE playlist_id=1"
+            )
+        ).scalar_one() == "track-1"
