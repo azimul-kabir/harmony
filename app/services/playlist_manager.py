@@ -12,6 +12,8 @@ from app.domain.playlist import Playlist as DomainPlaylist
 from app.services.library_paths import _safe
 from app.services.library_search import library_search
 
+PLAYLIST_ARTWORK_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+
 
 def playlist_file_path(name: str) -> Path:
     settings = get_settings()
@@ -19,6 +21,23 @@ def playlist_file_path(name: str) -> Path:
     for char in '<>:"/\\|?*':
         safe_name = safe_name.replace(char, "_")
     return Path(settings.music_path) / "Playlists" / f"{safe_name}.m3u"
+
+
+def playlist_artwork_path(name: str) -> Path | None:
+    """Return the first Navidrome-compatible sidecar for a playlist."""
+    base_path = playlist_file_path(name).with_suffix("")
+    for suffix in PLAYLIST_ARTWORK_SUFFIXES:
+        candidate = base_path.with_suffix(suffix)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def remove_playlist_artwork(name: str) -> None:
+    """Remove every supported sidecar variant for a playlist."""
+    base_path = playlist_file_path(name).with_suffix("")
+    for suffix in PLAYLIST_ARTWORK_SUFFIXES:
+        base_path.with_suffix(suffix).unlink(missing_ok=True)
 
 
 def count_m3u_entries(file_path: Path) -> int:

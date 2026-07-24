@@ -623,6 +623,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-meta-row span { min-width: 0; overflow-wrap: anywhere; text-align: right; }
 .playlist-empty-state { grid-column: 1 / -1; padding: 40px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); }
 .playlist-partial { color: #8a5700; background: #fff3cd; }
+.playlist-card-heading { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; }
+.playlist-card-heading .source-header { min-width: 0; gap: 8px; }
+.playlist-card-heading h3 { overflow-wrap: anywhere; }
+.playlist-cover-wrap { width: 76px; }
+.playlist-cover { display: block; width: 76px; aspect-ratio: 1 / 1; border-radius: 10px; object-fit: cover; }
+.playlist-cover-placeholder { display: grid; place-items: center; border: 1px solid var(--border-color); background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 14%, var(--bg-surface)), var(--bg-surface-alt)); color: var(--text-muted); font-size: 1.8rem; }
 .playlist-actions { flex-wrap: wrap; }
 .playlist-actions .btn-secondary, .source-open-link { flex: 1 1 110px; padding: 10px; border-radius: 6px; font-size: .85rem; font-weight: 600; text-align: center; text-decoration: none; box-sizing: border-box; }
 .playlist-actions .playlist-download-link { color: var(--primary); border-color: var(--primary); }
@@ -646,6 +652,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-track-status { white-space: nowrap; }
 .playlist-delete-progress { display: grid; grid-template-columns: minmax(80px, 1fr) auto; align-items: center; gap: 10px; color: var(--text-muted); font-size: .8rem; }
 .playlist-delete-progress progress { width: 100%; accent-color: var(--danger); }
+.playlist-artwork-dialog { width: min(520px, calc(100vw - 24px)); }
+.playlist-artwork-preview-wrap { display: grid; place-items: center; }
+.playlist-artwork-preview { width: min(280px, 70vw); aspect-ratio: 1 / 1; border-radius: 14px; object-fit: cover; }
+.playlist-artwork-file { display: grid; gap: 7px; color: var(--text-muted); font-size: .8rem; font-weight: 700; }
+.playlist-artwork-file input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--border-input); border-radius: 8px; background: var(--bg-surface-alt); color: var(--text-main); }
+.playlist-artwork-status { min-height: 1.4em; margin: 0; color: var(--text-muted); font-size: .82rem; }
 .source-outcome { display: flex; flex-wrap: wrap; gap: 6px; color: var(--text-muted); font-size: .78rem; }
 .source-outcome span { padding: 4px 7px; border-radius: 999px; background: var(--bg-surface-alt); }
 .source-outcome .has-failures { color: var(--danger); background: var(--error-bg); }

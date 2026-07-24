@@ -5,6 +5,11 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+### Added
+
+- Playlist cover upload, preview, replacement, and removal using
+  Navidrome-compatible sidecar images beside exported M3U files.
+
 ### Planned
 
 - Additional media-server API integrations beyond Navidrome.

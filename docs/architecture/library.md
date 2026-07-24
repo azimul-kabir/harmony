@@ -682,6 +682,12 @@ Playlist sources are resolved from the persistent `playlists` and
 `playlist_tracks` index using the Spotify track ID. This avoids duplicating
 playlist membership on each song row while still exposing it in Library APIs.
 
+Playlist artwork is stored beside each exported M3U with the same sanitized
+base filename, for example `Playlists/Night Drive.m3u` and
+`Playlists/Night Drive.jpg`. This is both Harmony's durable manual replacement
+and Navidrome's native sidecar format. Replacement uses a validated temporary
+file and atomic rename; deleting the playlist also removes supported sidecars.
+
 Incremental indexing compares file size and modified time before parsing tags.
 Unchanged files are skipped. Re-indexing forces tag extraction and compares the
 metadata hash. Files absent during reconciliation are marked `missing`, not
