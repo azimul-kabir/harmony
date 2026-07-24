@@ -8,8 +8,9 @@
 <section class="panel">
   <h2>Test search</h2>
   <form id="provider-search" class="provider-form">
+    <select id="provider-name"><option value="musicbrainz">MusicBrainz</option><option value="spotify">Spotify</option></select>
     <select id="provider-entity"><option value="recording">Recording</option><option value="release">Release</option><option value="artist">Artist</option></select>
-    <input id="provider-query" required maxlength="500" placeholder="Search MusicBrainz">
+    <input id="provider-query" required maxlength="500" placeholder="Search metadata provider">
     <button class="btn-primary" type="submit">Search</button>
   </form>
 </section>

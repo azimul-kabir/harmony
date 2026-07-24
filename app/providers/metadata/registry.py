@@ -1,19 +1,25 @@
 from app.providers.metadata.base import MetadataProvider
 from app.providers.metadata.musicbrainz import MusicBrainzProvider
+from app.providers.metadata.spotify import SpotifyMetadataProvider
 
 _providers: dict[str, MetadataProvider] = {}
 
 
 def get_provider(name: str) -> MetadataProvider:
-    if name != "musicbrainz":
+    factories = {
+        "musicbrainz": MusicBrainzProvider,
+        "spotify": SpotifyMetadataProvider,
+    }
+    if name not in factories:
         raise KeyError(name)
     if name not in _providers:
-        _providers[name] = MusicBrainzProvider()
+        _providers[name] = factories[name]()
     return _providers[name]
 
 
 def all_providers() -> dict[str, MetadataProvider]:
     get_provider("musicbrainz")
+    get_provider("spotify")
     return dict(_providers)
 
 

@@ -926,9 +926,17 @@ new canonical artwork into an audio file.
 
 Harmony owns metadata.
 
-Future metadata providers
-
 Spotify
+
+Spotify is an optional recording-only discovery provider. It uses client
+credentials lazily, performs bounded track search/lookup, and normalizes track,
+artist, album, duration, position, date, and ISRC data into the same candidate
+model used by MusicBrainz. Candidate selection, field-level suggestion
+generation, acceptance, application, audit, and tag writing remain separate.
+Spotify identities are retained as provider evidence and never written into
+MusicBrainz ID fields.
+
+Future metadata providers
 
 MusicBrainz
 

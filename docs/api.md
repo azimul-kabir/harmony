@@ -137,13 +137,15 @@ Songs; requests never silently apply provider values.
 
 ### Provider diagnostics
 
-- `GET /api/providers/capabilities` lists configured metadata provider
-  capabilities.
+- `GET /api/providers/capabilities` lists MusicBrainz and Spotify metadata
+  provider capabilities.
 - `GET /api/providers/status` reports provider availability and cache-aware
   operational status.
 - `POST /api/providers/test-search` and `POST /api/providers/lookup` provide
-  bounded MusicBrainz diagnostics. Provider failures return a clean structured
-  error response with a retryability flag.
+  bounded provider diagnostics. Spotify currently supports recording search
+  and lookup only and returns `not_configured` when optional credentials are
+  absent. Provider failures return a clean structured error response with a
+  retryability flag.
 
 ### Health, discovery, and suggestions
 

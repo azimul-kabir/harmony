@@ -742,8 +742,9 @@ async function discoverMetadataMatch(songId) {
     status.textContent = "Discovering bounded provider candidates…";
     target.innerHTML = '<p class="library-search-status">Contacting metadata provider…</p>';
     try {
+        const provider = document.getElementById("metadata-provider").value;
         const response = await fetch(`/api/metadata/discoveries/songs/${songId}`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "musicbrainz" }),
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }),
         });
         const started = await response.json();
         if (!response.ok) throw new Error(started.error?.message || "Discovery failed");

@@ -168,9 +168,13 @@ def test_concurrent_requests_are_bounded():
 
 def test_diagnostics_endpoints_and_page():
     client = TestClient(app)
-    assert client.get("/api/providers/capabilities").status_code == 200
+    capabilities = client.get("/api/providers/capabilities")
+    assert capabilities.status_code == 200
+    assert {item["provider"] for item in capabilities.json()["providers"]} == {"musicbrainz", "spotify"}
     status = client.get("/api/providers/status")
-    assert status.status_code == 200 and "cache" in status.json()["providers"][0]
+    assert status.status_code == 200
+    assert all("cache" in item for item in status.json()["providers"])
     page = client.get("/developers/providers")
     assert page.status_code == 200 and "Provider Diagnostics" in page.text
+    assert 'id="provider-name"' in page.text and "Spotify" in page.text
     assert client.post("/api/providers/lookup", json={"provider": "unknown", "entity_type": "artist", "entity_id": "x"}).status_code == 404

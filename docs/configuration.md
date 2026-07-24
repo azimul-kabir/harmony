@@ -63,6 +63,12 @@ SPOTIFY_CLIENT_SECRET=
 
 Spotify genres can be empty or unavailable. A missing credential or provider failure is non-fatal and never blocks a download. Existing genres and their provenance are retained when the feature is disabled. The precedence is: user-provided genre, MusicBrainz genre, enabled Spotify genre, embedded genre, then empty.
 
+The same optional credentials enable Spotify as an explicit, review-first
+Metadata Intelligence provider independently of genre enrichment. Selecting
+Spotify permits bounded recording search and lookup. Merely configuring
+credentials never makes scanning, indexing, or ordinary downloads contact
+Spotify, and Spotify candidates never populate MusicBrainz identifier fields.
+
 ## Source schedules and auto-playlists
 
 Source auto-sync is configured per Source in the Sources UI, not through an

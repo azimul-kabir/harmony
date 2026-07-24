@@ -74,15 +74,19 @@ def _issue_song_ids(db:Session,issues:list[MetadataIssue],maximum:int|None=None)
     return sorted(ids)[:maximum]
 
 
-def song_searches(song: Song) -> list[tuple[str, str, str | None]]:
+def song_searches(song: Song, provider_name: str = "musicbrainz") -> list[tuple[str, str, str | None]]:
     """Ordered bounded searches: (label, operation, query/id)."""
     searches=[]
-    if song.musicbrainz_recording_id: searches.append(("existing_provider_id", "lookup", song.musicbrainz_recording_id))
+    provider_id = song.spotify_track_id if provider_name == "spotify" else song.musicbrainz_recording_id
+    if provider_id: searches.append(("existing_provider_id", "lookup", provider_id))
     if song.isrc: searches.append(("isrc", "search", f'isrc:{_quote(song.isrc)}'))
+    title_field = "track" if provider_name == "spotify" else "recording"
+    album_field = "album" if provider_name == "spotify" else "release"
+    joiner = " " if provider_name == "spotify" else " AND "
     if song.title and song.artist:
-        searches.append(("exact_title_artist", "search", f'recording:{_quote(song.title)} AND artist:{_quote(song.artist)}'))
-        if song.album: searches.append(("title_artist_album", "search", f'recording:{_quote(song.title)} AND artist:{_quote(song.artist)} AND release:{_quote(song.album)}'))
-    if song.title and song.album_artist: searches.append(("title_album_artist", "search", f'recording:{_quote(song.title)} AND artist:{_quote(song.album_artist)}'))
+        searches.append(("exact_title_artist", "search", joiner.join((f'{title_field}:{_quote(song.title)}', f'artist:{_quote(song.artist)}'))))
+        if song.album: searches.append(("title_artist_album", "search", joiner.join((f'{title_field}:{_quote(song.title)}', f'artist:{_quote(song.artist)}', f'{album_field}:{_quote(song.album)}'))))
+    if song.title and song.album_artist: searches.append(("title_album_artist", "search", joiner.join((f'{title_field}:{_quote(song.title)}', f'artist:{_quote(song.album_artist)}'))))
     if song.title and song.artist: searches.append(("normalized_title_artist", "search", f'{song.title[:200]} {song.artist[:200]}'))
     return searches[:MAX_SEARCH_VARIANTS]
 
@@ -145,7 +149,7 @@ class MetadataDiscoveryService:
         if song is None: raise MetadataServiceError("entity_not_found", "Song not found.", 404)
         try: provider=get_provider(provider_name)
         except KeyError as exc: raise MetadataServiceError("provider_unavailable", "Metadata provider is unavailable.", 503) from exc
-        searches=song_searches(song); local=song_input(song)
+        searches=song_searches(song, provider_name); local=song_input(song)
         discovery=db.get(MetadataDiscovery,discovery_id) if discovery_id else None
         if discovery is None:
             discovery=MetadataDiscovery(entity_type="song", entity_id=str(song_id), provider=provider_name, status="running",

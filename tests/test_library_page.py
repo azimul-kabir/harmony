@@ -40,3 +40,5 @@ def test_normal_library_exposes_file_delete_not_forget():
     assert 'id="duplicate-review-dialog"' in response.text
     assert 'class="library-search-help"' in response.text
     assert 'data-search-example="is:duplicate"' in response.text
+    assert 'id="metadata-provider"' in response.text
+    assert '<option value="spotify">Spotify</option>' in response.text

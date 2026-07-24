@@ -29,6 +29,17 @@ def test_search_strategy_is_ordered_and_bounded():
         assert len(labels)<=6 and labels.index("title_artist_album")>labels.index("exact_title_artist")
 
 
+def test_spotify_search_strategy_uses_spotify_identity_and_fields():
+    with SessionLocal() as db:
+        song=add_song(db,spotify_track_id="1234567890123456789012",
+            musicbrainz_recording_id="recording-id",album_artist="Album Artist")
+        searches=song_searches(song,"spotify")
+        assert searches[0]==("existing_provider_id","lookup","1234567890123456789012")
+        queries=[query for _,operation,query in searches if operation=="search"]
+        assert any('track:"Song"' in query and 'artist:"Artist"' in query for query in queries)
+        assert all("recording:" not in query and "release:" not in query for query in queries)
+
+
 def test_missing_genre_health_issues_support_metadata_discovery():
     """Genre repair follows the same explicit review flow as other Song metadata."""
     assert "missing_genre" in SUPPORTED_HEALTH_RULES
