@@ -18,6 +18,8 @@
 - Add playlist-level Library file management with an ordered track list,
   individual or select-all selection, durable background deletion progress,
   and automatic refresh of every affected M3U.
+- Allow saved playlists and their generated M3U files to be deleted from the
+  Playlists page without removing downloaded songs or their Sources.
 
 All notable changes to Harmony are documented in this file.
 

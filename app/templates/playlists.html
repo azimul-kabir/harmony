@@ -76,6 +76,13 @@
                 data-playlist-id="{{ p.id }}"
                 data-playlist-name="{{ p.name }}"
             >Manage songs</button>
+            <button
+                type="button"
+                class="btn-secondary playlist-delete-btn"
+                data-playlist-id="{{ p.id }}"
+                data-playlist-name="{{ p.name }}"
+                data-source-exists="{{ 'true' if card.source else 'false' }}"
+            >Delete playlist</button>
         </div>
     </div>
     {% endfor %}

@@ -148,6 +148,37 @@ document.querySelectorAll(".playlist-manage-btn").forEach(button => {
     button.addEventListener("click", () => openPlaylistTracks(button));
 });
 
+document.querySelectorAll(".playlist-delete-btn").forEach(button => {
+    button.addEventListener("click", async () => {
+        const sourceWarning = button.dataset.sourceExists === "true"
+            ? "\n\nThis playlist still has a Source. A future source sync can create it again."
+            : "";
+        const confirmed = window.confirm(
+            `Delete the playlist “${button.dataset.playlistName}” from Harmony?` +
+            "\n\nIts M3U file will be removed. Downloaded songs will remain in your Library." +
+            sourceWarning
+        );
+        if (!confirmed) return;
+
+        button.disabled = true;
+        button.textContent = "Deleting…";
+        try {
+            const response = await fetch(`/api/playlists/${button.dataset.playlistId}`, {
+                method: "DELETE",
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.detail || "Playlist could not be deleted.");
+            button.closest(".playlist-card")?.remove();
+            filterPlaylists();
+            if (!document.querySelector(".playlist-card")) window.location.reload();
+        } catch (error) {
+            window.alert(error.message);
+            button.disabled = false;
+            button.textContent = "Delete playlist";
+        }
+    });
+});
+
 playlistSelectAll?.addEventListener("change", event => {
     activePlaylist?.tracks.filter(track => track.selectable).forEach(track => {
         if (event.target.checked) playlistSelection.add(track.song_id);

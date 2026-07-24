@@ -469,6 +469,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-partial { color: #8a5700; background: #fff3cd; }
 .playlist-actions { flex-wrap: wrap; }
 .playlist-actions .btn-secondary, .source-open-link { flex: 1 1 110px; padding: 10px; border-radius: 6px; font-size: .85rem; font-weight: 600; text-align: center; text-decoration: none; box-sizing: border-box; }
+.playlist-actions .playlist-delete-btn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, var(--border-color)); }
+.playlist-actions .playlist-delete-btn:hover:not(:disabled) { color: white; background: var(--danger); border-color: var(--danger); }
 .playlist-tracks-dialog { width: min(760px, calc(100vw - 24px)); overflow-x: hidden; }
 .playlist-tracks-dialog form { min-width: 0; max-height: min(82vh, 780px); overflow-x: hidden; grid-template-rows: auto auto minmax(120px, 1fr) auto auto; }
 .playlist-select-all { display: flex !important; grid-template-columns: auto 1fr; align-items: center; gap: 10px !important; padding: 10px 12px; border-radius: 9px; background: var(--bg-surface-alt); }
