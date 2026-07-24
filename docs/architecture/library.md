@@ -892,12 +892,18 @@ Artwork API:
 - `GET /api/artwork` lists resource metadata with offset/limit pagination.
 - `GET /api/artwork/{id}` returns one resource's metadata and public URL.
 - `GET /api/artwork/{id}/file` serves immutable cached bytes.
+- `POST /api/artwork/songs/{song_id}` validates, caches, and associates a
+  bounded manual upload.
+- `DELETE /api/artwork/songs/{song_id}` removes only that Song association.
 
 The model stores `provider`, `provider_id`, and `original_url` for Cover Art
-Archive provenance and future providers. Manual replacement will create or
-reuse a content-addressed resource and change an association; it must never
-overwrite shared bytes in place. Manual upload
-endpoints are intentionally outside this foundation.
+Archive provenance and future providers. Manual replacement creates or reuses
+a content-addressed resource and changes only an association; it never
+overwrites or deletes shared bytes in place. JPEG, PNG, and WebP uploads are
+bounded to 15 MB and 10,000 pixels per dimension. File signatures and
+dimensions are verified independently of the client-supplied filename and
+content type. Explicit tag writing remains the only operation that embeds the
+new canonical artwork into an audio file.
 
 ---
 

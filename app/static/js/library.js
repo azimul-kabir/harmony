@@ -569,6 +569,59 @@ function renderManualMetadataForm(review) {
     }));
 }
 
+function renderManualArtwork(songId) {
+    const song = libraryState.songs.find((item) => item.id === songId);
+    const target = document.getElementById("metadata-manual-artwork");
+    const remove = document.getElementById("metadata-artwork-remove");
+    remove.disabled = !song?.cover_url;
+    target.innerHTML = song?.cover_url
+        ? `<img src="${escapeAttribute(song.cover_url)}" alt=""><div><strong>Current canonical artwork</strong><small>Rendered as a square in Harmony. Uploading a replacement does not alter the audio file.</small></div>`
+        : '<div class="metadata-artwork-placeholder">No art</div><div><strong>No canonical artwork</strong><small>Choose an image to create a content-addressed cache resource.</small></div>';
+}
+
+async function uploadManualArtwork(songId, file) {
+    const status = document.getElementById("metadata-review-status");
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    status.textContent = "Validating and caching artwork…";
+    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "POST", body});
+    const result = await response.json();
+    if (!response.ok) {
+        status.textContent = result.detail || "Artwork could not be uploaded.";
+        return;
+    }
+    const song = libraryState.songs.find((item) => item.id === songId);
+    if (song) {
+        song.cover_url = result.artwork.url;
+        song.artwork_id = result.artwork.id;
+        song.artwork_status = "manual";
+    }
+    renderManualArtwork(songId);
+    await previewFileTags(songId);
+    status.textContent = result.message;
+}
+
+async function removeManualArtwork(songId) {
+    if (!window.confirm("Remove Harmony's canonical artwork association? Cached and audio-file artwork will remain unchanged.")) return;
+    const status = document.getElementById("metadata-review-status");
+    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "DELETE"});
+    const result = await response.json();
+    if (!response.ok) {
+        status.textContent = result.detail || "Artwork association could not be removed.";
+        return;
+    }
+    const song = libraryState.songs.find((item) => item.id === songId);
+    if (song) {
+        song.cover_url = null;
+        song.artwork_id = null;
+        song.artwork_status = "missing";
+    }
+    renderManualArtwork(songId);
+    await previewFileTags(songId);
+    status.textContent = result.message;
+}
+
 function manualMetadataChanges() {
     return Object.fromEntries([...document.querySelectorAll("[data-manual-field]")].map((input) => {
         const value = input.value.trim();
@@ -623,6 +676,11 @@ async function openMetadataReview(songId) {
     document.getElementById("metadata-apply-accepted").onclick = () => submitMetadataApplication(songId, true);
     document.getElementById("metadata-preview-manual").onclick = () => previewManualMetadata(songId);
     document.getElementById("metadata-apply-manual").onclick = () => applyManualMetadata(songId);
+    document.getElementById("metadata-artwork-file").onchange = (event) => {
+        const file = event.target.files?.[0];
+        uploadManualArtwork(songId, file).finally(() => { event.target.value = ""; });
+    };
+    document.getElementById("metadata-artwork-remove").onclick = () => removeManualArtwork(songId);
     await loadMetadataReview(songId);
 }
 
@@ -763,6 +821,7 @@ async function loadMetadataReview(songId) {
             .filter((field) => field.current_value !== null && field.current_value !== "")
             .map((field) => `<div><dt>${escapeHtml(field.field_name.replaceAll("_", " "))}</dt><dd>${escapeHtml(metadataValue(field.current_value))}</dd></div>`).join("") || "<p>No canonical metadata is indexed.</p>";
         renderManualMetadataForm(review);
+        renderManualArtwork(songId);
         const pending = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "pending");
         document.getElementById("metadata-suggestions").innerHTML = pending.map((item) => `
             <article class="metadata-suggestion-card">

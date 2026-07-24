@@ -25,6 +25,7 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 EMBEDDABLE_IMAGE_MIMES = {"image/jpeg", "image/png"}
 MAX_EMBEDDED_ARTWORK_BYTES = 15 * 1024 * 1024
 MAX_EMBEDDED_ARTWORK_DIMENSION = 10_000
+MANUAL_ARTWORK_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,10 @@ class ArtworkFetchSkipped(ValueError):
         super().__init__(messages.get(resolution.outcome, "Artwork fetch was skipped."))
 
 
+class ArtworkValidationError(ValueError):
+    """A bounded, user-safe manual artwork validation failure."""
+
+
 class ArtworkService:
     """Detect, deduplicate, and persist local artwork resources."""
 
@@ -156,6 +161,30 @@ class ArtworkService:
             artwork.id,
         )
         return artwork
+
+    def cache_manual_upload(self, db: Session, data: bytes) -> Artwork:
+        if not data:
+            raise ArtworkValidationError("Choose a non-empty artwork file.")
+        if len(data) > MAX_EMBEDDED_ARTWORK_BYTES:
+            raise ArtworkValidationError("Artwork must be 15 MB or smaller.")
+        mime_type = _recognized_image_mime(data)
+        if mime_type not in MANUAL_ARTWORK_MIMES:
+            raise ArtworkValidationError("Artwork must be a JPEG, PNG, or WebP image.")
+        try:
+            width, height = _image_dimensions(data, mime_type)
+        except (ValueError, struct.error, IndexError) as error:
+            raise ArtworkValidationError("Artwork is malformed or unreadable.") from error
+        if not width or not height:
+            raise ArtworkValidationError("Artwork dimensions could not be verified.")
+        if max(width, height) > MAX_EMBEDDED_ARTWORK_DIMENSION:
+            raise ArtworkValidationError("Artwork dimensions must not exceed 10,000 pixels.")
+        return self.cache(db, ArtworkCandidate(data=data, mime_type=mime_type, source="manual"))
+
+    def associate(self, song: Song, artwork: Artwork | None) -> None:
+        song.artwork = artwork
+        song.artwork_id = artwork.id if artwork else None
+        song.artwork_status = artwork.source if artwork else "missing"
+        song.cover_url = artwork_url(artwork.id) if artwork else None
 
     def validated_cached_bytes(self, artwork: Artwork | None) -> tuple[bytes, str] | None:
         """Return safe embeddable cache bytes without exposing its private path."""
@@ -418,4 +447,18 @@ def _image_dimensions(data: bytes, mime_type: str) -> tuple[int | None, int | No
             if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
                 return int.from_bytes(data[pos + 5:pos + 7], "big"), int.from_bytes(data[pos + 3:pos + 5], "big")
             pos += length
+    if mime_type == "image/webp" and len(data) >= 30:
+        chunk = data[12:16]
+        if chunk == b"VP8X":
+            width = 1 + int.from_bytes(data[24:27], "little")
+            height = 1 + int.from_bytes(data[27:30], "little")
+            return width, height
+        if chunk == b"VP8L" and len(data) >= 25 and data[20] == 0x2F:
+            bits = int.from_bytes(data[21:25], "little")
+            return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+        if chunk == b"VP8 " and len(data) >= 30 and data[23:26] == b"\x9d\x01\x2a":
+            return (
+                int.from_bytes(data[26:28], "little") & 0x3FFF,
+                int.from_bytes(data[28:30], "little") & 0x3FFF,
+            )
     return None, None

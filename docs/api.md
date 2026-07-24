@@ -75,6 +75,16 @@ Groups include stable Song IDs, evidence, confidence, quality attributes, and
 a non-binding `recommended_keep_id`. These endpoints never change Library rows
 or audio files.
 
+Manual artwork replacement uses multipart uploads:
+
+- `POST /api/artwork/songs/{song_id}` accepts one `file` containing JPEG, PNG,
+  or WebP data up to 15 MB and associates the validated content-addressed
+  resource with the Song.
+- `DELETE /api/artwork/songs/{song_id}` removes only the Song association.
+
+Replacement and removal do not modify embedded audio-file artwork or delete
+shared cached resources.
+
 ## Sources and automation
 
 - `GET /api/sources` lists source state and schedule fields.

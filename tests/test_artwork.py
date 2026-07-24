@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,6 +15,8 @@ from app.services.artwork import (
     ArtworkService,
     resolve_musicbrainz_release_id,
 )
+from app.database.session import SessionLocal
+from app.main import app
 
 
 PNG = (
@@ -100,6 +103,67 @@ def test_artwork_metadata_and_file_apis(tmp_path):
     assert metadata["url"] == f"/api/artwork/{artwork_id}/file"
     assert image.media_type == "image/png"
     assert Path(image.path).read_bytes() == PNG
+
+
+def test_manual_upload_reuses_content_and_association_removal_keeps_cache(tmp_path, monkeypatch):
+    service = ArtworkService(tmp_path / "manual-cache")
+    monkeypatch.setattr("app.api.artwork.ArtworkService", lambda: service)
+    with SessionLocal() as db:
+        first = Song(path="/music/art-one.mp3", filename="art-one.mp3")
+        second = Song(path="/music/art-two.mp3", filename="art-two.mp3")
+        db.add_all([first, second])
+        db.commit()
+        first_id, second_id = first.id, second.id
+    client = TestClient(app)
+
+    first_response = client.post(
+        f"/api/artwork/songs/{first_id}",
+        files={"file": ("cover.png", PNG, "image/png")},
+    )
+    second_response = client.post(
+        f"/api/artwork/songs/{second_id}",
+        files={"file": ("different-name.png", PNG, "image/png")},
+    )
+
+    assert first_response.status_code == second_response.status_code == 200
+    artwork_id = first_response.json()["artwork"]["id"]
+    assert second_response.json()["artwork"]["id"] == artwork_id
+    assert first_response.json()["artwork"]["source"] == "manual"
+    with SessionLocal() as db:
+        assert db.get(Song, first_id).artwork_id == artwork_id
+        assert db.get(Song, second_id).artwork_id == artwork_id
+        artwork = db.get(Artwork, artwork_id)
+        cache_path = Path(artwork.cache_path)
+        assert cache_path.read_bytes() == PNG
+
+    removed = client.delete(f"/api/artwork/songs/{first_id}")
+    assert removed.status_code == 200
+    with SessionLocal() as db:
+        assert db.get(Song, first_id).artwork_id is None
+        assert db.get(Song, first_id).artwork_status == "missing"
+        assert db.get(Song, second_id).artwork_id == artwork_id
+        assert db.get(Artwork, artwork_id) is not None
+        assert cache_path.is_file()
+
+
+def test_manual_upload_rejects_unsupported_content(tmp_path, monkeypatch):
+    service = ArtworkService(tmp_path / "manual-cache")
+    monkeypatch.setattr("app.api.artwork.ArtworkService", lambda: service)
+    with SessionLocal() as db:
+        song = Song(path="/music/not-image.mp3", filename="not-image.mp3")
+        db.add(song)
+        db.commit()
+        song_id = song.id
+
+    response = TestClient(app).post(
+        f"/api/artwork/songs/{song_id}",
+        files={"file": ("cover.jpg", b"this is not an image", "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+    assert "JPEG, PNG, or WebP" in response.json()["detail"]
+    with SessionLocal() as db:
+        assert db.get(Song, song_id).artwork_id is None
 
 
 def test_fetches_and_caches_cover_art_archive_front_image(tmp_path, monkeypatch):

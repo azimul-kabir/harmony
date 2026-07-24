@@ -1036,6 +1036,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .metadata-manual-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .metadata-manual-form label { display: grid; gap: 6px; color: var(--text-muted); font-size: .82rem; }
 .metadata-manual-form input { width: 100%; }
+.metadata-manual-artwork { display: flex; align-items: center; gap: 14px; min-height: 96px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-alt); }
+.metadata-manual-artwork img, .metadata-artwork-placeholder { width: 96px; aspect-ratio: 1 / 1; flex: 0 0 96px; border-radius: 9px; object-fit: cover; background: var(--bg-surface); }
+.metadata-artwork-placeholder { display: grid; place-items: center; color: var(--text-muted); }
+.metadata-artwork-upload { cursor: pointer; }
 .metadata-suggestion-list, .metadata-history-list { display: grid; gap: 12px; }
 .metadata-suggestion-card header, .metadata-history-list article { display: flex; justify-content: space-between; gap: 12px; }
 .metadata-suggestion-card header span, .metadata-suggestion-card small, .metadata-history-list small { color: var(--text-muted); }
