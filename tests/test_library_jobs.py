@@ -123,6 +123,42 @@ def test_activity_excludes_active_jobs():
         assert activity[0]["status"] == "completed"
 
 
+def test_activity_can_filter_all_attention_jobs_by_type():
+    with SessionLocal() as db:
+        _maintenance_task(
+            db,
+            status=TaskStatus.COMPLETED_WITH_ERRORS,
+            index=1,
+        )
+        _maintenance_task(db, status=TaskStatus.FAILED, index=2)
+        _maintenance_task(db, status=TaskStatus.COMPLETED, index=3)
+        bulk = create_task(
+            db,
+            name="Bulk failure",
+            spotify_url="library://bulk/delete",
+            task_type=TaskType.LIBRARY_BULK,
+            total_items=1,
+        )
+        bulk.status = TaskStatus.FAILED.value
+        db.commit()
+
+        activity = library_activity(
+            limit=100,
+            attention_only=True,
+            job_type=TaskType.LIBRARY_MAINTENANCE.value,
+            db=db,
+        )
+
+        assert len(activity) == 2
+        assert {item["status"] for item in activity} == {
+            "completed_with_errors",
+            "failed",
+        }
+        assert {item["type"] for item in activity} == {
+            "library_maintenance"
+        }
+
+
 def test_cleanup_retains_newest_terminal_jobs_and_active_jobs():
     with SessionLocal() as db:
         terminal_ids = [_maintenance_task(db, index=index).id for index in range(5)]

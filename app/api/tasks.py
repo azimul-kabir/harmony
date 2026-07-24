@@ -93,10 +93,27 @@ def cancel_job(task_id: int, db: Session = Depends(get_db)):
     return serialize_task_progress(task)
 
 @router.get("/library-activity", summary="Recent completed Library activity")
-def library_activity(limit: int = 20, db: Session = Depends(get_db)):
+def library_activity(
+    limit: int = 20,
+    attention_only: bool = False,
+    job_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if job_type is not None and job_type not in LIBRARY_TASK_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported Library job type")
+    statuses = (
+        ("completed_with_errors", "failed", "interrupted")
+        if attention_only
+        else TERMINAL_JOB_STATES
+    )
+    statement = select(Task).where(
+        Task.task_type.in_(LIBRARY_TASK_TYPES),
+        Task.status.in_(statuses),
+    )
+    if job_type is not None:
+        statement = statement.where(Task.task_type == job_type)
     jobs = db.scalars(
-        select(Task)
-        .where(Task.task_type.in_(LIBRARY_TASK_TYPES), Task.status.in_(TERMINAL_JOB_STATES))
+        statement
         .order_by(Task.completed_at.desc(), Task.id.desc())
         .limit(min(max(limit, 1), 100))
     ).all()

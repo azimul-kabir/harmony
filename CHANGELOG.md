@@ -22,6 +22,9 @@
   Playlists page without removing downloaded songs or their Sources.
 - Show square album artwork beside every song in the playlist Library manager,
   with download-job artwork and a compact placeholder as fallbacks.
+- Make Dashboard Library-job warnings link to complete filtered results and
+  expose job summaries, timestamps, counters, error codes, and safe per-item
+  failure messages in the Library Health review.
 
 All notable changes to Harmony are documented in this file.
 

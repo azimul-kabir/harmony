@@ -76,13 +76,31 @@
         </div>
     </section>
     <section id="library-jobs" class="health-job-panel" aria-labelledby="library-jobs-title">
-        <div><strong id="library-jobs-title">Library Jobs &amp; Activity</strong><span>Active and recent persistent operations</span></div>
+        <div><strong id="library-jobs-title">Library Jobs &amp; Activity</strong><span id="library-jobs-description">Active and recent persistent operations</span></div>
         <div class="health-job-columns">
             <div><h3>Active jobs</h3><div id="library-active-jobs" class="health-check-list" aria-live="polite"></div></div>
             <div><h3>Recent activity</h3><div id="library-recent-activity" class="health-check-list" aria-live="polite"></div></div>
         </div>
     </section>
 </section>
+
+<dialog id="library-job-dialog" class="library-bulk-dialog library-job-dialog">
+    <form method="dialog">
+        <div>
+            <span class="library-eyebrow">Persistent job diagnostics</span>
+            <h2 id="library-job-title">Library job</h2>
+            <p id="library-job-summary">Loading diagnostics…</p>
+        </div>
+        <dl id="library-job-facts" class="library-job-facts"></dl>
+        <div>
+            <h3>Failure details</h3>
+            <div id="library-job-failures" class="library-job-failures"></div>
+        </div>
+        <div class="library-bulk-dialog-actions">
+            <button class="btn-secondary" value="cancel">Close</button>
+        </div>
+    </form>
+</dialog>
 
 <dialog id="health-confirm" class="library-bulk-dialog">
     <form method="dialog">

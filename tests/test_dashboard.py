@@ -274,8 +274,11 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     "severity": "warning",
                     "count": 1,
                     "title": "Library maintenance jobs",
-                    "description": "1 item requires attention",
-                    "href": "/library/health#library-jobs",
+                    "description": "1 job requires attention",
+                    "href": (
+                        "/library/health?job_status=attention"
+                        "&job_type=library_maintenance#library-jobs"
+                    ),
                     "action_label": "Review",
                     "recovery_action": None,
                     "recovery_label": None,
@@ -391,8 +394,11 @@ def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failure
                     "severity": "warning",
                     "count": 1,
                     "title": "Library bulk jobs",
-                    "description": "1 item requires attention",
-                    "href": "/library/health#library-jobs",
+                    "description": "1 job requires attention",
+                    "href": (
+                        "/library/health?job_status=attention"
+                        "&job_type=library_bulk#library-jobs"
+                    ),
                     "action_label": "Review",
                     "recovery_action": None,
                     "recovery_label": None,
