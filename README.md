@@ -367,6 +367,21 @@ Features include:
 
 ---
 
+## Lyrics Support
+
+Harmony indexes lyrics already stored with the local audio file. It supports
+embedded ID3, Vorbis/FLAC, and MP4 lyrics plus same-name `.lrc` and `.txt`
+sidecar files. `.lrc` sidecars take precedence so synchronized timestamps are
+preserved. Lyrics are available from each Song's **Lyrics** action in the
+Library; full text is loaded only when opened and is not included in Library
+list responses.
+
+Lyrics files are bounded to 512 KiB. Harmony does not contact an external lyrics
+provider, and adding, editing, or downloading lyrics remains outside this
+initial local-library implementation.
+
+---
+
 # Download Pipeline
 
 ```text
@@ -624,7 +639,6 @@ Just a synchronized self-hosted music library.
 - Plugin system
 - API authentication and external integration hardening
 - Additional Navidrome event hooks
-- Lyrics support
 
 ---
 

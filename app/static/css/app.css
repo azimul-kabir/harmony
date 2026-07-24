@@ -1040,6 +1040,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .metadata-review-dialog { width: min(900px, calc(100% - 32px)); max-height: 90vh; padding: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); color: var(--text-main); }
 .metadata-review-dialog::backdrop { background: rgba(0, 0, 0, .58); }
+.lyrics-dialog { width: min(680px, calc(100% - 32px)); max-height: 90vh; padding: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-surface); color: var(--text-main); }
+.lyrics-dialog::backdrop { background: rgba(0, 0, 0, .58); }
+.lyrics-dialog-shell { padding: 24px; overflow-y: auto; max-height: calc(90vh - 48px); }
+.lyrics-dialog-shell > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.lyrics-dialog-shell h2 { margin: 5px 0 4px; }
+.lyrics-content { margin: 20px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.8; color: var(--text-main); }
+.library-row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .metadata-review-shell { padding: 24px; overflow-y: auto; max-height: calc(90vh - 48px); }
 .metadata-review-shell > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .metadata-review-shell h2, .metadata-review-shell h3 { margin: 5px 0 14px; }

@@ -32,6 +32,7 @@ from app.api.schemas.library import (
     ArtistProjectionResponse,
     SearchPageResponse,
     SongResponse,
+    LyricsResponse,
 )
 
 router = APIRouter(
@@ -350,6 +351,25 @@ def get_song(song_id: int, db: Session = Depends(get_db)):
         {song.spotify_track_id} if song.spotify_track_id else set(),
     )
     return serialize_song(song, sources.get(song.spotify_track_id or "", []))
+
+
+@router.get(
+    "/songs/{song_id}/lyrics",
+    response_model=LyricsResponse,
+    summary="Get locally indexed lyrics for one Song",
+)
+def get_song_lyrics(song_id: int, db: Session = Depends(get_db)):
+    song = db.get(Song, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return {
+        "song_id": song.id,
+        "title": song.title or song.filename,
+        "artist": song.artist,
+        "lyrics": song.lyrics,
+        "source": song.lyrics_source,
+        "synchronized": bool(song.lyrics_synced),
+    }
 
 
 @router.get(

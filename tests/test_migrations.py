@@ -49,6 +49,9 @@ def test_library_foundation_migrates_existing_songs_table(tmp_path):
         "musicbrainz_release_id",
         "musicbrainz_artist_id",
         "compilation",
+        "lyrics",
+        "lyrics_source",
+        "lyrics_synced",
     } <= columns
     assert "artwork" in inspect(engine).get_table_names()
     artwork_columns = {

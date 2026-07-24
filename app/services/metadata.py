@@ -6,6 +6,7 @@ import hashlib
 import json
 
 from mutagen import File
+from app.services.lyrics import extract_lyrics
 
 
 def _first(value: Any, default=None):
@@ -134,6 +135,10 @@ def read_metadata(file_path: str | Path) -> dict:
         "isrc": _first(tags.get("isrc")),
     }
 
+    lyrics = extract_lyrics(path, tags)
+    metadata["lyrics"] = lyrics.text if lyrics else None
+    metadata["lyrics_source"] = lyrics.source if lyrics else None
+    metadata["lyrics_synced"] = lyrics.synchronized if lyrics else False
     metadata["artwork_status"] = _artwork_status(audio)
     metadata["metadata_hash"] = _metadata_hash(metadata)
     return metadata

@@ -193,6 +193,10 @@ Songs; requests never silently apply provider values.
 - `GET /api/library/songs/{song_id}/metadata` returns canonical values and
   review state. Song-scoped suggestion and history lists are available through
   `/metadata/suggestions` and `/metadata/history`.
+- `GET /api/library/songs/{song_id}/lyrics` returns bounded lyrics indexed from
+  embedded audio tags or same-name `.lrc`/`.txt` sidecars. Library Song list
+  responses expose only `has_lyrics`, `lyrics_source`, and `lyrics_synced`, not
+  the full text.
 - `POST /api/library/songs/{song_id}/metadata/manual-preview` normalizes and
   validates explicit operator edits without persistence.
   `POST /api/library/songs/{song_id}/metadata/manual-apply` queues changed,

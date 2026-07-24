@@ -682,6 +682,13 @@ Playlist sources are resolved from the persistent `playlists` and
 `playlist_tracks` index using the Spotify track ID. This avoids duplicating
 playlist membership on each song row while still exposing it in Library APIs.
 
+Lyrics are local indexed metadata. Same-name `.lrc` and `.txt` sidecars take
+precedence over embedded ID3, Vorbis/FLAC, or MP4 lyrics; `.lrc` and synchronized
+ID3 frames retain their synchronized flag. Inputs are bounded before
+persistence. Song list responses expose only availability/source flags, while
+full text is returned by the dedicated per-Song lyrics endpoint. The filesystem
+watcher maps sidecar changes back to the sibling audio file for re-indexing.
+
 Playlist artwork is stored beside each exported M3U with the same sanitized
 base filename, for example `Playlists/Night Drive.m3u` and
 `Playlists/Night Drive.jpg`. This is both Harmony's durable manual replacement

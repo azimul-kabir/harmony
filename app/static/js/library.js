@@ -582,7 +582,10 @@ function renderSongs() {
                 <td data-label="Album">${escapeHtml(song.album || "Unknown album")}</td>
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
-                <td data-label="Metadata"><button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button></td>
+                <td data-label="Actions"><div class="library-row-actions">
+                    ${song.has_lyrics ? `<button class="btn-secondary" type="button" data-lyrics-song="${song.id}">Lyrics</button>` : ""}
+                    <button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button>
+                </div></td>
             </tr>
         `).join("");
     }
@@ -598,9 +601,39 @@ function renderSongs() {
     body.querySelectorAll("[data-review-song]").forEach((button) => {
         button.addEventListener("click", () => openMetadataReview(Number(button.dataset.reviewSong)));
     });
+    body.querySelectorAll("[data-lyrics-song]").forEach((button) => {
+        button.addEventListener("click", () => openLyrics(Number(button.dataset.lyricsSong)));
+    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
+}
+
+async function openLyrics(songId) {
+    const dialog = document.getElementById("lyrics-dialog");
+    const title = document.getElementById("lyrics-title");
+    const byline = document.getElementById("lyrics-byline");
+    const status = document.getElementById("lyrics-status");
+    const content = document.getElementById("lyrics-content");
+    title.textContent = "Loading lyrics…";
+    byline.textContent = "";
+    status.textContent = "";
+    content.textContent = "";
+    dialog.showModal();
+    try {
+        const result = await fetchJson(`/api/library/songs/${songId}/lyrics`);
+        title.textContent = result.title;
+        byline.textContent = result.artist || "Unknown artist";
+        status.textContent = result.lyrics
+            ? `${result.synchronized ? "Synchronized" : "Plain"} lyrics · ${String(result.source || "local").replaceAll("_", " ")}`
+            : "No locally indexed lyrics are available.";
+        content.textContent = result.lyrics || "";
+        content.hidden = !result.lyrics;
+    } catch (error) {
+        title.textContent = "Lyrics unavailable";
+        status.textContent = "Harmony could not load lyrics for this song.";
+        content.hidden = true;
+    }
 }
 
 function metadataValue(value) {
@@ -1339,6 +1372,7 @@ document.getElementById("library-select-page").addEventListener("change", (event
     renderSongs();
 });
 document.getElementById("metadata-review-close").addEventListener("click", () => document.getElementById("metadata-review-dialog").close());
+document.getElementById("lyrics-close").addEventListener("click", () => document.getElementById("lyrics-dialog").close());
 document.getElementById("library-duplicates-open").addEventListener("click", openDuplicateReview);
 document.getElementById("duplicate-review-close").addEventListener("click", () => document.getElementById("duplicate-review-dialog").close());
 document.getElementById("duplicate-tier").addEventListener("change", loadDuplicateCandidates);

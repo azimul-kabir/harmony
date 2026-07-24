@@ -10,6 +10,7 @@ from app.services import library_scanner, library_watcher
 from app.services.library_watcher import (
     LibraryWatcher,
     PendingFileEvent,
+    _audio_for_lyrics_path,
     _coalesce,
     _observer_is_healthy,
 )
@@ -19,6 +20,15 @@ def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     return Session(engine)
+
+
+def test_lyrics_sidecar_resolves_to_sibling_audio_file(tmp_path):
+    audio = tmp_path / "Track.FLAC"
+    audio.touch()
+
+    assert _audio_for_lyrics_path(tmp_path / "Track.lrc") == audio.resolve()
+    assert _audio_for_lyrics_path(tmp_path / "Other.lrc") is None
+    assert _audio_for_lyrics_path(tmp_path / "Track.json") is None
 
 
 def _metadata(path: Path, title: str = "Renamed Song") -> dict:
