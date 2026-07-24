@@ -374,6 +374,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-album-insight strong, .dashboard-album-insight small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-album-insight strong { margin-top: 6px; }
 .dashboard-album-insight small { margin-top: 3px; color: var(--text-muted); }
+.dashboard-stream-panel { padding: 0; overflow: hidden !important; }
+.dashboard-stream-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-surface-alt);
+}
+.dashboard-stream-header h2,
+.dashboard-stream-header h3 { margin: 2px 0 0; color: var(--text-main); font-size: 1.1rem; }
+.dashboard-stream-header .badge { font-size: .8rem; }
+.dashboard-stream-content { padding: 24px; }
 .bottom-split { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-lg); align-items: start; }
 .quick-actions-grid { display: flex; flex-direction: column; gap: 12px; }
 
@@ -462,14 +476,59 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (max-width: 640px) {
     .dashboard-header { align-items: start; flex-direction: column; }
     .dashboard-header-actions { width: 100%; }
-    .dashboard-header-actions > * { flex: 1; text-align: center; }
-    .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .dashboard-insight-metrics, .dashboard-album-insights { grid-template-columns: 1fr; }
+    .dashboard-header-actions > * {
+        display: inline-flex;
+        flex: 1;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    .dashboard-kpis {
+        display: flex;
+        gap: 8px;
+        margin-right: -12px;
+        padding-right: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+    }
+    .dashboard-kpis::-webkit-scrollbar { display: none; }
+    .dashboard-kpi {
+        flex: 0 0 112px;
+        min-height: 70px;
+        padding: 12px;
+        scroll-snap-align: start;
+        box-shadow: none;
+    }
+    .dashboard-insight-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-album-insights {
+        display: flex;
+        gap: 8px;
+        margin-right: -18px;
+        padding-right: 18px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+    }
+    .dashboard-album-insights::-webkit-scrollbar { display: none; }
+    .dashboard-album-insight { flex: 0 0 min(240px, 78vw); scroll-snap-align: start; }
     .dashboard-trends-content { grid-template-columns: 1fr; }
     .bottom-split { grid-template-columns: 1fr; }
-    .dashboard-attention-item { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 11px 10px; }
-    .dashboard-attention-controls { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 2px; }
-    .dashboard-attention-action, .dashboard-attention-recovery { width: auto; min-height: 40px; padding: 7px 12px; font-size: .84rem; }
+    .dashboard-attention-item {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 10px;
+        padding: 12px;
+    }
+    .dashboard-attention-severity { min-width: 0; }
+    .dashboard-attention-content { grid-column: 1 / -1; grid-row: 2; }
+    .dashboard-attention-count { grid-column: 2; grid-row: 1; }
+    .dashboard-attention-controls { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+    .dashboard-attention-action, .dashboard-attention-recovery { width: 100%; min-height: 42px; padding: 7px 10px; font-size: .82rem; }
+    .dashboard-stream-header { padding: 14px 16px; }
+    .dashboard-stream-content { padding: 16px; }
+    .dashboard-stream-header .dashboard-panel-link { max-width: 42%; white-space: normal; text-align: right; }
     .downloads-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
