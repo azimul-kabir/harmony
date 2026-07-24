@@ -475,7 +475,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .download-history-search .search-input { width: 100%; min-height: 44px; padding: 10px 14px; font-size: .9rem; }
 .download-history-table { margin: 0; border-radius: 0; }
 .download-song-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.download-artwork, .download-artwork-placeholder { width: 40px; height: 40px; border-radius: 6px; flex: 0 0 auto; object-fit: cover; }
+.download-song-copy { display: grid; min-width: 0; gap: 3px; }
+.download-artwork, .download-artwork-placeholder { width: 48px; height: 48px; aspect-ratio: 1 / 1; border-radius: 7px; flex: 0 0 48px; object-fit: cover; }
 .download-artwork-placeholder { display: grid; place-items: center; border: 1px solid var(--border-color); background: var(--bg-surface-hover); color: var(--text-muted); }
 .download-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.05rem; }
 .download-error { display: block; max-width: 220px; margin-top: 3px; color: var(--danger); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
