@@ -31,6 +31,7 @@ function renderSources(sources) {
     // Surgical DOM Patching
     sources.forEach(source => {
         let card = document.getElementById(`source-card-${source.id}`);
+        const renderSignature = JSON.stringify(source);
         
         // Format Date
         let formattedDate = 'Never';
@@ -198,16 +199,20 @@ function renderSources(sources) {
             </div>
         `;
 
-        // If card exists, update HTML, otherwise append new card
+        // Do not replace a card while one of its controls is being used. Replacing
+        // an open native select closes the menu and can discard the user's choice.
         if (card) {
-            if (card.innerHTML !== innerHTML) {
+            const controlIsActive = card.contains(document.activeElement);
+            if (card.dataset.renderSignature !== renderSignature && !controlIsActive) {
                 card.innerHTML = innerHTML;
+                card.dataset.renderSignature = renderSignature;
             }
         } else {
             card = document.createElement('div');
             card.id = `source-card-${source.id}`;
             card.className = "source-card";
             card.innerHTML = innerHTML;
+            card.dataset.renderSignature = renderSignature;
             container.appendChild(card);
         }
     });
@@ -246,14 +251,42 @@ function bindEvents() {
 
 async function saveAutoSync(sourceId, enabled, interval, control) {
     control.disabled = true;
-    const response = await fetch(`/api/sources/${sourceId}/auto-sync`, {
-        method: "PATCH",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({enabled, interval_minutes: Number(interval)}),
-    });
-    if (!response.ok) {
+    try {
+        const response = await fetch(`/api/sources/${sourceId}/auto-sync`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({enabled, interval_minutes: Number(interval)}),
+        });
         const payload = await response.json().catch(() => ({}));
-        alert(payload.detail || "Auto-sync settings could not be saved.");
+        if (!response.ok) {
+            throw new Error(payload.detail || "Auto-sync settings could not be saved.");
+        }
+
+        const card = document.getElementById(`source-card-${sourceId}`);
+        const button = card?.querySelector(".auto-sync-btn");
+        const select = card?.querySelector(".source-auto-sync-interval");
+        const summary = card?.querySelector(".source-auto-sync small");
+        const savedEnabled = payload.auto_sync_enabled;
+        const savedInterval = payload.auto_sync_interval_minutes;
+
+        if (button) {
+            button.dataset.autoEnabled = String(savedEnabled);
+            button.textContent = savedEnabled ? "Turn off" : "Turn on";
+        }
+        if (select) {
+            select.value = String(savedInterval);
+        }
+        if (summary) {
+            const intervalLabel = savedInterval < 1440
+                ? `${savedInterval / 60} hours`
+                : savedInterval === 1440 ? "day" : "week";
+            summary.textContent = savedEnabled
+                ? `On · every ${intervalLabel}`
+                : "Off · manual sync only";
+        }
+    } catch (error) {
+        alert(error.message || "Auto-sync settings could not be saved.");
+    } finally {
         control.disabled = false;
     }
 }
