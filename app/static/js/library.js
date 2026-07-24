@@ -104,7 +104,9 @@ async function loadDuplicateCandidates() {
                 <div class="duplicate-song-list">${group.songs.map((song) => `
                     <div class="duplicate-song-row">
                         <div class="duplicate-song-copy"><strong>${escapeHtml(song.filename)}</strong><small>${escapeHtml(song.album || "Album unknown")} · ${escapeHtml(song.codec || "codec unknown")}</small>${song.id === group.recommended_keep_id ? '<span class="duplicate-keeper">Suggested keeper — review before resolving</span>' : ""}</div>
-                        <span>${escapeHtml(formatDuration(song.duration))}</span><span>${escapeHtml(formatBitrate(song.bitrate))}</span><span>${escapeHtml(formatBytes(song.file_size))}</span>
+                        <span class="duplicate-song-stat"><small>Duration</small>${escapeHtml(formatDuration(song.duration))}</span>
+                        <span class="duplicate-song-stat"><small>Bitrate</small>${escapeHtml(formatBitrate(song.bitrate))}</span>
+                        <span class="duplicate-song-stat"><small>File size</small>${escapeHtml(formatBytes(song.file_size))}</span>
                         <label class="duplicate-keeper-control"><input type="radio" name="duplicate-keeper-${group.id}" value="${song.id}" ${song.id === group.recommended_keep_id ? "checked" : ""}> Keep this file</label>
                     </div>`).join("")}</div>
                 <div class="library-actions"><button class="btn-secondary" type="button" data-preview-duplicate-resolution="${group.id}">Preview resolution</button></div>

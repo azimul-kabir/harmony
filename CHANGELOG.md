@@ -10,6 +10,13 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Playlist cover upload, preview, replacement, and removal using
   Navidrome-compatible sidecar images beside exported M3U files.
 
+### Fixed
+
+- Library hero controls now use consistent typography and sizing on desktop,
+  and remain on-canvas as a full-width action row on mobile.
+- Duplicate candidate file details now use labeled, evenly aligned statistics
+  with a full-width keeper choice on small screens.
+
 ### Planned
 
 - Additional media-server API integrations beyond Navidrome.
