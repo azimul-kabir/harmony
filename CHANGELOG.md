@@ -15,7 +15,7 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Library hero controls now use consistent typography and sizing on desktop,
   and remain on-canvas as a full-width action row on mobile.
 - Duplicate candidate file details now use labeled, evenly aligned statistics
-  with a full-width keeper choice on small screens.
+  with square cover artwork and a full-width keeper choice on small screens.
 
 ### Planned
 

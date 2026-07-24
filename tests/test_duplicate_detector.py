@@ -27,6 +27,7 @@ def test_identity_tiers_are_explainable_and_quality_recommendation_is_read_only(
         lower = _song(
             db, "lower", musicbrainz_recording_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             bitrate=128000, sample_rate=44100, file_size=3_000_000,
+            cover_url="https://images.example/lower.jpg",
         )
         higher = _song(
             db, "higher", musicbrainz_recording_id="AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
@@ -42,6 +43,9 @@ def test_identity_tiers_are_explainable_and_quality_recommendation_is_read_only(
     assert group["song_ids"] == [lower.id, higher.id]
     assert group["evidence"][0]["field"] == "musicbrainz_recording_id"
     assert {song["availability_status"] for song in group["songs"]} == {"available"}
+    assert next(song for song in group["songs"] if song["id"] == lower.id)["cover_url"] == (
+        "https://images.example/lower.jpg"
+    )
 
 
 def test_fuzzy_candidates_require_duration_and_do_not_cross_external_id_conflicts():

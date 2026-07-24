@@ -103,10 +103,13 @@ async function loadDuplicateCandidates() {
                 <p class="duplicate-evidence">${escapeHtml([...new Set(group.evidence.map((item) => item.message))].join(" · "))}</p>
                 <div class="duplicate-song-list">${group.songs.map((song) => `
                     <div class="duplicate-song-row">
+                        ${song.cover_url
+                            ? `<img class="duplicate-song-artwork" src="${escapeHtml(song.cover_url)}" alt="" loading="lazy" data-duplicate-artwork>`
+                            : '<span class="duplicate-song-artwork duplicate-song-artwork-placeholder" aria-hidden="true">♪</span>'}
                         <div class="duplicate-song-copy"><strong>${escapeHtml(song.filename)}</strong><small>${escapeHtml(song.album || "Album unknown")} · ${escapeHtml(song.codec || "codec unknown")}</small>${song.id === group.recommended_keep_id ? '<span class="duplicate-keeper">Suggested keeper — review before resolving</span>' : ""}</div>
-                        <span class="duplicate-song-stat"><small>Duration</small>${escapeHtml(formatDuration(song.duration))}</span>
-                        <span class="duplicate-song-stat"><small>Bitrate</small>${escapeHtml(formatBitrate(song.bitrate))}</span>
-                        <span class="duplicate-song-stat"><small>File size</small>${escapeHtml(formatBytes(song.file_size))}</span>
+                        <span class="duplicate-song-stat duplicate-song-duration"><small>Duration</small>${escapeHtml(formatDuration(song.duration))}</span>
+                        <span class="duplicate-song-stat duplicate-song-bitrate"><small>Bitrate</small>${escapeHtml(formatBitrate(song.bitrate))}</span>
+                        <span class="duplicate-song-stat duplicate-song-size"><small>File size</small>${escapeHtml(formatBytes(song.file_size))}</span>
                         <label class="duplicate-keeper-control"><input type="radio" name="duplicate-keeper-${group.id}" value="${song.id}" ${song.id === group.recommended_keep_id ? "checked" : ""}> Keep this file</label>
                     </div>`).join("")}</div>
                 <div class="library-actions"><button class="btn-secondary" type="button" data-preview-duplicate-resolution="${group.id}">Preview resolution</button></div>
@@ -114,6 +117,15 @@ async function loadDuplicateCandidates() {
             </article>`).join("") || '<p class="library-search-status">No duplicate candidates match this tier.</p>';
         target.querySelectorAll("[data-preview-duplicate-resolution]").forEach((button) => {
             button.addEventListener("click", () => previewDuplicateResolution(button.dataset.previewDuplicateResolution));
+        });
+        target.querySelectorAll("[data-duplicate-artwork]").forEach((image) => {
+            image.addEventListener("error", () => {
+                const placeholder = document.createElement("span");
+                placeholder.className = "duplicate-song-artwork duplicate-song-artwork-placeholder";
+                placeholder.setAttribute("aria-hidden", "true");
+                placeholder.textContent = "♪";
+                image.replaceWith(placeholder);
+            }, {once: true});
         });
     } catch (_) {
         status.textContent = "Duplicate analysis is unavailable.";
