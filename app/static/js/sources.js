@@ -73,6 +73,33 @@ function renderSources(sources) {
         }
 
         const lastSync = formattedDate;
+        const autoSyncIntervals = [
+            [60, "Every hour"],
+            [360, "Every 6 hours"],
+            [720, "Every 12 hours"],
+            [1440, "Daily"],
+            [10080, "Weekly"],
+        ];
+        const autoSyncHtml = `
+            <div class="source-auto-sync">
+                <div>
+                    <strong>Auto-sync</strong>
+                    <small>${source.auto_sync_enabled
+                        ? `On · every ${source.auto_sync_interval_minutes < 1440
+                            ? `${source.auto_sync_interval_minutes / 60} hours`
+                            : source.auto_sync_interval_minutes === 1440 ? "day" : "week"}`
+                        : "Off · manual sync only"}</small>
+                </div>
+                <select class="source-auto-sync-interval" data-id="${source.id}" aria-label="Auto-sync interval for ${escapeHtml(source.name)}">
+                    ${autoSyncIntervals.map(([value, label]) =>
+                        `<option value="${value}"${source.auto_sync_interval_minutes === value ? " selected" : ""}>${label}</option>`
+                    ).join("")}
+                </select>
+                <button class="btn-secondary auto-sync-btn" data-id="${source.id}" data-auto-enabled="${source.auto_sync_enabled}">
+                    ${source.auto_sync_enabled ? "Turn off" : "Turn on"}
+                </button>
+            </div>
+        `;
         
         // Evaluate Task State
         let taskHtml = "";
@@ -161,6 +188,7 @@ function renderSources(sources) {
                 <div><strong>Type:</strong> ${escapeHtml(source.type)}</div>
                 <div><strong>Last Sync:</strong> ${lastSync}</div>
             </div>
+            ${autoSyncHtml}
             ${playlistHtml}
             ${outcomeHtml}
             ${taskHtml}
@@ -208,10 +236,48 @@ function bindEvents() {
     document.querySelectorAll(".sync-btn").forEach(btn => btn.onclick = syncSource);
     document.querySelectorAll(".toggle-btn").forEach(btn => btn.onclick = toggleSource);
     document.querySelectorAll(".delete-btn").forEach(btn => btn.onclick = deleteSource);
+    document.querySelectorAll(".auto-sync-btn").forEach(btn => btn.onclick = updateAutoSync);
+    document.querySelectorAll(".source-auto-sync-interval").forEach(select => select.onchange = updateAutoSyncInterval);
     
     document.querySelectorAll(".pause-btn").forEach(btn => btn.onclick = (e) => handleTaskAction(e, "pause"));
     document.querySelectorAll(".resume-btn").forEach(btn => btn.onclick = (e) => handleTaskAction(e, "resume"));
     document.querySelectorAll(".cancel-btn").forEach(btn => btn.onclick = (e) => handleTaskAction(e, "cancel"));
+}
+
+async function saveAutoSync(sourceId, enabled, interval, control) {
+    control.disabled = true;
+    const response = await fetch(`/api/sources/${sourceId}/auto-sync`, {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({enabled, interval_minutes: Number(interval)}),
+    });
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        alert(payload.detail || "Auto-sync settings could not be saved.");
+        control.disabled = false;
+    }
+}
+
+function updateAutoSync(event) {
+    const button = event.currentTarget;
+    const interval = document.querySelector(`.source-auto-sync-interval[data-id="${button.dataset.id}"]`)?.value || 360;
+    saveAutoSync(
+        button.dataset.id,
+        button.dataset.autoEnabled !== "true",
+        interval,
+        button,
+    );
+}
+
+function updateAutoSyncInterval(event) {
+    const select = event.currentTarget;
+    const button = document.querySelector(`.auto-sync-btn[data-id="${select.dataset.id}"]`);
+    saveAutoSync(
+        select.dataset.id,
+        button?.dataset.autoEnabled === "true",
+        select.value,
+        select,
+    );
 }
 
 async function handleTaskAction(event, action) {

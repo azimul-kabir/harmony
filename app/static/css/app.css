@@ -584,6 +584,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .source-header { display: flex; justify-content: space-between; align-items: flex-start; }
 .source-header h3 { margin: 0; font-size: 1.15rem; color: var(--text-main); line-height: 1.4; }
 .source-meta { background: var(--bg-surface-alt); color: var(--text-muted); padding: 12px; border-radius: 8px; font-size: 0.9rem; }
+.source-auto-sync { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, auto) auto; align-items: end; gap: 10px; padding: 12px; border: 1px solid var(--border-color); border-radius: 9px; background: color-mix(in srgb, var(--primary) 5%, var(--bg-surface)); }
+.source-auto-sync > div { display: grid; gap: 3px; }
+.source-auto-sync small { color: var(--text-muted); font-size: .76rem; }
+.source-auto-sync select { min-height: 40px; padding: 0 28px 0 10px; border: 1px solid var(--border-input); border-radius: 7px; background: var(--bg-surface); color: var(--text-main); font: inherit; font-size: .82rem; }
+.source-auto-sync button { min-height: 40px; }
 .source-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .source-actions button { flex: 1 1 90px; min-height: 42px; padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
 .source-actions .sync-btn { color: var(--primary); border-color: var(--primary); background: transparent; }
@@ -2301,6 +2306,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .source-card { gap: 13px; padding: 16px; }
     .source-header { gap: 10px; }
     .source-header h3 { min-width: 0; overflow-wrap: anywhere; font-size: 1.05rem; }
+    .source-auto-sync { grid-template-columns: 1fr auto; align-items: center; }
+    .source-auto-sync > div { grid-column: 1 / -1; }
+    .source-auto-sync select { min-height: 44px; font-size: 16px; }
+    .source-auto-sync button { min-height: 44px; }
     .playlist-toolbar { align-items: stretch; flex-direction: column; gap: 8px; padding: 12px; }
     .playlist-toolbar .search-input { min-height: 46px; font-size: 16px; }
     .playlist-toolbar span { align-self: flex-end; }
