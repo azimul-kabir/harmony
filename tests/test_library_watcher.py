@@ -1,4 +1,5 @@
 from pathlib import Path
+import errno
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -127,6 +128,76 @@ def test_observer_health_includes_native_emitter_threads():
     )()
 
     assert not _observer_is_healthy(observer)
+
+
+def test_watcher_falls_back_to_polling_when_inotify_limit_is_reached(
+    tmp_path,
+    monkeypatch,
+):
+    events = []
+    joins = []
+
+    class InotifyLimitObserver:
+        emitters = ()
+
+        def schedule(self, *args, **kwargs):
+            return None
+
+        def start(self):
+            raise OSError(errno.ENOSPC, "inotify watch limit reached")
+
+        def stop(self):
+            return None
+
+        def is_alive(self):
+            return False
+
+        def join(self, timeout=None):
+            raise AssertionError("an observer that never started must not be joined")
+
+    class PollingObserver:
+        emitters = ()
+
+        def schedule(self, *args, **kwargs):
+            return None
+
+        def start(self):
+            watcher._stop.set()
+
+        def stop(self):
+            return None
+
+        def is_alive(self):
+            return True
+
+        def join(self, timeout=None):
+            joins.append(timeout)
+
+    monkeypatch.setattr(
+        library_watcher.library_events,
+        "publish",
+        lambda event, **payload: events.append((event, payload)),
+    )
+    watcher = LibraryWatcher(
+        root=tmp_path,
+        observer_factory=InotifyLimitObserver,
+        polling_observer_factory=PollingObserver,
+    )
+
+    watcher._supervise()
+
+    assert watcher._use_polling_observer
+    assert joins == [5]
+    assert events == [
+        (
+            "library.watcher.fallback",
+            {
+                "root": str(tmp_path.resolve()),
+                "observer": "polling",
+                "reason": "inotify_limit_reached",
+            },
+        )
+    ]
 
 
 def test_watcher_ignores_events_resolving_outside_music_root(tmp_path, monkeypatch):

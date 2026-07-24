@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import errno
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Lock, Thread
@@ -9,6 +10,7 @@ import time
 from sqlalchemy import select
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, FileSystemMovedEvent
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -108,12 +110,15 @@ class LibraryWatcher:
         debounce_seconds: float = 0.75,
         retry_delays: tuple[float, ...] = (0.5, 1.5, 4.0),
         observer_factory=Observer,
+        polling_observer_factory=PollingObserver,
     ) -> None:
         settings = get_settings()
         self.root = Path(root or settings.music_path).resolve()
         self.debounce_seconds = debounce_seconds
         self.retry_delays = retry_delays
         self.observer_factory = observer_factory
+        self.polling_observer_factory = polling_observer_factory
+        self._use_polling_observer = False
         self._incoming: Queue[PendingFileEvent] = Queue()
         self._stop = Event()
         self._supervisor: Thread | None = None
@@ -167,7 +172,12 @@ class LibraryWatcher:
         while not self._stop.is_set():
             observer = None
             try:
-                observer = self.observer_factory()
+                observer_factory = (
+                    self.polling_observer_factory
+                    if self._use_polling_observer
+                    else self.observer_factory
+                )
+                observer = observer_factory()
                 self._observer = observer
                 observer.schedule(_WatchdogHandler(self), str(self.root), recursive=True)
                 observer.start()
@@ -185,6 +195,32 @@ class LibraryWatcher:
                 while not self._stop.wait(1):
                     if not _observer_is_healthy(observer):
                         raise RuntimeError("filesystem observer stopped unexpectedly")
+            except OSError as error:
+                if error.errno == errno.ENOSPC and not self._use_polling_observer:
+                    self._use_polling_observer = True
+                    logger.warning(
+                        "Library watcher reached the inotify limit; "
+                        "falling back to filesystem polling for {}",
+                        self.root,
+                    )
+                    library_events.publish(
+                        "library.watcher.fallback",
+                        root=str(self.root),
+                        observer="polling",
+                        reason="inotify_limit_reached",
+                    )
+                    continue
+                if self._stop.is_set():
+                    break
+                restart_count += 1
+                logger.exception("Library watcher failed; restarting")
+                library_events.publish(
+                    "library.watcher.error",
+                    root=str(self.root),
+                    error=str(error),
+                    restart_count=restart_count,
+                )
+                self._stop.wait(min(5.0, float(restart_count)))
             except Exception as error:
                 if self._stop.is_set():
                     break
@@ -200,7 +236,8 @@ class LibraryWatcher:
             finally:
                 if observer is not None:
                     observer.stop()
-                    observer.join(timeout=5)
+                    if observer.is_alive():
+                        observer.join(timeout=5)
                 self._observer = None
 
         logger.info("Library watcher stopped")
