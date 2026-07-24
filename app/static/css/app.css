@@ -307,6 +307,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-summary-card { padding: 18px; }
 .dashboard-operations-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 .dashboard-operations-card { padding: 18px; min-width: 0; }
+.navidrome-panel { padding: 18px; }
+.navidrome-content { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: var(--space-lg); align-items: end; }
+.navidrome-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-sm); }
+.navidrome-metrics > div { padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-alt); min-width: 0; }
+.navidrome-metrics span { display: block; color: var(--text-muted); font-size: .78rem; margin-bottom: 5px; }
+.navidrome-metrics strong { display: block; font-size: .95rem; overflow-wrap: anywhere; }
+.navidrome-status { border-radius: 999px; padding: 5px 10px; background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); font-size: .78rem; }
+.navidrome-status.is-offline { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.navidrome-status.is-checking, .navidrome-status.is-unconfigured { background: var(--bg-surface-alt); color: var(--text-muted); }
+.navidrome-status.is-scanning { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+.navidrome-controls p { color: var(--text-muted); font-size: .85rem; margin: 0 0 10px; }
+.navidrome-controls > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .dashboard-trends-content { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(150px, .75fr); gap: 16px; align-items: end; }
 .download-trend-chart { height: 150px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; align-items: end; border-bottom: 1px solid var(--border-color); padding: 0 2px 4px; }
 .download-trend-bar { height: 100%; min-width: 0; display: grid; grid-template-rows: auto 1fr auto; align-items: end; gap: 4px; text-align: center; }
@@ -408,6 +420,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (max-width: 900px) {
     .dashboard-summary-grid, .dashboard-operations-grid { grid-template-columns: 1fr; }
+    .navidrome-content { grid-template-columns: 1fr; }
+    .navidrome-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .navidrome-controls button { flex: 1 1 140px; }
     .dashboard-insight-metrics, .dashboard-album-insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dashboard-maintenance-list { grid-template-columns: 1fr; }
 }

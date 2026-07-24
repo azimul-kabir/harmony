@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (action) button.onclick = () => runAttentionRecovery(action, button);
     });
 
+    setupNavidromeControls();
     connectSSE();
 });
 
@@ -48,6 +49,94 @@ function formatDuration(seconds) {
 
 function formatQueueDuration(seconds) {
     return seconds === null || seconds === undefined ? "—" : formatDuration(seconds);
+}
+
+function formatNavidromeDate(value) {
+    if (!value) return "Never";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+function renderNavidromeStatus(status) {
+    const badge = document.getElementById("navidrome-status");
+    const rescan = document.getElementById("navidrome-rescan");
+    const fullRescan = document.getElementById("navidrome-full-rescan");
+    if (!badge || !rescan || !fullRescan) return;
+
+    badge.className = "navidrome-status";
+    if (!status.configured) {
+        badge.textContent = "Not configured";
+        badge.classList.add("is-unconfigured");
+        setText("navidrome-message", "Add Navidrome connection variables and restart Harmony.");
+    } else if (!status.reachable) {
+        badge.textContent = "Offline";
+        badge.classList.add("is-offline");
+        setText("navidrome-message", status.error || "Harmony cannot reach Navidrome.");
+    } else if (status.scanning) {
+        badge.textContent = "Scanning";
+        badge.classList.add("is-scanning");
+        setText("navidrome-message", "Navidrome is scanning the shared music library.");
+    } else {
+        badge.textContent = "Online";
+        setText("navidrome-message", "Navidrome is connected and ready.");
+    }
+
+    setText("navidrome-scanner", status.scanning ? `Scanning (${Number(status.scan_count || 0).toLocaleString()})` : "Idle");
+    setText("navidrome-last-scan", formatNavidromeDate(status.last_scan));
+    setText("navidrome-folders", status.reachable ? Number(status.folder_count || 0).toLocaleString() : "—");
+    setText("navidrome-version", status.server_version || "—");
+    const enabled = Boolean(status.configured && status.reachable && !status.scanning);
+    rescan.disabled = !enabled;
+    fullRescan.disabled = !enabled;
+}
+
+async function refreshNavidromeStatus() {
+    try {
+        const response = await fetch("/api/navidrome/status");
+        if (!response.ok) throw new Error("Status request failed");
+        renderNavidromeStatus(await response.json());
+    } catch (error) {
+        renderNavidromeStatus({
+            configured: true,
+            reachable: false,
+            error: "Harmony could not check Navidrome status.",
+        });
+    }
+}
+
+async function startNavidromeScan(fullScan, button) {
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = fullScan ? "Starting full scan…" : "Starting scan…";
+    try {
+        const response = await fetch(`/api/navidrome/rescan?full_scan=${fullScan}`, {
+            method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.detail?.message || "Navidrome rejected the scan.");
+        }
+        renderNavidromeStatus({ ...payload, scanning: true });
+    } catch (error) {
+        setText("navidrome-message", error.message || "The Navidrome scan could not be started.");
+    } finally {
+        button.textContent = originalLabel;
+        window.setTimeout(refreshNavidromeStatus, 1000);
+    }
+}
+
+function setupNavidromeControls() {
+    const rescan = document.getElementById("navidrome-rescan");
+    const fullRescan = document.getElementById("navidrome-full-rescan");
+    if (!rescan || !fullRescan) return;
+    rescan.addEventListener("click", () => startNavidromeScan(false, rescan));
+    fullRescan.addEventListener("click", () => {
+        if (window.confirm("Run a full Navidrome rescan? This can take a while on large libraries.")) {
+            startNavidromeScan(true, fullRescan);
+        }
+    });
+    refreshNavidromeStatus();
+    window.setInterval(refreshNavidromeStatus, 15000);
 }
 
 function renderDownloadTrends(trends) {

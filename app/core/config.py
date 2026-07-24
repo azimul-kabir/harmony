@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     library_watcher_enabled: bool = True
     library_watcher_debounce_seconds: float = 0.75
 
+    navidrome_url: str = ""
+    navidrome_username: str = ""
+    navidrome_password: str = ""
+    navidrome_timeout_seconds: float = 5.0
+
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
     musicbrainz_user_agent: str = "Harmony/1.6.0 (https://github.com/azimul-kabir/harmony)"
     musicbrainz_timeout_seconds: float = 10.0

@@ -66,6 +66,28 @@
         </article>
     </section>
 
+    <section class="panel navidrome-panel" aria-labelledby="navidrome-title">
+        <div class="dashboard-panel-heading">
+            <div><span class="library-eyebrow">Media server</span><h2 id="navidrome-title">Navidrome</h2></div>
+            <strong id="navidrome-status" class="navidrome-status is-checking">Checking…</strong>
+        </div>
+        <div class="navidrome-content">
+            <div class="navidrome-metrics" aria-live="polite">
+                <div><span>Scanner</span><strong id="navidrome-scanner">—</strong></div>
+                <div><span>Last scan</span><strong id="navidrome-last-scan">—</strong></div>
+                <div><span>Folders</span><strong id="navidrome-folders">—</strong></div>
+                <div><span>Version</span><strong id="navidrome-version">—</strong></div>
+            </div>
+            <div class="navidrome-controls">
+                <p id="navidrome-message">Checking the configured Navidrome server.</p>
+                <div>
+                    <button id="navidrome-rescan" class="btn-primary" type="button" disabled>Rescan changes</button>
+                    <button id="navidrome-full-rescan" class="btn-secondary" type="button" disabled>Full rescan</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="panel dashboard-insights" aria-labelledby="dashboard-insights-title">
         <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Library analytics</span><h2 id="dashboard-insights-title">Library insights</h2></div><a href="/library">Browse library →</a></div>
         <div class="dashboard-insight-metrics">

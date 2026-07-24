@@ -29,6 +29,19 @@ Conflicting submissions return HTTP 409 with a `CONFLICTING_JOB` detail. Unknown
 jobs return HTTP 404. Error payloads contain bounded user-safe codes/messages,
 never raw tracebacks or authentication data.
 
+## Navidrome status and scan controls
+
+- `GET /api/navidrome/status` returns configuration, connectivity, scanner,
+  last-scan, folder-count, and server-version state. An unavailable or
+  unconfigured server is represented as a safe status payload so the dashboard
+  can continue operating.
+- `POST /api/navidrome/rescan?full_scan=false` requests an incremental scan.
+- `POST /api/navidrome/rescan?full_scan=true` requests a full scan.
+
+Harmony authenticates server-to-server using the Subsonic token flow. The
+Navidrome password and generated authentication token are never returned to
+the browser.
+
 ## Operation-specific compatibility APIs
 
 - `POST /api/library/health/actions/{refresh|rebuild|verify|clear_artwork}`

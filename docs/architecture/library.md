@@ -1142,6 +1142,17 @@ Media servers consume it.
 
 Harmony never becomes a streaming server.
 
+The first direct integration is a read/control-only Navidrome adapter. Harmony
+uses Navidrome's Subsonic-compatible `getScanStatus` and `startScan` endpoints
+to show scanner state on the dashboard and request incremental or explicit
+full scans. Navidrome remains responsible for its own media index; it never
+writes Harmony's `songs` table.
+
+Configure `NAVIDROME_URL`, `NAVIDROME_USERNAME`, and `NAVIDROME_PASSWORD` in
+Harmony's environment. In Docker, the URL must be reachable from the Harmony
+container (for example `http://navidrome:4533` on a shared Compose network).
+Credentials stay server-side.
+
 Supported servers
 
 Navidrome

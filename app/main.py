@@ -15,6 +15,7 @@ from app.api.library_bulk import router as library_bulk_router
 from app.api.library_health import router as library_health_router
 from app.api.metadata import router as metadata_router
 from app.api.metadata_discovery import router as metadata_discovery_router
+from app.api.navidrome import router as navidrome_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
 from app.api.sync_sources import router as sync_sources_router
@@ -116,6 +117,7 @@ app.include_router(library_bulk_router)
 app.include_router(library_health_router)
 app.include_router(metadata_router)
 app.include_router(metadata_discovery_router)
+app.include_router(navidrome_router)
 app.include_router(artwork_router)
 app.include_router(library_page_router)
 app.include_router(downloads.router)
