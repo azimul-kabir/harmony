@@ -165,7 +165,9 @@ Songs; requests never silently apply provider values.
   Song; `POST /api/metadata/discoveries/songs` accepts an explicit Song scope.
 - `POST /api/metadata/discoveries/health-rules` and
   `POST /api/metadata/discoveries/health-issues` submit discovery from metadata
-  health findings.
+  health findings. Issue repair accepts 1–500 explicit issue IDs and a
+  provider; Library Health supports individual or selected-issue batches
+  through MusicBrainz or configured Spotify.
 - `GET /api/metadata/discoveries` lists durable discovery records;
   `GET /api/metadata/discoveries/{discovery_id}` returns the selected candidate
   and explainable matching evidence.

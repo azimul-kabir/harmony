@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -27,18 +27,18 @@ class SelectionRequest(BaseModel):
 
 
 class BatchRequest(DiscoverRequest):
-    song_ids: list[int]
+    song_ids: list[int] = Field(min_length=1, max_length=500)
     initiated_by: str|None=None
 
 
 class HealthDiscoveryRequest(DiscoverRequest):
-    rule_ids: list[str]
+    rule_ids: list[str] = Field(min_length=1, max_length=50)
     maximum: int|None=None
     initiated_by: str|None=None
 
 
 class HealthIssueDiscoveryRequest(DiscoverRequest):
-    issue_ids:list[int]
+    issue_ids:list[int] = Field(min_length=1, max_length=500)
     initiated_by:str|None=None
 
 

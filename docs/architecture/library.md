@@ -435,7 +435,11 @@ maximum (500 by default), and are processed in bounded order without loading
 the full Library. Health discovery is explicit and resolves supported open
 song, album-projection, and artist-projection issues into a bounded deduplicated
 Song scope. Health analysis never starts discovery, and discovery never changes
-issue state.
+issue state. The Library Health repair toolbar exposes only supported issue
+rules, permits explicit multi-issue selection, and submits the selected
+MusicBrainz or configured Spotify provider into this same durable lifecycle.
+Provider availability is read from diagnostics; unavailable optional providers
+are disabled rather than attempted implicitly.
 
 Normalized recording candidates now include album artist, track/disc totals,
 release/original dates and year, ISRC, compilation context, recording/release

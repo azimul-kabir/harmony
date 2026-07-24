@@ -1065,6 +1065,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .library-search-help p { margin: 10px 0 8px; }
 .library-search-examples { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
 .library-search-examples button { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 999px; background: var(--bg-surface-alt); color: var(--text-main); cursor: pointer; }
+.metadata-repair-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 12px 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-alt); }
+.metadata-repair-toolbar strong { margin-right: auto; }
+.metadata-repair-select { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
 .metadata-proposed { font-size: 1.05rem; }
 
 @media (max-width: 768px) {
