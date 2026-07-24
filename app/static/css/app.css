@@ -386,6 +386,38 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .downloads-summary-card span { display: block; color: var(--text-muted); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .downloads-summary-card strong { display: block; margin-top: 5px; color: var(--primary); font-size: 1.45rem; line-height: 1; }
 .downloads-summary-attention strong { color: var(--danger); }
+.download-ingest-panel { padding: 12px; margin-bottom: var(--space-md); }
+.download-ingest-form { display: flex; gap: 8px; margin: 0; }
+.download-ingest-form input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    font: inherit;
+}
+.download-ingest-form input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+.download-ingest-form .btn-primary { min-height: 44px; padding: 10px 18px; border-radius: 8px; }
+.download-history-panel { padding: 0; overflow: hidden !important; }
+.download-history-filters {
+    align-items: flex-end;
+    gap: 20px;
+    margin-bottom: 0;
+    padding: 16px 20px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.download-history-filters .filter-tabs { min-width: 0; }
+.download-history-search { flex: 0 1 340px; padding-bottom: 12px; }
+.download-history-search .search-input { width: 100%; min-height: 44px; padding: 10px 14px; font-size: .9rem; }
+.download-history-table { margin: 0; border-radius: 0; }
 .download-song-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .download-artwork, .download-artwork-placeholder { width: 40px; height: 40px; border-radius: 6px; flex: 0 0 auto; object-fit: cover; }
 .download-artwork-placeholder { display: grid; place-items: center; border: 1px solid var(--border-color); background: var(--bg-surface-hover); color: var(--text-muted); }
@@ -2063,6 +2095,50 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .queue-list .queue-item { padding-left: 10px; }
 .download-queue-panel .empty-state { margin: 4px 0; color: var(--text-muted); }
 @media (max-width: 640px) {
+    .downloads-header { margin-bottom: 14px; }
+    .downloads-header h1 { font-size: 1.75rem; }
+    .downloads-summary {
+        display: flex;
+        gap: 8px;
+        margin-right: -12px;
+        padding-right: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+    }
+    .downloads-summary::-webkit-scrollbar { display: none; }
+    .downloads-summary-card {
+        flex: 0 0 116px;
+        min-height: 76px;
+        padding: 12px;
+        scroll-snap-align: start;
+        box-shadow: none;
+    }
+    .download-ingest-panel { padding: 10px; }
+    .download-ingest-form { flex-direction: column; }
+    .download-ingest-form input { width: 100%; font-size: 16px; }
+    .download-ingest-form .btn-primary { width: 100%; }
+    .download-history-filters { gap: 10px !important; padding: 12px !important; }
+    .download-history-filters .filter-tabs {
+        gap: 6px;
+        margin: 0 -12px;
+        padding: 0 12px 4px;
+    }
+    .download-history-filters .filter-tab {
+        flex: 0 0 auto;
+        min-height: 40px;
+        padding: 8px 11px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        background: var(--bg-surface-alt);
+        font-size: .82rem;
+    }
+    .download-history-filters .filter-tab.active {
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 12%, var(--bg-surface));
+    }
+    .download-history-search { flex-basis: auto; width: 100%; padding-bottom: 0; }
+    .download-history-search .search-input { font-size: 16px; }
     .download-queue-panel { padding: 14px; }
     .active-downloads-grid { grid-template-columns: 1fr; }
     .source-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
