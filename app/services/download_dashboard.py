@@ -40,7 +40,11 @@ def _job_columns():
                      DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at,
                      DownloadJob.reason_code, DownloadJob.reason_message, DownloadJob.failure_stage,
                      DownloadJob.provider, DownloadJob.retryable, DownloadJob.technical_detail,
-                     DownloadJob.error, DownloadJob.error_message, DownloadJob.source_provider)
+                     DownloadJob.error, DownloadJob.error_message, DownloadJob.source_provider,
+                     DownloadJob.pipeline_stage, DownloadJob.progress_percent,
+                     DownloadJob.heartbeat_at, DownloadJob.worker_name,
+                     DownloadJob.bytes_downloaded, DownloadJob.bytes_total,
+                     DownloadJob.transfer_rate_bps, DownloadJob.eta_seconds)
 
 
 def _legacy_reason(job: DownloadJob, status: str) -> tuple[str | None, str | None]:
@@ -139,6 +143,19 @@ def _stage(status: str) -> str:
             "failed": "Failed", "cancelled": "Cancelled", "skipped": "Skipped"}.get(normalized_status(status), "Unknown")
 
 
+def serialize_telemetry(job: DownloadJob) -> dict:
+    return {
+        "stage": job.pipeline_stage,
+        "progress": job.progress_percent,
+        "heartbeat_at": _timestamp(job.heartbeat_at),
+        "worker": job.worker_name,
+        "bytes_downloaded": job.bytes_downloaded,
+        "bytes_total": job.bytes_total,
+        "transfer_rate_bps": job.transfer_rate_bps,
+        "eta_seconds": job.eta_seconds,
+    }
+
+
 def download_details(job: DownloadJob) -> dict:
     events: list[tuple[datetime, int, dict]] = []
     if job.created_at is not None:
@@ -153,8 +170,10 @@ def download_details(job: DownloadJob) -> dict:
     events.sort(key=lambda item: (item[0], item[1]))
     outcome = serialize_outcome(job)
     return {"id": job.id, "task_id": job.task_id, "title": job.title, "artist": job.artist, "album": job.album,
-            "source": "YouTube Music" if job.source_provider == "youtube_music" else "Spotify", "status": status, "stage": _stage(status),
-            "progress": 100 if status == "completed" else None, "created_at": _timestamp(job.created_at),
+            "source": "YouTube Music" if job.source_provider == "youtube_music" else "Spotify", "status": status,
+            **serialize_telemetry(job),
+            "stage": job.pipeline_stage or _stage(status),
+            "progress": 100 if status == "completed" else job.progress_percent, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "finished_at": _timestamp(job.completed_at),
             "queue_wait_seconds": _duration_seconds(job.created_at, job.started_at),
             "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at), "retry_count": 0,
@@ -173,7 +192,7 @@ def get_download_snapshot(db: Session, *, queue_limit: int = QUEUE_LIMIT,
                           .order_by(DownloadJob.created_at.asc(), DownloadJob.id.asc()).limit(queue_limit)).all()
     active, queued, paused = queue("running"), queue("queued"), queue("paused")
     return {"event_type": "snapshot", "counts": download_counts(db),
-            "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "status": normalized_status(j.status), "progress": None, "stage": None, "worker_slot": None, "started_at": _timestamp(j.started_at)} for j in active],
+            "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "status": normalized_status(j.status), **serialize_telemetry(j), "worker_slot": j.worker_name, "started_at": _timestamp(j.started_at)} for j in active],
             "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(queued, 1)],
             "paused": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(paused, 1)],
             "jobs": history["items"], "history": history}

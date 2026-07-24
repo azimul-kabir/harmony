@@ -49,7 +49,19 @@
         </aside>
     </section>
     <section class="health-job-panel metadata-issues-panel" aria-labelledby="metadata-issues-title">
-        <div class="metadata-issues-header"><div><span class="library-eyebrow">Library intelligence</span><h2 id="metadata-issues-title">Metadata issues</h2><p id="metadata-score-detail">Diagnostic score pending analysis.</p></div><div class="metadata-issue-counts"><small id="metadata-severity-counts">Loading severity counts…</small><small id="metadata-rule-counts">Loading rule counts…</small></div></div>
+        <div class="metadata-issues-header">
+            <div class="metadata-issues-intro"><span class="library-eyebrow">Library intelligence</span><h2 id="metadata-issues-title">Metadata issues</h2><p id="metadata-score-detail">Diagnostic score pending analysis.</p></div>
+            <aside class="metadata-issue-summary" aria-label="Metadata issue summary">
+                <div class="metadata-summary-heading"><span>Issue breakdown</span><small>Included open records</small></div>
+                <div id="metadata-severity-counts" class="metadata-severity-grid" aria-live="polite">
+                    <button type="button" class="metadata-severity-chip severity-critical" data-metadata-severity-filter="critical"><span>Critical</span><strong data-metadata-severity-count="critical">—</strong></button>
+                    <button type="button" class="metadata-severity-chip severity-error" data-metadata-severity-filter="error"><span>Error</span><strong data-metadata-severity-count="error">—</strong></button>
+                    <button type="button" class="metadata-severity-chip severity-warning" data-metadata-severity-filter="warning"><span>Warning</span><strong data-metadata-severity-count="warning">—</strong></button>
+                    <button type="button" class="metadata-severity-chip severity-info" data-metadata-severity-filter="info"><span>Info</span><strong data-metadata-severity-count="info">—</strong></button>
+                </div>
+                <div id="metadata-rule-counts" class="metadata-rule-summary" aria-live="polite"><span class="metadata-rule-icon" aria-hidden="true">✓</span><div><strong>Waiting for analysis</strong><small>Rule patterns will appear here.</small></div></div>
+            </aside>
+        </div>
         <div class="library-filter-row metadata-issue-filters"><input id="metadata-search" type="search" placeholder="Search issues" aria-label="Search metadata issues"><select id="metadata-status" aria-label="Issue status"><option value="open">Open</option><option value="resolved">Resolved</option><option value="ignored">Ignored</option></select><select id="metadata-severity" aria-label="Issue severity"><option value="">All severities</option><option>critical</option><option>error</option><option>warning</option><option>info</option></select><select id="metadata-entity" aria-label="Issue entity"><option value="">Songs, albums &amp; artists</option><option value="song">Songs</option><option value="album">Albums</option><option value="artist">Artists</option></select></div>
         <div id="metadata-issues" class="health-check-list" aria-live="polite"><p>Loading metadata issues…</p></div>
     </section>

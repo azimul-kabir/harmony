@@ -38,7 +38,7 @@ def test_dashboard_download_trends_and_queue_health_are_bounded_and_aggregate_on
             DownloadJob(spotify_url="cancelled", title="job", artist="artist", status="cancelled", completed_at=datetime(2026, 7, 17, 8)),
             DownloadJob(spotify_url="old", title="job", artist="artist", status="completed", completed_at=datetime(2026, 7, 15, 8)),
             DownloadJob(spotify_url="queued", title="job", artist="artist", status="queued", created_at=datetime(2026, 7, 22, 11, 53)),
-            DownloadJob(spotify_url="running", title="job", artist="artist", status="running", created_at=datetime(2026, 7, 22, 10), started_at=datetime(2026, 7, 22, 10, 10)),
+            DownloadJob(spotify_url="running", title="job", artist="artist", status="running", created_at=datetime(2026, 7, 22, 10), started_at=datetime(2026, 7, 22, 10, 10), heartbeat_at=now),
             DownloadJob(spotify_url="paused", title="job", artist="artist", status="paused"),
         ])
         db.commit()
@@ -50,7 +50,7 @@ def test_dashboard_download_trends_and_queue_health_are_bounded_and_aggregate_on
         assert trends["success_rate"] == round(1 / 3, 3)
         assert trends["daily"][2] == {"date": "2026-07-18", "completed": 0, "failed": 0, "cancelled": 0}
         health = get_queue_health(db, now=now, configured_workers=4)
-        assert health == {"active_workers": 1, "configured_workers": 4, "utilization": 0.25, "queued_jobs": 1, "running_jobs": 1, "paused_jobs": 1, "oldest_queue_seconds": 420, "average_queue_wait_seconds": 450, "longest_running_seconds": 6600, "stalled": False}
+        assert health == {"active_workers": 1, "configured_workers": 4, "utilization": 0.25, "queued_jobs": 1, "running_jobs": 1, "paused_jobs": 1, "oldest_queue_seconds": 420, "average_queue_wait_seconds": 450, "longest_running_seconds": 6600, "stalled_jobs": 0, "stale_after_seconds": 30, "stalled": False}
 
 
 def test_queue_health_uses_null_durations_when_no_matching_jobs():
@@ -63,6 +63,45 @@ def test_queue_health_uses_null_durations_when_no_matching_jobs():
         assert health["average_queue_wait_seconds"] is None
         assert health["longest_running_seconds"] is None
         assert health["stalled"] is False
+        assert health["stalled_jobs"] == 0
+
+
+def test_queue_health_detects_only_expired_running_heartbeats():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    now = datetime(2026, 7, 22, 12)
+    with Session(engine) as db:
+        db.add_all(
+            [
+                DownloadJob(
+                    spotify_url="fresh",
+                    title="Fresh",
+                    artist="Artist",
+                    status="running",
+                    started_at=datetime(2026, 7, 22, 11, 50),
+                    heartbeat_at=datetime(2026, 7, 22, 11, 59, 50),
+                ),
+                DownloadJob(
+                    spotify_url="stale",
+                    title="Stale",
+                    artist="Artist",
+                    status="running",
+                    started_at=datetime(2026, 7, 22, 11, 40),
+                    heartbeat_at=datetime(2026, 7, 22, 11, 59),
+                ),
+                DownloadJob(
+                    spotify_url="legacy",
+                    title="Legacy",
+                    artist="Artist",
+                    status="running",
+                    started_at=datetime(2026, 7, 22, 11, 30),
+                ),
+            ]
+        )
+        db.commit()
+        health = get_queue_health(db, now=now, configured_workers=4)
+        assert health["stalled"] is True
+        assert health["stalled_jobs"] == 2
 from app.services.library_analytics import library_analytics
 
 

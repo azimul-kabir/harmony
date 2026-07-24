@@ -118,9 +118,11 @@ Waiting entries are ordered exactly as the download worker claims them: oldest
 `created_at`, then stable job ID. Running entries are ordered by `started_at`,
 then ID. Queue positions are supplied only for this bounded waiting order.
 The response intentionally excludes provider URLs, output paths, task payloads,
-filesystem metadata, and raw errors. Progress, transfer speed, byte counts,
-ETA, pipeline stage, and worker identities are omitted because Harmony does not
-persist reliable values for them. Failed history filtering includes cancelled
+filesystem metadata, and raw errors. Active downloads include persisted
+`progress`, `stage`, `heartbeat_at`, `worker`, `bytes_downloaded`,
+`bytes_total`, `transfer_rate_bps`, and `eta_seconds`. Optional values are
+`null` when the provider cannot measure them; clients must not infer missing
+byte progress or ETA. Failed history filtering includes cancelled
 jobs, matching the Dashboard attention link; `/downloads?status=cancelled`
 remains available for cancelled-only history.
 

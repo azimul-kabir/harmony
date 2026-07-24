@@ -25,7 +25,7 @@ def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
         "metadata_application_batches",
         "metadata_application_locks",
     } <= tables
-    assert revision == "20260723_0018"
+    assert revision == "20260724_0019"
 
     # A second bootstrap detects the existing database and is an Alembic no-op.
     database_init.init_db()
@@ -70,7 +70,7 @@ def test_existing_database_upgrades_without_precreating_future_tables(
         .scalar_one()
     )
     assert {"metadata_suggestions", "metadata_application_locks"} <= tables
-    assert revision == "20260723_0018"
+    assert revision == "20260724_0019"
 
 
 def test_existing_database_retries_interrupted_metadata_migration(
@@ -103,7 +103,7 @@ def test_existing_database_retries_interrupted_metadata_migration(
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
     )
-    assert revision == "20260723_0018"
+    assert revision == "20260724_0019"
 
 
 def test_existing_database_retries_interrupted_metadata_health_migration(
@@ -136,7 +136,7 @@ def test_existing_database_retries_interrupted_metadata_health_migration(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260723_0018"
+        == "20260724_0019"
     )
 
 
@@ -170,7 +170,7 @@ def test_existing_database_retries_interrupted_metadata_health_indexes_migration
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260723_0018"
+        == "20260724_0019"
     )
 
 
@@ -200,6 +200,7 @@ def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
 
     song_columns = {column["name"] for column in inspect(engine).get_columns("songs")}
     assert {
+        "cover_url",
         "musicbrainz_release_group_id",
         "musicbrainz_release_artist_id",
         "release_date",
@@ -209,7 +210,7 @@ def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260723_0018"
+        == "20260724_0019"
     )
 
 
@@ -273,5 +274,53 @@ def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260723_0018"
+        == "20260724_0019"
     )
+
+
+def test_stamped_database_repairs_legacy_download_columns(tmp_path, monkeypatch):
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-downloads.db'}")
+    with engine.begin() as connection:
+        database_init.Base.metadata.tables["songs"].create(bind=connection)
+        connection.exec_driver_sql(
+            "CREATE TABLE download_jobs ("
+            "id INTEGER PRIMARY KEY, spotify_url VARCHAR NOT NULL, "
+            "title VARCHAR NOT NULL, artist VARCHAR NOT NULL, "
+            "status VARCHAR NOT NULL, created_at DATETIME NOT NULL, "
+            "started_at DATETIME, completed_at DATETIME)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO download_jobs "
+            "(id, spotify_url, title, artist, status, created_at) "
+            "VALUES (1, 'source', 'Kept', 'Artist', 'failed', '2026-07-24')"
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO alembic_version VALUES ('20260724_0019')"
+        )
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+    columns = {
+        column["name"]
+        for column in inspect(engine).get_columns("download_jobs")
+    }
+    assert {
+        "cover_url",
+        "error_message",
+        "source_url",
+        "updated_at",
+        "pipeline_stage",
+        "progress_percent",
+        "heartbeat_at",
+        "worker_name",
+        "bytes_downloaded",
+        "bytes_total",
+        "transfer_rate_bps",
+        "eta_seconds",
+    } <= columns
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT updated_at FROM download_jobs WHERE id=1")
+        ).scalar_one() is not None

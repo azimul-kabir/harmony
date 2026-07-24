@@ -106,13 +106,22 @@ download KPI.
 
 `queue_health` is real-time aggregate state: active/configured worker
 utilization, queued/running/paused job counts, the oldest queued age, longest
-running age, and average creation-to-start wait for downloads started in the
-same bounded seven-day window. Empty measures are `null`, not guessed values.
-Harmony does not persist a download-progress heartbeat, so its `stalled` value
-is intentionally always `false`; `updated_at` is not treated as a heartbeat.
+running age, average creation-to-start wait for downloads started in the same
+bounded seven-day window, and the number of stalled jobs. Workers persist a
+heartbeat while a provider call is blocking. A running job is stalled when its
+heartbeat is older than the published `stale_after_seconds` threshold; legacy
+running rows without a heartbeat use their start time. `updated_at` is not
+treated as a heartbeat.
+
+Each running download may also publish provider-neutral telemetry: pipeline
+stage, bounded progress percentage, worker name, byte counts, transfer rate,
+and ETA. A provider that cannot measure a value leaves it `null`; the service
+and browser never synthesize byte progress, speed, or ETA. Terminal jobs retain
+their last heartbeat and stage for diagnostics while transient rate and ETA
+values are cleared.
 
 Both sections travel through the existing Dashboard SSE snapshot and expose
-only counts, durations, dates, and status-derived values. They never serialize
+only counts, durations, dates, bounded telemetry, and status-derived values. They never serialize
 download URLs, output paths, provider payloads, or errors.
 Download output paths and error diagnostics are deliberately excluded.
 

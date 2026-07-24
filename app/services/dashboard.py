@@ -17,6 +17,7 @@ from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
 from app.services.metadata_health import metadata_health
+from app.services.download_telemetry import STALE_HEARTBEAT_SECONDS
 
 
 DASHBOARD_TREND_DAYS = 7
@@ -63,11 +64,7 @@ def get_download_trends(db, *, now: datetime | None = None) -> dict:
 
 
 def get_queue_health(db, *, now: datetime | None = None, configured_workers: int | None = None) -> dict:
-    """Return real-time queue aggregates without exposing download details.
-
-    Harmony has no persisted per-download progress heartbeat, so stalled remains
-    false rather than guessing from `updated_at`, which is not a heartbeat.
-    """
+    """Return real-time queue aggregates using the persisted worker heartbeat."""
     now = _as_naive_utc(now or datetime.now(UTC))
     configured_workers = configured_workers if configured_workers is not None else get_settings().max_parallel_downloads
     recent = now - timedelta(days=DASHBOARD_TREND_DAYS)
@@ -83,6 +80,19 @@ def get_queue_health(db, *, now: datetime | None = None, configured_workers: int
     # SQLite stores datetime subtraction as a non-portable value.  Calculate
     # wait seconds in SQL using Julian days, still over only the bounded window.
     wait = db.scalar(select(func.avg((func.julianday(DownloadJob.started_at) - func.julianday(DownloadJob.created_at)) * 86400)).where(DownloadJob.started_at.is_not(None), DownloadJob.created_at.is_not(None), DownloadJob.started_at >= recent))
+    stale_before = now - timedelta(seconds=STALE_HEARTBEAT_SECONDS)
+    stalled_jobs = db.scalar(
+        select(func.count(DownloadJob.id)).where(
+            DownloadJob.status == JobStatus.RUNNING.value,
+            (
+                (DownloadJob.heartbeat_at < stale_before)
+                | (
+                    DownloadJob.heartbeat_at.is_(None)
+                    & (DownloadJob.started_at < stale_before)
+                )
+            ),
+        )
+    ) or 0
     active, queued, paused, oldest, longest = row
     oldest_age = max(0, round((now - _as_naive_utc(oldest)).total_seconds())) if oldest else None
     longest_age = max(0, round((now - _as_naive_utc(longest)).total_seconds())) if longest else None
@@ -92,7 +102,9 @@ def get_queue_health(db, *, now: datetime | None = None, configured_workers: int
             "queued_jobs": int(queued), "running_jobs": active, "paused_jobs": int(paused),
             "oldest_queue_seconds": oldest_age,
             "average_queue_wait_seconds": max(0, round(float(wait))) if wait is not None else None,
-            "longest_running_seconds": longest_age, "stalled": False}
+            "longest_running_seconds": longest_age, "stalled_jobs": int(stalled_jobs),
+            "stale_after_seconds": STALE_HEARTBEAT_SECONDS,
+            "stalled": bool(stalled_jobs)}
 
 
 def get_dashboard_stats(db):

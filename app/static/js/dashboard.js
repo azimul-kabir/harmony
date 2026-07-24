@@ -91,7 +91,11 @@ function renderQueueHealth(health) {
     setText("queue-longest-running", formatQueueDuration(health.longest_running_seconds));
     setText("queue-average-wait", formatQueueDuration(health.average_queue_wait_seconds));
     const stalled = document.getElementById("queue-stalled");
-    if (stalled) { stalled.textContent = health.stalled ? "Stalled" : "Healthy"; stalled.classList.toggle("is-stalled", Boolean(health.stalled)); }
+    if (stalled) {
+        const stalledJobs = Number(health.stalled_jobs || 0);
+        stalled.textContent = health.stalled ? `Stalled (${stalledJobs})` : "Healthy";
+        stalled.classList.toggle("is-stalled", Boolean(health.stalled));
+    }
 }
 
 function renderAlbumInsight(id, album, detail) {
@@ -287,65 +291,92 @@ function renderCollections(collections) {
     });
 }
 
-// Inside app/static/js/dashboard.js, update renderWorkers() and renderActivity():
-
 function renderWorkers(workers, maxWorkers) {
     const container = document.getElementById("workers-grid");
     const badge = document.getElementById("worker-count-badge");
     if (!container) return;
 
-    badge.textContent = `${workers.length} / ${maxWorkers} Active`;
-    
-    if (workers.length > 0) {
-        badge.classList.remove("badge-queued");
-        badge.classList.add("badge-running");
-    } else {
-        badge.classList.remove("badge-running");
-        badge.classList.add("badge-queued");
+    if (badge) {
+        badge.textContent = `${workers.length} / ${maxWorkers} Active`;
+        badge.classList.toggle("badge-running", workers.length > 0);
+        badge.classList.toggle("badge-queued", workers.length === 0);
     }
 
-    let html = "";
+    const fragment = document.createDocumentFragment();
     for (let i = 0; i < maxWorkers; i++) {
+        const card = document.createElement("article");
+        card.className = "worker-card";
+        const header = document.createElement("div");
+        header.className = "worker-header";
+        const slot = document.createElement("span");
+        const status = document.createElement("span");
+        header.append(slot, status);
+        card.appendChild(header);
+
         if (i < workers.length) {
             const worker = workers[i];
-            
-            // NEW: Artwork HTML Generation
-            const coverImg = worker.cover_url
-                ? `<img src="${worker.cover_url}" alt="Cover" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`
-                : `<div style="width: 48px; height: 48px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--border-color);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
+            slot.textContent = worker.worker || `Worker ${i + 1}`;
+            status.className = "worker-status active";
+            status.textContent = String(worker.stage || "working").replaceAll("_", " ");
 
-            html += `
-                <div class="worker-card">
-                    <div class="worker-header" style="margin-bottom: 12px;">
-                        <span>Thread ${i + 1}</span>
-                        <span class="worker-status active"><span class="spinner" style="width:10px;height:10px;border-width:2px;margin:0;"></span></span>
-                    </div>
-                    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
-                        ${coverImg}
-                        <div style="min-width: 0;">
-                            <div class="worker-track" title="${worker.title ?? "Unknown"}">${worker.title ?? "Unknown Title"}</div>
-                            <div class="worker-artist" title="${worker.artist ?? "Unknown"}">${worker.artist ?? "Unknown Artist"}</div>
-                        </div>
-                    </div>
-                    <div class="task-progress-bar" style="margin-top:auto;">
-                        <div class="task-progress-fill worker-pulse"></div>
-                    </div>
-                </div>
-            `;
+            const media = document.createElement("div");
+            media.className = "worker-media";
+            const artwork = worker.cover_url
+                ? document.createElement("img")
+                : document.createElement("div");
+            artwork.className = worker.cover_url ? "worker-artwork" : "worker-artwork worker-artwork-empty";
+            if (worker.cover_url) {
+                artwork.src = worker.cover_url;
+                artwork.alt = "";
+            } else {
+                artwork.textContent = "♫";
+                artwork.setAttribute("aria-hidden", "true");
+            }
+            const copy = document.createElement("div");
+            copy.className = "worker-copy";
+            const title = document.createElement("div");
+            title.className = "worker-track";
+            title.textContent = worker.title || "Unknown Title";
+            title.title = title.textContent;
+            const artist = document.createElement("div");
+            artist.className = "worker-artist";
+            artist.textContent = worker.artist || "Unknown Artist";
+            artist.title = artist.textContent;
+            copy.append(title, artist);
+            media.append(artwork, copy);
+            card.appendChild(media);
+
+            const progress = document.createElement("div");
+            progress.className = "task-progress-bar";
+            const fill = document.createElement("div");
+            fill.className = "task-progress-fill";
+            const measured = worker.progress !== null && worker.progress !== undefined;
+            if (measured) fill.style.width = `${Math.max(0, Math.min(100, Number(worker.progress)))}%`;
+            else fill.classList.add("worker-pulse");
+            progress.appendChild(fill);
+            card.appendChild(progress);
+
+            const telemetry = document.createElement("small");
+            telemetry.className = "worker-telemetry";
+            const facts = [];
+            if (measured) facts.push(`${Math.round(Number(worker.progress))}%`);
+            if (worker.transfer_rate_bps) facts.push(`${formatBytes(worker.transfer_rate_bps)}/s`);
+            if (worker.eta_seconds !== null && worker.eta_seconds !== undefined) facts.push(`ETA ${formatQueueDuration(worker.eta_seconds)}`);
+            telemetry.textContent = facts.join(" · ") || "Heartbeat active";
+            card.appendChild(telemetry);
         } else {
-            html += `
-                <div class="worker-card idle">
-                    <div class="worker-header">
-                        <span>Thread ${i + 1}</span>
-                        <span class="worker-status">Waiting</span>
-                    </div>
-                    <div class="worker-track" style="color: var(--text-muted);">Idle</div>
-                    <div class="worker-artist">-</div>
-                </div>
-            `;
+            card.classList.add("idle");
+            slot.textContent = `Worker ${i + 1}`;
+            status.className = "worker-status";
+            status.textContent = "Waiting";
+            const idle = document.createElement("div");
+            idle.className = "worker-track worker-idle-label";
+            idle.textContent = "Idle";
+            card.appendChild(idle);
         }
+        fragment.appendChild(card);
     }
-    container.innerHTML = html;
+    container.replaceChildren(fragment);
 }
 
 function activityDetails(status) {

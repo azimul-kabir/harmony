@@ -452,6 +452,16 @@ class DownloadJob(Base):
     )
     technical_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Live telemetry is intentionally provider-neutral.  Providers may leave
+    # byte-oriented values null when they cannot report them reliably.
+    pipeline_stage: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    progress_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    worker_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    bytes_downloaded: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bytes_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transfer_rate_bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    eta_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

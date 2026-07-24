@@ -85,11 +85,28 @@ async function loadMetadataIssues() {
     const summary = await healthJson("/api/library/health/metadata/summary");
     document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issue records · ${summary.score.inputs.ignored_issues} ignored historical records (diagnostic only). Warnings reduce this score.`;
     const severityCounts = Object.fromEntries((summary.counts.severity || []).map((row) => [row.value, row.count]));
-    document.getElementById("metadata-severity-counts").textContent = ["critical", "error", "warning", "info"].map((key) => `${key}: ${severityCounts[key] || 0}`).join(" · ");
+    document.querySelectorAll("[data-metadata-severity-count]").forEach((count) => {
+        count.textContent = Number(severityCounts[count.dataset.metadataSeverityCount] || 0).toLocaleString();
+    });
     const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value))).slice(0, 8);
-    document.getElementById("metadata-rule-counts").textContent = ruleCounts.length
-        ? `Most frequent included rule: ${ruleCounts[0].value.replaceAll("_", " ")} (${ruleCounts[0].count} issue records)${ruleCounts.length > 1 ? ` · +${ruleCounts.length - 1} more rules` : ""}`
-        : "No rule counts yet.";
+    const ruleSummary = document.getElementById("metadata-rule-counts");
+    ruleSummary.classList.toggle("is-empty", !ruleCounts.length);
+    const ruleIcon = document.createElement("span");
+    ruleIcon.className = "metadata-rule-icon";
+    ruleIcon.setAttribute("aria-hidden", "true");
+    ruleIcon.textContent = ruleCounts.length ? "↗" : "✓";
+    const ruleCopy = document.createElement("div");
+    const ruleTitle = document.createElement("strong");
+    const ruleDetail = document.createElement("small");
+    if (ruleCounts.length) {
+        ruleTitle.textContent = ruleCounts[0].value.replaceAll("_", " ");
+        ruleDetail.textContent = `${Number(ruleCounts[0].count).toLocaleString()} issue records${ruleCounts.length > 1 ? ` · ${ruleCounts.length - 1} more rules` : ""}`;
+    } else {
+        ruleTitle.textContent = "No recurring rule patterns";
+        ruleDetail.textContent = "Run metadata analysis to populate this summary.";
+    }
+    ruleCopy.append(ruleTitle, ruleDetail);
+    ruleSummary.replaceChildren(ruleIcon, ruleCopy);
 }
 
 async function loadLibraryJobs() {
@@ -230,7 +247,23 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
 document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);
-document.getElementById("metadata-severity")?.addEventListener("change", loadMetadataIssues);
+document.getElementById("metadata-severity")?.addEventListener("change", (event) => {
+    document.querySelectorAll("[data-metadata-severity-filter]").forEach((chip) => {
+        chip.classList.toggle("is-selected", chip.dataset.metadataSeverityFilter === event.target.value);
+    });
+    loadMetadataIssues();
+});
+document.querySelectorAll("[data-metadata-severity-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const select = document.getElementById("metadata-severity");
+        const next = button.dataset.metadataSeverityFilter;
+        select.value = select.value === next ? "" : next;
+        document.querySelectorAll("[data-metadata-severity-filter]").forEach((chip) => {
+            chip.classList.toggle("is-selected", chip.dataset.metadataSeverityFilter === select.value);
+        });
+        loadMetadataIssues();
+    });
+});
 document.getElementById("metadata-entity")?.addEventListener("change", loadMetadataIssues);
 let metadataSearchTimer;
 document.getElementById("metadata-search")?.addEventListener("input", () => {

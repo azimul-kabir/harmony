@@ -127,3 +127,41 @@ def test_discovery_migration_preserves_populated_metadata_and_jobs(tmp_path):
     result_indexes={x["name"] for x in inspect(engine).get_indexes("metadata_match_results")}
     assert {"ix_metadata_discoveries_entity","ix_metadata_discoveries_filter","ix_metadata_discoveries_job"}<=discovery_indexes
     assert {"ix_metadata_match_results_ranking","ix_metadata_match_results_confidence","uq_metadata_match_result_provider"}<=result_indexes
+
+
+def test_download_telemetry_migrates_existing_download_jobs(tmp_path):
+    database = tmp_path / "pre-telemetry.db"
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE download_jobs ("
+            "id INTEGER PRIMARY KEY, status VARCHAR NOT NULL, "
+            "title VARCHAR NOT NULL, artist VARCHAR NOT NULL)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO download_jobs VALUES (1, 'running', 'Kept', 'Artist')"
+        )
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.stamp(config, "20260723_0018")
+        command.upgrade(config, "head")
+    download_columns = {
+        column["name"] for column in inspect(engine).get_columns("download_jobs")
+    }
+    assert {
+        "pipeline_stage",
+        "progress_percent",
+        "heartbeat_at",
+        "worker_name",
+        "bytes_downloaded",
+        "bytes_total",
+        "transfer_rate_bps",
+        "eta_seconds",
+    } <= download_columns
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT title FROM download_jobs WHERE id=1")
+        ).scalar_one() == "Kept"

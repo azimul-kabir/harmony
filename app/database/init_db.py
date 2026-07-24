@@ -12,10 +12,28 @@ from app.database import models  # noqa: F401
 
 
 _METADATA_APPLICATION_SONG_COLUMNS = (
+    # ``cover_url`` predates the Alembic chain and can be absent from an
+    # upgraded legacy database even though current ORM queries select it.
+    ("cover_url", "VARCHAR"),
     ("musicbrainz_release_group_id", "VARCHAR"),
     ("musicbrainz_release_artist_id", "VARCHAR"),
     ("release_date", "VARCHAR(10)"),
     ("original_release_date", "VARCHAR(10)"),
+)
+
+_DOWNLOAD_JOB_COMPAT_COLUMNS = (
+    ("cover_url", "VARCHAR"),
+    ("error_message", "VARCHAR"),
+    ("source_url", "VARCHAR"),
+    ("updated_at", "DATETIME"),
+    ("pipeline_stage", "VARCHAR(40)"),
+    ("progress_percent", "INTEGER"),
+    ("heartbeat_at", "DATETIME"),
+    ("worker_name", "VARCHAR(80)"),
+    ("bytes_downloaded", "INTEGER"),
+    ("bytes_total", "INTEGER"),
+    ("transfer_rate_bps", "INTEGER"),
+    ("eta_seconds", "INTEGER"),
 )
 
 
@@ -41,6 +59,38 @@ def _repair_stamped_metadata_application_schema(connection) -> None:
     ):
         if name not in indexes:
             connection.execute(text(f"CREATE INDEX {name} ON songs ({column})"))
+
+
+def _repair_stamped_download_schema(connection) -> None:
+    """Reconcile additive DownloadJob fields missing from legacy databases."""
+    inspector = inspect(connection)
+    if "download_jobs" not in inspector.get_table_names():
+        return
+    columns = {
+        column["name"] for column in inspector.get_columns("download_jobs")
+    }
+    for name, column_type in _DOWNLOAD_JOB_COMPAT_COLUMNS:
+        if name not in columns:
+            connection.execute(
+                text(f"ALTER TABLE download_jobs ADD COLUMN {name} {column_type}")
+            )
+    connection.execute(
+        text(
+            "UPDATE download_jobs SET updated_at = "
+            "COALESCE(updated_at, completed_at, started_at, created_at) "
+            "WHERE updated_at IS NULL"
+        )
+    )
+    indexes = {
+        index["name"] for index in inspect(connection).get_indexes("download_jobs")
+    }
+    if "ix_download_jobs_heartbeat_at" not in indexes:
+        connection.execute(
+            text(
+                "CREATE INDEX ix_download_jobs_heartbeat_at "
+                "ON download_jobs (heartbeat_at)"
+            )
+        )
 
 
 def init_db() -> None:
@@ -74,3 +124,4 @@ def init_db() -> None:
         # incomplete 0014 migration. Alembic cannot replay a revision already
         # recorded as applied, so reconcile the known additive Song fields.
         _repair_stamped_metadata_application_schema(connection)
+        _repair_stamped_download_schema(connection)

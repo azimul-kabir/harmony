@@ -104,7 +104,22 @@ async def stream_dashboard_data(request: Request):
                 )
                 # NEW: Add cover_url
                 workers = [
-                    {"title": j.title, "artist": j.artist, "cover_url": j.cover_url}
+                    {
+                        "id": j.id,
+                        "title": j.title,
+                        "artist": j.artist,
+                        "cover_url": j.cover_url,
+                        "stage": j.pipeline_stage,
+                        "progress": j.progress_percent,
+                        "heartbeat_at": (
+                            j.heartbeat_at.isoformat() if j.heartbeat_at else None
+                        ),
+                        "worker": j.worker_name,
+                        "bytes_downloaded": j.bytes_downloaded,
+                        "bytes_total": j.bytes_total,
+                        "transfer_rate_bps": j.transfer_rate_bps,
+                        "eta_seconds": j.eta_seconds,
+                    }
                     for j in running_jobs
                 ]
 

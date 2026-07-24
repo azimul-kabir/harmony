@@ -18,6 +18,7 @@ from app.domain.task import TaskStatus
 from app.domain.track import Track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
+from app.services.download_telemetry import heartbeat_ticker, update_telemetry
 from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
@@ -102,9 +103,17 @@ def process_job(
         
     job.error = None
     job.error_message = None
-    db.commit()
+    update_telemetry(
+        db,
+        job,
+        stage="preparing",
+        progress_percent=5,
+        worker_name=threading.current_thread().name,
+    )
     
     output_file = None
+    ticker = heartbeat_ticker(job.id)
+    ticker.__enter__()
     try:
         # Build the Track domain object, carrying the cover_url and extended metadata forward
         track = Track(
@@ -125,6 +134,7 @@ def process_job(
         )
         # A queued job may predate genre support; resolve safely at execution.
         if not track.genre:
+            update_telemetry(db, job, stage="metadata", progress_percent=10)
             # Enrichment is optional; a provider outage must not fail audio.
             try:
                 enrich_tracks([track], job_id=job.id)
@@ -135,9 +145,11 @@ def process_job(
                 job.genre = track.genre
                 job.genre_provenance = track.genre_provenance
                 db.commit()
+        update_telemetry(db, job, stage="downloading", progress_percent=None)
         output_file = download_track(track, job.id)
         if _cancelled(db, job, output_file):
             return
+        update_telemetry(db, job, stage="tagging", progress_percent=80)
         if track.genre:
             try:
                 write_genres(output_file, track.genre.split(";"))
@@ -146,6 +158,7 @@ def process_job(
         if _cancelled(db, job, output_file):
             return
         
+        update_telemetry(db, job, stage="importing", progress_percent=90)
         library_file = import_downloaded_track(
             db=db,
             downloaded_file=output_file,
@@ -210,6 +223,8 @@ def process_job(
         _finish_with_outcome(db, job, JobStatus.SKIPPED if isinstance(outcome, DownloadSkipped) else JobStatus.FAILED, outcome)
         if not isinstance(outcome, DownloadSkipped):
             logger.exception("Job #{} failed", job.id)
+    finally:
+        ticker.__exit__(None, None, None)
 
 
 def _record_outcome(db, job, status, code, message, stage, provider, retryable, technical_detail=None):

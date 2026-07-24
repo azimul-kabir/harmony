@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.models import DownloadJob, Task
 from app.domain.download import JobStatus
 from app.domain.task import TaskStatus
+from app.services.download_telemetry import utcnow_naive
 
 
 def create_job(
@@ -112,6 +113,9 @@ def claim_next_job(
 
         job.status = JobStatus.RUNNING.value
         job.started_at = datetime.now(UTC)
+        job.heartbeat_at = utcnow_naive()
+        job.pipeline_stage = "claimed"
+        job.progress_percent = 0
 
         db.commit()
         db.refresh(job)
@@ -140,6 +144,11 @@ def update_status(
         JobStatus.CANCELLED, # Tracks completion time when manually aborted
     ):
         job.completed_at = datetime.now(UTC)
+        job.heartbeat_at = utcnow_naive()
+        job.pipeline_stage = status.value
+        job.progress_percent = 100 if status == JobStatus.COMPLETED else None
+        job.eta_seconds = None
+        job.transfer_rate_bps = None
 
     db.commit()
     db.refresh(job)
@@ -165,5 +174,13 @@ def recover_running_jobs(
     for job in running_jobs:
         job.status = JobStatus.QUEUED.value
         job.started_at = None
+        job.heartbeat_at = None
+        job.pipeline_stage = None
+        job.progress_percent = None
+        job.worker_name = None
+        job.bytes_downloaded = None
+        job.bytes_total = None
+        job.transfer_rate_bps = None
+        job.eta_seconds = None
 
     db.commit()
