@@ -15,6 +15,36 @@ function filterPlaylists() {
 
 search?.addEventListener("input", filterPlaylists);
 
+async function generateAutoPlaylist(button) {
+    const rule = button.dataset.autoRule;
+    const limitInput = document.querySelector(`[data-auto-limit="${CSS.escape(rule)}"]`);
+    const limit = Number(limitInput?.value || 50);
+    const status = document.querySelector(`[data-auto-status="${CSS.escape(rule)}"]`);
+    button.disabled = true;
+    button.textContent = "Generating…";
+    if (status) status.textContent = "Selecting songs and exporting M3U…";
+    try {
+        const response = await fetch(`/api/playlists/auto/${encodeURIComponent(rule)}/generate`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({limit, enabled: true}),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || "Auto-playlist could not be generated.");
+        if (status) status.textContent = `${payload.exported_count} songs exported · ${payload.limit} song limit`;
+        button.textContent = "Generated";
+        window.setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+        if (status) status.textContent = error.message;
+        button.disabled = false;
+        button.textContent = "Try again";
+    }
+}
+
+document.querySelectorAll(".auto-playlist-generate, .auto-playlist-refresh").forEach(button => {
+    button.addEventListener("click", () => generateAutoPlaylist(button));
+});
+
 document.querySelectorAll(".playlist-sync-btn").forEach(button => {
     button.addEventListener("click", async () => {
         button.disabled = true;

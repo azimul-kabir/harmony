@@ -7,6 +7,40 @@
     <button id="scan-navidrome" class="btn-secondary" type="button">↻ Scan Navidrome</button>
 </div>
 
+<section class="panel auto-playlists-panel" aria-labelledby="auto-playlists-title">
+    <div class="auto-playlists-heading">
+        <div>
+            <span class="library-eyebrow">Dynamic M3U exports</span>
+            <h2 id="auto-playlists-title">Auto-playlists</h2>
+            <p>Harmony rebuilds these from your Library Index. Available playlists default to 50 songs.</p>
+        </div>
+    </div>
+    <div class="auto-playlists-grid">
+        {% for item in auto_playlists %}
+        <article class="auto-playlist-card{% if not item.available %} is-unavailable{% endif %}">
+            <div>
+                <strong>{{ item.name }}</strong>
+                <span>{{ item.description }}</span>
+            </div>
+            {% if item.available %}
+            <label>Song limit
+                <input type="number" min="1" max="500" value="{{ item.limit }}" data-auto-limit="{{ item.id }}">
+            </label>
+            <button type="button" class="btn-primary auto-playlist-generate" data-auto-rule="{{ item.id }}">
+                {{ 'Refresh playlist' if item.playlist_id else 'Create playlist' }}
+            </button>
+            <small data-auto-status="{{ item.id }}">
+                {% if item.playlist_id %}Enabled · {{ item.limit }} song limit{% else %}Ready to create{% endif %}
+            </small>
+            {% else %}
+            <small>{{ item.unavailable_reason }}</small>
+            <button type="button" class="btn-secondary" disabled>Coming next</button>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
 {% if playlists %}
 <div class="playlist-toolbar panel">
     <input id="playlist-search" class="search-input" type="search" placeholder="Filter playlists…" autocomplete="off">
@@ -26,7 +60,9 @@
     <div class="source-card playlist-card" data-playlist-name="{{ p.name|lower }}">
         <div class="source-header">
             <h3>🎵 {{ p.name }}</h3>
-            {% if card.exported_count == p.track_count %}
+            {% if p.playlist_kind == 'smart' %}
+                <span class="badge badge-running">Auto</span>
+            {% elif card.exported_count == p.track_count %}
                 <span class="badge badge-completed">Ready</span>
             {% elif card.exported_count %}
                 <span class="badge playlist-partial">Partial</span>
@@ -61,12 +97,17 @@
         </div>
         
         <div class="source-actions playlist-actions">
+            {% if p.playlist_kind == 'smart' %}
+            <button type="button" class="btn-secondary auto-playlist-refresh" data-auto-rule="{{ p.smart_rule }}">↻ Refresh auto-playlist</button>
+            {% endif %}
             {% if card.source %}
             <button class="btn-secondary playlist-sync-btn" data-source-id="{{ card.source.id }}">↻ Resync</button>
             {% endif %}
+            {% if p.playlist_kind != 'smart' %}
             <a href="{{ card.source.spotify_url if card.source else 'https://open.spotify.com/playlist/' ~ p.spotify_id }}" target="_blank" rel="noopener" class="btn-secondary">
                 Open Spotify
             </a>
+            {% endif %}
             <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary playlist-download-link">
                 Download M3U
             </a>

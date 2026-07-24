@@ -495,6 +495,10 @@ class Playlist(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String, nullable=True)
     owner: Mapped[str | None] = mapped_column(String, nullable=True)
+    playlist_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="source", index=True)
+    smart_rule: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True, index=True)
+    smart_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    smart_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
     track_count: Mapped[int] = mapped_column(Integer, default=0)
     navidrome_playlist_id: Mapped[str | None] = mapped_column(
         String, nullable=True, unique=True, index=True

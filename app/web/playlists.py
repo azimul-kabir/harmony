@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.database.models import Playlist, SyncSource
 from app.services.playlist_manager import count_m3u_entries, playlist_file_path
+from app.services.auto_playlists import definitions as auto_playlist_definitions
 from app.web.templates import templates, template_context
 
 router = APIRouter(tags=["web"])
@@ -33,5 +34,6 @@ def playlists_page(request: Request, db: Session = Depends(get_db)):
             request=request, 
             page="playlists",
             playlists=playlist_cards,
+            auto_playlists=auto_playlist_definitions(db),
         ),
     )

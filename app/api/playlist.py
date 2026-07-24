@@ -14,6 +14,7 @@ from app.services.comparison import compare_with_library
 from app.services.playlist import import_playlist
 from app.services.playlist_download import download_playlist
 from app.services.playlist_manager import playlist_file_path
+from app.services import auto_playlists
 
 router = APIRouter(
     prefix="/api/playlists",
@@ -22,6 +23,35 @@ router = APIRouter(
 
 class PlaylistDownloadRequest(BaseModel):
     url: str
+
+
+class AutoPlaylistRequest(BaseModel):
+    limit: int = 50
+    enabled: bool = True
+
+
+@router.get("/auto/definitions")
+def auto_playlist_definitions(db: Session = Depends(get_db)):
+    return auto_playlists.definitions(db)
+
+
+@router.post("/auto/{rule_id}/generate")
+def generate_auto_playlist(
+    rule_id: str,
+    request: AutoPlaylistRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        return auto_playlists.generate(
+            db,
+            rule_id,
+            limit=request.limit,
+            enabled=request.enabled,
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Auto-playlist definition not found.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.get("/{playlist_id}/tracks")
