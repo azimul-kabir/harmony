@@ -930,6 +930,11 @@ const bulkActions = {
         message: "This permanently removes the selected audio files. Their Library records remain available for missing-file detection.",
         confirm: "Delete files",
     },
+    forget_missing: {
+        title: "Forget selected missing records?",
+        message: "This permanently removes the selected canonical Library records and their missing-file health warnings. No audio or artwork files will be deleted.",
+        confirm: "Forget records",
+    },
     move: {
         title: "Move selected songs?",
         message: "Each song keeps its filename and Library identity.",
@@ -1003,7 +1008,10 @@ function showBulkDialog(operation) {
     document.getElementById("library-bulk-dialog-message").textContent =
         `${action.message} ${pluralize(libraryState.selectedSongs.size, "song")} selected.`;
     document.getElementById("library-bulk-confirm").textContent = action.confirm;
-    document.getElementById("library-bulk-confirm").classList.toggle("library-danger-button", operation === "delete");
+    document.getElementById("library-bulk-confirm").classList.toggle(
+        "library-danger-button",
+        ["delete", "forget_missing"].includes(operation),
+    );
     optionWrap.hidden = !action.label;
     if (action.label) {
         document.getElementById("library-bulk-option-label").textContent = action.label;
@@ -1222,7 +1230,7 @@ document.getElementById("btn-rescan").addEventListener("click", async (event) =>
 function connectLibraryEvents() {
     if (!("EventSource" in window)) return;
     const events = new EventSource("/api/library/events");
-    ["library.track.added", "library.track.updated", "library.track.missing", "library.track.renamed"].forEach((type) => {
+    ["library.track.added", "library.track.updated", "library.track.missing", "library.track.renamed", "library.track.forgotten"].forEach((type) => {
         events.addEventListener(type, () => {
             clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => loadLibraryData({ preserveState: true }), 500);
@@ -1250,6 +1258,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (requestedAvailability === "missing") {
         libraryState.requestedAvailability = requestedAvailability;
         libraryState.view = "songs";
+        document.getElementById("library-bulk-forget-missing").hidden = false;
     }
     document.getElementById("library-sort").value = libraryState.sort;
     updateFilterControls();

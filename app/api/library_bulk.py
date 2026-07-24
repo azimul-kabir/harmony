@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/library/bulk", tags=["library", "tasks"])
 class BulkOperationRequest(BaseModel):
     operation: Literal[
         "delete",
+        "forget_missing",
         "move",
         "rename",
         "refresh_metadata",

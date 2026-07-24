@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.database.models import Artwork, BulkOperationItem, Song
 from app.database.session import SessionLocal
 from app.services.library_bulk import LibraryBulkWorker, create_bulk_task
+from app.services.library_health import library_health
 
 
 def _songs(db, root: Path, count: int = 2):
@@ -216,6 +217,128 @@ def test_bulk_delete_rejects_path_outside_music_root(tmp_path):
 
         assert outside.read_bytes() == b"outside"
         assert song.availability_status == "available"
+
+
+def test_bulk_forget_removes_only_missing_record_and_health_projection(
+    tmp_path, monkeypatch
+):
+    music = tmp_path / "music"
+    album = music / "Artist" / "Album"
+    album.mkdir(parents=True)
+    sibling = album / "02 - Sibling.mp3"
+    sibling.write_bytes(b"sibling")
+
+    with SessionLocal() as db:
+        song = _songs(db, album, 1)[0]
+        song_id = song.id
+        artwork = Artwork(
+            checksum="b" * 64,
+            cache_path=str(tmp_path / "shared-cover.jpg"),
+            source="remote",
+            mime_type="image/jpeg",
+            file_size=1,
+        )
+        other = Song(
+            path=str(sibling),
+            filename=sibling.name,
+            artist="Artist",
+            title="Sibling",
+            availability_status="available",
+            artwork_status="remote",
+            download_source="filesystem",
+            artwork=artwork,
+        )
+        song.artwork = artwork
+        song.artwork_status = "remote"
+        Path(song.path).unlink()
+        song.availability_status = "missing"
+        db.add(other)
+        db.commit()
+        artwork_id = artwork.id
+        assert library_health.calculate(db)["checks"][3]["count"] == 1
+        indexed = []
+        monkeypatch.setattr(
+            "app.services.library_bulk.library_search.index_song",
+            lambda _db, indexed_song_id: indexed.append(indexed_song_id),
+        )
+        worker = LibraryBulkWorker()
+        worker.settings = SimpleNamespace(
+            music_path=str(music),
+            download_path=str(tmp_path),
+        )
+        task = create_bulk_task(
+            db,
+            operation="forget_missing",
+            song_ids=[song_id],
+        )
+
+        worker.process_task(db, task)
+        db.refresh(task)
+        item = db.scalar(
+            select(BulkOperationItem).where(BulkOperationItem.task_id == task.id)
+        )
+
+        assert task.status == "completed"
+        assert task.completed_items == 1
+        assert task.failed_items == 0
+        assert item.status == "completed"
+        assert item.song_id is None
+        assert db.get(Song, song_id) is None
+        assert db.get(Artwork, artwork_id) is not None
+        assert db.get(Song, other.id).artwork_id == artwork_id
+        assert library_health.calculate(db)["checks"][3]["count"] == 0
+        assert indexed == [song_id]
+        assert sibling.read_bytes() == b"sibling"
+        assert album.is_dir()
+
+
+def test_bulk_forget_rejects_available_record(tmp_path):
+    music = tmp_path / "music"
+    music.mkdir()
+    with SessionLocal() as db:
+        song = _songs(db, music, 1)[0]
+
+        with pytest.raises(ValueError, match="already marked missing"):
+            create_bulk_task(
+                db,
+                operation="forget_missing",
+                song_ids=[song.id],
+            )
+
+        assert Path(song.path).is_file()
+        assert db.get(Song, song.id) is not None
+
+
+def test_bulk_forget_fails_if_missing_file_reappears(tmp_path):
+    music = tmp_path / "music"
+    music.mkdir()
+    with SessionLocal() as db:
+        song = _songs(db, music, 1)[0]
+        song_id = song.id
+        song.availability_status = "missing"
+        db.commit()
+        worker = LibraryBulkWorker()
+        worker.settings = SimpleNamespace(
+            music_path=str(music),
+            download_path=str(tmp_path),
+        )
+        task = create_bulk_task(
+            db,
+            operation="forget_missing",
+            song_ids=[song_id],
+        )
+
+        worker.process_task(db, task)
+        db.refresh(task)
+        item = db.scalar(
+            select(BulkOperationItem).where(BulkOperationItem.task_id == task.id)
+        )
+
+        assert task.status == "failed"
+        assert task.failed_items == 1
+        assert item.status == "failed"
+        assert Path(song.path).is_file()
+        assert db.get(Song, song_id) is not None
 
 
 def test_bulk_fetch_artwork_uses_musicbrainz_release_id(tmp_path, monkeypatch):

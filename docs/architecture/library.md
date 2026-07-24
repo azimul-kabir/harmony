@@ -1332,9 +1332,9 @@ progress record and `bulk_operation_items` stores the status, original path,
 result path, and error for every selected song. This keeps progress and partial
 failures inspectable without coupling the Library UI to worker threads.
 
-Supported operations are delete, move, rename, metadata refresh, artwork cache
-refresh, and ZIP export. All operations resolve songs through the Library Index.
-UI routes never perform filesystem mutations.
+Supported operations are delete, forget missing records, move, rename, metadata
+refresh, artwork cache refresh, and ZIP export. All operations resolve songs
+through the Library Index. UI routes never perform filesystem mutations.
 
 The Library bulk worker:
 
@@ -1346,6 +1346,12 @@ The Library bulk worker:
   destination collision.
 - Preserves the internal song ID when moving or renaming files.
 - Publishes the existing Library events after index-changing operations.
+
+Delete removes an audio file but retains its canonical Song as `missing`.
+Forget Missing Records is a separate explicit operation available from the
+missing-files review. It removes only canonical rows already marked `missing`
+whose managed paths remain absent. It never deletes audio or artwork files; if
+a file reappears before the task runs, that item fails safely.
 
 Exports are written beneath `<download_path>/exports` and exposed through an
 authenticated-ready API boundary. Export creation reads files only in the
