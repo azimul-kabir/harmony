@@ -1,4 +1,4 @@
-const CACHE_VERSION = "harmony-shell-v1";
+const CACHE_VERSION = "harmony-shell-v2";
 const APP_SHELL = [
     "/static/css/app.css",
     "/static/js/app.js",
