@@ -573,7 +573,7 @@ Just a synchronized self-hosted music library.
 - Scheduled synchronization
 - Backup & restore
 - Import/export settings
-- Direct Navidrome integration beyond the existing M3U workflow
+- Additional media-server API integrations beyond Navidrome
 
 ---
 

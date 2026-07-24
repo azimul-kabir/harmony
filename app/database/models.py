@@ -35,6 +35,9 @@ class Song(Base):
     album: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     spotify_track_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True, index=True)
+    navidrome_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
     spotify_album_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     track: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -490,6 +493,17 @@ class Playlist(Base):
     cover_url: Mapped[str | None] = mapped_column(String, nullable=True)
     owner: Mapped[str | None] = mapped_column(String, nullable=True)
     track_count: Mapped[int] = mapped_column(Integer, default=0)
+    navidrome_playlist_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
+    navidrome_sync_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    navidrome_synced_track_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    navidrome_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    navidrome_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)

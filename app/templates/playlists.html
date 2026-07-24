@@ -48,6 +48,16 @@
                 <strong>M3U:</strong>
                 <span>{{ 'Exported' if card.m3u_exists else 'Missing' }}</span>
             </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px;">
+                <strong>Navidrome:</strong>
+                {% if p.navidrome_sync_status == 'synced' %}
+                    <span>Direct · {{ p.navidrome_synced_track_count }} tracks</span>
+                {% elif p.navidrome_sync_status == 'fallback' %}
+                    <span title="{{ p.navidrome_sync_error or '' }}">M3U fallback</span>
+                {% else %}
+                    <span>Pending</span>
+                {% endif %}
+            </div>
         </div>
         
         <div class="source-actions playlist-actions">

@@ -16,6 +16,7 @@ def _settings(**overrides):
         "navidrome_url": "http://navidrome:4533",
         "navidrome_username": "harmony",
         "navidrome_password": "secret",
+        "navidrome_direct_playlist_sync_enabled": False,
         "navidrome_playlist_reimport_enabled": True,
         "navidrome_playlist_reimport_debounce_seconds": 0,
         "navidrome_playlist_reimport_poll_seconds": 0.01,
@@ -101,3 +102,54 @@ def test_reconcile_is_disabled_without_credentials():
     assert coordinator.enabled is False
     assert coordinator.schedule(1) is False
     assert asyncio.run(coordinator.reconcile({1})) is False
+
+
+def test_successful_direct_reconcile_skips_second_scan(monkeypatch):
+    events = []
+
+    class Client:
+        async def status(self):
+            events.append("status")
+            return {"reachable": True, "scanning": False}
+
+        async def start_scan(self, *, full_scan=False):
+            events.append("scan")
+            return {"accepted": True}
+
+    class Direct:
+        def __init__(self, **kwargs):
+            pass
+
+        async def reconcile(self, playlist_id):
+            events.append(f"direct:{playlist_id}")
+            return SimpleNamespace(
+                playlist_id=playlist_id,
+                track_count=2,
+            )
+
+    monkeypatch.setattr(navidrome_playlist_sync, "NavidromeDirectPlaylistSync", Direct)
+    monkeypatch.setattr(
+        navidrome_playlist_sync,
+        "export_m3u",
+        lambda db, playlist: events.append(f"export:{playlist.id}") or 2,
+    )
+    db = SessionLocal()
+    try:
+        task, playlist = _playlist_sync_task(db)
+        coordinator = NavidromePlaylistReimportCoordinator(
+            settings=_settings(
+                navidrome_direct_playlist_sync_enabled=True
+            ),
+            client_factory=Client,
+        )
+
+        assert asyncio.run(coordinator.reconcile({task.id})) is True
+        assert events == [
+            "status",
+            "scan",
+            "status",
+            f"export:{playlist.id}",
+            f"direct:{playlist.id}",
+        ]
+    finally:
+        db.close()

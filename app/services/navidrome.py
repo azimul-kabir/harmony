@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from collections.abc import Sequence
 from typing import Any
 from urllib.parse import urlparse
 
@@ -11,9 +12,16 @@ from app.core.config import get_settings
 
 
 class NavidromeError(RuntimeError):
-    def __init__(self, message: str, *, code: str = "navidrome_unavailable") -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "navidrome_unavailable",
+        api_code: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.api_code = api_code
 
 
 class NavidromeClient:
@@ -64,7 +72,7 @@ class NavidromeClient:
         self,
         action: str,
         *,
-        extra_params: dict[str, str] | None = None,
+        extra_params: dict[str, str | Sequence[str]] | None = None,
     ) -> dict[str, Any]:
         if not self.configured:
             raise NavidromeError(
@@ -94,8 +102,17 @@ class NavidromeClient:
             raise NavidromeError(
                 error.get("message") or "Navidrome rejected the request.",
                 code="navidrome_api_error",
+                api_code=error.get("code"),
             )
         return envelope
+
+    @staticmethod
+    def _as_list(value: Any) -> list[dict[str, Any]]:
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, dict):
+            return [value]
+        return []
 
     @staticmethod
     def _status_payload(envelope: dict[str, Any]) -> dict[str, Any]:
@@ -146,3 +163,71 @@ class NavidromeClient:
             "accepted": True,
             "full_scan": full_scan,
         }
+
+    async def search_songs(
+        self, query: str, *, count: int = 25
+    ) -> list[dict[str, Any]]:
+        envelope = await self._request(
+            "search3",
+            extra_params={
+                "query": query,
+                "songCount": str(max(1, count)),
+                "songOffset": "0",
+                "albumCount": "0",
+                "artistCount": "0",
+            },
+        )
+        result = envelope.get("searchResult3") or {}
+        return self._as_list(result.get("song"))
+
+    async def get_song(self, song_id: str) -> dict[str, Any]:
+        envelope = await self._request(
+            "getSong", extra_params={"id": song_id}
+        )
+        song = envelope.get("song")
+        if not isinstance(song, dict):
+            raise NavidromeError(
+                "Navidrome returned an invalid song response.",
+                code="navidrome_invalid_response",
+            )
+        return song
+
+    async def get_playlists(self) -> list[dict[str, Any]]:
+        envelope = await self._request("getPlaylists")
+        playlists = envelope.get("playlists") or {}
+        return self._as_list(playlists.get("playlist"))
+
+    async def get_playlist(self, playlist_id: str) -> dict[str, Any]:
+        envelope = await self._request(
+            "getPlaylist", extra_params={"id": playlist_id}
+        )
+        playlist = envelope.get("playlist")
+        if not isinstance(playlist, dict):
+            raise NavidromeError(
+                "Navidrome returned an invalid playlist response.",
+                code="navidrome_invalid_response",
+            )
+        return playlist
+
+    async def replace_playlist(
+        self,
+        *,
+        name: str,
+        song_ids: Sequence[str],
+        playlist_id: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, str | Sequence[str]] = {
+            "songId": list(song_ids),
+        }
+        if playlist_id:
+            params["playlistId"] = playlist_id
+        else:
+            params["name"] = name
+        envelope = await self._request("createPlaylist", extra_params=params)
+        playlist = envelope.get("playlist")
+        if not isinstance(playlist, dict):
+            raise NavidromeError(
+                "Navidrome returned an invalid playlist response.",
+                code="navidrome_invalid_response",
+            )
+        return playlist

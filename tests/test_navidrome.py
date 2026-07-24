@@ -146,3 +146,91 @@ def test_url_rejects_embedded_credentials():
         client._endpoint("getScanStatus")
 
     assert caught.value.code == "navidrome_invalid_url"
+
+
+def test_playlist_api_preserves_repeated_song_id_order():
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == "/rest/createPlaylist":
+            assert request.url.params["playlistId"] == "playlist-1"
+            assert request.url.params.get_list("songId") == [
+                "song-3",
+                "song-1",
+                "song-2",
+            ]
+            return httpx.Response(
+                200,
+                json={
+                    "subsonic-response": {
+                        "status": "ok",
+                        "playlist": {"id": "playlist-1", "songCount": 3},
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "subsonic-response": {
+                    "status": "ok",
+                    "playlist": {
+                        "id": "playlist-1",
+                        "entry": [
+                            {"id": "song-3"},
+                            {"id": "song-1"},
+                            {"id": "song-2"},
+                        ],
+                    },
+                }
+            },
+        )
+
+    client = NavidromeClient(
+        _settings(), transport=httpx.MockTransport(handler)
+    )
+    replaced = asyncio.run(
+        client.replace_playlist(
+            name="Ordered",
+            playlist_id="playlist-1",
+            song_ids=["song-3", "song-1", "song-2"],
+        )
+    )
+    fetched = asyncio.run(client.get_playlist("playlist-1"))
+
+    assert replaced["songCount"] == 3
+    assert [entry["id"] for entry in fetched["entry"]] == [
+        "song-3",
+        "song-1",
+        "song-2",
+    ]
+    assert calls == ["/rest/createPlaylist", "/rest/getPlaylist"]
+
+
+def test_search_songs_normalizes_single_result():
+    def handler(request):
+        assert request.url.path == "/rest/search3"
+        assert request.url.params["query"] == "Superstition Stevie Wonder"
+        assert request.url.params["songCount"] == "12"
+        return httpx.Response(
+            200,
+            json={
+                "subsonic-response": {
+                    "status": "ok",
+                    "searchResult3": {
+                        "song": {
+                            "id": "song-1",
+                            "title": "Superstition",
+                        }
+                    },
+                }
+            },
+        )
+
+    songs = asyncio.run(
+        NavidromeClient(
+            _settings(), transport=httpx.MockTransport(handler)
+        ).search_songs("Superstition Stevie Wonder", count=12)
+    )
+
+    assert songs == [{"id": "song-1", "title": "Superstition"}]
