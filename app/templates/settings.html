@@ -2,22 +2,21 @@
 {% block title %}Settings{% endblock %}
 
 {% block content %}
-<div class="settings-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-    <h1 style="margin: 0;">Settings</h1>
+<div class="settings-header">
+    <div><span class="library-eyebrow">Application</span><h1>Settings</h1></div>
 </div>
 
 <div class="settings-container">
-    <!-- Sidebar Navigation -->
     <div class="settings-sidebar">
-        <div class="settings-tabs" id="settings-tabs">
-            <button class="settings-tab active" data-target="general">General</button>
-            <button class="settings-tab" data-target="downloads">Downloads</button>
-            <button class="settings-tab" data-target="playlists">Playlists</button>
-            <button class="settings-tab" data-target="appearance">Appearance</button>
-            <button class="settings-tab" data-target="spotify">Spotify</button>
-            <button class="settings-tab" data-target="metadata">Metadata</button>
-            <button class="settings-tab" data-target="navidrome">Navidrome</button>
-            <button class="settings-tab" data-target="library-settings">Library</button>
+        <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings categories">
+            <button class="settings-tab active" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-target="general">General</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-downloads" data-target="downloads">Downloads</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-playlists" data-target="playlists">Playlists</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-appearance" data-target="appearance">Appearance</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-spotify" data-target="spotify">Spotify</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-metadata" data-target="metadata">Metadata</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-navidrome" data-target="navidrome">Navidrome</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-library-settings" data-target="library-settings">Library</button>
             <a class="settings-tab settings-submenu-link" href="/developers/providers">Provider diagnostics</a>
         </div>
     </div>
@@ -234,6 +233,14 @@
 </div>
 
 <style>
+    .settings-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+    }
+    .settings-header h1 { margin: 0; }
+
     /* Base Container Styles */
     .settings-container {
         display: flex;
@@ -339,42 +346,85 @@
 
     /* MOBILE RESPONSIVE QUERIES */
     @media (max-width: 768px) {
+        .settings-header { margin-bottom: 18px; }
         .settings-container {
             flex-direction: column;
+            min-height: 0;
+            overflow: visible;
         }
         .settings-sidebar {
             width: 100%;
             border-right: none;
             border-bottom: 1px solid var(--border-color);
+            overflow: hidden;
         }
         .settings-tabs {
             display: flex;
+            gap: 6px;
+            padding: 8px;
             overflow-x: auto;
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
-            scrollbar-width: none; /* Firefox */
+            scroll-padding-inline: 8px;
+            scroll-snap-type: x proximity;
+            scrollbar-width: none;
         }
         .settings-tabs::-webkit-scrollbar {
-            display: none; /* Chrome/Safari */
+            display: none;
         }
         .settings-tab {
+            flex: 0 0 auto;
+            min-height: 42px;
             border-left: none;
-            border-bottom: 3px solid transparent;
-            padding: 14px 20px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            padding: 10px 14px;
             text-align: center;
+            scroll-snap-align: start;
         }
         .settings-tab.active {
             border-left-color: transparent;
-            border-bottom-color: var(--primary);
+            border-color: color-mix(in srgb, var(--primary) 35%, var(--border-color));
+            background: color-mix(in srgb, var(--primary) 11%, var(--bg-surface));
         }
         .settings-content {
-            padding: 20px;
+            padding: 18px 16px;
         }
-        .responsive-input {
-            width: 100%; /* Full width on mobile */
+        .settings-section h2 {
+            margin-bottom: 20px !important;
+            font-size: 1.3rem;
+        }
+        .responsive-input,
+        .responsive-input-small {
+            width: 100%;
+            min-height: 44px;
+            box-sizing: border-box;
+            font-size: 16px;
         }
         .settings-field-grid {
             grid-template-columns: 1fr;
+            gap: 14px;
+        }
+        .settings-toggle-list label {
+            display: flex;
+            min-height: 44px;
+            align-items: center;
+            padding: 0 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 9px;
+            background: var(--bg-surface);
+        }
+        .settings-save-row,
+        .settings-form > div[style*="margin-top: 32px"] {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 24px !important;
+        }
+        .settings-save-row .btn-primary,
+        .settings-form > div[style*="margin-top: 32px"] .btn-primary {
+            flex: 1;
+            min-height: 46px;
         }
     }
 </style>
@@ -385,11 +435,17 @@
     // Tab switching logic
     document.querySelectorAll('.settings-tab[data-target]').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.settings-tab[data-target]').forEach(t => {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
             document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
-            
-            e.target.classList.add('active');
-            document.getElementById('tab-' + e.target.dataset.target).style.display = 'block';
+
+            const selectedTab = e.currentTarget;
+            selectedTab.classList.add('active');
+            selectedTab.setAttribute('aria-selected', 'true');
+            selectedTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            document.getElementById('tab-' + selectedTab.dataset.target).style.display = 'block';
         });
     });
 
