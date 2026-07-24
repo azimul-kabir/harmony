@@ -94,6 +94,29 @@ body {
     color: var(--text-main);
 }
 
+.skip-link {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 5000;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--primary);
+    color: white;
+    font-weight: 700;
+    text-decoration: none;
+    transform: translateY(calc(-100% - 16px));
+    transition: transform .15s ease;
+}
+.skip-link:focus { transform: translateY(0); }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--primary) 72%, white) !important;
+    outline-offset: 3px;
+}
+
+#main-content:focus { outline: none !important; }
+
 .layout {
     display: flex;
     min-height: 100vh;
@@ -258,6 +281,17 @@ body {
 .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
 
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}
 
 /* Status Badges */
 .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 0.5px; }
