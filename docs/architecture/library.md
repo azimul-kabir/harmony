@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
-> Version: 1.6.0 (Metadata Intelligence foundation)
-> Status: Released in v1.6.0
-> Last Updated: 2026-07-22
+> Version: 2.0.0
+> Status: Released in v2.0.0 (direct successor to v1.5.0)
+> Last Updated: 2026-07-24
 
 ---
 
@@ -328,7 +328,7 @@ metadata application are separate layers. The scorer imports only normalized
 sees MusicBrainz response objects or raw payloads. Discovery neither changes a
 Song nor opens an audio file, and selection does not imply metadata acceptance.
 
-Public discovery is Song-only in v1.6.0. Album and artist projection scorers
+Public discovery is Song-only in v2.0.0. Album and artist projection scorers
 remain internal because those projections do not yet have normalized persistent
 identities. Public attempts to use unsupported entity scopes return
 `unsupported_entity_type`; no partially functional album/artist workflow is
@@ -1104,7 +1104,7 @@ Duplicate handling is a separate service.
 
 ---
 
-# Multi-Source Downloads (Future)
+# Multi-Source Downloads
 
 Harmony separates metadata from audio.
 
@@ -1134,7 +1134,7 @@ Navidrome
 
 ---
 
-# Media Server Integration (Future)
+# Media Server Integration
 
 Harmony manages the library.
 

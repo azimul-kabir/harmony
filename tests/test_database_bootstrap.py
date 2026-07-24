@@ -25,7 +25,7 @@ def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
         "metadata_application_batches",
         "metadata_application_locks",
     } <= tables
-    assert revision == "20260724_0023"
+    assert revision == "20260724_0025"
 
     # A second bootstrap detects the existing database and is an Alembic no-op.
     database_init.init_db()
@@ -40,7 +40,7 @@ def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
 def test_existing_database_upgrades_without_precreating_future_tables(
     tmp_path, monkeypatch
 ):
-    """Existing v1.5 databases must let Alembic create v1.6 tables itself."""
+    """Existing v1.5 databases must let Alembic create v2.0 tables itself."""
     engine = create_engine(f"sqlite:///{tmp_path / 'existing.db'}")
     root = Path(__file__).resolve().parents[1]
     config = Config(str(root / "alembic.ini"))
@@ -70,7 +70,7 @@ def test_existing_database_upgrades_without_precreating_future_tables(
         .scalar_one()
     )
     assert {"metadata_suggestions", "metadata_application_locks"} <= tables
-    assert revision == "20260724_0023"
+    assert revision == "20260724_0025"
 
 
 def test_existing_database_retries_interrupted_metadata_migration(
@@ -103,7 +103,7 @@ def test_existing_database_retries_interrupted_metadata_migration(
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
     )
-    assert revision == "20260724_0023"
+    assert revision == "20260724_0025"
 
 
 def test_existing_database_retries_interrupted_metadata_health_migration(
@@ -136,7 +136,7 @@ def test_existing_database_retries_interrupted_metadata_health_migration(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0023"
+        == "20260724_0025"
     )
 
 
@@ -170,7 +170,7 @@ def test_existing_database_retries_interrupted_metadata_health_indexes_migration
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0023"
+        == "20260724_0025"
     )
 
 
@@ -210,14 +210,14 @@ def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0023"
+        == "20260724_0025"
     )
 
 
 def test_existing_database_repairs_missing_song_columns_when_incorrectly_at_head(
     tmp_path, monkeypatch
 ):
-    """A mistakenly stamped v1.6 database must not remain permanently broken."""
+    """A mistakenly stamped development database must not remain broken."""
     engine = create_engine(f"sqlite:///{tmp_path / 'stamped-incomplete.db'}")
     root = Path(__file__).resolve().parents[1]
     config = Config(str(root / "alembic.ini"))
@@ -274,7 +274,7 @@ def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0023"
+        == "20260724_0025"
     )
 
 

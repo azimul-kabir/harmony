@@ -86,7 +86,11 @@ That's it. Open your browser, add a Spotify playlist, and Harmony takes care of 
 
 ### Current Status
 
-Harmony has just reached its **v1.0.0** milestone and is highly stable for everyday use. 
+Harmony has reached **v2.0.0**, the direct successor to v1.5.0. Harmony v1.6.0
+was never published. The current release includes Metadata Intelligence,
+durable download operations, direct Navidrome playlist synchronization,
+playlist file management, automatic playlists, scheduled Sources, editable
+runtime settings, and a redesigned mobile experience.
 
 I'm continuing to improve it, and suggestions, feedback, or feature requests are always welcome. If you've also been frustrated by duplicate downloads and messy music folders, I'd love to hear your thoughts!
 
