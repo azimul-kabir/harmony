@@ -140,6 +140,11 @@ Songs; requests never silently apply provider values.
 - `GET /api/library/songs/{song_id}/metadata` returns canonical values and
   review state. Song-scoped suggestion and history lists are available through
   `/metadata/suggestions` and `/metadata/history`.
+- `POST /api/library/songs/{song_id}/metadata/manual-preview` normalizes and
+  validates explicit operator edits without persistence.
+  `POST /api/library/songs/{song_id}/metadata/manual-apply` queues changed,
+  valid fields through the durable audit and rollback pipeline as provider
+  `manual`; it never modifies audio files.
 - `GET` or `POST /api/library/songs/{song_id}/metadata/application-preview`
   previews accepted or explicitly selected changes without writing them.
 - `POST /api/library/songs/{song_id}/metadata/apply` queues accepted changes;

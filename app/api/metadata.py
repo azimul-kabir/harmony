@@ -10,7 +10,7 @@ from app.database.models import MetadataApplicationBatch, MetadataHistory, Song
 from app.services.file_tag_writer import preview as tag_preview, write_song
 
 from app.database.session import get_db
-from app.services.metadata_intelligence import APPLICABLE_FIELDS, metadata_service, metadata_application_service, serialize_history, serialize_suggestion
+from app.services.metadata_intelligence import APPLICABLE_FIELDS, MANUAL_EDIT_FIELDS, metadata_service, metadata_application_service, serialize_history, serialize_suggestion
 
 router = APIRouter(tags=["metadata"])
 
@@ -37,6 +37,11 @@ class TagWriteOptions(BaseModel):
     embed_artwork: bool = True
 
 
+class ManualMetadataRequest(BaseModel):
+    changes: dict[str, Any] = Field(min_length=1, max_length=len(MANUAL_EDIT_FIELDS))
+    initiated_by: str | None = Field(default=None, max_length=120)
+
+
 def _page(items: list[Any], total: int, limit: int, offset: int) -> dict[str, Any]:
     return {"items": [serialize_suggestion(item) for item in items], "pagination": {
         "total": total, "limit": limit, "offset": offset, "has_more": offset + len(items) < total,
@@ -46,6 +51,20 @@ def _page(items: list[Any], total: int, limit: int, offset: int) -> dict[str, An
 @router.get("/api/library/songs/{song_id}/metadata", summary="Compare canonical and proposed Song metadata")
 def get_song_metadata(song_id: int, db: Session = Depends(get_db)):
     return metadata_service.review_model(db, "song", song_id)
+
+
+@router.post("/api/library/songs/{song_id}/metadata/manual-preview", summary="Validate and preview manual canonical metadata edits")
+def preview_manual_metadata(song_id: int, request: ManualMetadataRequest, db: Session = Depends(get_db)):
+    return metadata_application_service.preview_manual(
+        db, song_id, request.changes, initiated_by=request.initiated_by
+    )
+
+
+@router.post("/api/library/songs/{song_id}/metadata/manual-apply", summary="Queue audited manual canonical metadata edits")
+def apply_manual_metadata(song_id: int, request: ManualMetadataRequest, db: Session = Depends(get_db)):
+    return metadata_application_service.submit_manual(
+        db, song_id, request.changes, initiated_by=request.initiated_by
+    )
 
 
 @router.get("/api/library/songs/{song_id}/metadata/suggestions", summary="List Song metadata suggestions")
@@ -205,7 +224,7 @@ def _serialize_batch(item: MetadataApplicationBatch) -> dict[str, Any]:
 
 @router.get("/api/metadata/application/capabilities")
 def application_capabilities():
-    return {"entity_types": ["song"], "supported_fields": sorted(APPLICABLE_FIELDS), "unsupported_fields": ["artwork_source"], "limits": {"max_text_length": 500, "year_min": 1000}}
+    return {"entity_types": ["song"], "supported_fields": sorted(APPLICABLE_FIELDS), "manual_edit_fields": sorted(MANUAL_EDIT_FIELDS), "unsupported_fields": ["artwork_source"], "limits": {"max_text_length": 500, "year_min": 1000}}
 
 
 @router.get("/api/metadata/suggestions/pending", summary="List pending metadata suggestions")

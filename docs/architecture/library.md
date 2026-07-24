@@ -1430,6 +1430,14 @@ service/API boundaries, preserving the dashboard layout.
 
 # Canonical Metadata Application
 
+Manual Song edits use this same application boundary rather than updating
+database rows directly. Preview is read-only. Apply creates already-reviewed
+`manual` proposals for changed fields, then queues the normal durable task.
+Consequently manual edits retain per-Song locking, stale-write protection,
+immutable history, rollback, FTS maintenance, and metadata-health refresh.
+Writing the resulting canonical values to an audio file remains a separate
+explicit action.
+
 Accepted metadata is applied only to canonical `Song` database columns by a
 durable `library_maintenance` Task. The application service never opens an
 audio file, writes tags, downloads artwork, calls a provider, or accepts a
@@ -1450,6 +1458,9 @@ edits or deletes the original row.
 
 Stable API surface:
 
+- `POST /api/library/songs/{song_id}/metadata/manual-preview` and
+  `POST /api/library/songs/{song_id}/metadata/manual-apply` preview and queue
+  validated operator edits.
 - `GET|POST /api/library/songs/{song_id}/metadata/application-preview` previews
   all accepted or explicitly selected suggestions without queuing work.
 - `POST /api/library/songs/{song_id}/metadata/apply` and

@@ -34,6 +34,7 @@ CURRENT_STATUSES = ("accepted", "applied")
 MAX_VALUE_BYTES = 4096
 MAX_EVIDENCE_BYTES = 8192
 APPLICABLE_FIELDS = METADATA_FIELDS - {"artwork_source"}
+MANUAL_EDIT_FIELDS = APPLICABLE_FIELDS
 FIELD_COLUMNS = {"track_number": "track", "total_tracks": "track_total", "disc_number": "disc", "total_discs": "disc_total"}
 MAX_TEXT_LENGTH = 500
 
@@ -281,6 +282,87 @@ class MetadataApplicationService:
             return "invalid_metadata_value"
         return None
 
+    def _manual_value(self, field: str, value: Any) -> Any:
+        if isinstance(value, str):
+            value = " ".join(unicodedata.normalize("NFKC", value).split())
+            if not value:
+                return None
+            if field == "isrc":
+                return value.upper()
+            if field.startswith("musicbrainz_"):
+                return value.lower()
+        return value
+
+    def preview_manual(self, db: Session, song_id: int, changes: dict[str, Any],
+                       *, initiated_by: str | None = None) -> dict[str, Any]:
+        if not changes:
+            raise MetadataServiceError("manual_edit_empty", "Provide at least one metadata field.")
+        unsupported = sorted(set(changes) - MANUAL_EDIT_FIELDS)
+        if unsupported:
+            raise MetadataServiceError(
+                "manual_edit_invalid_field",
+                f"Manual editing does not support: {', '.join(unsupported)}.",
+            )
+        canonical = metadata_service.canonical_metadata(db, "song", song_id)
+        proposed = {field: self._manual_value(field, value) for field, value in changes.items()}
+        effective = {**canonical, **proposed}
+        operations = []
+        for field in sorted(proposed):
+            value = proposed[field]
+            validation = self._validate(field, value, effective)
+            unchanged = self._normal(canonical[field]) == self._normal(value)
+            status = "invalid" if validation else "unchanged" if unchanged else "applicable"
+            operations.append({
+                "field_name": field,
+                "current_value": canonical[field],
+                "proposed_value": value,
+                "status": status,
+                "applicability": status == "applicable",
+                "validation_error": validation,
+                "reversible": status == "applicable",
+            })
+        return {
+            "target_entity_type": "song",
+            "target_entity_id": song_id,
+            "canonical_snapshot": canonical,
+            "operations": operations,
+            "created_at": utcnow_naive(),
+            "initiated_by": initiated_by,
+        }
+
+    def submit_manual(self, db: Session, song_id: int, changes: dict[str, Any],
+                      *, initiated_by: str | None = None) -> dict[str, Any]:
+        preview = self.preview_manual(db, song_id, changes, initiated_by=initiated_by)
+        invalid = [item["field_name"] for item in preview["operations"] if item["status"] == "invalid"]
+        if invalid:
+            raise MetadataServiceError(
+                "manual_edit_invalid_value",
+                f"Correct invalid manual metadata fields: {', '.join(invalid)}.",
+            )
+        applicable = [item for item in preview["operations"] if item["status"] == "applicable"]
+        if not applicable:
+            raise MetadataServiceError("manual_edit_unchanged", "The submitted metadata already matches the Library.", 409)
+        suggestion_ids = []
+        for operation in applicable:
+            suggestion = metadata_service.create_suggestion(
+                db,
+                entity_type="song",
+                entity_id=song_id,
+                field_name=operation["field_name"],
+                current_value=operation["current_value"],
+                suggested_value=operation["proposed_value"],
+                provider="manual",
+                confidence_level="exact",
+                confidence=1.0,
+                match_explanation="Explicit manual Library edit.",
+                reviewed_by=initiated_by,
+            )
+            metadata_service.accept_suggestion(db, suggestion.id, reviewed_by=initiated_by)
+            suggestion_ids.append(suggestion.id)
+        return self.submit(
+            db, [song_id], suggestion_ids=suggestion_ids, initiated_by=initiated_by
+        ) | {"preview": preview}
+
     def build_preview(self, db: Session, song_id: int, suggestion_ids: list[int] | None = None, *, initiated_by: str | None = None) -> dict[str, Any]:
         song = db.get(Song, song_id)
         if song is None: raise MetadataServiceError("song_not_found", "Song not found.", 404)
@@ -430,7 +512,7 @@ class MetadataApplicationService:
                 results.append(operation); continue
             suggestion=db.get(MetadataSuggestion, operation["suggestion_id"]); assert suggestion is not None
             setattr(song,FIELD_COLUMNS.get(operation["field_name"],operation["field_name"]),operation["proposed_value"])
-            metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=operation["field_name"],previous_value=operation["current_value"],new_value=operation["proposed_value"],provider=suggestion.provider,provider_entity_id=suggestion.provider_entity_id,confidence=suggestion.confidence,job_id=job_id,change_source="metadata_application",audio_file_modified=False,reversible=True,reversal_of_history_id=None,suggestion_id=suggestion.id,discovery_id=suggestion.discovery_id,match_result_id=suggestion.match_result_id,application_batch_id=batch.id,forced=bool(operation.get("forced")),stale_override_reason=stale_override_reason if operation.get("forced") else None)
+            metadata_service.record_history(db,entity_type="song",entity_id=song.id,field_name=operation["field_name"],previous_value=operation["current_value"],new_value=operation["proposed_value"],provider=suggestion.provider,provider_entity_id=suggestion.provider_entity_id,confidence=suggestion.confidence,job_id=job_id,change_source="manual_edit" if suggestion.provider == "manual" else "metadata_application",audio_file_modified=False,reversible=True,reversal_of_history_id=None,suggestion_id=suggestion.id,discovery_id=suggestion.discovery_id,match_result_id=suggestion.match_result_id,application_batch_id=batch.id,forced=bool(operation.get("forced")),stale_override_reason=stale_override_reason if operation.get("forced") else None)
             suggestion.status="applied"; suggestion.applied_at=utcnow_naive(); batch.applied_fields += 1
             if operation.get("forced"): batch.forced_fields += 1
             operation["status"]="applied"; results.append(operation)

@@ -31,3 +31,6 @@ def test_normal_library_exposes_file_delete_not_forget():
         'id="library-bulk-forget-missing" class="library-bulk-delete" '
         'data-bulk-action="forget_missing" hidden'
     ) in response.text
+    assert 'id="metadata-manual-form"' in response.text
+    assert 'id="metadata-preview-manual"' in response.text
+    assert 'id="metadata-apply-manual"' in response.text

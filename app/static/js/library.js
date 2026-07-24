@@ -513,6 +513,75 @@ function evidenceText(value) {
     return String(value);
 }
 
+const manualMetadataFields = [
+    ["title", "Title", "text"], ["artist", "Artist", "text"],
+    ["album", "Album", "text"], ["album_artist", "Album artist", "text"],
+    ["genre", "Genre", "text"], ["year", "Year", "number"],
+    ["track_number", "Track number", "number"], ["total_tracks", "Total tracks", "number"],
+    ["disc_number", "Disc number", "number"], ["total_discs", "Total discs", "number"],
+    ["isrc", "ISRC", "text"], ["musicbrainz_recording_id", "MusicBrainz recording ID", "text"],
+    ["musicbrainz_release_id", "MusicBrainz release ID", "text"],
+    ["musicbrainz_release_group_id", "MusicBrainz release-group ID", "text"],
+    ["musicbrainz_artist_id", "MusicBrainz artist ID", "text"],
+    ["musicbrainz_release_artist_id", "MusicBrainz release artist ID", "text"],
+];
+
+function renderManualMetadataForm(review) {
+    const current = Object.fromEntries(review.fields.map((item) => [item.field_name, item.current_value]));
+    const form = document.getElementById("metadata-manual-form");
+    form.innerHTML = manualMetadataFields.map(([field, label, type]) => {
+        const value = current[field] ?? "";
+        const numeric = type === "number" ? ' min="1" step="1"' : "";
+        return `<label>${escapeHtml(label)}<input type="${type}" data-manual-field="${field}" value="${escapeAttribute(String(value))}"${numeric}></label>`;
+    }).join("");
+    form.querySelectorAll("[data-manual-field]").forEach((input) => input.addEventListener("input", () => {
+        document.getElementById("metadata-apply-manual").disabled = true;
+        document.getElementById("metadata-manual-preview").textContent = "";
+    }));
+}
+
+function manualMetadataChanges() {
+    return Object.fromEntries([...document.querySelectorAll("[data-manual-field]")].map((input) => {
+        const value = input.value.trim();
+        return [input.dataset.manualField, input.type === "number" && value ? Number(value) : value || null];
+    }));
+}
+
+async function previewManualMetadata(songId) {
+    const target = document.getElementById("metadata-manual-preview");
+    const apply = document.getElementById("metadata-apply-manual");
+    apply.disabled = true;
+    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-preview`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
+    });
+    const result = await response.json();
+    if (!response.ok) { target.textContent = result.error?.message || "Manual edit preview is unavailable."; return; }
+    const invalid = result.operations.some((item) => item.status === "invalid");
+    const applicable = result.operations.some((item) => item.status === "applicable");
+    apply.disabled = invalid || !applicable;
+    target.innerHTML = result.operations.filter((item) => item.status !== "unchanged").map((item) =>
+        `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small></article>`
+    ).join("") || '<p class="library-search-status">No manual changes to apply.</p>';
+}
+
+async function applyManualMetadata(songId) {
+    const status = document.getElementById("metadata-review-status");
+    const button = document.getElementById("metadata-apply-manual");
+    button.disabled = true;
+    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-apply`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+        status.textContent = result.error?.message || "Manual metadata edits could not be queued.";
+        return;
+    }
+    status.textContent = `Manual edit queued (job ${result.job_id}).`;
+    await pollMetadataApplication(result.job_id, songId);
+}
+
 async function openMetadataReview(songId) {
     const dialog = document.getElementById("metadata-review-dialog");
     dialog.dataset.songId = String(songId);
@@ -523,6 +592,8 @@ async function openMetadataReview(songId) {
     document.getElementById("metadata-preview-accepted").onclick = () => previewMetadataApplication(songId);
     document.getElementById("metadata-apply-selected").onclick = () => submitMetadataApplication(songId, false);
     document.getElementById("metadata-apply-accepted").onclick = () => submitMetadataApplication(songId, true);
+    document.getElementById("metadata-preview-manual").onclick = () => previewManualMetadata(songId);
+    document.getElementById("metadata-apply-manual").onclick = () => applyManualMetadata(songId);
     await loadMetadataReview(songId);
 }
 
@@ -662,6 +733,7 @@ async function loadMetadataReview(songId) {
         document.getElementById("metadata-current").innerHTML = review.fields
             .filter((field) => field.current_value !== null && field.current_value !== "")
             .map((field) => `<div><dt>${escapeHtml(field.field_name.replaceAll("_", " "))}</dt><dd>${escapeHtml(metadataValue(field.current_value))}</dd></div>`).join("") || "<p>No canonical metadata is indexed.</p>";
+        renderManualMetadataForm(review);
         const pending = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "pending");
         document.getElementById("metadata-suggestions").innerHTML = pending.map((item) => `
             <article class="metadata-suggestion-card">
