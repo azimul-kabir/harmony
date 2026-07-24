@@ -409,6 +409,27 @@ def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failure
         assert "path" not in str(attention)
 
 
+def test_dashboard_attention_excludes_reviewed_library_jobs():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(
+            Task(
+                name="Reviewed failure",
+                spotify_url="library://maintenance/reviewed",
+                task_type=TaskType.LIBRARY_MAINTENANCE.value,
+                status=TaskStatus.FAILED.value,
+                reviewed_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+        )
+        db.commit()
+
+        attention = get_dashboard_snapshot(db)["attention"]
+
+        assert attention["healthy"] is True
+        assert attention["items"] == []
+
+
 def test_dashboard_failed_attention_matches_downloads_failed_filter():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

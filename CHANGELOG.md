@@ -25,6 +25,9 @@
 - Make Dashboard Library-job warnings link to complete filtered results and
   expose job summaries, timestamps, counters, error codes, and safe per-item
   failure messages in the Library Health review.
+- Add durable acknowledgement for historical Library-job failures, including
+  individual and category-wide review actions that clear Dashboard attention
+  without deleting job history or diagnostics.
 
 All notable changes to Harmony are documented in this file.
 

@@ -1,4 +1,9 @@
-const healthState = { taskId: null, timer: null };
+const healthState = {
+    taskId: null,
+    timer: null,
+    attentionJobs: false,
+    jobType: null,
+};
 const healthCheckDestinations = {
     artwork: "/library?missing_artwork=true",
     metadata: "/library?missing_metadata=true",
@@ -113,6 +118,10 @@ async function loadLibraryJobs() {
     const pageParams = new URLSearchParams(window.location.search);
     const attentionOnly = pageParams.get("job_status") === "attention";
     const requestedType = pageParams.get("job_type");
+    healthState.attentionJobs = attentionOnly;
+    healthState.jobType = ["library_bulk", "library_maintenance"].includes(requestedType)
+        ? requestedType
+        : null;
     const activityParams = new URLSearchParams({
         limit: attentionOnly ? "100" : "20",
     });
@@ -126,10 +135,14 @@ async function loadLibraryJobs() {
     document.getElementById("library-jobs-description").textContent = attentionOnly
         ? `Showing all ${typeLabel} jobs that require attention`
         : "Active and recent persistent operations";
+    const acknowledgeAll = document.getElementById("library-jobs-acknowledge-all");
+    acknowledgeAll.hidden = !attentionOnly || !healthState.jobType;
     const [active, recent] = await Promise.all([
         healthJson("/api/tasks/jobs/active"),
         healthJson(`/api/tasks/library-activity?${activityParams}`),
     ]);
+    acknowledgeAll.hidden = !attentionOnly || !healthState.jobType || recent.length === 0;
+    acknowledgeAll.textContent = "Mark all shown reviewed";
     const renderJobs = (target, jobs, empty) => {
         target.innerHTML = jobs.length ? jobs.map((job) => `<article class="health-check status-${escapeHealth(job.status)}">
       <span class="health-check-indicator" aria-hidden="true"></span><div><strong>${escapeHealth(job.name)}</strong><small>${escapeHealth(job.status)} · ${job.processed}/${job.total}${job.error_code ? ` · ${escapeHealth(job.error_code)}` : ""}</small></div>
@@ -158,6 +171,9 @@ async function openLibraryJobDetails(taskId) {
     document.getElementById("library-job-summary").textContent = "Loading diagnostics…";
     document.getElementById("library-job-facts").replaceChildren();
     document.getElementById("library-job-failures").replaceChildren();
+    const acknowledge = document.getElementById("library-job-acknowledge");
+    acknowledge.hidden = true;
+    acknowledge.dataset.taskId = "";
     dialog.showModal();
     try {
         const [job, failures] = await Promise.all([
@@ -165,6 +181,9 @@ async function openLibraryJobDetails(taskId) {
             healthJson(`/api/tasks/jobs/${taskId}/failures?limit=100`),
         ]);
         document.getElementById("library-job-title").textContent = job.name || "Library job";
+        acknowledge.hidden = !["completed_with_errors", "failed", "interrupted"].includes(job.status)
+            || Boolean(job.reviewed_at);
+        acknowledge.dataset.taskId = String(job.id);
         document.getElementById("library-job-summary").textContent =
             job.error_summary || (
                 job.status === "interrupted"
@@ -217,6 +236,51 @@ async function openLibraryJobDetails(taskId) {
             `Harmony could not load these diagnostics: ${error.message}`;
     }
 }
+
+document.getElementById("library-job-acknowledge")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!button.dataset.taskId) return;
+    button.disabled = true;
+    button.textContent = "Marking…";
+    try {
+        await healthJson(`/api/tasks/jobs/${button.dataset.taskId}/acknowledge`, {
+            method: "POST",
+        });
+        document.getElementById("library-job-dialog").close();
+        await loadLibraryJobs();
+    } catch (error) {
+        document.getElementById("library-job-summary").textContent =
+            `Harmony could not mark this job reviewed: ${error.message}`;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Mark reviewed";
+    }
+});
+
+document.getElementById("library-jobs-acknowledge-all")?.addEventListener("click", async (event) => {
+    if (!healthState.jobType) return;
+    const typeLabel = healthState.jobType === "library_bulk" ? "bulk" : "maintenance";
+    if (!window.confirm(
+        `Mark all shown ${typeLabel} job warnings as reviewed?\n\n` +
+        "Their history and diagnostics will remain available in Recent activity."
+    )) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Marking…";
+    try {
+        const result = await healthJson("/api/tasks/jobs/acknowledge", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({job_type: healthState.jobType}),
+        });
+        button.textContent = `${result.acknowledged} reviewed`;
+        await loadLibraryJobs();
+    } catch (error) {
+        button.textContent = "Try again";
+    } finally {
+        button.disabled = false;
+    }
+});
 
 function renderHealthChecks(checks) {
     document.getElementById("health-check-list").innerHTML = checks.map((check) => `

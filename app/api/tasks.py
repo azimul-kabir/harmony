@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.database.models import Task, TaskItemFailure
 from app.database.session import get_db
 from app.domain.task import TaskStatus
+from app.core.time import utcnow_naive
 from app.services.task_service import (
     cancel_task,
     pause_task,
@@ -20,6 +22,11 @@ router = APIRouter(
 LIBRARY_TASK_TYPES = ("library_bulk", "library_maintenance")
 ACTIVE_JOB_STATES = ("queued", "running", "cancelling")
 TERMINAL_JOB_STATES = ("cancelled", "completed", "completed_with_errors", "failed", "interrupted")
+ATTENTION_JOB_STATES = ("completed_with_errors", "failed", "interrupted")
+
+
+class AcknowledgeJobsRequest(BaseModel):
+    job_type: str
 
 @router.get("")
 def list_tasks(db: Session = Depends(get_db)):
@@ -73,6 +80,44 @@ def job_details(task_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Library job not found")
     return serialize_task_progress(task)
 
+
+@router.post("/jobs/{task_id}/acknowledge", summary="Mark a Library job reviewed")
+def acknowledge_job(task_id: int, db: Session = Depends(get_db)):
+    task = db.get(Task, task_id)
+    if (
+        not task
+        or task.task_type not in LIBRARY_TASK_TYPES
+        or task.status not in ATTENTION_JOB_STATES
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Reviewable Library job not found",
+        )
+    task.reviewed_at = utcnow_naive()
+    db.commit()
+    return serialize_task_progress(task)
+
+
+@router.post("/jobs/acknowledge", summary="Mark a category of Library jobs reviewed")
+def acknowledge_jobs(
+    request: AcknowledgeJobsRequest,
+    db: Session = Depends(get_db),
+):
+    if request.job_type not in LIBRARY_TASK_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported Library job type")
+    tasks = db.scalars(
+        select(Task).where(
+            Task.task_type == request.job_type,
+            Task.status.in_(ATTENTION_JOB_STATES),
+            Task.reviewed_at.is_(None),
+        )
+    ).all()
+    reviewed_at = utcnow_naive()
+    for task in tasks:
+        task.reviewed_at = reviewed_at
+    db.commit()
+    return {"acknowledged": len(tasks), "job_type": request.job_type}
+
 @router.get("/jobs/{task_id}/failures", summary="Paginate safe per-item Library job failures")
 def job_failures(task_id: int, offset: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
@@ -101,17 +146,15 @@ def library_activity(
 ):
     if job_type is not None and job_type not in LIBRARY_TASK_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported Library job type")
-    statuses = (
-        ("completed_with_errors", "failed", "interrupted")
-        if attention_only
-        else TERMINAL_JOB_STATES
-    )
+    statuses = ATTENTION_JOB_STATES if attention_only else TERMINAL_JOB_STATES
     statement = select(Task).where(
         Task.task_type.in_(LIBRARY_TASK_TYPES),
         Task.status.in_(statuses),
     )
     if job_type is not None:
         statement = statement.where(Task.task_type == job_type)
+    if attention_only:
+        statement = statement.where(Task.reviewed_at.is_(None))
     jobs = db.scalars(
         statement
         .order_by(Task.completed_at.desc(), Task.id.desc())

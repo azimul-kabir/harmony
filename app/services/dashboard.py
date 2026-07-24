@@ -418,6 +418,7 @@ def _attention_task_counts(db) -> dict[str, int]:
                 (TaskType.LIBRARY_MAINTENANCE.value, TaskType.LIBRARY_BULK.value)
             ),
             Task.status.in_(needs_review),
+            Task.reviewed_at.is_(None),
         )
     ).one()
     return {"maintenance_jobs": int(row[0]), "bulk_jobs": int(row[1])}

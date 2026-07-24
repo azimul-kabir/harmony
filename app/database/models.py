@@ -373,6 +373,9 @@ class Task(Base):
     error_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     cancellation_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
     initiated_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     resource_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     resumable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
