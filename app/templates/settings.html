@@ -8,6 +8,20 @@
 
 <div class="settings-container">
     <div class="settings-sidebar">
+        <label class="settings-mobile-picker" for="settings-section-picker">
+            <span>Settings section</span>
+            <select id="settings-section-picker">
+                <option value="general">General</option>
+                <option value="downloads">Downloads</option>
+                <option value="playlists">Playlists</option>
+                <option value="appearance">Appearance</option>
+                <option value="spotify">Spotify</option>
+                <option value="metadata">Metadata</option>
+                <option value="navidrome">Navidrome</option>
+                <option value="library-settings">Library</option>
+                <option value="/developers/providers">Provider diagnostics</option>
+            </select>
+        </label>
         <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings categories">
             <button class="settings-tab active" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-target="general">General</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-downloads" data-target="downloads">Downloads</button>
@@ -240,6 +254,7 @@
         margin-bottom: 24px;
     }
     .settings-header h1 { margin: 0; }
+    .settings-mobile-picker { display: none; }
 
     /* Base Container Styles */
     .settings-container {
@@ -358,34 +373,33 @@
             border-bottom: 1px solid var(--border-color);
             overflow: hidden;
         }
+        .settings-mobile-picker {
+            display: grid;
+            gap: 7px;
+            padding: 14px 16px;
+            color: var(--text-muted);
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+        .settings-mobile-picker select {
+            width: 100%;
+            min-height: 48px;
+            box-sizing: border-box;
+            padding: 0 44px 0 14px;
+            border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border-color));
+            border-radius: 10px;
+            background: color-mix(in srgb, var(--primary) 9%, var(--bg-surface));
+            color: var(--text-main);
+            font: inherit;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: normal;
+            text-transform: none;
+        }
         .settings-tabs {
-            display: flex;
-            gap: 6px;
-            padding: 8px;
-            overflow-x: auto;
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
-            scroll-padding-inline: 8px;
-            scroll-snap-type: x proximity;
-            scrollbar-width: none;
-        }
-        .settings-tabs::-webkit-scrollbar {
             display: none;
-        }
-        .settings-tab {
-            flex: 0 0 auto;
-            min-height: 42px;
-            border-left: none;
-            border: 1px solid transparent;
-            border-radius: 9px;
-            padding: 10px 14px;
-            text-align: center;
-            scroll-snap-align: start;
-        }
-        .settings-tab.active {
-            border-left-color: transparent;
-            border-color: color-mix(in srgb, var(--primary) 35%, var(--border-color));
-            background: color-mix(in srgb, var(--primary) 11%, var(--bg-surface));
         }
         .settings-content {
             padding: 18px 16px;
@@ -433,20 +447,32 @@
 {% block scripts %}
 <script>
     // Tab switching logic
-    document.querySelectorAll('.settings-tab[data-target]').forEach(tab => {
-        tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.settings-tab[data-target]').forEach(t => {
-                t.classList.remove('active');
-                t.setAttribute('aria-selected', 'false');
-            });
-            document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
-
-            const selectedTab = e.currentTarget;
-            selectedTab.classList.add('active');
-            selectedTab.setAttribute('aria-selected', 'true');
-            selectedTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            document.getElementById('tab-' + selectedTab.dataset.target).style.display = 'block';
+    function activateSettingsSection(target) {
+        document.querySelectorAll('.settings-tab[data-target]').forEach(tab => {
+            const selected = tab.dataset.target === target;
+            tab.classList.toggle('active', selected);
+            tab.setAttribute('aria-selected', String(selected));
         });
+        document.querySelectorAll('.settings-section').forEach(section => {
+            section.style.display = section.id === `tab-${target}` ? 'block' : 'none';
+        });
+        const picker = document.getElementById('settings-section-picker');
+        if (picker && picker.value !== target) picker.value = target;
+    }
+
+    document.querySelectorAll('.settings-tab[data-target]').forEach(tab => {
+        tab.addEventListener('click', (event) => {
+            activateSettingsSection(event.currentTarget.dataset.target);
+        });
+    });
+
+    document.getElementById('settings-section-picker')?.addEventListener('change', (event) => {
+        const target = event.currentTarget.value;
+        if (target.startsWith('/')) {
+            window.location.assign(target);
+            return;
+        }
+        activateSettingsSection(target);
     });
 
     // Handle saving Forms asynchronously
