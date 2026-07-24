@@ -207,10 +207,20 @@ def export_m3us_for_track(db: Session, spotify_track_id: str | None) -> int:
     """Refresh only playlists affected by a completed download."""
     if not spotify_track_id:
         return 0
+    return export_m3us_for_tracks(db, [spotify_track_id])
+
+
+def export_m3us_for_tracks(
+    db: Session, spotify_track_ids: list[str]
+) -> int:
+    """Refresh each playlist affected by a set of tracks exactly once."""
+    if not spotify_track_ids:
+        return 0
     playlists = db.scalars(
         select(Playlist)
         .join(PlaylistTrack)
-        .where(PlaylistTrack.spotify_track_id == spotify_track_id)
+        .where(PlaylistTrack.spotify_track_id.in_(spotify_track_ids))
+        .order_by(Playlist.id)
     ).unique().all()
     for playlist in playlists:
         export_m3u(db, playlist)

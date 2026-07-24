@@ -265,6 +265,22 @@ class LibraryBulkWorker:
         if task.status == TaskStatus.CANCELLED.value:
             self._cancel_remaining(db, task)
             return
+        if operation == "delete" and task.completed_items:
+            spotify_ids = db.scalars(
+                select(Song.spotify_track_id)
+                .join(
+                    BulkOperationItem,
+                    BulkOperationItem.song_id == Song.id,
+                )
+                .where(
+                    BulkOperationItem.task_id == task.id,
+                    BulkOperationItem.status == "completed",
+                    Song.spotify_track_id.is_not(None),
+                )
+            ).all()
+            from app.services.playlist_manager import export_m3us_for_tracks
+
+            export_m3us_for_tracks(db, list(spotify_ids))
         task.current_item = None
         task.completed_at = utcnow_naive()
         if task.failed_items and not task.completed_items:

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -8,7 +9,7 @@ from app.api.schemas.comparison import PlaylistComparisonResponse
 from app.api.schemas.playlist import PlaylistImportRequest
 from app.api.schemas.playlist_response import PlaylistResponse
 from app.database.session import get_db
-from app.database.models import Playlist  # <-- Fixed the NameError!
+from app.database.models import Playlist, Song
 from app.services.comparison import compare_with_library
 from app.services.playlist import import_playlist
 from app.services.playlist_download import download_playlist
@@ -23,6 +24,55 @@ router = APIRouter(
 
 class PlaylistDownloadRequest(BaseModel):
     url: str
+
+
+@router.get("/{playlist_id}/tracks")
+def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
+    playlist = db.scalar(
+        select(Playlist)
+        .options(selectinload(Playlist.tracks))
+        .where(Playlist.id == playlist_id)
+    )
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    spotify_ids = [track.spotify_track_id for track in playlist.tracks]
+    songs = db.scalars(
+        select(Song).where(Song.spotify_track_id.in_(spotify_ids))
+    ).all()
+    songs_by_spotify_id = {
+        song.spotify_track_id: song for song in songs
+    }
+    tracks = []
+    for track in playlist.tracks:
+        song = songs_by_spotify_id.get(track.spotify_track_id)
+        tracks.append(
+            {
+                "position": track.position + 1,
+                "spotify_track_id": track.spotify_track_id,
+                "title": (song.title if song else None)
+                or track.title
+                or "Unknown title",
+                "artist": (song.artist if song else None)
+                or track.artist
+                or "Unknown artist",
+                "album": (song.album if song else None) or track.album,
+                "song_id": song.id if song else None,
+                "availability": (
+                    song.availability_status if song else "not_in_library"
+                ),
+                "selectable": bool(
+                    song and song.availability_status != "missing"
+                ),
+            }
+        )
+    return {
+        "id": playlist.id,
+        "name": playlist.name,
+        "track_count": len(tracks),
+        "deletable_count": sum(track["selectable"] for track in tracks),
+        "tracks": tracks,
+    }
 
 @router.post("/import", response_model=PlaylistResponse)
 def import_spotify_playlist(request: PlaylistImportRequest):

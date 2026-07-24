@@ -15,6 +15,9 @@
   song and playlist IDs, preserve the original source order, and verify the
   resulting ID sequence. Ambiguous, read-only, or failed updates automatically
   fall back to the targeted incremental M3U-import workflow.
+- Add playlist-level Library file management with an ordered track list,
+  individual or select-all selection, durable background deletion progress,
+  and automatic refresh of every affected M3U.
 
 All notable changes to Harmony are documented in this file.
 

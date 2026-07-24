@@ -70,10 +70,41 @@
             <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
                 Download M3U
             </a>
+            <button
+                type="button"
+                class="btn-secondary playlist-manage-btn"
+                data-playlist-id="{{ p.id }}"
+                data-playlist-name="{{ p.name }}"
+            >Manage songs</button>
         </div>
     </div>
     {% endfor %}
 </div>
+
+<dialog id="playlist-tracks-dialog" class="library-bulk-dialog playlist-tracks-dialog">
+    <form method="dialog">
+        <div>
+            <span class="library-eyebrow">Playlist library files</span>
+            <h2 id="playlist-tracks-title">Playlist songs</h2>
+            <p id="playlist-tracks-summary">Loading songs…</p>
+        </div>
+        <label class="playlist-select-all">
+            <input id="playlist-select-all" type="checkbox">
+            <span>Select all songs available in Harmony</span>
+        </label>
+        <div id="playlist-track-list" class="playlist-track-list" role="list"></div>
+        <div id="playlist-delete-progress" class="playlist-delete-progress" hidden>
+            <progress id="playlist-delete-progress-bar" value="0" max="100"></progress>
+            <span id="playlist-delete-progress-text">Preparing deletion…</span>
+        </div>
+        <div class="library-bulk-dialog-actions">
+            <button class="btn-secondary" value="cancel">Close</button>
+            <button id="playlist-delete-selected" class="btn-danger" type="button" disabled>
+                Delete selected files
+            </button>
+        </div>
+    </form>
+</dialog>
 {% endblock %}
 
 {% block scripts %}
