@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import downloads, library
@@ -133,6 +133,26 @@ app.include_router(playlist_router)
 app.include_router(sync_sources_router)
 app.include_router(providers_router)
 app.include_router(providers_page_router)
+
+PWA_ASSET_DIR = Path("app/static/pwa")
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def web_app_manifest():
+    return FileResponse(
+        PWA_ASSET_DIR / "manifest.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/service-worker.js", include_in_schema=False)
+def service_worker():
+    return FileResponse(
+        PWA_ASSET_DIR / "service-worker.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.exception_handler(Exception)

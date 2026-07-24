@@ -355,6 +355,8 @@ Harmony is designed for desktop and mobile devices.
 Features include:
 
 - Responsive layouts
+- Installable Progressive Web App on supported browsers
+- Offline connection screen when the Harmony server cannot be reached
 - Compact mobile navigation and discoverable Settings sections
 - Touch-friendly controls and safe-area spacing
 - Optimized album grids
@@ -622,7 +624,6 @@ Just a synchronized self-hosted music library.
 - Plugin system
 - API authentication and external integration hardening
 - Additional Navidrome event hooks
-- Progressive Web App (PWA)
 - Lyrics support
 
 ---
