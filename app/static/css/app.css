@@ -853,22 +853,43 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .sources-grid { grid-template-columns: 1fr; }
 
     .mini-player {
-        bottom: 85px; 
+        bottom: calc(80px + env(safe-area-inset-bottom));
         left: 12px;
         right: 12px;
         width: auto;
+        max-width: none;
+        box-sizing: border-box;
         border-radius: 10px;
         padding: 12px 16px;
         box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
     }
 
     .fab-btn {
-        bottom: 100px;
-        right: 20px;
+        bottom: calc(84px + env(safe-area-inset-bottom));
+        right: max(16px, env(safe-area-inset-right));
         width: 52px;
         height: 52px;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
     }
+
+    .modal-overlay {
+        align-items: flex-end;
+        padding: 12px max(12px, env(safe-area-inset-right))
+            calc(12px + env(safe-area-inset-bottom))
+            max(12px, env(safe-area-inset-left));
+        box-sizing: border-box;
+    }
+    .modal-content {
+        width: 100%;
+        max-width: 520px;
+        max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 20px;
+        border-radius: 16px;
+    }
+    .modal-close { width: 44px; height: 44px; }
+    .modal-form input { min-height: 46px; font-size: 16px; }
 
     /* -------------------------------------
        TABLE TO CARD TRANSFORMATION (FLEX)
@@ -1977,12 +1998,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .health-section-heading { align-items: flex-start; flex-direction: column; }
     .health-section-heading small { text-align: left; }
     .health-job-panel-header { flex-direction: column; }
+    .health-job-panel-header > .btn-secondary { width: 100%; min-height: 44px; }
     .metadata-issues-header { grid-template-columns: 1fr; }
     .metadata-issues-panel { padding: 16px; }
     .metadata-issue-summary { width: 100%; box-sizing: border-box; }
     .metadata-issue-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
     .metadata-issue-filters input { grid-column: 1 / -1; }
     .health-job-columns { grid-template-columns: 1fr; }
+    .health-check { align-items: flex-start; }
+    .library-job-actions { width: 100%; grid-column: 1 / -1; }
+    .library-job-actions button { flex: 1; min-height: 42px; }
     .library-tabs {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2128,6 +2153,35 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .library-collection-count small { margin: 0; }
     .library-pagination { padding: 12px; }
     .library-pagination .btn-secondary { padding: 7px 10px; }
+
+    .library-bulk-dialog,
+    .library-job-dialog,
+    .playlist-tracks-dialog {
+        width: calc(100vw - 16px);
+        max-width: none;
+        max-height: calc(100dvh - 16px - env(safe-area-inset-bottom));
+        margin: auto 8px calc(8px + env(safe-area-inset-bottom));
+        border-radius: 16px;
+    }
+    .library-bulk-dialog form,
+    .library-job-dialog form,
+    .playlist-tracks-dialog form {
+        max-height: calc(100dvh - 16px - env(safe-area-inset-bottom));
+        box-sizing: border-box;
+        padding: 18px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+    .library-bulk-dialog-actions {
+        position: sticky;
+        bottom: -18px;
+        z-index: 2;
+        margin: 0 -18px -18px;
+        padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-surface);
+    }
 }
 
 @media (max-width: 390px) {
