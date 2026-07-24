@@ -66,12 +66,12 @@ def sync_playlist(
             return task
             
         # 6. Check duplicates and queue missing tracks
-        queueable_tracks: list[Track] = []
+        queueable_tracks: list[tuple[int, Track]] = []
         skipped_count = 0
         
-        for track in domain_playlist.tracks:
+        for position, track in enumerate(domain_playlist.tracks, 1):
             if _can_enqueue(db=db, track=track):
-                queueable_tracks.append(track)
+                queueable_tracks.append((position, track))
             else:
                 skipped_count += 1
                 
@@ -82,11 +82,12 @@ def sync_playlist(
             
         set_current_item(db=db, task=task, item="Queueing tracks...")
         
-        for track in queueable_tracks:
+        for position, track in queueable_tracks:
             enqueue_track(
                 db=db,
                 track=track,
                 task_id=task.id,
+                queue_position=position,
             )
             
         if not queueable_tracks:

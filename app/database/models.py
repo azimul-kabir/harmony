@@ -425,6 +425,7 @@ class DownloadJob(Base):
     album: Mapped[str | None] = mapped_column(String, nullable=True)
     album_artist: Mapped[str | None] = mapped_column(String, nullable=True)
     track: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    queue_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disc: Mapped[int | None] = mapped_column(Integer, nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True)

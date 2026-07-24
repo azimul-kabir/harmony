@@ -28,7 +28,8 @@ def test_enqueue_playlist_uses_playlist_importer(monkeypatch):
             ],
         )
 
-    def fake_enqueue_track(db, track, task_id=None):
+    def fake_enqueue_track(db, track, task_id=None, queue_position=None):
+        assert queue_position in (1, 2)
         created_jobs.append(track.spotify_url)
         return QueueResult(
             job_id=len(created_jobs),

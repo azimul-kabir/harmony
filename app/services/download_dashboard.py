@@ -44,7 +44,8 @@ def _job_columns():
                      DownloadJob.pipeline_stage, DownloadJob.progress_percent,
                      DownloadJob.heartbeat_at, DownloadJob.worker_name,
                      DownloadJob.bytes_downloaded, DownloadJob.bytes_total,
-                     DownloadJob.transfer_rate_bps, DownloadJob.eta_seconds)
+                     DownloadJob.transfer_rate_bps, DownloadJob.eta_seconds,
+                     DownloadJob.queue_position)
 
 
 def _legacy_reason(job: DownloadJob, status: str) -> tuple[str | None, str | None]:
@@ -92,6 +93,7 @@ def serialize_outcome(job: DownloadJob) -> dict:
 def _history_job(job: DownloadJob) -> dict:
     outcome = serialize_outcome(job)
     return {"id": job.id, "task_id": job.task_id, "title": job.title,
+            "queue_position": job.queue_position,
             "artist": job.artist, "album": job.album, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "completed_at": _timestamp(job.completed_at),
             "updated_at": _timestamp(job.updated_at), "error_category": outcome["reason_message"],
@@ -170,6 +172,7 @@ def download_details(job: DownloadJob) -> dict:
     events.sort(key=lambda item: (item[0], item[1]))
     outcome = serialize_outcome(job)
     return {"id": job.id, "task_id": job.task_id, "title": job.title, "artist": job.artist, "album": job.album,
+            "queue_position": job.queue_position,
             "source": "YouTube Music" if job.source_provider == "youtube_music" else "Spotify", "status": status,
             **serialize_telemetry(job),
             "stage": job.pipeline_stage or _stage(status),
@@ -192,9 +195,9 @@ def get_download_snapshot(db: Session, *, queue_limit: int = QUEUE_LIMIT,
                           .order_by(DownloadJob.created_at.asc(), DownloadJob.id.asc()).limit(queue_limit)).all()
     active, queued, paused = queue("running"), queue("queued"), queue("paused")
     return {"event_type": "snapshot", "counts": download_counts(db),
-            "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "status": normalized_status(j.status), **serialize_telemetry(j), "worker_slot": j.worker_name, "started_at": _timestamp(j.started_at)} for j in active],
-            "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(queued, 1)],
-            "paused": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(paused, 1)],
+            "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "queue_position": j.queue_position, "status": normalized_status(j.status), **serialize_telemetry(j), "worker_slot": j.worker_name, "started_at": _timestamp(j.started_at)} for j in active],
+            "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(queued, 1)],
+            "paused": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(paused, 1)],
             "jobs": history["items"], "history": history}
 
 

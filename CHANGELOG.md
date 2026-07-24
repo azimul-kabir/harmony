@@ -9,6 +9,8 @@
   the true available-versus-source track count.
 - Add source and playlist availability summaries, playlist filtering, direct
   Spotify links, one-click playlist resync, and a Navidrome scan shortcut.
+- Preserve and display each download's original playlist position, make queue
+  claiming deterministic, and compact mobile Source and Download action rows.
 
 All notable changes to Harmony are documented in this file.
 

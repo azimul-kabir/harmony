@@ -127,7 +127,7 @@ function renderSources(sources) {
         let actionsHtml = "";
         if (!isTaskActive) {
             actionsHtml = `
-                <button class="btn-secondary sync-btn" data-id="${source.id}" style="color: var(--primary); border-color: var(--primary); background: transparent;">↻ Sync</button>
+                <button class="btn-secondary sync-btn" data-id="${source.id}">Sync now</button>
                 <button class="btn-secondary toggle-btn" data-id="${source.id}" data-enabled="${source.enabled}">
                     ${source.enabled ? "Disable" : "Enable"}
                 </button>
@@ -144,8 +144,8 @@ function renderSources(sources) {
         ` : "";
         const outcomeHtml = source.task && !isTaskActive ? `
             <div class="source-outcome">
-                <span>${source.task.completed} completed</span>
-                <span>${source.task.skipped} skipped</span>
+                <span>${source.task.completed} downloaded</span>
+                <span>${source.task.skipped} already owned</span>
                 <span class="${source.task.failed ? "has-failures" : ""}">${source.task.failed} failed</span>
             </div>
         ` : "";

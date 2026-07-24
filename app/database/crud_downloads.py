@@ -16,6 +16,7 @@ def create_job(
     db: Session,
     track: Track,
     task_id: int | None = None,
+    queue_position: int | None = None,
 ) -> DownloadJob:
     job = DownloadJob(
         task_id=task_id,
@@ -30,6 +31,7 @@ def create_job(
         album=track.album,
         album_artist=track.album_artist,
         track=track.track,
+        queue_position=queue_position,
         cover_url=track.cover_url,
         disc=track.disc,
         year=track.year,
@@ -103,7 +105,7 @@ def claim_next_job(
                     ~Task.status.in_((TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value))
                 )
             )
-            .order_by(DownloadJob.created_at)
+            .order_by(DownloadJob.created_at, DownloadJob.id)
             .limit(1)
         )
 

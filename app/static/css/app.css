@@ -451,9 +451,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .source-header { display: flex; justify-content: space-between; align-items: flex-start; }
 .source-header h3 { margin: 0; font-size: 1.15rem; color: var(--text-main); line-height: 1.4; }
 .source-meta { background: var(--bg-surface-alt); color: var(--text-muted); padding: 12px; border-radius: 8px; font-size: 0.9rem; }
-.source-actions { display: flex; gap: 8px; margin-top: auto; }
-.source-actions button { flex: 1; padding: 10px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; }
-.source-actions button.delete-btn { flex: 0 0 auto; color: var(--danger); background: transparent; border: 1px solid transparent; }
+.source-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.source-actions button { flex: 1 1 90px; min-height: 42px; padding: 8px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.source-actions .sync-btn { color: var(--primary); border-color: var(--primary); background: transparent; }
+.source-actions button.delete-btn { flex: 0 1 auto; color: var(--danger); background: transparent; border: 1px solid var(--border-color); }
 .source-actions button.delete-btn:hover { background: var(--error-bg); }
 .page-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; }
 .page-heading h1 { margin: 0; }
@@ -1932,15 +1933,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .queue-waiting-heading, .queue-paused-heading { margin-top: 22px; }
 .active-downloads-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .active-download-card, .queue-item { min-width: 0; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface-alt); padding: 12px; }
+.queue-item-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.queue-item-heading strong { min-width: 0; }
+.queue-source-position { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-size: .72rem; font-weight: 700; }
 .active-download-card strong, .queue-item strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queue-artist, .queue-elapsed { display: block; color: var(--text-muted); font-size: .85rem; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queue-stage { display: block; margin-top: 8px; color: var(--primary); font-size: .78rem; font-weight: 700; text-transform: capitalize; }
 .queue-progress { width: 100%; height: 7px; margin-top: 7px; accent-color: var(--primary); }
-.queue-cancel { min-height: 44px; margin-top: 10px; padding: 7px 12px; font-size: .85rem; }
+.queue-item-actions { display: flex; gap: 8px; margin-top: 10px; }
+.queue-item-actions button { width: auto; min-height: 38px; margin: 0; padding: 6px 12px; font-size: .8rem; }
+.queue-cancel { min-height: 38px; margin: 0; padding: 6px 12px; font-size: .8rem; }
 .queue-list { display: grid; gap: 8px; padding-left: 28px; margin: 0; }
 .queue-list .queue-item { padding-left: 10px; }
 .download-queue-panel .empty-state { margin: 4px 0; color: var(--text-muted); }
-@media (max-width: 640px) { .download-queue-panel { padding: 14px; } .active-downloads-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+    .download-queue-panel { padding: 14px; }
+    .active-downloads-grid { grid-template-columns: 1fr; }
+    .source-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .source-actions button, .source-actions .source-open-link { width: 100%; min-width: 0; }
+}
 
 /* Privacy-safe download details drawer */
 .download-details-backdrop { position: fixed; inset: 0; z-index: 90; background: rgb(0 0 0 / .35); }
