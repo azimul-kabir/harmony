@@ -8,6 +8,7 @@ from app.web.templates import templates, template_context
 
 router = APIRouter(tags=["web"])
 
+
 @router.get("/settings")
 def settings_page(request: Request, db: Session = Depends(get_db)):
     # 1. Ensure our default database settings exist
@@ -18,7 +19,11 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     downloads = settings_service.get_settings_by_category(db, "downloads")
     playlists = settings_service.get_settings_by_category(db, "playlists")
     appearance = settings_service.get_settings_by_category(db, "appearance")
+    metadata = settings_service.get_settings_by_category(db, "metadata")
+    navidrome = settings_service.get_settings_by_category(db, "navidrome")
+    library = settings_service.get_settings_by_category(db, "library")
     
+    runtime_settings = get_settings()
     return templates.TemplateResponse(
         "settings.html",
         template_context(
@@ -28,6 +33,13 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
             downloads=downloads,
             playlists=playlists,
             appearance=appearance,
-            settings=get_settings()
+            metadata=metadata,
+            navidrome=navidrome,
+            library_settings=library,
+            settings=runtime_settings,
+            spotify_credentials_configured=bool(
+                runtime_settings.spotify_client_id
+                and runtime_settings.spotify_client_secret
+            ),
         ),
     )

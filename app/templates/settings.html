@@ -15,7 +15,9 @@
             <button class="settings-tab" data-target="playlists">Playlists</button>
             <button class="settings-tab" data-target="appearance">Appearance</button>
             <button class="settings-tab" data-target="spotify">Spotify</button>
-            <button class="settings-tab" data-target="system">System</button>
+            <button class="settings-tab" data-target="metadata">Metadata</button>
+            <button class="settings-tab" data-target="navidrome">Navidrome</button>
+            <button class="settings-tab" data-target="library-settings">Library</button>
             <a class="settings-tab settings-submenu-link" href="/developers/providers">Provider diagnostics</a>
         </div>
     </div>
@@ -98,6 +100,13 @@
                         <option value="youtube_music" {% if downloads.default_download_source == 'youtube_music' %}selected{% endif %}>YouTube Music</option>
                     </select>
                 </div>
+                <h3>Provider limits</h3>
+                <div class="settings-field-grid">
+                    <label>Request timeout (seconds)<input type="number" min="30" max="3600" name="youtube_music_timeout_seconds" class="form-control responsive-input-small" value="{{ downloads.youtube_music_timeout_seconds }}"></label>
+                    <label>Maximum playlist items<input type="number" min="1" max="5000" name="youtube_music_max_playlist_items" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_playlist_items }}"></label>
+                    <label>Maximum search results<input type="number" min="1" max="100" name="youtube_music_max_search_results" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_search_results }}"></label>
+                    <label>Maximum queued items<input type="number" min="1" max="5000" name="youtube_music_max_queue_items" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_queue_items }}"></label>
+                </div>
                 <div style="margin-top: 32px;">
                     <button type="submit" class="btn-primary">Save Changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
@@ -161,33 +170,65 @@
                 <div id="spotify-credential-status" style="display: {% if spotify.spotify_genre_enrichment_enabled %}block{% else %}none{% endif %}; color: var(--text-muted); font-size: 0.85rem;">
                     Credentials configured: <strong>{{ 'yes' if spotify_credentials_configured else 'no' }}</strong>. Set <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in the environment; secrets are never displayed here.
                 </div>
+                <div class="settings-field-grid" style="margin-top: 20px;">
+                    <label>Maximum genres<input type="number" min="1" max="20" name="spotify_genre_max_values" class="form-control responsive-input-small" value="{{ spotify.spotify_genre_max_values }}"></label>
+                </div>
+                <div class="settings-toggle-list">
+                    <label><input type="checkbox" name="spotify_genre_include_featured_fallback" {% if spotify.spotify_genre_include_featured_fallback %}checked{% endif %}> Use featured artists as fallback</label>
+                    <label><input type="checkbox" name="spotify_genre_merge_featured" {% if spotify.spotify_genre_merge_featured %}checked{% endif %}> Merge featured-artist genres</label>
+                    <label><input type="checkbox" name="spotify_genre_replace_existing" {% if spotify.spotify_genre_replace_existing %}checked{% endif %}> Replace existing genre tags</label>
+                </div>
                 <div style="margin-top: 32px;"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span></div>
             </form>
         </div>
 
-        <!-- System Tab (Legacy Env variables) -->
-        <div class="settings-section" id="tab-system" style="display: none;">
-            <h2 style="margin-top: 0; margin-bottom: 8px;">System Configuration</h2>
-            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">These variables are loaded from your <code>.env</code> file and require a container restart to modify.</p>
-            
-            <div class="system-grid">
-                <div class="system-card">
-                    <div class="system-card-title">App Version</div>
-                    <div class="system-card-value">{{ settings.app_version }}</div>
+        <div class="settings-section" id="tab-metadata" style="display: none;">
+            <h2 style="margin-top: 0;">Metadata</h2>
+            <form class="settings-form" data-category="metadata">
+                <h3>MusicBrainz</h3>
+                <div class="settings-field-grid">
+                    <label>Request timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="musicbrainz_timeout_seconds" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_timeout_seconds }}"></label>
+                    <label>Maximum retries<input type="number" min="0" max="10" name="musicbrainz_max_retries" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_max_retries }}"></label>
+                    <label>Cache TTL (seconds)<input type="number" min="0" max="2592000" name="musicbrainz_cache_ttl_seconds" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_cache_ttl_seconds }}"></label>
+                    <label>Concurrent requests<input type="number" min="1" max="10" name="musicbrainz_max_concurrent_requests" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_max_concurrent_requests }}"></label>
+                    <label>Cover art timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="cover_art_archive_timeout_seconds" class="form-control responsive-input-small" value="{{ metadata.cover_art_archive_timeout_seconds }}"></label>
                 </div>
-                <div class="system-card">
-                    <div class="system-card-title">Music Path</div>
-                    <div class="system-card-value">{{ settings.music_path }}</div>
+                <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
+            </form>
+        </div>
+
+        <div class="settings-section" id="tab-navidrome" style="display: none;">
+            <h2 style="margin-top: 0;">Navidrome</h2>
+            <p class="settings-help">Connection URL and credentials remain environment-only.</p>
+            <form class="settings-form" data-category="navidrome">
+                <div class="settings-toggle-list">
+                    <label><input type="checkbox" name="navidrome_direct_playlist_sync_enabled" {% if navidrome.navidrome_direct_playlist_sync_enabled %}checked{% endif %}> Direct playlist sync</label>
+                    <label><input type="checkbox" name="navidrome_playlist_reimport_enabled" {% if navidrome.navidrome_playlist_reimport_enabled %}checked{% endif %}> Scan and reconcile playlists after downloads</label>
                 </div>
-                <div class="system-card">
-                    <div class="system-card-title">Download Path</div>
-                    <div class="system-card-value">{{ settings.download_path }}</div>
+                <div class="settings-field-grid">
+                    <label>Request timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="navidrome_timeout_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_timeout_seconds }}"></label>
+                    <label>Direct search limit<input type="number" min="1" max="500" name="navidrome_direct_search_limit" class="form-control responsive-input-small" value="{{ navidrome.navidrome_direct_search_limit }}"></label>
+                    <label>Duration tolerance (seconds)<input type="number" min="0" max="60" step="0.5" name="navidrome_direct_duration_tolerance_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_direct_duration_tolerance_seconds }}"></label>
+                    <label>Reimport debounce (seconds)<input type="number" min="0" max="300" step="0.5" name="navidrome_playlist_reimport_debounce_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_debounce_seconds }}"></label>
+                    <label>Scan poll interval (seconds)<input type="number" min="0.25" max="60" step="0.25" name="navidrome_playlist_reimport_poll_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_poll_seconds }}"></label>
+                    <label>Scan timeout (seconds)<input type="number" min="10" max="3600" step="1" name="navidrome_playlist_reimport_scan_timeout_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_scan_timeout_seconds }}"></label>
                 </div>
-                <div class="system-card">
-                    <div class="system-card-title">Staging Path</div>
-                    <div class="system-card-value">{{ settings.staging_path }}</div>
+                <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
+            </form>
+        </div>
+
+        <div class="settings-section" id="tab-library-settings" style="display: none;">
+            <h2 style="margin-top: 0;">Library</h2>
+            <form class="settings-form" data-category="library">
+                <div class="settings-toggle-list">
+                    <label><input type="checkbox" name="library_watcher_enabled" {% if library_settings.library_watcher_enabled %}checked{% endif %}> Watch the music folder for changes</label>
                 </div>
-            </div>
+                <div class="settings-field-grid">
+                    <label>Watcher debounce (seconds)<input type="number" min="0.1" max="60" step="0.05" name="library_watcher_debounce_seconds" class="form-control responsive-input-small" value="{{ library_settings.library_watcher_debounce_seconds }}"></label>
+                </div>
+                <p class="settings-help">Watcher changes take effect after restarting Harmony.</p>
+                <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
+            </form>
         </div>
     </div>
 </div>
@@ -257,29 +298,43 @@
         color: var(--text-main);
     }
 
-    /* System Card Grid */
-    .system-grid {
+    .settings-field-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 18px;
+        margin-top: 18px;
     }
-    .system-card {
-        padding: 16px;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
+    .settings-field-grid label, .settings-toggle-list label {
+        color: var(--text-main);
+        font-weight: 600;
     }
-    .system-card-title {
-        font-size: 0.8rem;
+    .settings-field-grid input {
+        display: block;
+        margin-top: 8px;
+    }
+    .settings-toggle-list {
+        display: grid;
+        gap: 14px;
+        margin: 18px 0;
+    }
+    .settings-toggle-list input {
+        width: 18px;
+        height: 18px;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+    .settings-help {
         color: var(--text-muted);
-        text-transform: uppercase;
-        font-weight: bold;
+        font-size: 0.85rem;
     }
-    .system-card-value {
-        font-family: monospace;
-        margin-top: 6px;
-        font-size: 0.95rem;
-        word-break: break-all;
+    .settings-save-row {
+        margin-top: 32px;
+    }
+    .settings-save-row .save-status {
+        display: none;
+        margin-left: 12px;
+        color: var(--success);
+        font-weight: bold;
     }
 
     /* MOBILE RESPONSIVE QUERIES */
@@ -318,8 +373,8 @@
         .responsive-input {
             width: 100%; /* Full width on mobile */
         }
-        .system-grid {
-            grid-template-columns: 1fr; /* Stack system cards on mobile */
+        .settings-field-grid {
+            grid-template-columns: 1fr;
         }
     }
 </style>
@@ -354,6 +409,7 @@
                 body: JSON.stringify(data)
             });
 
+            const status = form.querySelector('.save-status');
             if(res.ok) {
                 // Instantly apply theme shift without page reload
                 if(category === 'appearance' && data.theme) {
@@ -364,9 +420,19 @@
                     }
                 }
 
-                const status = form.querySelector('.save-status');
+                status.textContent = '✓ Saved';
+                status.style.color = 'var(--success)';
                 status.style.display = 'inline';
                 setTimeout(() => status.style.display = 'none', 3000);
+            } else {
+                let message = 'Could not save settings.';
+                try {
+                    const error = await res.json();
+                    if (error.detail) message = error.detail;
+                } catch (_) {}
+                status.textContent = message;
+                status.style.color = 'var(--danger)';
+                status.style.display = 'inline';
             }
         });
     });

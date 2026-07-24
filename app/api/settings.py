@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.services import settings_service
@@ -33,5 +33,8 @@ def get_category_settings(category: str, db: Session = Depends(get_db)):
 
 @router.put("/{category}")
 def update_category_settings(category: str, updates: dict, db: Session = Depends(get_db)):
-    settings_service.update_settings(db, category, updates)
+    try:
+        settings_service.update_settings(db, category, updates)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"status": "success"}
