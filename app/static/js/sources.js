@@ -1,6 +1,16 @@
 // State tracker to prevent unneeded DOM thrashing
 let currentlySyncing = new Set();
 
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+    })[character]);
+}
+
 function renderSources(sources) {
     const container = document.getElementById("sources");
     if (!container) return;
@@ -100,7 +110,7 @@ function renderSources(sources) {
                         <div class="task-progress-bar">
                             <div class="task-progress-fill" style="width:${percent}%"></div>
                         </div>
-                        ${t.current ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Downloading: ${t.current}</div>` : ""}
+                        ${t.current ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Downloading: ${escapeHtml(t.current)}</div>` : ""}
                         <div style="margin-top: 12px; display:flex; gap: 8px;">
                             ${taskActions}
                         </div>
@@ -125,20 +135,38 @@ function renderSources(sources) {
             `;
         }
 
+        const playlistHtml = source.playlist ? `
+            <div class="source-counts">
+                <div><strong>${source.playlist.total}</strong><span>Source</span></div>
+                <div><strong>${source.playlist.exported}</strong><span>Available</span></div>
+                <div><strong>${Math.max(0, source.playlist.total - source.playlist.exported)}</strong><span>Missing</span></div>
+            </div>
+        ` : "";
+        const outcomeHtml = source.task && !isTaskActive ? `
+            <div class="source-outcome">
+                <span>${source.task.completed} completed</span>
+                <span>${source.task.skipped} skipped</span>
+                <span class="${source.task.failed ? "has-failures" : ""}">${source.task.failed} failed</span>
+            </div>
+        ` : "";
+
         const innerHTML = `
             <div class="source-header">
-                <h3>${source.name}</h3>
+                <h3>${escapeHtml(source.name)}</h3>
                 <span class="badge ${source.enabled ? "badge-completed" : "badge-cancelled"}">
                     ${source.enabled ? "Active" : "Disabled"}
                 </span>
             </div>
             <div class="source-meta" style="margin-top: 16px;">
-                <div><strong>Type:</strong> ${source.type}</div>
+                <div><strong>Type:</strong> ${escapeHtml(source.type)}</div>
                 <div><strong>Last Sync:</strong> ${lastSync}</div>
             </div>
+            ${playlistHtml}
+            ${outcomeHtml}
             ${taskHtml}
             <div class="source-actions" style="margin-top: 16px; align-items: center;">
                 ${actionsHtml}
+                <a class="btn-secondary source-open-link" href="${escapeHtml(source.spotify_url)}" target="_blank" rel="noopener">Spotify</a>
             </div>
         `;
 

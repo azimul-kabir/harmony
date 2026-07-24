@@ -36,6 +36,43 @@ def _parse_number(value):
         return None
 
 
+def _parse_total(value):
+    if value is None:
+        return None
+    parts = str(value).split("/", 1)
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[1])
+    except ValueError:
+        return None
+
+
+def _parse_bool(value):
+    normalized = str(value).strip().casefold() if value is not None else ""
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    return None
+
+
+def _tag_value(tags: Any, *names: str):
+    """Read a known external-ID tag across Vorbis/MP4 and ID3 TXXX forms."""
+    for name in names:
+        value = tags.get(name) if hasattr(tags, "get") else None
+        if value is not None:
+            return _first(value)
+    # ID3 stores the user-visible names written by file_tag_writer as TXXX
+    # frames.  This is indexing/repair logic, not artwork-fetch lookup.
+    if getattr(tags, "getall", None):
+        requested = {name.casefold() for name in names}
+        for frame in tags.getall("TXXX"):
+            if str(getattr(frame, "desc", "")).casefold() in requested:
+                return _first(getattr(frame, "text", None))
+    return None
+
+
 def read_metadata(file_path: str | Path) -> dict:
     path = Path(file_path)
 
@@ -62,7 +99,9 @@ def read_metadata(file_path: str | Path) -> dict:
         "album": _first(easy.get("album")),
         # Track
         "track": _parse_number(_first(easy.get("tracknumber"))),
+        "track_total": _parse_total(_first(easy.get("tracknumber"))),
         "disc": _parse_number(_first(easy.get("discnumber"))),
+        "disc_total": _parse_total(_first(easy.get("discnumber"))),
         # Other
         "genre": _first(easy.get("genre")),
         "year": _parse_number(_first(easy.get("date"))),
@@ -76,10 +115,22 @@ def read_metadata(file_path: str | Path) -> dict:
         # External IDs
         "spotify_track_id": _first(tags.get("spotify_track_id")),
         "spotify_album_id": _first(tags.get("spotify_album_id")),
-        "musicbrainz_recording_id": _first(
-            tags.get("musicbrainz_recordingid")
-            or tags.get("musicbrainz_trackid")
+        "musicbrainz_recording_id": _tag_value(
+            tags, "musicbrainz_recordingid", "musicbrainz_trackid", "MusicBrainz Track Id"
         ),
+        "musicbrainz_release_id": _tag_value(
+            tags, "musicbrainz_albumid", "MusicBrainz Album Id"
+        ),
+        "musicbrainz_release_group_id": _tag_value(
+            tags, "musicbrainz_releasegroupid", "MusicBrainz Release Group Id"
+        ),
+        "musicbrainz_artist_id": _tag_value(
+            tags, "musicbrainz_artistid", "MusicBrainz Artist Id"
+        ),
+        "musicbrainz_release_artist_id": _tag_value(
+            tags, "musicbrainz_albumartistid", "MusicBrainz Album Artist Id"
+        ),
+        "compilation": _parse_bool(_first(tags.get("compilation") or easy.get("compilation"))),
         "isrc": _first(tags.get("isrc")),
     }
 

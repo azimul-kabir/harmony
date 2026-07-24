@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.database.models import Task, TaskItemFailure, SyncSource
-from sqlalchemy import select, delete
+from app.database.models import (MetadataApplicationBatch, MetadataApplicationLock,
+    MetadataDiscovery, MetadataDiscoveryLock, Task, TaskItemFailure, SyncSource)
+from sqlalchemy import select, delete, update
 from app.domain.task import (
     TaskStatus,
     TaskType,
@@ -198,6 +199,14 @@ def cancel_task(
         if task.status == TaskStatus.CANCELLED.value:
             task.completed_at = utcnow_naive()
             task.current_item = None
+            db.execute(delete(MetadataDiscoveryLock).where(MetadataDiscoveryLock.task_id == task.id))
+            db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
+            db.execute(update(MetadataApplicationBatch).where(
+                MetadataApplicationBatch.job_id == task.id,
+                MetadataApplicationBatch.status == "queued",
+            ).values(status="cancelled", completed_at=utcnow_naive()))
+            db.execute(update(MetadataDiscovery).where(MetadataDiscovery.job_id==task.id,
+                MetadataDiscovery.status.in_(("queued","running"))).values(status="cancelled",completed_at=utcnow_naive()))
         db.commit()
         db.refresh(task)
 
@@ -248,5 +257,14 @@ def recover_library_jobs(db: Session) -> int:
         task.current_item = None
         task.completed_at = None if task.resumable else utcnow_naive()
         task.recovery_metadata = '{"reason":"process_restart"}'
+        if not task.resumable:
+            db.execute(delete(MetadataDiscoveryLock).where(MetadataDiscoveryLock.task_id == task.id))
+            db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
+            db.execute(update(MetadataApplicationBatch).where(
+                MetadataApplicationBatch.job_id == task.id,
+                MetadataApplicationBatch.status.in_(("queued", "running")),
+            ).values(status="interrupted", completed_at=utcnow_naive()))
+            db.execute(update(MetadataDiscovery).where(MetadataDiscovery.job_id==task.id,
+                MetadataDiscovery.status.in_(("queued","running"))).values(status="failed",completed_at=utcnow_naive(),error_metadata='[{"code":"process_restart"}]'))
     db.commit()
     return len(jobs)

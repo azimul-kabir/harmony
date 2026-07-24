@@ -22,6 +22,7 @@ def settings_page(request: Request):
         template_context(
             request=request,
             settings=settings,
+            spotify_credentials_configured=bool(settings.spotify_client_id and settings.spotify_client_secret),
             page="settings",
         ),
     )

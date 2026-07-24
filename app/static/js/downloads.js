@@ -1,180 +1,37 @@
 let currentJobs = [];
-let currentFilter = 'ALL';
-let searchQuery = '';
+const selectedDownloadIds = new Set();
+let bulkPending = false;
+const DOWNLOAD_FILTERS = new Set(["ALL", "ACTIVE", "RUNNING", "QUEUED", "PAUSED", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED"]);
+let currentFilter = "ALL", searchQuery = "", detailsController = null, openDownloadId = null, detailsTrigger = null;
+const drawer = document.getElementById("download-details-drawer"), backdrop = document.getElementById("download-details-backdrop"), detailsContent = document.getElementById("download-details-content");
 
-// 1. Smart URL Validation
-const urlInput = document.getElementById("spotify-url");
-const submitBtn = document.getElementById("download-submit-btn");
-
-if (urlInput) {
-    urlInput.addEventListener("input", (e) => {
-        const val = e.target.value.trim();
-        if (val.length > 0 && !val.includes("open.spotify.com")) {
-            urlInput.classList.add("invalid");
-            submitBtn.disabled = true;
-            submitBtn.textContent = "Invalid URL";
-        } else {
-            urlInput.classList.remove("invalid");
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Download";
-        }
-    });
-}
-
-// 2. Download Form Submission
-const downloadForm = document.getElementById("download-form");
-if (downloadForm) {
-    downloadForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const result = document.getElementById("download-result");
-        result.innerHTML = '<div class="success-message"><span class="spinner" style="border-top-color:#1565c0;"></span> Processing...</div>';
-        
-        await queueSpotifyUrl(urlInput.value, result);
-        urlInput.value = "";
-    });
-}
-
-async function queueSpotifyUrl(url, resultElement) {
-    try {
-        const response = await fetch("/api/downloads", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: url }),
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) throw new Error(data.detail || "Download failed.");
-        
-        if (data.summary) {
-            resultElement.innerHTML = `
-                <div class="success-message">
-                    <strong>Playlist queued successfully</strong><br>
-                    ${data.summary.playlist_name}<br><br>
-                    Queued: ${data.summary.queued}<br>
-                    Already queued: ${data.summary.already_queued}<br>
-                    Already owned: ${data.summary.owned}
-                </div>
-            `;
-        } else if (data.status === "owned") {
-            resultElement.innerHTML = `<div class="success-message">This track already exists in your library.</div>`;
-        } else {
-            resultElement.innerHTML = `<div class="success-message">Download queued successfully.</div>`;
-        }
-    } catch (error) {
-        resultElement.innerHTML = `<div class="error-message">${error.message}</div>`;
-    }
-}
-
-// 3. Client-Side Rendering & Filtering
-function renderFilteredDownloads() {
-    const tbody = document.getElementById("downloads-body");
-    if (!tbody) return;
-
-    // Apply Status Filter
-    let filtered = currentJobs;
-    if (currentFilter === 'ACTIVE') {
-        filtered = filtered.filter(j => ['RUNNING', 'QUEUED'].includes((j.status || '').toUpperCase()));
-    } else if (currentFilter === 'COMPLETED') {
-        filtered = filtered.filter(j => ['COMPLETED', 'SKIPPED'].includes((j.status || '').toUpperCase()));
-    } else if (currentFilter === 'FAILED') {
-        filtered = filtered.filter(j => ['FAILED', 'CANCELLED'].includes((j.status || '').toUpperCase()));
-    }
-
-    // Apply Search Filter
-    if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        filtered = filtered.filter(job => 
-            (job.title || '').toLowerCase().includes(q) || 
-            (job.artist || '').toLowerCase().includes(q) ||
-            (job.album || '').toLowerCase().includes(q)
-        );
-    }
-
-    if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center empty-state" style="padding: 40px;">No downloads found matching your criteria.</td></tr>`;
-        return;
-    }
-
-// Inside app/static/js/downloads.js, update the tbody.innerHTML map logic inside renderFilteredDownloads():
-
-    tbody.innerHTML = filtered.map(job => {
-        const status = (job.status || '').toUpperCase();
-        const isFailed = status === 'FAILED' || status === 'CANCELLED';
-        
-        let statusHtml = `<span class="badge badge-${status.toLowerCase()}">${status}</span>`;
-        if (status === 'RUNNING') {
-            statusHtml = `<span class="badge badge-running"><span class="spinner" style="width:10px; height:10px; border-width:2px; margin-right:4px;"></span> Downloading</span>`;
-        }
-
-        const actionHtml = isFailed 
-            ? `<button class="btn-retry" onclick="retryJob('${job.spotify_url}')">  Retry</button>` 
-            : ``;
-
-        // NEW: Artwork HTML Generation
-        const coverImg = job.cover_url
-            ? `<img src="${job.cover_url}" alt="Cover" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`
-            : `<div style="width: 40px; height: 40px; border-radius: 6px; background: var(--bg-surface-hover); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); border: 1px solid var(--border-color);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`;
-
-        return `
-            <tr>
-                <td style="padding-left: 24px; vertical-align: middle;">${statusHtml}</td>
-                <td style="font-weight: 600; color: var(--text-main);">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        ${coverImg}
-                        <span style="font-size: 1.05rem;">${job.title ?? ""}</span>
-                    </div>
-                </td>
-                <td style="color: var(--text-muted); vertical-align: middle;">${job.artist ?? ""}</td>
-                <td style="color: var(--text-muted); vertical-align: middle;">${job.album ?? ""}</td>
-                <td style="text-align: right; padding-right: 24px; vertical-align: middle;">${actionHtml}</td>
-            </tr>
-        `;
-    }).join("");
-}
-
-// 4. Action Handlers
-window.retryJob = async function(url) {
-    if (!url) return;
-    const resultElement = document.getElementById("download-result");
-    resultElement.innerHTML = '<div class="success-message"><span class="spinner" style="border-top-color:#1565c0;"></span> Retrying download...</div>';
-    await queueSpotifyUrl(url, resultElement);
-}
-
-document.getElementById("clear-history-btn")?.addEventListener("click", async () => {
-    if (!confirm("Are you sure you want to clear all completed and failed history?")) return;
-    const response = await fetch("/api/downloads/clear", { method: "POST" });
-    if (!response.ok) alert("Failed to clear history.");
-});
-
-// 5. Filter Listeners
-document.querySelectorAll(".filter-tab").forEach(tab => {
-    tab.addEventListener("click", (e) => {
-        document.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
-        e.target.classList.add("active");
-        currentFilter = e.target.dataset.filter;
-        renderFilteredDownloads();
-    });
-});
-
-document.getElementById("search-input")?.addEventListener("input", (e) => {
-    searchQuery = e.target.value.trim();
-    renderFilteredDownloads();
-});
-
-// 6. SSE Connection
-function connectDownloadsSSE() {
-    if (!document.getElementById("downloads-body")) return;
-    const eventSource = new EventSource("/api/downloads/stream");
-    
-    eventSource.onmessage = function(event) {
-        currentJobs = JSON.parse(event.data);
-        renderFilteredDownloads();
-    };
-    
-    eventSource.onerror = function(error) {
-        console.error("SSE connection error, attempting to reconnect...", error);
-    };
-}
-
-connectDownloadsSSE();
+function setText(id, value) { const node = document.getElementById(id); if (node) node.textContent = Number(value || 0).toLocaleString(); }
+function statusOf(job) { return String(job.status || "").toUpperCase(); }
+function textNode(tag, value, className) { const node = document.createElement(tag); if (className) node.className = className; node.textContent = value; return node; }
+function setDownloadFilter(filter, push = true) { currentFilter = DOWNLOAD_FILTERS.has(filter) ? filter : "ALL"; document.querySelectorAll(".filter-tab, [data-summary-filter]").forEach((item) => item.classList.toggle("active", (item.dataset.filter || item.dataset.summaryFilter) === currentFilter)); const url = new URL(window.location.href); currentFilter === "ALL" ? url.searchParams.delete("status") : url.searchParams.set("status", currentFilter.toLowerCase()); window.history[push ? "pushState" : "replaceState"]({}, "", url); renderHistory(); }
+function filteredJobs() { let jobs = currentJobs.filter((job) => { const status = statusOf(job); if (currentFilter === "ALL") return true; if (currentFilter === "ACTIVE") return ["RUNNING", "QUEUED", "PAUSED"].includes(status);  return status === currentFilter; }); if (searchQuery) { const q = searchQuery.toLowerCase(); jobs = jobs.filter((j) => [j.title, j.artist, j.album].some((v) => String(v || "").toLowerCase().includes(q))); } return jobs; }
+function detailsButton(id) { const button = textNode("button", "Details", "btn-secondary download-details-button"); button.type = "button"; button.addEventListener("click", (event) => { event.stopPropagation(); openDetails(id, button); }); return button; }
+function selectedVisibleJobs() { return filteredJobs().filter((job) => selectedDownloadIds.has(job.id)); }
+function updateSelectionToolbar() { const selected = selectedVisibleJobs(), toolbar = document.getElementById("download-selection-toolbar"); if (toolbar) toolbar.hidden = !selected.length; const count = document.getElementById("download-selected-count"); if (count) count.textContent = `${selected.length} selected`; const visible = filteredJobs(), all = document.getElementById("select-visible-downloads-checkbox"); if (all) { all.checked = visible.length > 0 && selected.length === visible.length; all.indeterminate = selected.length > 0 && selected.length < visible.length; } document.querySelectorAll("[data-bulk-action]").forEach((button) => { const action = button.dataset.bulkAction, capability = action === "clear_history" ? "clear_history" : action; const eligible = action.startsWith("clear_") && action !== "clear_history" ? 1 : selected.filter((job) => job.capabilities?.[capability]).length; button.disabled = bulkPending || eligible === 0; button.title = eligible ? "" : "No selected downloads are eligible for this action."; }); }
+function renderHistory() { const tbody = document.getElementById("downloads-body"); if (!tbody) return; const jobs = filteredJobs(); tbody.replaceChildren(); if (!jobs.length) { const row = document.createElement("tr"), cell = textNode("td", "No recent downloads match this filter.", "text-center empty-state"); cell.colSpan = 6; cell.style.padding = "40px"; row.appendChild(cell); tbody.appendChild(row); } else jobs.forEach((job) => { const row = document.createElement("tr"); row.dataset.downloadId = String(job.id); row.className = `download-history-row${selectedDownloadIds.has(job.id) ? " is-selected" : ""}`; const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.checked = selectedDownloadIds.has(job.id); checkbox.setAttribute("aria-label", `Select ${job.title || "download"} by ${job.artist || "unknown artist"}`); checkbox.addEventListener("click", (event) => event.stopPropagation()); checkbox.addEventListener("change", () => { checkbox.checked ? selectedDownloadIds.add(job.id) : selectedDownloadIds.delete(job.id); renderHistory(); }); const badge = textNode("span", statusOf(job) === "RUNNING" ? "Downloading" : statusOf(job) || "Unknown", `badge badge-${statusOf(job).toLowerCase()}`); const cells = Array.from({ length: 6 }, () => document.createElement("td")); cells[0].appendChild(checkbox); cells[1].appendChild(badge); const song = document.createElement("div"); song.appendChild(textNode("strong", job.title || "Unknown title")); if (job.reason_message) song.appendChild(textNode("small", `${job.reason_message}${job.failure_stage ? ` · ${job.failure_stage}` : ""}`, "download-outcome-reason")); cells[2].appendChild(song); cells[3].textContent = job.artist || "—"; cells[4].textContent = job.album || "—"; cells[5].appendChild(detailsButton(job.id)); row.append(...cells); row.addEventListener("click", () => openDetails(job.id, row)); tbody.appendChild(row); }); const label = document.getElementById("downloads-visible-count"); if (label) label.textContent = `${jobs.length.toLocaleString()} of ${currentJobs.length.toLocaleString()} recent downloads shown`; updateSelectionToolbar(); }
+function queueItem(job, active) { const item = document.createElement(active ? "article" : "li"); item.className = active ? "active-download-card" : "queue-item"; item.dataset.downloadId = String(job.id); const title = textNode("strong", job.title || "Unknown title"), artist = textNode("span", job.artist || "Unknown artist", "queue-artist"); item.append(title, artist); if (active && job.stage) item.appendChild(textNode("small", String(job.stage).replaceAll("_", " "), "queue-stage")); if (active && job.progress != null) { const progress = document.createElement("progress"); progress.className = "queue-progress"; progress.max = 100; progress.value = Math.max(0, Math.min(100, Number(job.progress))); progress.setAttribute("aria-label", `${job.title || "Download"} progress`); item.appendChild(progress); } if (active && job.started_at) { const elapsed = document.createElement("small"); elapsed.className = "queue-elapsed"; elapsed.dataset.startedAt = job.started_at; item.appendChild(elapsed); } item.appendChild(detailsButton(job.id)); if (active) { const cancel = textNode("button", "Cancel", "btn-danger queue-cancel"); cancel.type = "button"; cancel.addEventListener("click", (event) => { event.stopPropagation(); cancelDownload(job.id); }); item.appendChild(cancel); } return item; }
+function patchQueue(containerId, emptyId, jobs, active) { const container = document.getElementById(containerId), empty = document.getElementById(emptyId); if (!container || !empty) return; container.replaceChildren(...jobs.map((job) => queueItem(job, active))); empty.hidden = jobs.length > 0; }
+function updateElapsed() { document.querySelectorAll(".queue-elapsed").forEach((node) => { const start = Date.parse(node.dataset.startedAt); if (!Number.isNaN(start)) node.textContent = `Running for ${Math.max(0, Math.floor((Date.now() - start) / 60000))} min`; }); }
+async function cancelDownload(id) { const response = await fetch(`/api/downloads/${id}/cancel`, { method: "POST" }); if (response.ok && openDownloadId === id) refreshOpenDetails(); }
+function formatValue(value) { if (typeof value === "number") return value.toLocaleString(); if (typeof value === "string" && value.includes("T")) { const date = new Date(value); if (!Number.isNaN(date)) return date.toLocaleString(); } return value; }
+function renderDetails(data) { detailsContent.replaceChildren(); const list = document.createElement("dl"); list.className = "download-details-list"; const fields = [["Title", data.title], ["Artist", data.artist], ["Album", data.album], ["Source", data.source], ["Status", data.status], ["Reason", data.reason_message], ["Reason code", data.reason_code], ["Stage", data.failure_stage || data.stage], ["Provider", data.provider], ["Worker", data.worker], ["Heartbeat", data.heartbeat_at], ["Retry available", data.retryable ? "Yes" : "No"], ["Technical detail", data.technical_detail], ["Progress", data.progress == null ? null : `${data.progress}%`], ["Downloaded bytes", data.bytes_downloaded], ["Total bytes", data.bytes_total], ["Transfer rate", data.transfer_rate_bps == null ? null : `${data.transfer_rate_bps.toLocaleString()} B/s`], ["ETA", data.eta_seconds == null ? null : `${data.eta_seconds}s`], ["Requested", data.created_at], ["Started", data.started_at], ["Finished", data.finished_at], ["Queue wait", data.queue_wait_seconds == null ? null : `${data.queue_wait_seconds}s`], ["Processing duration", data.run_duration_seconds == null ? null : `${data.run_duration_seconds}s`], ["Retry count", data.retry_count]]; fields.forEach(([label, value]) => { if (value === null || value === undefined || value === "") return; const item = document.createElement("div"); item.append(textNode("dt", label), textNode("dd", formatValue(value))); list.appendChild(item); }); detailsContent.appendChild(list); if (data.events?.length) { detailsContent.appendChild(textNode("h3", "Event timeline")); const timeline = document.createElement("ol"); timeline.className = "download-timeline"; data.events.forEach((event) => { const item = document.createElement("li"); item.appendChild(textNode("strong", event.label)); if (event.description) item.appendChild(textNode("p", event.description)); if (event.occurred_at) { const time = textNode("time", formatValue(event.occurred_at)); time.dateTime = event.occurred_at; item.appendChild(time); } timeline.appendChild(item); }); detailsContent.appendChild(timeline); } const actions = document.createElement("div"); actions.className = "download-detail-actions"; if (data.can_cancel) { const cancel = textNode("button", "Cancel", "btn-danger"); cancel.type = "button"; cancel.addEventListener("click", () => cancelDownload(data.id)); actions.appendChild(cancel); } const close = textNode("button", "Close", "btn-secondary"); close.type = "button"; close.addEventListener("click", closeDetails); actions.appendChild(close); detailsContent.appendChild(actions); }
+function showDetailsState(message) { detailsContent.replaceChildren(textNode("p", message, "empty-state")); }
+async function openDetails(id, trigger) { detailsTrigger = trigger || document.activeElement; openDownloadId = id; if (detailsController) detailsController.abort(); detailsController = new AbortController(); backdrop.hidden = false; drawer.hidden = false; drawer.classList.add("is-open"); drawer.setAttribute("aria-hidden", "false"); document.getElementById("download-details-title").textContent = "Download details"; showDetailsState("Loading download details…"); document.getElementById("download-details-close").focus(); try { const response = await fetch(`/api/downloads/${id}`, { signal: detailsController.signal }); if (id !== openDownloadId) return; if (response.status === 404) { showDetailsState("This download is no longer available."); return; } if (!response.ok) throw new Error("Unable to load download details."); const data = await response.json(); if (id === openDownloadId) { document.getElementById("download-details-title").textContent = data.title || "Download details"; renderDetails(data); } } catch (error) { if (error.name !== "AbortError" && id === openDownloadId) showDetailsState("Unable to load download details. Please try again."); } }
+function closeDetails() { if (detailsController) detailsController.abort(); openDownloadId = null; drawer.classList.remove("is-open"); drawer.setAttribute("aria-hidden", "true"); backdrop.hidden = true; window.setTimeout(() => { if (!openDownloadId) drawer.hidden = true; }, 200); if (detailsTrigger?.isConnected) detailsTrigger.focus(); }
+function refreshOpenDetails() { if (openDownloadId !== null) openDetails(openDownloadId, detailsTrigger); }
+function showDownloadError(message) { const result = document.getElementById("download-result"); if (result) result.textContent = message; }
+function validArray(value, name) { if (!Array.isArray(value)) { console.warn(`Invalid Downloads response: ${name} must be an array.`, value); return false; } return true; }
+function applySnapshot(snapshot) { if (!snapshot || typeof snapshot !== "object") { console.warn("Invalid Downloads response: expected an object.", snapshot); return; } if (snapshot.event_type && snapshot.event_type !== "snapshot") return; if (snapshot.jobs !== undefined) { if (!validArray(snapshot.jobs, "jobs")) return; currentJobs = snapshot.jobs; const visibleIds = new Set(currentJobs.map((job) => job.id)); [...selectedDownloadIds].forEach((id) => { if (!visibleIds.has(id)) selectedDownloadIds.delete(id); }); renderHistory(); } if (snapshot.counts !== undefined) { if (typeof snapshot.counts !== "object" || snapshot.counts === null) console.warn("Invalid Downloads response: counts must be an object.", snapshot.counts); else ["running", "queued", "paused", "completed", "failed", "skipped", "cancelled"].forEach((key) => setText(`downloads-${key}`, snapshot.counts[key])); } if (snapshot.active !== undefined && validArray(snapshot.active, "active")) patchQueue("active-downloads", "active-downloads-empty", snapshot.active, true); if (snapshot.queued !== undefined && validArray(snapshot.queued, "queued")) patchQueue("waiting-downloads", "waiting-downloads-empty", snapshot.queued, false); if (snapshot.paused !== undefined && validArray(snapshot.paused, "paused")) patchQueue("paused-downloads", "paused-downloads-empty", snapshot.paused, false); updateElapsed(); refreshOpenDetails(); }
+async function reloadSnapshot() { try { const response = await fetch("/api/downloads/snapshot", { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); applySnapshot(await response.json()); } catch (error) { console.warn("Unable to reload Downloads snapshot.", error); showDownloadError("Unable to load downloads. Please retry shortly."); } }
+function connectDownloadsSSE() { const source = new EventSource("/api/downloads/stream"); const handleSnapshot = (event) => { try { applySnapshot(JSON.parse(event.data)); } catch (error) { console.warn("Invalid Downloads SSE payload.", error); } }; source.addEventListener("snapshot", handleSnapshot); source.onmessage = handleSnapshot; source.onerror = () => { reloadSnapshot(); }; }
+document.querySelectorAll(".filter-tab, [data-summary-filter]").forEach((item) => item.addEventListener("click", () => setDownloadFilter(item.dataset.filter || item.dataset.summaryFilter)));
+document.getElementById("search-input")?.addEventListener("input", (event) => { searchQuery = event.target.value.trim(); renderHistory(); }); window.addEventListener("popstate", () => setDownloadFilter(new URLSearchParams(location.search).get("status")?.toUpperCase() || "ALL", false)); document.getElementById("download-details-close")?.addEventListener("click", closeDetails); backdrop?.addEventListener("click", closeDetails); document.addEventListener("keydown", (event) => { if (event.key === "Escape" && openDownloadId !== null) { closeDetails(); return; } if (event.key === "Tab" && openDownloadId !== null) { const focusable = [...drawer.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])")]; if (!focusable.length) return; const first = focusable[0], last = focusable.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } } }); const requested = new URLSearchParams(location.search).get("status")?.toUpperCase(); setDownloadFilter(requested || "ALL", false); setInterval(updateElapsed, 60000); reloadSnapshot(); connectDownloadsSSE();
+const downloadForm = document.getElementById("download-form"); downloadForm?.addEventListener("submit", async (event) => { event.preventDefault(); const input = document.getElementById("spotify-url"), result = document.getElementById("download-result"); try { const response = await fetch("/api/downloads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: input.value }) }); const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Download failed."); result.textContent = data.status === "owned" ? "This track already exists in your library." : "Download queued successfully."; input.value = ""; } catch (error) { result.textContent = error.message || "Download failed."; } });
+function bulkDescription(action, selected, eligible) { const names = { retry: "Retry", cancel: "Cancel", clear_history: "Remove", clear_completed_history: "Remove", clear_failed_cancelled_history: "Remove" }; const subject = action === "clear_completed_history" ? "all completed download records" : action === "clear_failed_cancelled_history" ? "all failed and cancelled download records" : `${eligible} eligible downloads`; return `${names[action]} ${subject}?\n\n${selected - eligible > 0 ? `${selected - eligible} selected records are not eligible and will be skipped.\n\n` : ""}Downloaded music files, Library records, and artwork cache will not be deleted.`; }
+async function submitBulk(action) { const selected = selectedVisibleJobs(), global = action === "clear_completed_history" || action === "clear_failed_cancelled_history"; const capability = action === "clear_history" ? "clear_history" : action; const eligible = global ? selected.length : selected.filter((job) => job.capabilities?.[capability]).length; if (!global && !eligible) return; if (!confirm(bulkDescription(action, selected.length, eligible))) return; bulkPending = true; updateSelectionToolbar(); try { const response = await fetch("/api/downloads/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, download_ids: global ? [] : selected.map((job) => job.id) }) }); const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Bulk action failed."); document.getElementById("download-result").textContent = data.result_code === "partial" ? `${data.succeeded} completed; ${data.skipped} skipped.` : `${data.succeeded} download records updated.`; if (action.startsWith("clear_") || data.succeeded) selected.forEach((job) => selectedDownloadIds.delete(job.id)); } catch (error) { document.getElementById("download-result").textContent = error.message || "Bulk action failed."; } finally { bulkPending = false; renderHistory(); } }
+document.getElementById("select-visible-downloads")?.addEventListener("click", () => { filteredJobs().forEach((job) => selectedDownloadIds.add(job.id)); renderHistory(); }); document.getElementById("select-visible-downloads-checkbox")?.addEventListener("change", (event) => { filteredJobs().forEach((job) => event.target.checked ? selectedDownloadIds.add(job.id) : selectedDownloadIds.delete(job.id)); renderHistory(); }); document.getElementById("clear-download-selection")?.addEventListener("click", () => { selectedDownloadIds.clear(); renderHistory(); }); document.querySelectorAll("[data-bulk-action]").forEach((button) => button.addEventListener("click", () => submitBulk(button.dataset.bulkAction)));

@@ -7,8 +7,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.artwork import get_artwork, get_artwork_file, list_artwork
 from app.database.base import Base
-from app.database.models import Artwork
-from app.services.artwork import ArtworkCandidate, ArtworkService
+from app.database.models import Artwork, Song
+from app.services.artwork import (
+    ArtworkCandidate,
+    ArtworkFetchSkipped,
+    ArtworkService,
+    resolve_musicbrainz_release_id,
+)
 
 
 PNG = (
@@ -95,3 +100,151 @@ def test_artwork_metadata_and_file_apis(tmp_path):
     assert metadata["url"] == f"/api/artwork/{artwork_id}/file"
     assert image.media_type == "image/png"
     assert Path(image.path).read_bytes() == PNG
+
+
+def test_fetches_and_caches_cover_art_archive_front_image(tmp_path, monkeypatch):
+    session_factory = _database()
+    service = ArtworkService(tmp_path / "cache")
+    release_id = "24b78a62-5b88-4f3b-9bfc-1e1db47c50ad"
+    monkeypatch.setattr(
+        "app.services.artwork.get_settings",
+        lambda: SimpleNamespace(
+            cover_art_archive_base_url="https://coverartarchive.example",
+            cover_art_archive_timeout_seconds=1,
+            cover_art_archive_max_bytes=1024,
+        ),
+    )
+
+    class Response:
+        def read(self, amount):
+            assert amount == 1025
+            return PNG
+
+        def geturl(self):
+            return f"https://coverartarchive.example/release/{release_id}/front"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        assert request.full_url == f"https://coverartarchive.example/release/{release_id}/front"
+        assert timeout == 1
+        return Response()
+
+    monkeypatch.setattr("app.services.artwork.urlopen", fake_urlopen)
+
+    with session_factory() as db:
+        artwork = service.fetch_musicbrainz_release_artwork(db, release_id)
+        db.commit()
+
+        assert artwork.source == "remote"
+        assert artwork.provider == "cover_art_archive"
+        assert artwork.provider_id == release_id
+        assert artwork.original_url == f"https://coverartarchive.example/release/{release_id}/front"
+        assert Path(artwork.cache_path).read_bytes() == PNG
+
+
+def test_cover_art_archive_rejects_non_image_response(tmp_path, monkeypatch):
+    service = ArtworkService(tmp_path / "cache")
+    monkeypatch.setattr(
+        "app.services.artwork.get_settings",
+        lambda: SimpleNamespace(
+            cover_art_archive_base_url="https://coverartarchive.example",
+            cover_art_archive_timeout_seconds=1,
+            cover_art_archive_max_bytes=1024,
+        ),
+    )
+    class Response:
+        def read(self, _amount):
+            return b"not an image"
+
+        def geturl(self):
+            return "https://coverartarchive.example/image"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr("app.services.artwork.urlopen", lambda *_args, **_kwargs: Response())
+    with _database()() as db:
+        try:
+            service.fetch_musicbrainz_release_artwork(db, "24b78a62-5b88-4f3b-9bfc-1e1db47c50ad")
+        except ValueError as error:
+            assert str(error) == "Cover Art Archive returned an unsupported artwork format"
+        else:
+            raise AssertionError("expected non-image response to be rejected")
+
+
+def _song(tmp_path, **values):
+    return Song(path=str(tmp_path / "track.mp3"), filename="track.mp3", **values)
+
+
+def test_resolver_uses_canonical_musicbrainz_album_id_for_observed_case(tmp_path):
+    song = _song(
+        tmp_path,
+        musicbrainz_release_id="4f003785-1944-4b33-8a90-c676aab3db86",
+        musicbrainz_release_group_id="c4f1b0ff-54e4-4ee3-a722-4c30892997b7",
+    )
+
+    result = resolve_musicbrainz_release_id(song)
+
+    assert result.resolved
+    assert result.release_id == "4f003785-1944-4b33-8a90-c676aab3db86"
+    assert result.source_field == "songs.musicbrainz_release_id"
+    assert not result.legacy_fallback_used
+
+
+def test_release_group_is_never_used_as_cover_art_release_id(tmp_path):
+    result = resolve_musicbrainz_release_id(
+        _song(tmp_path, musicbrainz_release_group_id="c4f1b0ff-54e4-4ee3-a722-4c30892997b7")
+    )
+
+    assert result.release_id is None
+    assert result.outcome == "release_group_only"
+
+
+def test_invalid_release_id_is_rejected_before_provider_request(tmp_path, monkeypatch):
+    service = ArtworkService(tmp_path / "cache")
+    monkeypatch.setattr("app.services.artwork.urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("network request")))
+    with _database()() as db:
+        song = _song(tmp_path, musicbrainz_release_id="not-a-uuid")
+        try:
+            service.fetch_for_song(db, song)
+        except ArtworkFetchSkipped as error:
+            assert error.resolution.outcome == "invalid_release_id"
+        else:
+            raise AssertionError("expected invalid identifier to be skipped")
+
+
+def test_cached_artwork_avoids_remote_fetch_without_release_id(tmp_path, monkeypatch):
+    service = ArtworkService(tmp_path / "cache")
+    with _database()() as db:
+        artwork = service.cache(db, ArtworkCandidate(PNG, "image/png", "remote"))
+        song = _song(tmp_path)
+        song.artwork = artwork
+        monkeypatch.setattr(service, "fetch_musicbrainz_release_artwork", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("network request")))
+
+        resolved, outcome, cache_hit = service.fetch_for_song(db, song)
+
+        assert resolved is artwork
+        assert cache_hit
+        assert outcome.outcome == "canonical_release_id_missing"
+
+
+def test_forced_remote_refresh_requires_a_valid_release_id(tmp_path):
+    service = ArtworkService(tmp_path / "cache")
+    with _database()() as db:
+        artwork = service.cache(db, ArtworkCandidate(PNG, "image/png", "remote"))
+        song = _song(tmp_path)
+        song.artwork = artwork
+        try:
+            service.fetch_for_song(db, song, force_remote=True)
+        except ArtworkFetchSkipped as error:
+            assert error.resolution.outcome == "canonical_release_id_missing"
+        else:
+            raise AssertionError("expected forced remote refresh to require an identifier")

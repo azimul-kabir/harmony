@@ -18,9 +18,10 @@ from app.database.crud_sync_sources import (
     create_sync_source,
     get_sync_source_by_spotify_id,
 )
-from app.database.models import Task
+from app.database.models import Playlist, Task
 from app.database.session import get_db, SessionLocal
 from app.services.playlist_sync import sync_playlist
+from app.services.playlist_manager import count_m3u_entries, playlist_file_path
 from app.services.spotify.url import spotify_resource
 
 router = APIRouter(
@@ -129,6 +130,11 @@ async def stream_sources_data(request: Request):
                 payload = []
                 
                 for source in sources:
+                    playlist = db.scalar(
+                        select(Playlist).where(
+                            Playlist.spotify_id == source.spotify_id
+                        )
+                    )
                     latest_task = db.execute(
                         select(Task)
                         .where(Task.source_id == source.id)
@@ -155,6 +161,13 @@ async def stream_sources_data(request: Request):
                         "spotify_url": source.spotify_url,
                         "enabled": source.enabled,
                         "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None,
+                        "playlist": {
+                            "id": playlist.id,
+                            "total": playlist.track_count,
+                            "exported": count_m3u_entries(
+                                playlist_file_path(playlist.name)
+                            ),
+                        } if playlist else None,
                         "task": task_data
                     })
                 

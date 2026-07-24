@@ -3,7 +3,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.api.library import _serialize_song, list_collections
+from app.api.library import _serialize_song, list_collections, list_songs
+from app.api.schemas.library import SongResponse
 from app.database.base import Base
 from app.database.models import Song
 
@@ -87,3 +88,31 @@ def test_song_response_falls_back_when_a_legacy_song_has_no_created_at():
 
     assert response["date_added"] == indexed_at
     assert response["recently_added"] is True
+
+
+def test_library_song_payload_repairs_nullable_legacy_status_fields():
+    """A legacy NULL must not invalidate the full /songs response page."""
+    with _session() as db:
+        song = Song(
+            path="/music/legacy-nullable.mp3",
+            filename="legacy-nullable.mp3",
+            availability_status="available",
+            artwork_status=None,
+            download_source=None,
+        )
+        db.add(song)
+        db.commit()
+
+        payload = list_songs(
+            db=db,
+            playlist_id=None,
+            year=None,
+            min_bitrate=None,
+            max_bitrate=None,
+            limit=None,
+            offset=0,
+        )
+
+        assert payload[0]["artwork_status"] == "missing"
+        assert payload[0]["download_source"] == "filesystem"
+        SongResponse.model_validate(payload[0])

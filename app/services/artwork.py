@@ -6,6 +6,9 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import struct
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+from uuid import UUID
 
 from mutagen import File
 from mutagen.flac import Picture
@@ -19,6 +22,9 @@ from app.database.models import Artwork, Song
 
 FOLDER_ARTWORK_NAMES = ("cover", "folder", "front", "album")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+EMBEDDABLE_IMAGE_MIMES = {"image/jpeg", "image/png"}
+MAX_EMBEDDED_ARTWORK_BYTES = 15 * 1024 * 1024
+MAX_EMBEDDED_ARTWORK_DIMENSION = 10_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +32,66 @@ class ArtworkCandidate:
     data: bytes
     mime_type: str
     source: str
+    provider: str | None = None
+    provider_id: str | None = None
+    original_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MusicBrainzReleaseResolution:
+    """The safe, canonical input to a Cover Art Archive release request."""
+
+    release_id: str | None
+    source_field: str | None
+    outcome: str
+    legacy_fallback_used: bool = False
+    release_group_id: str | None = None
+
+    @property
+    def resolved(self) -> bool:
+        return self.outcome == "resolved"
+
+
+def resolve_musicbrainz_release_id(song: Song) -> MusicBrainzReleaseResolution:
+    """Resolve only Harmony's canonical *release* identifier.
+
+    ``Song.musicbrainz_release_id`` is the canonical value populated by metadata
+    application and indexing.  There is no separate legacy release-ID column in
+    the current schema, so this deliberately does not infer an ID from a release
+    group, provider match, suggestion, or audio tag.
+    """
+    value = song.musicbrainz_release_id
+    if not value or not value.strip():
+        return MusicBrainzReleaseResolution(
+            None,
+            None,
+            "release_group_only" if song.musicbrainz_release_group_id else "canonical_release_id_missing",
+            release_group_id=song.musicbrainz_release_group_id,
+        )
+    try:
+        release_id = str(UUID(value.strip()))
+    except (ValueError, AttributeError):
+        return MusicBrainzReleaseResolution(
+            None, "songs.musicbrainz_release_id", "invalid_release_id",
+            release_group_id=song.musicbrainz_release_group_id,
+        )
+    return MusicBrainzReleaseResolution(
+        release_id, "songs.musicbrainz_release_id", "resolved",
+        release_group_id=song.musicbrainz_release_group_id,
+    )
+
+
+class ArtworkFetchSkipped(ValueError):
+    """A user-actionable non-error outcome for a remote artwork request."""
+
+    def __init__(self, resolution: MusicBrainzReleaseResolution):
+        self.resolution = resolution
+        messages = {
+            "canonical_release_id_missing": "Canonical MusicBrainz release ID is missing; apply canonical metadata before fetching artwork.",
+            "release_group_only": "Only a MusicBrainz release-group ID is available; Cover Art Archive release lookup requires a release ID.",
+            "invalid_release_id": "The canonical MusicBrainz release ID is not a valid UUID.",
+        }
+        super().__init__(messages.get(resolution.outcome, "Artwork fetch was skipped."))
 
 
 class ArtworkService:
@@ -78,16 +144,113 @@ class ArtworkService:
             width=width,
             height=height,
             file_size=len(candidate.data),
+            provider=candidate.provider,
+            provider_id=candidate.provider_id,
+            original_url=candidate.original_url,
         )
         db.add(artwork)
         db.flush()
         logger.info(
-            "Cached {} artwork {} at {}",
+            "Cached {} artwork {}",
             candidate.source,
             artwork.id,
-            cache_path,
         )
         return artwork
+
+    def validated_cached_bytes(self, artwork: Artwork | None) -> tuple[bytes, str] | None:
+        """Return safe embeddable cache bytes without exposing its private path."""
+        if artwork is None:
+            return None
+        try:
+            data = Path(artwork.cache_path).read_bytes()
+        except OSError:
+            return None
+        mime = _recognized_image_mime(data)
+        if mime not in EMBEDDABLE_IMAGE_MIMES or len(data) > MAX_EMBEDDED_ARTWORK_BYTES:
+            return None
+        try:
+            width, height = _image_dimensions(data, mime)
+        except (ValueError, struct.error):
+            return None
+        if not data or not width or not height or max(width, height) > MAX_EMBEDDED_ARTWORK_DIMENSION:
+            return None
+        return data, mime
+
+    def fetch_musicbrainz_release_artwork(
+        self,
+        db: Session,
+        release_id: str,
+        *,
+        force_remote: bool = False,
+    ) -> Artwork:
+        """Download and cache the Cover Art Archive front image for a release."""
+        try:
+            release_id = str(UUID(release_id))
+        except (TypeError, ValueError, AttributeError) as error:
+            raise ValueError("A valid MusicBrainz release ID is required") from error
+
+        existing = db.scalar(
+            select(Artwork).where(
+                Artwork.provider == "cover_art_archive",
+                Artwork.provider_id == release_id,
+            )
+        )
+        if existing is not None and Path(existing.cache_path).is_file() and not force_remote:
+            return existing
+
+        settings = get_settings()
+        url = f"{settings.cover_art_archive_base_url.rstrip('/')}/release/{release_id}/front"
+        try:
+            request = Request(url, headers={"Accept": "image/jpeg, image/png, image/webp"})
+            with urlopen(request, timeout=settings.cover_art_archive_timeout_seconds) as response:
+                data = response.read(settings.cover_art_archive_max_bytes + 1)
+                original_url = response.geturl()
+        except (HTTPError, URLError, OSError) as error:
+            raise ValueError("Cover Art Archive could not provide front artwork for this release") from error
+
+        if not data or len(data) > settings.cover_art_archive_max_bytes:
+            raise ValueError("Cover Art Archive returned an invalid artwork file")
+        mime_type = _recognized_image_mime(data)
+        if mime_type is None:
+            raise ValueError("Cover Art Archive returned an unsupported artwork format")
+        return self.cache(
+            db,
+            ArtworkCandidate(
+                data=data,
+                mime_type=mime_type,
+                source="remote",
+                provider="cover_art_archive",
+                provider_id=release_id,
+                original_url=original_url,
+            ),
+        )
+
+    def fetch_for_song(
+        self, db: Session, song: Song, *, force_remote: bool = False
+    ) -> tuple[Artwork, MusicBrainzReleaseResolution, bool]:
+        """Fetch canonical provider artwork, preserving a valid cached result.
+
+        A cache hit satisfies the ordinary fetch action even when a provider ID
+        is now unavailable.  Forced remote refreshes resolve and validate the
+        canonical release ID before issuing a request.
+        """
+        cached = self.validated_cached_bytes(song.artwork)
+        if cached is not None and not force_remote:
+            resolution = resolve_musicbrainz_release_id(song)
+            logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=cache_hit", song.id, resolution.outcome, resolution.source_field)
+            return song.artwork, resolution, True  # type: ignore[return-value]
+        resolution = resolve_musicbrainz_release_id(song)
+        if not resolution.resolved:
+            logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=not_requested cache={}", song.id, resolution.outcome, resolution.source_field, "miss" if cached is None else "hit")
+            raise ArtworkFetchSkipped(resolution)
+        if force_remote:
+            artwork = self.fetch_musicbrainz_release_artwork(
+                db, resolution.release_id, force_remote=True
+            )
+        else:
+            artwork = self.fetch_musicbrainz_release_artwork(db, resolution.release_id)
+        logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=success cache=miss", song.id, resolution.outcome, resolution.source_field)
+        return artwork, resolution, False
 
     def refresh_for_song(self, db: Session, song: Song) -> Artwork | None:
         """Re-read local artwork sources, repairing the cache when necessary."""
@@ -219,6 +382,16 @@ def _sniff_mime(data: bytes, extension: str | None = None) -> str:
     return "image/jpeg"
 
 
+def _recognized_image_mime(data: bytes) -> str | None:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 def _extension_for_mime(mime_type: str) -> str:
     return {
         "image/png": ".png",
@@ -229,4 +402,20 @@ def _extension_for_mime(mime_type: str) -> str:
 def _image_dimensions(data: bytes, mime_type: str) -> tuple[int | None, int | None]:
     if mime_type == "image/png" and len(data) >= 24:
         return struct.unpack(">II", data[16:24])
+    if mime_type == "image/jpeg" and data.startswith(b"\xff\xd8"):
+        pos = 2
+        while pos + 9 < len(data):
+            if data[pos] != 0xFF:
+                raise ValueError("Malformed JPEG")
+            while pos < len(data) and data[pos] == 0xFF:
+                pos += 1
+            marker = data[pos]; pos += 1
+            if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                continue
+            length = int.from_bytes(data[pos:pos + 2], "big")
+            if length < 7 or pos + length > len(data):
+                raise ValueError("Malformed JPEG")
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                return int.from_bytes(data[pos + 5:pos + 7], "big"), int.from_bytes(data[pos + 3:pos + 5], "big")
+            pos += length
     return None, None

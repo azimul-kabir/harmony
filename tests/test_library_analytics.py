@@ -86,3 +86,20 @@ def test_empty_library_analytics_are_stable():
         assert analytics["largest_album"] is None
         assert analytics["newest_album"] is None
         assert analytics["oldest_album"] is None
+
+
+def test_album_insights_fall_back_to_index_dates_when_release_years_are_missing():
+    now = datetime.now(UTC).replace(tzinfo=None)
+    with _session() as db:
+        db.add_all([
+            Song(path="/music/early.mp3", filename="early.mp3", title="Early", artist="Artist",
+                 album="Early Album", created_at=now - timedelta(days=10), availability_status="available"),
+            Song(path="/music/late.mp3", filename="late.mp3", title="Late", artist="Artist",
+                 album="Late Album", created_at=now, availability_status="available"),
+        ])
+        db.commit()
+
+        analytics = library_analytics.calculate(db)
+
+        assert analytics["newest_album"]["name"] == "Late Album"
+        assert analytics["oldest_album"]["name"] == "Early Album"

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "1.5.0"
+    app_version: str = "1.6.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -37,10 +37,26 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     spotdl_path: str = "spotdl"
+    yt_dlp_path: str = "yt-dlp"
+    youtube_music_enabled: bool = True
+    default_download_source: str = "spotify"
+    youtube_music_timeout_seconds: int = 300
+    youtube_music_audio_quality: str = "0"
+    youtube_music_max_playlist_items: int = 500
+    youtube_music_max_search_results: int = 25
+    youtube_music_max_queue_items: int = 500
     use_official_spotify_api: bool = False
     spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
+    # Artist genres are supplementary metadata only.  Keep the provider opt-in
+    # so normal downloads never need Spotify credentials or a Spotify request.
+    spotify_genre_enrichment_enabled: bool = False
+    spotify_genre_max_values: int = 3
+    spotify_genre_max_concurrent_requests: int = 4
+    spotify_genre_include_featured_fallback: bool = True
+    spotify_genre_merge_featured: bool = False
+    spotify_genre_replace_existing: bool = False
 
     audio_providers: str = "youtube-music,youtube"
 
@@ -48,6 +64,25 @@ class Settings(BaseSettings):
 
     library_watcher_enabled: bool = True
     library_watcher_debounce_seconds: float = 0.75
+
+    navidrome_url: str = ""
+    navidrome_username: str = ""
+    navidrome_password: str = ""
+    navidrome_timeout_seconds: float = 5.0
+
+    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
+    musicbrainz_user_agent: str = "Harmony/1.6.0 (https://github.com/azimul-kabir/harmony)"
+    musicbrainz_timeout_seconds: float = 10.0
+    musicbrainz_max_retries: int = 3
+    musicbrainz_backoff_seconds: float = 0.5
+    musicbrainz_requests_per_second: float = 1.0
+    musicbrainz_cache_ttl_seconds: int = 86400
+    musicbrainz_max_concurrent_requests: int = 2
+    cover_art_archive_base_url: str = "https://coverartarchive.org"
+    cover_art_archive_timeout_seconds: float = 20.0
+    cover_art_archive_max_bytes: int = 15 * 1024 * 1024
+    metadata_discovery_chunk_size: int = 25
+    metadata_discovery_max_batch_songs: int = 500
 
 
 @lru_cache

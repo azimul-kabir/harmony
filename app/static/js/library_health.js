@@ -1,4 +1,9 @@
 const healthState = { taskId: null, timer: null };
+const healthCheckDestinations = {
+    artwork: "/library?missing_artwork=true",
+    metadata: "/library?missing_metadata=true",
+    missing_files: "/library?availability=missing",
+};
 const actionCopy = {
     refresh: ["Refresh Library?", "Harmony will scan the music folder incrementally and reconcile missing files."],
     rebuild: ["Rebuild the Library Index?", "Harmony will re-read metadata for every music file and rebuild indexed search."],
@@ -10,7 +15,8 @@ async function healthJson(url, options) {
     const response = await fetch(url, options);
     if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || `Request failed: ${response.status}`);
+        const detail = body.detail?.error || body.error || body.detail;
+        throw new Error(detail?.message || detail || `Request failed: ${response.status}`);
     }
     return response.json();
 }
@@ -34,6 +40,7 @@ async function loadHealth() {
         document.getElementById("health-score").textContent = health.health_score;
         document.getElementById("health-score-ring").style.setProperty("--health-score", `${health.health_score * 3.6}deg`);
         renderHealthChecks(health.checks || []);
+        await loadMetadataIssues();
         await loadLibraryJobs();
         document.getElementById("health-error").hidden = true;
     } catch (error) {
@@ -41,6 +48,65 @@ async function loadHealth() {
         box.textContent = `Harmony could not load Library health: ${error.message}`;
         box.hidden = false;
     }
+}
+
+async function loadMetadataIssues() {
+    const status = document.getElementById("metadata-status")?.value || "open";
+    const severity = document.getElementById("metadata-severity")?.value || "";
+    const query = document.getElementById("metadata-search")?.value || "";
+    const entityType = document.getElementById("metadata-entity")?.value || "";
+    const params = new URLSearchParams({ status, limit: "50" });
+    if (status === "open") params.set("included_only", "true");
+    if (severity) params.set("severity", severity);
+    if (entityType) params.set("entity_type", entityType);
+    if (query) params.set("search", query);
+    const data = await healthJson(`/api/library/health/metadata/issues?${params}`);
+    const target = document.getElementById("metadata-issues");
+    const items = data.items;
+    target.innerHTML = items.length ? items.map((item) => {
+        const destination = item.entity_type === "song" && item.song_id
+            ? `<a class="btn-secondary" href="/library?song=${item.song_id}&metadata=review">Review song</a>`
+            : item.entity_type === "album" && item.album_key
+                ? `<a class="btn-secondary" href="/library?view=albums&album_key=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
+        const action = item.status === "ignored"
+            ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>`
+            : item.status === "open" ? `<button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>` : "";
+        const discoverable = ["missing_musicbrainz_recording_id","missing_musicbrainz_release_id","missing_musicbrainz_artist_id","missing_title","placeholder_title","filename_derived_title","missing_artist","placeholder_artist","missing_album","placeholder_album","missing_genre","suspicious_whitespace","inconsistent_capitalization"].includes(item.rule_id);
+        const discover = discoverable ? `<button class="btn-secondary" data-discover-issue="${item.id}">Find MusicBrainz candidates</button>` : "";
+        return `<details class="health-check status-${escapeHealth(item.severity)}"><summary><span class="health-check-indicator"></span><div><strong>${escapeHealth(item.title)}</strong><small>${escapeHealth(item.rule_id)} · ${escapeHealth(item.entity_type)} · ${escapeHealth(item.severity)}</small></div></summary><p>${escapeHealth(item.explanation)}</p><p><strong>Next action:</strong> ${escapeHealth(item.suggested_action)}</p><div>${destination}${action}${discover}</div></details>`;
+    }).join("") : `<p>${status === "open" ? "No open metadata issues. Run an analysis to refresh results." : `No ${escapeHealth(status)} metadata issues match these filters.`}</p>`;
+    target.querySelectorAll("[data-metadata-ignore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataIgnore}/ignore`, {method:"POST"}); loadMetadataIssues(); });
+    target.querySelectorAll("[data-metadata-restore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataRestore}/restore`, {method:"POST"}); loadMetadataIssues(); });
+    target.querySelectorAll("[data-metadata-resolve]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataResolve}/resolve`, {method:"POST"}); loadMetadataIssues(); });
+    target.querySelectorAll("[data-discover-issue]").forEach((button) => button.onclick = async () => {
+        const result=await healthJson("/api/metadata/discoveries/health-issues",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_ids:[Number(button.dataset.discoverIssue)],initiated_by:"library-health-ui"})});
+        button.textContent=`Candidate search queued (job ${result.job.id})`;button.disabled=true;
+    });
+    const summary = await healthJson("/api/library/health/metadata/summary");
+    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issue records · ${summary.score.inputs.ignored_issues} ignored historical records (diagnostic only). Warnings reduce this score.`;
+    const severityCounts = Object.fromEntries((summary.counts.severity || []).map((row) => [row.value, row.count]));
+    document.querySelectorAll("[data-metadata-severity-count]").forEach((count) => {
+        count.textContent = Number(severityCounts[count.dataset.metadataSeverityCount] || 0).toLocaleString();
+    });
+    const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value))).slice(0, 8);
+    const ruleSummary = document.getElementById("metadata-rule-counts");
+    ruleSummary.classList.toggle("is-empty", !ruleCounts.length);
+    const ruleIcon = document.createElement("span");
+    ruleIcon.className = "metadata-rule-icon";
+    ruleIcon.setAttribute("aria-hidden", "true");
+    ruleIcon.textContent = ruleCounts.length ? "↗" : "✓";
+    const ruleCopy = document.createElement("div");
+    const ruleTitle = document.createElement("strong");
+    const ruleDetail = document.createElement("small");
+    if (ruleCounts.length) {
+        ruleTitle.textContent = ruleCounts[0].value.replaceAll("_", " ");
+        ruleDetail.textContent = `${Number(ruleCounts[0].count).toLocaleString()} issue records${ruleCounts.length > 1 ? ` · ${ruleCounts.length - 1} more rules` : ""}`;
+    } else {
+        ruleTitle.textContent = "No recurring rule patterns";
+        ruleDetail.textContent = "Run metadata analysis to populate this summary.";
+    }
+    ruleCopy.append(ruleTitle, ruleDetail);
+    ruleSummary.replaceChildren(ruleIcon, ruleCopy);
 }
 
 async function loadLibraryJobs() {
@@ -69,9 +135,19 @@ function renderHealthChecks(checks) {
             <div><strong>${escapeHealth(check.label)}</strong><small>${check.available ?
                 (check.count ? `${Number(check.count).toLocaleString()} songs need attention` : "No issues detected") :
                 "Provider not installed yet"}</small></div>
-            <span>${check.available ? (check.status === "healthy" ? "Healthy" : "Review") : "Future"}</span>
+            ${renderHealthCheckAction(check)}
         </article>
     `).join("");
+}
+
+function renderHealthCheckAction(check) {
+    if (!check.available) return "<span>Future</span>";
+    if (check.status === "healthy") return "<span>Healthy</span>";
+
+    const destination = healthCheckDestinations[check.id];
+    return destination
+        ? `<a class="btn-secondary health-check-action" href="${destination}" aria-label="Review ${escapeHealth(check.label)}">Review</a>`
+        : "<span>Review</span>";
 }
 
 function showHealthConfirmation(action) {
@@ -163,4 +239,34 @@ document.getElementById("health-task-dismiss").addEventListener("click", () => {
     document.getElementById("health-task").hidden = true;
     healthState.taskId = null;
 });
-document.addEventListener("DOMContentLoaded", loadHealth);
+document.addEventListener("DOMContentLoaded", () => {
+    const requestedStatus = new URLSearchParams(window.location.search).get("metadata_status");
+    const status = document.getElementById("metadata-status");
+    if (requestedStatus && status && [...status.options].some((option) => option.value === requestedStatus)) status.value = requestedStatus;
+    loadHealth();
+});
+document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
+document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);
+document.getElementById("metadata-severity")?.addEventListener("change", (event) => {
+    document.querySelectorAll("[data-metadata-severity-filter]").forEach((chip) => {
+        chip.classList.toggle("is-selected", chip.dataset.metadataSeverityFilter === event.target.value);
+    });
+    loadMetadataIssues();
+});
+document.querySelectorAll("[data-metadata-severity-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const select = document.getElementById("metadata-severity");
+        const next = button.dataset.metadataSeverityFilter;
+        select.value = select.value === next ? "" : next;
+        document.querySelectorAll("[data-metadata-severity-filter]").forEach((chip) => {
+            chip.classList.toggle("is-selected", chip.dataset.metadataSeverityFilter === select.value);
+        });
+        loadMetadataIssues();
+    });
+});
+document.getElementById("metadata-entity")?.addEventListener("change", loadMetadataIssues);
+let metadataSearchTimer;
+document.getElementById("metadata-search")?.addEventListener("input", () => {
+    clearTimeout(metadataSearchTimer);
+    metadataSearchTimer = setTimeout(loadMetadataIssues, 250);
+});

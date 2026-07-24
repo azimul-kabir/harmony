@@ -2,10 +2,19 @@
 {% block title %}Downloads{% endblock %} 
 
 {% block content %} 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-    <h1 style="margin: 0; font-size: 1.6rem;">Command Center</h1>
-    <button id="clear-history-btn" class="btn-danger" style="padding: 8px 14px; font-size: 0.85rem;">Clear History</button>
+<div class="downloads-header">
+    <div><span class="library-eyebrow">Download queue</span><h1>Command Center</h1></div>
 </div>
+
+<section class="downloads-summary" aria-label="Download queue summary">
+    <button type="button" class="downloads-summary-card" data-summary-filter="RUNNING"><span>Running</span><strong id="downloads-running">—</strong></button>
+    <button type="button" class="downloads-summary-card" data-summary-filter="QUEUED"><span>Queued</span><strong id="downloads-queued">—</strong></button>
+    <button type="button" class="downloads-summary-card" data-summary-filter="PAUSED"><span>Paused</span><strong id="downloads-paused">—</strong></button>
+    <button type="button" class="downloads-summary-card" data-summary-filter="COMPLETED"><span>Completed</span><strong id="downloads-completed">—</strong></button>
+    <button type="button" class="downloads-summary-card downloads-summary-attention" data-summary-filter="FAILED"><span>Failed</span><strong id="downloads-failed">—</strong></button>
+    <button type="button" class="downloads-summary-card" data-summary-filter="SKIPPED"><span>Skipped</span><strong id="downloads-skipped">—</strong></button>
+    <button type="button" class="downloads-summary-card downloads-summary-attention" data-summary-filter="CANCELLED"><span>Cancelled</span><strong id="downloads-cancelled">—</strong></button>
+</section>
 
 <!-- Compact Download Form -->
 <div class="panel" style="padding: 12px; margin-bottom: 16px;">
@@ -20,26 +29,55 @@
         >
         <button type="submit" id="download-submit-btn" class="btn-primary" style="padding: 10px 16px; font-size: 0.95rem; border-radius: 6px;">Download</button>
     </form>
-    <div id="download-result"></div>
+    <div id="download-result" role="status" aria-live="polite"></div>
 </div>
+
+<section class="download-queue-panel panel" aria-labelledby="active-downloads-heading">
+    <div class="queue-section-heading"><div><span class="library-eyebrow">Live queue</span><h2 id="active-downloads-heading">Active Downloads</h2></div></div>
+    <div id="active-downloads" class="active-downloads-grid" aria-live="polite"></div>
+    <p id="active-downloads-empty" class="empty-state">No downloads are currently running.</p>
+    <div class="queue-section-heading queue-waiting-heading"><h2>Waiting</h2></div>
+    <ol id="waiting-downloads" class="queue-list" aria-live="polite"></ol>
+    <p id="waiting-downloads-empty" class="empty-state">The download queue is empty.</p>
+    <div class="queue-section-heading queue-paused-heading"><h2>Paused</h2></div>
+    <ol id="paused-downloads" class="queue-list" aria-live="polite"></ol>
+    <p id="paused-downloads-empty" class="empty-state">No downloads are paused.</p>
+</section>
 
 <div class="panel" style="padding: 0; overflow: hidden;">
     <div class="filters-bar" style="padding: 16px 20px 0 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 0;">
         <div class="filter-tabs" id="status-filters">
             <button class="filter-tab active" data-filter="ALL">All</button>
             <button class="filter-tab" data-filter="ACTIVE">Active</button>
+            <button class="filter-tab" data-filter="RUNNING">Running</button>
+            <button class="filter-tab" data-filter="QUEUED">Queued</button>
+            <button class="filter-tab" data-filter="PAUSED">Paused</button>
             <button class="filter-tab" data-filter="COMPLETED">Completed</button>
             <button class="filter-tab" data-filter="FAILED">Failed</button>
+            <button class="filter-tab" data-filter="SKIPPED">Skipped</button>
+            <button class="filter-tab" data-filter="CANCELLED">Cancelled</button>
         </div>
         <div style="padding-bottom: 16px;">
             <input type="text" id="search-input" class="search-input" placeholder="Search song, artist, album..." style="padding: 10px 14px; font-size: 0.9rem;">
+            <small id="downloads-visible-count" class="downloads-visible-count" aria-live="polite"></small>
         </div>
+    </div>
+    <div id="download-selection-toolbar" class="download-selection-toolbar" hidden aria-label="Selected downloads actions">
+        <strong id="download-selected-count" aria-live="polite">0 selected</strong>
+        <button type="button" id="select-visible-downloads" class="btn-secondary">Select visible</button>
+        <button type="button" id="clear-download-selection" class="btn-secondary">Clear selection</button>
+        <button type="button" data-bulk-action="retry" class="btn-primary">Retry selected</button>
+        <button type="button" data-bulk-action="cancel" class="btn-danger">Cancel selected</button>
+        <button type="button" data-bulk-action="clear_history" class="btn-secondary">Clear selected history</button>
+        <button type="button" data-bulk-action="clear_completed_history" class="btn-secondary">Clear all completed</button>
+        <button type="button" data-bulk-action="clear_failed_cancelled_history" class="btn-secondary">Clear failed/cancelled</button>
     </div>
     <div class="table-responsive">
         <table class="table command-table" style="border-radius: 0; margin: 0;">
             <thead>
                 <tr>
-                    <th style="width: 120px; padding-left: 24px;">Status</th>
+                    <th style="width: 48px; padding-left: 24px;"><input id="select-visible-downloads-checkbox" type="checkbox" aria-label="Select all visible downloads"></th>
+                    <th style="width: 120px;">Status</th>
                     <th>Song</th>
                     <th>Artist</th>
                     <th>Album</th>
@@ -48,7 +86,7 @@
             </thead>
             <tbody id="downloads-body">
                 <tr>
-                    <td colspan="5" style="padding: 0;">
+                    <td colspan="6" style="padding: 0;">
                         <div class="skeleton-row">
                             <div class="skeleton skeleton-text" style="width: 80px; height: 24px; border-radius: 999px;"></div>
                             <div class="skeleton-row-content" style="margin-left: 16px;">
@@ -76,6 +114,14 @@
         </table>
     </div>
 </div>
+<div id="download-details-backdrop" class="download-details-backdrop" hidden></div>
+<aside id="download-details-drawer" class="download-details-drawer" role="dialog" aria-modal="true" aria-labelledby="download-details-title" aria-hidden="true" tabindex="-1" hidden>
+    <header class="download-details-header">
+        <div><span class="library-eyebrow">Download details</span><h2 id="download-details-title">Download details</h2></div>
+        <button id="download-details-close" class="download-details-close" type="button" aria-label="Close download details">×</button>
+    </header>
+    <div id="download-details-content" class="download-details-content" aria-live="polite"></div>
+</aside>
 {% endblock %} 
 
 {% block scripts %} 

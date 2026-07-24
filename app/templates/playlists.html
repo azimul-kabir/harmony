@@ -2,10 +2,17 @@
 {% block title %}Playlists{% endblock %} 
 
 {% block content %} 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+<div class="page-heading">
     <h1 style="margin: 0;">Playlists</h1>
-    <span class="badge badge-completed">Navidrome Sync Active</span>
+    <button id="scan-navidrome" class="btn-secondary" type="button">↻ Scan Navidrome</button>
 </div>
+
+{% if playlists %}
+<div class="playlist-toolbar panel">
+    <input id="playlist-search" class="search-input" type="search" placeholder="Filter playlists…" autocomplete="off">
+    <span id="playlist-result-count">{{ playlists|length }} playlists</span>
+</div>
+{% endif %}
 
 <div class="sources-grid">
     {% if not playlists %}
@@ -14,33 +21,51 @@
         </div>
     {% endif %}
 
-    {% for p in playlists %}
-    <div class="source-card">
+    {% for card in playlists %}
+    {% set p = card.playlist %}
+    <div class="source-card playlist-card" data-playlist-name="{{ p.name|lower }}">
         <div class="source-header">
             <h3>🎵 {{ p.name }}</h3>
+            {% if card.exported_count == p.track_count %}
+                <span class="badge badge-completed">Ready</span>
+            {% elif card.exported_count %}
+                <span class="badge playlist-partial">Partial</span>
+            {% else %}
+                <span class="badge badge-cancelled">Empty</span>
+            {% endif %}
         </div>
-        <div class="source-meta" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between;">
-                <strong>Tracks:</strong> <span>{{ p.track_count }}</span>
-            </div>
+        <div class="playlist-counts">
+            <div><strong>{{ p.track_count }}</strong><span>Source tracks</span></div>
+            <div><strong>{{ card.exported_count }}</strong><span>Available in M3U</span></div>
+            <div><strong>{{ p.track_count - card.exported_count }}</strong><span>Unavailable</span></div>
+        </div>
+        <div class="source-meta playlist-meta">
             <div style="display: flex; justify-content: space-between;">
                 <strong>Last Sync:</strong> 
                 <span>{{ p.last_synced_at | format_tz(general.timezone, datetime_fmt) if p.last_synced_at else 'Never' }}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-                <strong>M3U Status:</strong> <span style="color: var(--success); font-weight: 600;">✓ Exported</span>
+                <strong>M3U:</strong>
+                <span>{{ 'Exported' if card.m3u_exists else 'Missing' }}</span>
             </div>
         </div>
         
-        <div class="source-actions" style="margin-top: 16px; display: flex; gap: 8px;">
-            <button class="btn-secondary" disabled style="background: transparent;">Manage Tracks</button>
-            
-            <!-- NEW: Download Button -->
+        <div class="source-actions playlist-actions">
+            {% if card.source %}
+            <button class="btn-secondary playlist-sync-btn" data-source-id="{{ card.source.id }}">↻ Resync</button>
+            {% endif %}
+            <a href="{{ card.source.spotify_url if card.source else 'https://open.spotify.com/playlist/' ~ p.spotify_id }}" target="_blank" rel="noopener" class="btn-secondary">
+                Open Spotify
+            </a>
             <a href="/api/playlists/{{ p.id }}/download" class="btn-secondary" style="text-decoration: none; color: var(--primary); border-color: var(--primary);">
-                ⬇ Download .m3u
+                Download M3U
             </a>
         </div>
     </div>
     {% endfor %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/playlists.js?v={{ version }}"></script>
 {% endblock %}

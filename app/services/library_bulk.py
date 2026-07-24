@@ -16,21 +16,24 @@ from app.core.time import utcnow_naive
 from app.database.models import BulkOperationItem, Song, Task
 from app.database.session import SessionLocal
 from app.domain.task import TaskStatus, TaskType
-from app.services.artwork import ArtworkService
+from app.services.artwork import ArtworkFetchSkipped, ArtworkService
 from app.services.library_events import library_events
 from app.services.library_scanner import index_file
+from app.services.library_search import library_search
 from app.services.task_service import create_task, record_item_failure
 
 
 OPERATIONS = {
     "delete",
+    "forget_missing",
     "move",
     "rename",
     "refresh_metadata",
     "refresh_artwork",
+    "fetch_artwork",
     "export",
 }
-TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled"}
+TERMINAL_ITEM_STATUSES = {"completed", "failed", "cancelled", "skipped"}
 INVALID_FILENAME = re.compile(r"[\\/:*?\"<>|\x00-\x1f]")
 
 
@@ -62,6 +65,17 @@ def create_bulk_task(
     missing = [song_id for song_id in unique_ids if song_id not in songs_by_id]
     if missing:
         raise ValueError(f"Songs not found: {', '.join(map(str, missing))}")
+    if operation == "forget_missing":
+        present = [
+            song.id
+            for song in songs
+            if song.availability_status != "missing"
+        ]
+        if present:
+            raise ValueError(
+                "Only records already marked missing can be forgotten: "
+                + ", ".join(map(str, present))
+            )
 
     task = create_task(
         db,
@@ -214,6 +228,19 @@ class LibraryBulkWorker:
                     item.result_path = self._apply(db, item, operation, options, archive)
                     item.status = "completed"
                     task.completed_items += 1
+                except ArtworkFetchSkipped as error:
+                    # Missing/invalid provider metadata is actionable but is not a
+                    # filesystem or provider failure.  Keep it visible as a
+                    # structured skipped item rather than masking it as a generic
+                    # file-operation error.
+                    item.status = "skipped"
+                    item.error = str(error)
+                    task.skipped_items += 1
+                    logger.info(
+                        "Artwork operation={} song_id={} resolver_outcome={} identifier_source={} provider_response=skipped",
+                        operation, item.song_id, error.resolution.outcome,
+                        error.resolution.source_field,
+                    )
                 except Exception as error:
                     db.rollback()
                     # Filesystem operations cannot be rolled back by SQLite.
@@ -294,12 +321,40 @@ class LibraryBulkWorker:
         source = self._managed_path(song.path)
 
         if operation == "delete":
-            source.unlink()
+            try:
+                source.unlink()
+            except FileNotFoundError:
+                # Deletion is idempotent: a stale index path means the
+                # filesystem side of the operation is already complete.
+                pass
             # Retain the durable row and its provenance after deletion.
             song.availability_status = "missing"
             song.last_indexed_at = utcnow_naive()
             db.flush()
             library_events.publish("library.track.missing", path=str(source), song_id=song.id)
+            return None
+        if operation == "forget_missing":
+            if song.availability_status != "missing":
+                raise ValueError("Only a missing Library record can be forgotten")
+            try:
+                source.stat()
+            except FileNotFoundError:
+                pass
+            else:
+                raise ValueError(
+                    "The indexed file exists again; refresh the Library instead"
+                )
+            song_id = song.id
+            # The durable task item must survive after its Song is forgotten.
+            item.song_id = None
+            db.delete(song)
+            db.flush()
+            library_search.index_song(db, song_id)
+            library_events.publish(
+                "library.track.forgotten",
+                path=str(source),
+                song_id=song_id,
+            )
             return None
         if operation == "move":
             destination_dir = self._managed_path(options.get("destination", ""), relative=True)
@@ -314,6 +369,16 @@ class LibraryBulkWorker:
             return str(source)
         if operation == "refresh_artwork":
             self.artwork.refresh_for_song(db, song)
+            library_events.publish("library.track.updated", path=str(source), song_id=song.id)
+            return str(source)
+        if operation == "fetch_artwork":
+            artwork, _resolution, _cache_hit = self.artwork.fetch_for_song(
+                db, song, force_remote=bool(options.get("force_remote", False))
+            )
+            song.artwork = artwork
+            song.artwork_id = artwork.id
+            song.artwork_status = artwork.source
+            song.cover_url = f"/api/artwork/{artwork.id}/file"
             library_events.publish("library.track.updated", path=str(source), song_id=song.id)
             return str(source)
         if operation == "export":

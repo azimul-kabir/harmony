@@ -1,10 +1,15 @@
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
 
 
-TEST_DATABASE = Path("/private/tmp/harmony-pytest.db")
+# The old /private/tmp location exists on some macOS machines only.  Use a
+# session-private directory so CI, Docker, Linux and Synology all have a
+# writable parent before SQLAlchemy opens SQLite.
+TEST_DIRECTORY = Path(tempfile.mkdtemp(prefix="harmony-pytest-"))
+TEST_DATABASE = TEST_DIRECTORY / "harmony.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DATABASE}"
 
 
@@ -33,3 +38,4 @@ def pytest_sessionfinish(session, exitstatus):
 
     engine.dispose()
     TEST_DATABASE.unlink(missing_ok=True)
+    TEST_DIRECTORY.rmdir()

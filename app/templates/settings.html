@@ -14,7 +14,9 @@
             <button class="settings-tab" data-target="downloads">Downloads</button>
             <button class="settings-tab" data-target="playlists">Playlists</button>
             <button class="settings-tab" data-target="appearance">Appearance</button>
+            <button class="settings-tab" data-target="spotify">Spotify</button>
             <button class="settings-tab" data-target="system">System</button>
+            <a class="settings-tab settings-submenu-link" href="/developers/providers">Provider diagnostics</a>
         </div>
     </div>
 
@@ -80,6 +82,22 @@
                         Retry Failed Downloads
                     </label>
                 </div>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
+                <h3>Download Sources</h3>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="youtube_music_enabled" style="width: 18px; height: 18px;" {% if downloads.youtube_music_enabled %}checked{% endif %}>
+                        Enable YouTube Music
+                    </label>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Uses public URLs through yt-dlp; availability depends on YouTube.</p>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Default search source</label>
+                    <select name="default_download_source" class="form-control responsive-input">
+                        <option value="spotify" {% if downloads.default_download_source == 'spotify' %}selected{% endif %}>Spotify</option>
+                        <option value="youtube_music" {% if downloads.default_download_source == 'youtube_music' %}selected{% endif %}>YouTube Music</option>
+                    </select>
+                </div>
                 <div style="margin-top: 32px;">
                     <button type="submit" class="btn-primary">Save Changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
@@ -126,6 +144,24 @@
                     <button type="submit" class="btn-primary">Save Changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
+            </form>
+        </div>
+
+        <!-- Spotify genre enrichment -->
+        <div class="settings-section" id="tab-spotify" style="display: none;">
+            <h2 style="margin-top: 0; margin-bottom: 8px;">Spotify</h2>
+            <form class="settings-form" data-category="spotify">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+                        <input type="checkbox" name="spotify_genre_enrichment_enabled" style="width: 18px; height: 18px;" {% if spotify.spotify_genre_enrichment_enabled %}checked{% endif %}>
+                        Spotify genre enrichment
+                    </label>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Use Spotify artist metadata as an optional genre source.</p>
+                </div>
+                <div id="spotify-credential-status" style="display: {% if spotify.spotify_genre_enrichment_enabled %}block{% else %}none{% endif %}; color: var(--text-muted); font-size: 0.85rem;">
+                    Credentials configured: <strong>{{ 'yes' if spotify_credentials_configured else 'no' }}</strong>. Set <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in the environment; secrets are never displayed here.
+                </div>
+                <div style="margin-top: 32px;"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span></div>
             </form>
         </div>
 
@@ -201,6 +237,7 @@
         font-weight: 600; 
         color: var(--primary); 
     }
+    .settings-submenu-link { box-sizing: border-box; text-decoration: none; }
 
     /* Input Styles */
     .responsive-input {
@@ -291,7 +328,7 @@
 {% block scripts %}
 <script>
     // Tab switching logic
-    document.querySelectorAll('.settings-tab').forEach(tab => {
+    document.querySelectorAll('.settings-tab[data-target]').forEach(tab => {
         tab.addEventListener('click', (e) => {
             document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.settings-section').forEach(s => s.style.display = 'none');
@@ -332,6 +369,10 @@
                 setTimeout(() => status.style.display = 'none', 3000);
             }
         });
+    });
+    const spotifyToggle = document.querySelector('[name="spotify_genre_enrichment_enabled"]');
+    if (spotifyToggle) spotifyToggle.addEventListener('change', () => {
+        document.getElementById('spotify-credential-status').style.display = spotifyToggle.checked ? 'block' : 'none';
     });
 </script>
 {% endblock %}

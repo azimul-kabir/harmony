@@ -22,10 +22,12 @@ router = APIRouter(prefix="/api/library/bulk", tags=["library", "tasks"])
 class BulkOperationRequest(BaseModel):
     operation: Literal[
         "delete",
+        "forget_missing",
         "move",
         "rename",
         "refresh_metadata",
         "refresh_artwork",
+        "fetch_artwork",
         "export",
     ]
     song_ids: list[int] = Field(min_length=1, max_length=5000)

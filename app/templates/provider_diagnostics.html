@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Provider Diagnostics · Harmony{% endblock %}
+{% block content %}
+<a class="provider-settings-back" href="/settings">← Settings</a>
+<h1>Provider Diagnostics</h1>
+<p class="provider-note">Development-only view. Searches return normalized candidates and do not alter Library metadata.</p>
+<section class="provider-grid" id="provider-status" aria-live="polite"><div class="panel">Loading provider status…</div></section>
+<section class="panel">
+  <h2>Test search</h2>
+  <form id="provider-search" class="provider-form">
+    <select id="provider-entity"><option value="recording">Recording</option><option value="release">Release</option><option value="artist">Artist</option></select>
+    <input id="provider-query" required maxlength="500" placeholder="Search MusicBrainz">
+    <button class="btn-primary" type="submit">Search</button>
+  </form>
+</section>
+<section class="panel"><h2>Normalized result</h2><pre id="provider-result">No request yet.</pre></section>
+{% endblock %}
+{% block scripts %}<script src="/static/js/provider_diagnostics.js"></script>{% endblock %}

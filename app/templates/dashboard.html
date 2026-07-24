@@ -2,26 +2,104 @@
 {% block title %}Dashboard{% endblock %} 
 
 {% block content %} 
-<h1>Dashboard</h1> 
+<header class="dashboard-header">
+    <div><span class="library-eyebrow">Control Center</span><h1>Dashboard</h1></div>
+    <div class="dashboard-header-actions"><a class="btn-secondary" href="/library/health">Library Health</a><button id="btn-sync-all" class="btn-primary" type="button">↻ Sync All</button></div>
+</header>
 
 <div class="dashboard-grid">
-    <!-- Top Row: Overview Cards -->
-    <section class="overview-cards">
-        <div class="dashboard-card">
-            <h3>Songs</h3>
-            <p id="card-songs">{{ stats.songs }}</p>
+    <section class="dashboard-kpis" aria-label="Library overview">
+        <a href="/library" class="dashboard-kpi"><span>Songs</span><strong id="kpi-songs">{{ stats.songs }}</strong></a>
+        <a href="/library?view=albums" class="dashboard-kpi"><span>Albums</span><strong id="kpi-albums">—</strong></a>
+        <a href="/library?view=artists" class="dashboard-kpi"><span>Artists</span><strong id="kpi-artists">—</strong></a>
+        <a href="/sources" class="dashboard-kpi"><span>Sources</span><strong id="kpi-sources">{{ stats.sources }}</strong></a>
+        <a href="/playlists" class="dashboard-kpi"><span>Playlists</span><strong id="kpi-playlists">—</strong></a>
+        <a href="/library" class="dashboard-kpi"><span>Storage</span><strong id="kpi-storage">—</strong></a>
+        <a href="/library/health" class="dashboard-kpi dashboard-kpi-health"><span>Health</span><strong id="kpi-health">—</strong></a>
+        <a href="/downloads?status=failed" class="dashboard-kpi dashboard-kpi-danger"><span>Failed</span><strong id="kpi-failed">{{ stats.failed }}</strong></a>
+    </section>
+
+    <section class="panel dashboard-attention" aria-labelledby="dashboard-attention-title">
+        <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Operational overview</span><h2 id="dashboard-attention-title">Needs Attention</h2></div><strong id="attention-total" class="dashboard-attention-total">{{ dashboard_snapshot.attention.total_count }} {{ 'issue' if dashboard_snapshot.attention.total_count == 1 else 'issues' }}</strong></div>
+        <div id="dashboard-attention-empty" class="dashboard-attention-empty"{% if not dashboard_snapshot.attention.healthy %} hidden{% endif %}><strong id="dashboard-attention-headline">{{ dashboard_snapshot.attention.headline }}</strong><span id="dashboard-attention-message">{{ dashboard_snapshot.attention.message }}</span></div>
+        <div id="dashboard-attention-list" class="dashboard-attention-list" aria-live="polite">
+            {% for issue in dashboard_snapshot.attention["items"] %}
+            <article class="dashboard-attention-item severity-{{ issue.severity }}" data-attention-key="{{ issue.key }}">
+                <span class="dashboard-attention-severity">{{ issue.severity }}</span>
+                <div class="dashboard-attention-content"><strong>{{ issue.title }}</strong><span class="dashboard-attention-description">{{ issue.description }}</span></div>
+                <strong class="dashboard-attention-count">{{ issue.count }}</strong>
+                <div class="dashboard-attention-controls">
+                    <a class="btn-secondary dashboard-attention-action" href="{{ issue.href }}" aria-label="{{ issue.action_label }} {{ issue.title }}">{{ issue.action_label }}</a>
+                    <button class="btn-secondary dashboard-attention-recovery" type="button"{% if not issue.recovery_action %} hidden{% endif %} data-attention-recovery="{{ issue.recovery_action or '' }}" aria-label="{{ issue.recovery_label or '' }} for {{ issue.title }}">{{ issue.recovery_label or '' }}</button>
+                </div>
+            </article>
+            {% endfor %}
         </div>
-        <div class="dashboard-card">
-            <h3>Total Downloads</h3>
-            <p id="card-downloads">{{ stats.downloads }}</p>
+    </section>
+
+    <section class="dashboard-summary-grid" aria-label="Dashboard summaries">
+        <article class="panel dashboard-summary-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Download queue</span><h2>Downloads</h2></div><a href="/downloads">Open queue →</a></div>
+            <div class="dashboard-queue-metrics"><a href="/downloads?status=active"><span>Running</span><strong id="queue-running">0</strong></a><a href="/downloads?status=active"><span>Queued</span><strong id="queue-queued">0</strong></a><a href="/downloads?status=completed"><span>Today</span><strong id="queue-today">0</strong></a><a href="/downloads?status=failed"><span>Failed</span><strong id="queue-failed">0</strong></a></div>
+        </article>
+        <article class="panel dashboard-summary-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Library maintenance</span><h2>Library health</h2></div><a href="/library/health">View health →</a></div>
+            <div class="dashboard-health-content"><strong id="health-score">—</strong><div><p>Missing artwork <a id="health-artwork-link" href="/library"> <b id="health-artwork">0</b></a></p><p>Missing metadata <a href="/library/health"><b id="health-metadata">0</b></a></p><p>Missing files <a href="/library/health"><b id="health-files">0</b></a></p><p>Suggestions pending <a href="/library/health"><b id="health-suggestions">0</b></a></p></div></div>
+        </article>
+        <article class="panel dashboard-summary-card dashboard-collections-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Smart collections</span><h2>At a glance</h2></div><a href="/library">Open library →</a></div>
+            <div id="dashboard-collections" class="dashboard-collections"><p class="empty-state">Loading collections…</p></div>
+        </article>
+    </section>
+
+    <section class="dashboard-operations-grid" aria-label="Download operations">
+        <article class="panel dashboard-operations-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Last 7 days</span><h2>Download Trends</h2></div></div>
+            <div class="dashboard-trends-content">
+                <div id="download-trend-chart" class="download-trend-chart" role="img" aria-label="Download completions over the last seven days"></div>
+                <div class="dashboard-operation-metrics"><div><span>Completed</span><strong id="trend-completed">0</strong></div><div><span>Failed</span><strong id="trend-failed">0</strong></div><div><span>Cancelled</span><strong id="trend-cancelled">0</strong></div><div><span>Success rate</span><strong id="trend-success-rate">—</strong></div></div>
+            </div>
+        </article>
+        <article class="panel dashboard-operations-card">
+            <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Live queue state</span><h2>Queue Health</h2></div><strong id="queue-stalled" class="queue-health-status">Healthy</strong></div>
+            <div class="dashboard-operation-metrics dashboard-queue-health"><div><span>Worker utilization</span><strong id="queue-utilization">—</strong></div><div><span>Queued jobs</span><strong id="health-queued-jobs">0</strong></div><div><span>Running jobs</span><strong id="health-running-jobs">0</strong></div><div><span>Paused jobs</span><strong id="health-paused-jobs">0</strong></div><div><span>Oldest queued job</span><strong id="queue-oldest">—</strong></div><div><span>Longest running</span><strong id="queue-longest-running">—</strong></div><div><span>Average queue wait</span><strong id="queue-average-wait">—</strong></div></div>
+        </article>
+    </section>
+
+    <section class="panel navidrome-panel" aria-labelledby="navidrome-title">
+        <div class="dashboard-panel-heading">
+            <div><span class="library-eyebrow">Media server</span><h2 id="navidrome-title">Navidrome</h2></div>
+            <strong id="navidrome-status" class="navidrome-status is-checking">Checking…</strong>
         </div>
-        <div class="dashboard-card">
-            <h3>Sources</h3>
-            <p id="card-sources">{{ stats.sources }}</p>
+        <div class="navidrome-content">
+            <div class="navidrome-metrics" aria-live="polite">
+                <div><span>Scanner</span><strong id="navidrome-scanner">—</strong></div>
+                <div><span>Last scan</span><strong id="navidrome-last-scan">—</strong></div>
+                <div><span>Folders</span><strong id="navidrome-folders">—</strong></div>
+                <div><span>Version</span><strong id="navidrome-version">—</strong></div>
+            </div>
+            <div class="navidrome-controls">
+                <p id="navidrome-message">Checking the configured Navidrome server.</p>
+                <div>
+                    <button id="navidrome-rescan" class="btn-primary" type="button" disabled>Rescan changes</button>
+                    <button id="navidrome-full-rescan" class="btn-secondary" type="button" disabled>Full rescan</button>
+                </div>
+            </div>
         </div>
-        <div class="dashboard-card">
-            <h3>Failed Jobs</h3>
-            <p id="card-failed">{{ stats.failed }}</p>
+    </section>
+
+    <section class="panel dashboard-insights" aria-labelledby="dashboard-insights-title">
+        <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Library analytics</span><h2 id="dashboard-insights-title">Library insights</h2></div><a href="/library">Browse library →</a></div>
+        <div class="dashboard-insight-metrics">
+            <div><span>Recently added</span><strong id="insight-recently-added">—</strong></div>
+            <div><span>Genres</span><strong id="insight-genres">—</strong></div>
+            <div><span>Average bitrate</span><strong id="insight-bitrate">—</strong></div>
+            <div><span>Average duration</span><strong id="insight-duration">—</strong></div>
+        </div>
+        <div class="dashboard-album-insights">
+            <a id="insight-largest-album" class="dashboard-album-insight" href="/library"><span>Largest album</span><strong>Loading…</strong><small>—</small></a>
+            <a id="insight-newest-album" class="dashboard-album-insight" href="/library"><span>Newest album</span><strong>Loading…</strong><small>—</small></a>
+            <a id="insight-oldest-album" class="dashboard-album-insight" href="/library"><span>Oldest album</span><strong>Loading…</strong><small>—</small></a>
         </div>
     </section>
 
@@ -46,21 +124,29 @@
         </div>
     </section>
 
-    <!-- Bottom Row: Split -->
+    <section class="panel dashboard-maintenance" aria-labelledby="dashboard-maintenance-title">
+        <div class="dashboard-panel-heading"><div><span class="library-eyebrow">Library maintenance</span><h2 id="dashboard-maintenance-title">Recent jobs</h2></div><a href="/library/health">View health →</a></div>
+        <div id="dashboard-maintenance-list" class="dashboard-maintenance-list"><p class="empty-state">Loading recent maintenance…</p></div>
+    </section>
+
+    <!-- Bottom Row: Activity and quick actions -->
     <div class="bottom-split">
         <section class="panel" style="padding: 0; overflow: hidden;">
-            <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
-                <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Recent Activity</h3>
+            <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+                <div><span class="library-eyebrow">Download history</span><h2 style="margin: 2px 0 0; font-size: 1.1rem;">Activity timeline</h2></div>
+                <a href="/downloads" class="dashboard-panel-link">Open downloads →</a>
             </div>
             <div id="recent-activity" class="activity-list" style="padding: 24px;">
                 <p class="empty-state">No recent activity.</p>
             </div>
         </section>
         
-        <section class="panel">
-            <h3 style="margin: 0 0 16px 0; font-size: 1.1rem; color: var(--text-main);">Quick Actions</h3>
+        <section class="panel dashboard-actions">
+            <h3>Quick Actions</h3>
             <div class="quick-actions-grid">
-                <button id="btn-sync-all" class="btn-primary" style="width: 100%;">↻ Sync All Sources</button>
+                <a class="btn-secondary" href="/library/health">Run library maintenance</a>
+                <a class="btn-secondary" href="/library?missing_artwork=true">Review missing artwork</a>
+                <a class="btn-secondary" href="/downloads?status=failed">Review failed downloads</a>
             </div>
         </section>
     </div>

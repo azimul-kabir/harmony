@@ -1,33 +1,42 @@
+# syntax=docker/dockerfile:1.7
+
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=0 \
+    DENO_INSTALL=/root/.deno \
+    PATH="/root/.deno/bin:${PATH}"
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    curl \
-    sqlite3 \
-    unzip \
+# Install system dependencies in one cached layer.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        ffmpeg \
+        sqlite3 \
+        unzip \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Deno.
 RUN curl -fsSL https://deno.land/install.sh | sh
 
-ENV DENO_INSTALL=/root/.deno
-
-ENV PATH="${DENO_INSTALL}/bin:${PATH}"
-
-# `pyproject.toml` is the canonical dependency manifest.  Install the
-# application distribution so production images include the mandatory
-# filesystem watcher dependency.
+# Copy dependency metadata first so dependency installation remains cached
+# when only application source files change.
 COPY pyproject.toml README.md ./
+
+# The package currently requires the app directory during installation.
 COPY app ./app
 
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir .
+# Reuse downloaded Python packages between builds.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --upgrade pip \
+    && python -m pip install .
 
+# Copy remaining project files after dependency installation.
 COPY . .
 
 EXPOSE 8080

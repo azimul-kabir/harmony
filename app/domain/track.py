@@ -21,6 +21,9 @@ class Track:
 
     # Multiple artists
     artists: list[str] = field(default_factory=list)
+    # Artist IDs are retained from Spotify's track payload for provider metadata.
+    spotify_artist_ids: list[str] = field(default_factory=list)
+    genre_provenance: str | None = None
 
     # Artwork
     cover_url: str | None = None
@@ -30,6 +33,11 @@ class Track:
     spotify_album_id: str | None = None
     spotify_url: str | None = None
     isrc: str | None = None
+    # Download-source identity is deliberately provider neutral.  The Spotify
+    # fields above remain for compatibility with existing libraries.
+    source_provider: str = "spotify"
+    source_item_id: str | None = None
+    source_url: str | None = None
 
     # Local library
     path: str | None = None

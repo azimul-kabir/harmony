@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ class AlbumAnalytics:
     song_count: int
     storage_bytes: int
     year: int | None
+    indexed_at: datetime | None
 
     @classmethod
     def from_row(cls, row) -> "AlbumAnalytics | None":
@@ -27,6 +29,7 @@ class AlbumAnalytics:
             song_count=row.song_count,
             storage_bytes=row.storage_bytes or 0,
             year=row.year,
+            indexed_at=row.indexed_at,
         )
 
     def to_dict(self) -> dict:
@@ -70,6 +73,7 @@ class LibraryAnalyticsService:
                 func.count(Song.id).label("song_count"),
                 func.coalesce(func.sum(Song.file_size), 0).label("storage_bytes"),
                 func.max(Song.year).label("year"),
+                func.max(Song.created_at).label("indexed_at"),
             )
             .where(available, Song.album.is_not(None), Song.album != "")
             .group_by(
@@ -89,16 +93,26 @@ class LibraryAnalyticsService:
             )
             .limit(1)
         ).first()
+        # Release year is the primary ordering signal.  When it is absent,
+        # retain the album in the insight using its index date instead.
         newest = db.execute(
             select(album_stats)
-            .where(album_stats.c.year.is_not(None))
-            .order_by(album_stats.c.year.desc(), func.lower(album_stats.c.album))
+            .order_by(
+                album_stats.c.year.is_not(None).desc(),
+                album_stats.c.year.desc(),
+                album_stats.c.indexed_at.desc(),
+                func.lower(album_stats.c.album),
+            )
             .limit(1)
         ).first()
         oldest = db.execute(
             select(album_stats)
-            .where(album_stats.c.year.is_not(None))
-            .order_by(album_stats.c.year.asc(), func.lower(album_stats.c.album))
+            .order_by(
+                album_stats.c.year.is_not(None).desc(),
+                album_stats.c.year.asc(),
+                album_stats.c.indexed_at.asc(),
+                func.lower(album_stats.c.album),
+            )
             .limit(1)
         ).first()
 

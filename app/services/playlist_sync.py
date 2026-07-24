@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from datetime import UTC, datetime
 
 from app.core.logging import logger
 from app.database.models import SyncSource, Task
@@ -52,6 +53,9 @@ def sync_playlist(
         
         # 4. Update the Playlist Database with the latest Spotify structure
         db_playlist = sync_database_playlist(db, source, domain_playlist)
+        source.last_synced_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(source)
         
         # 5. Export M3U immediately, passing the freshly scraped domains tracks to fix historic library duplicates
         export_m3u(db, db_playlist, domain_tracks=domain_playlist.tracks)

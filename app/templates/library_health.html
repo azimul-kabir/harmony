@@ -29,7 +29,7 @@
     </section>
 
     <section class="health-workspace">
-        <div class="health-checks">
+        <div id="health-checks" class="health-checks">
             <div class="health-section-heading">
                 <div><span class="library-eyebrow">Extensible checks</span><h2>Health checks</h2></div>
                 <small>Repair and duplicate engines will appear here automatically.</small>
@@ -44,8 +44,26 @@
             <button type="button" data-health-action="refresh"><strong>Refresh Library</strong><span>Find new files and reconcile missing tracks.</span></button>
             <button type="button" data-health-action="rebuild"><strong>Rebuild Index</strong><span>Re-read all metadata and rebuild search.</span></button>
             <button type="button" data-health-action="verify"><strong>Verify Files</strong><span>Check every indexed path without scanning folders.</span></button>
+            <button type="button" id="metadata-analysis"><strong>Run Metadata Analysis</strong><span>Analyze indexed song, album, and artist metadata.</span></button>
             <button type="button" class="health-destructive" data-health-action="clear_artwork"><strong>Clear Artwork Cache</strong><span>Remove cached resources; indexing can recreate them.</span></button>
         </aside>
+    </section>
+    <section class="health-job-panel metadata-issues-panel" aria-labelledby="metadata-issues-title">
+        <div class="metadata-issues-header">
+            <div class="metadata-issues-intro"><span class="library-eyebrow">Library intelligence</span><h2 id="metadata-issues-title">Metadata issues</h2><p id="metadata-score-detail">Diagnostic score pending analysis.</p></div>
+            <aside class="metadata-issue-summary" aria-label="Metadata issue summary">
+                <div class="metadata-summary-heading"><span>Issue breakdown</span><small>Included open records</small></div>
+                <div id="metadata-severity-counts" class="metadata-severity-grid" aria-live="polite">
+                    <button type="button" class="metadata-severity-chip severity-critical" data-metadata-severity-filter="critical"><span>Critical</span><strong data-metadata-severity-count="critical">—</strong></button>
+                    <button type="button" class="metadata-severity-chip severity-error" data-metadata-severity-filter="error"><span>Error</span><strong data-metadata-severity-count="error">—</strong></button>
+                    <button type="button" class="metadata-severity-chip severity-warning" data-metadata-severity-filter="warning"><span>Warning</span><strong data-metadata-severity-count="warning">—</strong></button>
+                    <button type="button" class="metadata-severity-chip severity-info" data-metadata-severity-filter="info"><span>Info</span><strong data-metadata-severity-count="info">—</strong></button>
+                </div>
+                <div id="metadata-rule-counts" class="metadata-rule-summary" aria-live="polite"><span class="metadata-rule-icon" aria-hidden="true">✓</span><div><strong>Waiting for analysis</strong><small>Rule patterns will appear here.</small></div></div>
+            </aside>
+        </div>
+        <div class="library-filter-row metadata-issue-filters"><input id="metadata-search" type="search" placeholder="Search issues" aria-label="Search metadata issues"><select id="metadata-status" aria-label="Issue status"><option value="open">Open</option><option value="resolved">Resolved</option><option value="ignored">Ignored</option></select><select id="metadata-severity" aria-label="Issue severity"><option value="">All severities</option><option>critical</option><option>error</option><option>warning</option><option>info</option></select><select id="metadata-entity" aria-label="Issue entity"><option value="">Songs, albums &amp; artists</option><option value="song">Songs</option><option value="album">Albums</option><option value="artist">Artists</option></select></div>
+        <div id="metadata-issues" class="health-check-list" aria-live="polite"><p>Loading metadata issues…</p></div>
     </section>
 
     <section id="health-task" class="health-task" hidden aria-live="polite">
@@ -57,7 +75,7 @@
             <button id="health-task-dismiss" class="btn-secondary" type="button" hidden>Dismiss</button>
         </div>
     </section>
-    <section class="health-job-panel" aria-labelledby="library-jobs-title">
+    <section id="library-jobs" class="health-job-panel" aria-labelledby="library-jobs-title">
         <div><strong id="library-jobs-title">Library Jobs &amp; Activity</strong><span>Active and recent persistent operations</span></div>
         <div class="health-job-columns">
             <div><h3>Active jobs</h3><div id="library-active-jobs" class="health-check-list" aria-live="polite"></div></div>
