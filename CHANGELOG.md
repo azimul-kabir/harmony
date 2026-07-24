@@ -11,6 +11,9 @@
   Spotify links, one-click playlist resync, and a Navidrome scan shortcut.
 - Preserve and display each download's original playlist position, make queue
   claiming deterministic, and compact mobile Source and Download action rows.
+- Reconcile completed playlist syncs with Navidrome using two batched
+  incremental scans: index new audio, rewrite the affected M3Us, then import
+  the newer playlist files without requiring a library-wide full scan.
 
 All notable changes to Harmony are documented in this file.
 

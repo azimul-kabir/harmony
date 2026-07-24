@@ -15,6 +15,7 @@ from app.services.task_service import (
     set_current_item,
     _fail_task,
 )
+from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 
 def sync_playlist(
     db: Session,
@@ -63,6 +64,7 @@ def sync_playlist(
         if not domain_playlist.tracks:
             logger.warning("Playlist '{}' is empty.", domain_playlist.name)
             _finish_if_complete(db=db, task=task)
+            navidrome_playlist_reimport.schedule(task.id)
             return task
             
         # 6. Check duplicates and queue missing tracks
@@ -92,6 +94,7 @@ def sync_playlist(
             
         if not queueable_tracks:
             _finish_if_complete(db=db, task=task)
+            navidrome_playlist_reimport.schedule(task.id)
             
         return task
         

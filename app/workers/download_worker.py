@@ -14,7 +14,7 @@ from app.database.models import DownloadJob
 from app.database.session import SessionLocal
 from app.domain.download import JobStatus
 from app.domain.download_outcome import DownloadCancelled, DownloadFailed, DownloadOutcome, DownloadSkipped, classify_unexpected
-from app.domain.task import TaskStatus
+from app.domain.task import TaskStatus, TaskType
 from app.domain.track import Track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
@@ -23,6 +23,7 @@ from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
 from app.services.playlist_manager import export_m3us_for_track
+from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.task_service import (
     increment_completed,
     increment_failed,
@@ -201,6 +202,7 @@ def process_job(
             export_m3us_for_track(db, job.spotify_track_id)
         except Exception:
             logger.warning("Playlist export failed after completed job #{}", job.id)
+        _schedule_navidrome_reimport(job)
         
     except DuplicateTrackError as ex:
         logger.info(
@@ -259,3 +261,17 @@ def _finish_with_outcome(db, job, status, outcome):
     if job.task is not None:
         set_current_item(db=db, task=job.task, item=None)
         {JobStatus.SKIPPED: increment_skipped, JobStatus.FAILED: increment_failed}.get(status, lambda **_: None)(db=db, task=job.task)
+        _schedule_navidrome_reimport(job)
+
+
+def _schedule_navidrome_reimport(job: DownloadJob) -> None:
+    task = job.task
+    if (
+        task is not None
+        and task.task_type == TaskType.PLAYLIST_SYNC.value
+        and task.status in {
+            TaskStatus.COMPLETED.value,
+            TaskStatus.FAILED.value,
+        }
+    ):
+        navidrome_playlist_reimport.schedule(task.id)

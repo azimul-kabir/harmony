@@ -1153,6 +1153,19 @@ Harmony's environment. In Docker, the URL must be reachable from the Harmony
 container (for example `http://navidrome:4533` on a shared Compose network).
 Credentials stay server-side.
 
+Completed playlist syncs use a short-term M3U reconciliation workflow. Harmony
+batches terminal playlist tasks for a configurable debounce window, waits for
+any active Navidrome scan, requests an incremental scan to index newly imported
+audio, rewrites only the affected M3Us so their timestamps are newer than that
+media scan, and requests one final incremental scan to import those playlists.
+Failures are logged and never change a successful download into a failure.
+
+The workflow is controlled by
+`NAVIDROME_PLAYLIST_REIMPORT_ENABLED`,
+`NAVIDROME_PLAYLIST_REIMPORT_DEBOUNCE_SECONDS`,
+`NAVIDROME_PLAYLIST_REIMPORT_POLL_SECONDS`, and
+`NAVIDROME_PLAYLIST_REIMPORT_SCAN_TIMEOUT_SECONDS`.
+
 Supported servers
 
 Navidrome
