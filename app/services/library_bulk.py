@@ -308,7 +308,12 @@ class LibraryBulkWorker:
         source = self._managed_path(song.path)
 
         if operation == "delete":
-            source.unlink()
+            try:
+                source.unlink()
+            except FileNotFoundError:
+                # Deletion is idempotent: a stale index path means the
+                # filesystem side of the operation is already complete.
+                pass
             # Retain the durable row and its provenance after deletion.
             song.availability_status = "missing"
             song.last_indexed_at = utcnow_naive()
