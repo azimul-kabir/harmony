@@ -656,27 +656,30 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 } /* FIXED: This closing bracket was missing previously! */
 
 @media (max-width: 768px) {
-    /* Destroys the hardcoded table width to eliminate all horizontal scrolling */
     .table { min-width: 0 !important; }
     .table-responsive { overflow-x: hidden !important; }
     
-    .layout { padding-bottom: 75px; }
+    .layout { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
     
     .content {
         margin-left: 0;
         width: 100%;
-        padding: 20px 16px 120px 16px; /* Added 120px bottom padding so FAB won't cover content */
+        padding: 20px max(16px, env(safe-area-inset-right))
+            calc(108px + env(safe-area-inset-bottom))
+            max(16px, env(safe-area-inset-left));
     }
     
     .sidebar {
         width: 100%;
-        height: 75px;
+        height: calc(68px + env(safe-area-inset-bottom));
         top: auto;
         bottom: 0;
-        padding: 0;
+        padding: 0 6px env(safe-area-inset-bottom);
         flex-direction: row;
         border-top: 1px solid var(--border-color);
-        box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+        background: color-mix(in srgb, var(--bg-sidebar) 96%, transparent);
+        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.16);
+        backdrop-filter: blur(16px);
         z-index: 2000;
     }
 
@@ -687,46 +690,54 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         width: 100%;
         gap: 0;
         align-items: center;
-        justify-content: space-around;
+        justify-content: stretch;
     }
 
     .sidebar a {
         flex: 1;
+        min-width: 0;
+        min-height: 56px;
         flex-direction: column;
-        gap: 6px;
-        padding: 12px 0;
-        border-radius: 0;
-        font-size: 0.75rem;
+        gap: 4px;
+        padding: 7px 2px 5px;
+        border-radius: 10px;
+        font-size: 0.64rem;
         justify-content: center;
+        line-height: 1;
     }
-    .sidebar a.active { background: transparent; color: var(--primary); border-top: 3px solid var(--primary); }
+    .sidebar a.active {
+        border: 0;
+        background: color-mix(in srgb, var(--primary) 18%, transparent);
+        color: #fff;
+    }
     
     .nav-icon { 
         display: block; 
+        width: 21px;
+        height: 21px;
         opacity: 0.6; 
-        margin: 0 auto 4px auto; 
+        margin: 0;
         transition: 0.2s ease;
     }
     .sidebar a.active .nav-icon { opacity: 1; }
     
-    .nav-text { font-weight: 600; }
-
-    /* Seven destinations fit on a phone only when the navigation is icon-led.
-       Keep the labels available to assistive technology without letting them
-       collide in the fixed bottom bar. */
-    .sidebar a { position: relative; min-width: 0; }
-    .sidebar .nav-text {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
+    .nav-text {
+        display: block;
+        width: 100%;
         overflow: hidden;
-        clip: rect(0, 0, 0, 0);
+        font-weight: 650;
+        text-align: center;
+        text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    .sidebar .nav-text {
+        position: static;
+        height: auto;
+        padding: 0;
+        margin: 0;
+        clip: auto;
         border: 0;
     }
-    .nav-icon { margin: 0 !important; }
 
     .form-row { flex-direction: column; }
     .activity-item { grid-template-columns: 10px minmax(0, 1fr) auto; gap: 9px; padding: 12px 2px; }
@@ -1840,13 +1851,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @media (max-width: 768px) {
-    .library-hero { align-items: flex-start; }
+    .library-page { width: 100%; }
+    .library-hero { align-items: flex-start; gap: 14px; margin-bottom: 20px; }
     .library-hero h1 { font-size: 2rem; }
-    .library-hero p { font-size: 0.9rem; }
+    .library-hero p { max-width: 34rem; font-size: 0.9rem; line-height: 1.5; }
     .library-rescan { width: 42px; justify-content: center; padding: 8px; }
     .library-rescan span { display: none; }
-    .library-hero-actions { align-items: stretch; }
-    .library-health-link { display: inline-flex; align-items: center; }
+    .library-hero-actions { flex: 0 0 auto; align-items: stretch; }
+    .library-health-link { display: inline-flex; align-items: center; min-height: 42px; box-sizing: border-box; }
     .health-page { padding: 16px; }
     .health-hero { flex-direction: row; }
     .health-score { width: 112px; height: 112px; flex-basis: 112px; }
@@ -1861,32 +1873,92 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .metadata-issue-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
     .metadata-issue-filters input { grid-column: 1 / -1; }
     .health-job-columns { grid-template-columns: 1fr; }
-    .library-tabs { margin-right: -16px; padding-right: 16px; }
-    .library-analytics { padding: 14px; }
+    .library-tabs {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+        margin: 0 0 12px;
+        padding: 4px;
+        overflow: visible;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--bg-surface-alt);
+    }
+    .library-analytics { margin-bottom: 16px; padding: 14px; }
+    .library-analytics-heading { align-items: flex-start; margin-bottom: 12px; }
+    .library-analytics-grid { gap: 8px; }
+    .library-analytics-grid article { min-height: 58px; padding: 11px; }
     .library-album-insights { grid-template-columns: 1fr; }
-    .library-tab { min-height: 42px; padding: 8px 10px; font-size: 0.86rem; }
+    .library-tab {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 5px;
+        border-radius: 8px;
+        font-size: 0.76rem;
+    }
+    .library-tab.active { border-color: transparent; box-shadow: none; }
+    .library-tab svg { width: 17px; height: 17px; flex: 0 0 auto; }
     .library-tab-count { display: none; }
 
     .library-toolbar {
         position: static;
-        flex-direction: column;
-        align-items: stretch;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
         padding: 14px;
+        gap: 10px;
     }
 
     .library-search { width: auto; }
-    .library-toolbar-actions { justify-content: space-between; }
+    .library-search input { min-height: 44px; padding: 8px 0; font-size: 16px; }
+    .library-search-status { min-height: 0; white-space: normal; }
+    .library-search-status:empty { display: none; }
+    .library-toolbar-actions {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 8px;
+        width: 100%;
+    }
+    .library-toolbar-actions .library-filter-chip { grid-column: 1 / -1; }
+    .library-filter-toggle { min-height: 44px; justify-content: center; }
+    .library-sort { width: 100%; min-height: 44px; font-size: 16px; }
     .library-bulk-toolbar { align-items: stretch; flex-direction: column; }
-    .library-bulk-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .library-bulk-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-height: 190px;
+        padding-right: 3px;
+        overflow-y: auto;
+    }
+    .library-bulk-actions button { min-height: 42px; }
     .library-filter-panel { padding: 14px; }
     .library-filter-fields { grid-template-columns: 1fr; }
     .library-filter-flags { align-items: stretch; flex-direction: column; }
-    .library-filter-flags .btn-secondary { width: 100%; margin-left: 0; }
+    .library-filter-flags label {
+        min-height: 42px;
+        padding: 0 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--bg-surface);
+    }
+    .library-filter-flags input { width: 18px; height: 18px; }
+    .library-filter-flags .btn-secondary { width: 100%; min-height: 44px; margin-left: 0; }
     .library-filter-chip { min-width: 0; overflow: hidden; }
     .library-filter-chip span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .library-sort-label { margin-left: auto; }
+    .library-sort-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
 
-    .library-table-wrap { padding: 12px; overflow: visible; }
+    .library-table-wrap { padding: 10px; overflow: visible; }
     .library-songs-table,
     .library-songs-table tbody { display: block; width: 100%; }
     .library-songs-table thead { display: none; }
@@ -1949,9 +2021,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @media (max-width: 390px) {
-    .library-tab svg { display: none; }
+    .content {
+        padding-right: max(12px, env(safe-area-inset-right));
+        padding-left: max(12px, env(safe-area-inset-left));
+    }
+    .sidebar { padding-right: 2px; padding-left: 2px; }
+    .sidebar a { font-size: 0.59rem; }
+    .library-hero { flex-direction: column; }
+    .library-hero-actions { width: 100%; }
+    .library-health-link { flex: 1; justify-content: center; }
     .library-albums-grid { gap: 11px; padding: 12px; }
-    .library-toolbar-actions { flex-wrap: wrap; }
     .health-hero { flex-direction: column; }
     .health-score { align-self: flex-start; }
     .metadata-severity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
