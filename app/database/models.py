@@ -35,6 +35,9 @@ class Song(Base):
     album: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     spotify_track_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True, index=True)
+    navidrome_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
     spotify_album_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     track: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -370,6 +373,9 @@ class Task(Base):
     error_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     cancellation_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
     initiated_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     resource_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     resumable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -425,6 +431,7 @@ class DownloadJob(Base):
     album: Mapped[str | None] = mapped_column(String, nullable=True)
     album_artist: Mapped[str | None] = mapped_column(String, nullable=True)
     track: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    queue_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disc: Mapped[int | None] = mapped_column(Integer, nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -476,6 +483,9 @@ class SyncSource(Base):
     spotify_url: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auto_sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    auto_sync_interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=360)
+    auto_sync_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
@@ -488,7 +498,22 @@ class Playlist(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String, nullable=True)
     owner: Mapped[str | None] = mapped_column(String, nullable=True)
+    playlist_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="source", index=True)
+    smart_rule: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True, index=True)
+    smart_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    smart_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
     track_count: Mapped[int] = mapped_column(Integer, default=0)
+    navidrome_playlist_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
+    navidrome_sync_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    navidrome_synced_track_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    navidrome_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    navidrome_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)

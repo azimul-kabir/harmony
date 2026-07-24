@@ -1,35 +1,24 @@
 # Changelog
 
-## Unreleased
-
-- Add an opt-in YouTube Music download source using public URLs and yt-dlp.
-- Prevent completed downloads from destructively regenerating unrelated M3U
-  playlists, and persist playlist-entry metadata for reliable targeted exports.
-- Export only audio files that currently exist, write M3Us atomically, and log
-  the true available-versus-source track count.
-- Add source and playlist availability summaries, playlist filtering, direct
-  Spotify links, one-click playlist resync, and a Navidrome scan shortcut.
-
-All notable changes to Harmony are documented in this file.
-
-The format is based on **Keep a Changelog**, and this project follows **Semantic Versioning**.
-
----
+All notable changes to Harmony are documented in this file. The format is based
+on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
 ### Planned
 
-- Direct Navidrome integration beyond Harmony's existing M3U export workflow.
+- Additional media-server API integrations beyond Navidrome.
+- Duplicate detection and user-defined smart-playlist rules.
 
 ---
 
-## [v1.6.0] - 2026-07-22
+## [v2.0.0] - 2026-07-24
 
-Harmony v1.6.0 introduces **Metadata Intelligence**: a provider-neutral,
-review-first workflow for diagnosing, discovering, applying, auditing, and
-reversing library metadata changes. The initial public discovery provider is
-MusicBrainz, while Harmony remains the authority for every applied change.
+Harmony v2.0.0 is the direct successor to v1.5.0. Harmony v1.6.0 was never
+published; documentation that previously assigned Metadata Intelligence to
+v1.6.0 described unreleased development work. This release combines that work
+with the Downloads Operations Center, Navidrome playlist synchronization,
+playlist file management, automation, and a comprehensive responsive UI pass.
 
 ### Added
 
@@ -57,6 +46,26 @@ MusicBrainz, while Harmony remains the authority for every applied change.
 - **Metadata APIs:** Added provider diagnostics, discovery, candidate
   comparison/selection, suggestion review, application, history, batch, and
   rollback endpoints. Interactive contracts are available at `/docs`.
+- **Downloads Operations Center:** Added deterministic queue snapshots,
+  persisted history, telemetry, outcome classification, job details, bulk
+  retry/cancel/history actions, and safer cancellation and redownload behavior.
+- **YouTube Music Source:** Added opt-in public YouTube Music and explicit
+  YouTube URL downloads through yt-dlp, with normalized diagnostics and no
+  cookie or authenticated-scraper requirement.
+- **Navidrome Controls:** Added safe status and scan APIs plus direct,
+  order-preserving playlist synchronization through the Subsonic API.
+  Ambiguous, read-only, and failed updates fall back to targeted M3U import.
+- **Playlist Management:** Added availability summaries, filtering, Spotify
+  links, one-click resync, M3U downloads, ordered Library file management,
+  durable selected-file deletion, artwork, and safe saved-playlist deletion.
+- **Auto-playlists:** Added bounded Recently Added and Recently Downloaded
+  playlist generation with a configurable 1–500-song limit.
+- **Scheduled Sources:** Added per-source auto-sync with hourly, 6-hour,
+  12-hour, daily, and weekly intervals.
+- **Library Job Review:** Added complete failure diagnostics and durable
+  acknowledgement of historical job warnings without deleting audit history.
+- **Runtime Settings:** Added editable application settings and reorganized
+  mobile Settings navigation.
 
 ### Changed
 
@@ -67,25 +76,45 @@ MusicBrainz, while Harmony remains the authority for every applied change.
   persistent task lifecycle, including durable cancellation and recovery data.
 - Updated Docker dependency installation to use the canonical `pyproject.toml`
   manifest with cached build stages.
+- Made playlist export targeted and atomic, preserved source position, and
+  excluded missing files from generated M3Us.
+- Added explicit canonical audio-tag writing and optional embedding of cached
+  artwork after a separate user confirmation.
+- Redesigned mobile navigation and polished Dashboard, Downloads, Sources,
+  Library, Settings, overlays, dialogs, tabs, pagination, action rows, focus
+  behavior, and accessibility.
+
+### Fixed
+
+- Repaired interrupted and legacy metadata schema upgrades and missing Song
+  columns without discarding existing data.
+- Prevented completed downloads from regenerating unrelated playlists.
+- Reconciled playlist imports during incremental scans and corrected stale
+  metadata projections.
+- Fixed canonical MusicBrainz release artwork lookup and YouTube Music
+  thumbnail post-processing.
+- Fixed Downloads outcome serialization, queue history, hidden recovery
+  actions, and failed/cancelled filtering.
+- Fixed mobile overflow, scrolling, dense control spacing, and auto-sync
+  dropdown resets caused by live source-card refreshes.
 
 ### Upgrade
 
-- This release includes Alembic revisions `20260721_0009` through
-  `20260722_0015`. They create metadata intelligence, health, provider-cache,
-  discovery, application-audit, and application-lock tables, and add Library
-  Song metadata columns and indexes.
+- This direct v1.5.0 upgrade includes Alembic revisions `20260721_0009` through
+  `20260724_0025`. They add metadata intelligence, health, provider cache,
+  matching/application state, genre provenance, download outcomes and
+  telemetry, playlist metadata and Navidrome IDs, Library-job review state,
+  auto-playlists, and source scheduling.
 - Back up the persistent SQLite database before deploying. Start Harmony
   normally after deployment; Alembic applies the migrations automatically.
-- Review `.env.example` before deployment if you need to tune MusicBrainz
-  traffic or discovery-batch bounds. The defaults are conservative for the
-  public MusicBrainz service.
+- Review `.env.example` for MusicBrainz, Navidrome, Spotify genre enrichment,
+  and YouTube Music settings.
 
 ### Documentation
 
-- Expanded the Library architecture with metadata health, provider boundaries,
-  deterministic matching, discovery, application, rollback, and operational
-  contracts.
-- Added dedicated v1.6.0 release notes with deployment and validation steps.
+- Reconciled README, roadmap, API, architecture, configuration, and release
+  documents around the actual v1.5.0 → v2.0.0 release path.
+- Added dedicated v2.0.0 release notes with deployment and validation steps.
 
 ---
 
@@ -286,7 +315,7 @@ After upgrading to **v1.3.0**:
 
 ---
 
-## Looking Ahead
+## Looking Ahead (as documented in v1.3.0)
 
 The improvements in v1.3.0 provide the foundation for upcoming releases, including:
 

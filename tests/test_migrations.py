@@ -160,6 +160,7 @@ def test_download_telemetry_migrates_existing_download_jobs(tmp_path):
         "bytes_total",
         "transfer_rate_bps",
         "eta_seconds",
+        "queue_position",
     } <= download_columns
     with engine.connect() as connection:
         assert connection.execute(

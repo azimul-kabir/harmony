@@ -1,6 +1,12 @@
 from sqlalchemy import select
 
-from app.api.tasks import job_failures, library_activity
+from app.api.tasks import (
+    AcknowledgeJobsRequest,
+    acknowledge_job,
+    acknowledge_jobs,
+    job_failures,
+    library_activity,
+)
 from app.database.models import Task, TaskItemFailure
 from app.database.session import SessionLocal
 from app.domain.task import TaskStatus, TaskType
@@ -121,6 +127,98 @@ def test_activity_excludes_active_jobs():
 
         assert len(activity) == 1
         assert activity[0]["status"] == "completed"
+
+
+def test_activity_can_filter_all_attention_jobs_by_type():
+    with SessionLocal() as db:
+        _maintenance_task(
+            db,
+            status=TaskStatus.COMPLETED_WITH_ERRORS,
+            index=1,
+        )
+        _maintenance_task(db, status=TaskStatus.FAILED, index=2)
+        _maintenance_task(db, status=TaskStatus.COMPLETED, index=3)
+        bulk = create_task(
+            db,
+            name="Bulk failure",
+            spotify_url="library://bulk/delete",
+            task_type=TaskType.LIBRARY_BULK,
+            total_items=1,
+        )
+        bulk.status = TaskStatus.FAILED.value
+        db.commit()
+
+        activity = library_activity(
+            limit=100,
+            attention_only=True,
+            job_type=TaskType.LIBRARY_MAINTENANCE.value,
+            db=db,
+        )
+
+        assert len(activity) == 2
+        assert {item["status"] for item in activity} == {
+            "completed_with_errors",
+            "failed",
+        }
+        assert {item["type"] for item in activity} == {
+            "library_maintenance"
+        }
+
+
+def test_reviewed_jobs_leave_attention_but_keep_history():
+    with SessionLocal() as db:
+        first = _maintenance_task(
+            db,
+            status=TaskStatus.COMPLETED_WITH_ERRORS,
+            index=1,
+        )
+        second = _maintenance_task(
+            db,
+            status=TaskStatus.FAILED,
+            index=2,
+        )
+
+        acknowledged = acknowledge_job(first.id, db)
+
+        assert acknowledged["reviewed_at"] is not None
+        attention = library_activity(
+            limit=100,
+            attention_only=True,
+            job_type=TaskType.LIBRARY_MAINTENANCE.value,
+            db=db,
+        )
+        assert [item["id"] for item in attention] == [second.id]
+        history = library_activity(limit=100, db=db)
+        assert {item["id"] for item in history} == {first.id, second.id}
+
+
+def test_category_acknowledgement_marks_only_requested_job_type():
+    with SessionLocal() as db:
+        maintenance = _maintenance_task(
+            db,
+            status=TaskStatus.FAILED,
+            index=1,
+        )
+        bulk = create_task(
+            db,
+            name="Bulk failure",
+            spotify_url="library://bulk/delete",
+            task_type=TaskType.LIBRARY_BULK,
+            total_items=1,
+        )
+        bulk.status = TaskStatus.FAILED.value
+        db.commit()
+
+        result = acknowledge_jobs(
+            AcknowledgeJobsRequest(job_type="library_maintenance"),
+            db,
+        )
+
+        assert result["acknowledged"] == 1
+        db.refresh(maintenance)
+        db.refresh(bulk)
+        assert maintenance.reviewed_at is not None
+        assert bulk.reviewed_at is None
 
 
 def test_cleanup_retains_newest_terminal_jobs_and_active_jobs():

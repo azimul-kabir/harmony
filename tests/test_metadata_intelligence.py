@@ -98,7 +98,7 @@ def test_legacy_plain_text_history_values_serialize_without_error():
     with SessionLocal() as db:
         song = add_song(db)
         history = metadata_service.record_history(
-            db, entity_type="song", entity_id=song.id, field_name="artwork",
+            db, entity_type="song", entity_id=song.id, field_name="artwork_source",
             previous_value="embedded", new_value="missing", provider="file_tag_write",
             provider_entity_id=None, confidence=1, job_id=None, change_source="manual",
             audio_file_modified=False, reversible=True, reversal_of_history_id=None,

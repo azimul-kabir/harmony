@@ -92,9 +92,23 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
     safe_name = file_path.stem
     
     # 1. Map current local downloads via strict ID lookup
-    track_ids = [pt.spotify_track_id for pt in playlist.tracks]
+    track_ids = [
+        pt.spotify_track_id
+        for pt in playlist.tracks
+        if not pt.spotify_track_id.startswith("library:")
+    ]
     songs = db.query(Song).filter(Song.spotify_track_id.in_(track_ids)).all()
     song_id_map = {s.spotify_track_id: s for s in songs}
+    local_song_ids = [
+        int(pt.spotify_track_id.removeprefix("library:"))
+        for pt in playlist.tracks
+        if pt.spotify_track_id.startswith("library:")
+        and pt.spotify_track_id.removeprefix("library:").isdigit()
+    ]
+    local_song_map = {
+        song.id: song
+        for song in db.scalars(select(Song).where(Song.id.in_(local_song_ids))).all()
+    }
     
     # 2. Map downloading/queued jobs
     from app.database.models import DownloadJob
@@ -120,6 +134,9 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
             
             for pt in playlist.tracks:
                 song = song_id_map.get(pt.spotify_track_id)
+                if song is None and pt.spotify_track_id.startswith("library:"):
+                    raw_song_id = pt.spotify_track_id.removeprefix("library:")
+                    song = local_song_map.get(int(raw_song_id)) if raw_song_id.isdigit() else None
                 job = job_map.get(pt.spotify_track_id)
                 dt = domain_map.get(pt.spotify_track_id)
                 
@@ -207,16 +224,32 @@ def export_m3us_for_track(db: Session, spotify_track_id: str | None) -> int:
     """Refresh only playlists affected by a completed download."""
     if not spotify_track_id:
         return 0
+    return export_m3us_for_tracks(db, [spotify_track_id])
+
+
+def export_m3us_for_tracks(
+    db: Session, spotify_track_ids: list[str]
+) -> int:
+    """Refresh each playlist affected by a set of tracks exactly once."""
+    if not spotify_track_ids:
+        return 0
     playlists = db.scalars(
         select(Playlist)
         .join(PlaylistTrack)
-        .where(PlaylistTrack.spotify_track_id == spotify_track_id)
+        .where(
+            PlaylistTrack.spotify_track_id.in_(spotify_track_ids),
+            Playlist.playlist_kind != "smart",
+        )
+        .order_by(Playlist.id)
     ).unique().all()
     for playlist in playlists:
         export_m3u(db, playlist)
-    return len(playlists)
+    from app.services.auto_playlists import refresh_enabled
+    return len(playlists) + refresh_enabled(db)
 
 def export_all_m3us(db: Session) -> None:
     """Utility to regenerate all playlists"""
-    for p in db.query(Playlist).all():
+    for p in db.query(Playlist).where(Playlist.playlist_kind != "smart").all():
         export_m3u(db, p)
+    from app.services.auto_playlists import refresh_enabled
+    refresh_enabled(db)

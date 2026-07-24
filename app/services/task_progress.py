@@ -59,6 +59,7 @@ def serialize_task_progress(task: Task) -> dict[str, Any]:
         "error_summary": task.error_summary,
         "error_code": task.error_code,
         "cancellation_requested_at": task.cancellation_requested_at,
+        "reviewed_at": task.reviewed_at,
         "initiated_by": task.initiated_by,
         "initiating_source_id": task.source_id,
         "resumable": task.resumable,

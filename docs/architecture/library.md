@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
-> Version: 1.6.0 (Metadata Intelligence foundation)
-> Status: Released in v1.6.0
-> Last Updated: 2026-07-22
+> Version: 2.0.0
+> Status: Released in v2.0.0 (direct successor to v1.5.0)
+> Last Updated: 2026-07-24
 
 ---
 
@@ -328,7 +328,7 @@ metadata application are separate layers. The scorer imports only normalized
 sees MusicBrainz response objects or raw payloads. Discovery neither changes a
 Song nor opens an audio file, and selection does not imply metadata acceptance.
 
-Public discovery is Song-only in v1.6.0. Album and artist projection scorers
+Public discovery is Song-only in v2.0.0. Album and artist projection scorers
 remain internal because those projections do not yet have normalized persistent
 identities. Public attempts to use unsupported entity scopes return
 `unsupported_entity_type`; no partially functional album/artist workflow is
@@ -1104,7 +1104,7 @@ Duplicate handling is a separate service.
 
 ---
 
-# Multi-Source Downloads (Future)
+# Multi-Source Downloads
 
 Harmony separates metadata from audio.
 
@@ -1134,7 +1134,7 @@ Navidrome
 
 ---
 
-# Media Server Integration (Future)
+# Media Server Integration
 
 Harmony manages the library.
 
@@ -1142,16 +1142,42 @@ Media servers consume it.
 
 Harmony never becomes a streaming server.
 
-The first direct integration is a read/control-only Navidrome adapter. Harmony
-uses Navidrome's Subsonic-compatible `getScanStatus` and `startScan` endpoints
-to show scanner state on the dashboard and request incremental or explicit
-full scans. Navidrome remains responsible for its own media index; it never
-writes Harmony's `songs` table.
+Harmony uses Navidrome's Subsonic-compatible API for scanner controls and
+ordered playlist reconciliation. `getScanStatus` and `startScan` expose scanner
+state and index newly downloaded audio. `search3` and `getSong` resolve
+Harmony's local songs to stable Navidrome IDs. `createPlaylist` replaces the
+target playlist with the IDs in original source order, and `getPlaylist`
+verifies the result before Harmony records success. Navidrome remains
+responsible for its own media index; it never writes Harmony's `songs` table.
 
 Configure `NAVIDROME_URL`, `NAVIDROME_USERNAME`, and `NAVIDROME_PASSWORD` in
 Harmony's environment. In Docker, the URL must be reachable from the Harmony
 container (for example `http://navidrome:4533` on a shared Compose network).
 Credentials stay server-side.
+
+Completed playlist syncs are batched for a configurable debounce window.
+Harmony waits for any active scan, requests one incremental scan to index newly
+downloaded audio, and rewrites the affected M3Us as portable backups. It then
+resolves each available local track, replaces the corresponding Navidrome
+playlist in source order, and reads it back to verify the exact ID sequence.
+Stable song and playlist IDs are cached in Harmony's database.
+
+Direct replacement is all-or-nothing. Harmony refuses ambiguous song matches,
+ambiguous same-name playlists, and read-only targets. Any direct API or
+verification failure is recorded on the playlist and triggers the previous
+incremental M3U-import scan automatically. A successful direct update therefore
+needs one media scan; fallback needs the second playlist-import scan. Neither
+path changes a successful download into a failure.
+
+Direct reconciliation is controlled by
+`NAVIDROME_DIRECT_PLAYLIST_SYNC_ENABLED`,
+`NAVIDROME_DIRECT_SEARCH_LIMIT`, and
+`NAVIDROME_DIRECT_DURATION_TOLERANCE_SECONDS`. The coordinator and fallback are
+controlled by
+`NAVIDROME_PLAYLIST_REIMPORT_ENABLED`,
+`NAVIDROME_PLAYLIST_REIMPORT_DEBOUNCE_SECONDS`,
+`NAVIDROME_PLAYLIST_REIMPORT_POLL_SECONDS`, and
+`NAVIDROME_PLAYLIST_REIMPORT_SCAN_TIMEOUT_SECONDS`.
 
 Supported servers
 

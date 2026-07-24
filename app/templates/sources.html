@@ -2,24 +2,24 @@
 {% block title %}Sources{% endblock %} 
 
 {% block content %} 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-    <h1 style="margin: 0;">Automation Sources</h1>
+<div class="page-heading source-page-heading">
+    <div><span class="library-eyebrow">Playlist automation</span><h1>Sources</h1></div>
 </div>
 
-<div class="panel" style="margin-bottom: 24px;">
-    <p style="margin: 0 0 16px 0; color: var(--text-muted); font-size: 1.05rem;">
+<div class="panel source-add-panel">
+    <p>
         Add Spotify playlists here to automatically keep your local library synced.
     </p>
-    <form id="add-source-form" class="form-row" style="margin: 0;">
+    <form id="add-source-form" class="form-row source-add-form">
         <input
             id="source-url"
             type="url"
-            placeholder="Paste a Spotify Playlist URL..."
+            placeholder="Paste a Spotify playlist URL…"
             required
             autocomplete="off"
         >
         <button type="submit">
-            + Add Source
+            Add source
         </button>
     </form>
 </div>

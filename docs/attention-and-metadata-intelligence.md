@@ -1,5 +1,7 @@
 # Dashboard attention and metadata intelligence
 
+> v2.0.0 operational contract
+
 ## Attention-item contract
 
 `GET /api/dashboard` and the dashboard SSE stream publish one `attention` snapshot. `items` contains only non-zero, actionable categories; `total_count` and severity counts are sums of those item counts. `healthy`, `headline`, and `message` are derived from that exact list, so a healthy message is possible only when the list is empty.
@@ -11,6 +13,10 @@
 | Maintenance jobs | jobs | `failed`, `completed_with_errors`, `interrupted` | queued, running, paused, cancelling, completed, cancelled |
 | Bulk jobs | jobs | `failed`, `completed_with_errors`, `interrupted` | queued, running, paused, cancelling, completed, cancelled |
 | Open metadata issues | included current issue records | `open` and current entity scope | ignored, resolved, stale, and missing-file song records |
+
+Library-job attention can be acknowledged per job or by category. Review state
+suppresses the warning while preserving job summaries and safe per-item failure
+diagnostics for audit and troubleshooting.
 
 The dashboard does not serialize filenames, paths, error details, or task payloads. Cancelled jobs and completed history are intentionally not attention items. Retryable failed downloads and jobs are included.
 

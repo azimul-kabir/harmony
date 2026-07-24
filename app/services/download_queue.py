@@ -20,6 +20,7 @@ def enqueue_track(
     db: Session,
     track: Track,
     task_id: int | None = None,
+    queue_position: int | None = None,
 ) -> QueueResult:
 
     if not _can_enqueue(
@@ -51,6 +52,7 @@ def enqueue_track(
         db=db,
         track=track,
         task_id=task_id,
+        queue_position=queue_position,
     )
 
     return QueueResult(
@@ -105,14 +107,14 @@ def enqueue_playlist(
 ) -> list[QueueResult]:
     playlist = import_playlist(spotify_url)
 
-    queue: list[Track] = []
+    queue: list[tuple[int, Track]] = []
 
-    for track in playlist.tracks:
+    for position, track in enumerate(playlist.tracks, 1):
         if _can_enqueue(
             db=db,
             track=track,
         ):
-            queue.append(track)
+            queue.append((position, track))
 
     if not queue:
         return []
@@ -127,12 +129,13 @@ def enqueue_playlist(
 
     results: list[QueueResult] = []
 
-    for track in queue:
+    for position, track in queue:
         results.append(
             enqueue_track(
                 db=db,
                 track=track,
                 task_id=task.id,
+                queue_position=position,
             )
         )
 

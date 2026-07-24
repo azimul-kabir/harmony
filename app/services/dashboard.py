@@ -354,7 +354,7 @@ _ATTENTION_DEFINITIONS = (
         "maintenance_jobs",
         "warning",
         "Library maintenance jobs",
-        "/library/health#library-jobs",
+        "/library/health?job_status=attention&job_type=library_maintenance#library-jobs",
         "Review",
         None,
         None,
@@ -363,7 +363,7 @@ _ATTENTION_DEFINITIONS = (
         "bulk_jobs",
         "warning",
         "Library bulk jobs",
-        "/library/health#library-jobs",
+        "/library/health?job_status=attention&job_type=library_bulk#library-jobs",
         "Review",
         None,
         None,
@@ -418,6 +418,7 @@ def _attention_task_counts(db) -> dict[str, int]:
                 (TaskType.LIBRARY_MAINTENANCE.value, TaskType.LIBRARY_BULK.value)
             ),
             Task.status.in_(needs_review),
+            Task.reviewed_at.is_(None),
         )
     ).one()
     return {"maintenance_jobs": int(row[0]), "bulk_jobs": int(row[1])}
@@ -452,7 +453,11 @@ def _get_attention_summary(
     ) in _ATTENTION_DEFINITIONS:
         count = int(counts[key])
         if count:
-            noun = "item" if count == 1 else "items"
+            noun = (
+                "job" if count == 1 else "jobs"
+            ) if key in {"maintenance_jobs", "bulk_jobs"} else (
+                "item" if count == 1 else "items"
+            )
             verb = "requires" if count == 1 else "require"
             items.append(
                 {

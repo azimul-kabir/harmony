@@ -103,23 +103,21 @@
         </div>
     </section>
 
-    <!-- NEW: Download Workers -->
-    <section class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Download Workers</h3>
-            <span id="worker-count-badge" class="badge badge-queued" style="font-size: 0.8rem;">0 Active</span>
+    <section class="panel dashboard-stream-panel">
+        <div class="dashboard-stream-header">
+            <h3>Download Workers</h3>
+            <span id="worker-count-badge" class="badge badge-queued">0 Active</span>
         </div>
-        <div id="workers-grid" class="workers-grid" style="padding: 24px;">
+        <div id="workers-grid" class="workers-grid dashboard-stream-content">
             <p class="empty-state">Connecting to download engine...</p>
         </div>
     </section>
 
-    <!-- Middle Row: Active Tasks -->
-    <section class="panel" style="padding: 0; overflow: hidden;">
-        <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color);">
-            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Active Queue Tasks</h3>
+    <section class="panel dashboard-stream-panel">
+        <div class="dashboard-stream-header">
+            <h3>Active Queue Tasks</h3>
         </div>
-        <div id="active-tasks" style="padding: 24px;">
+        <div id="active-tasks" class="dashboard-stream-content">
             <p class="empty-state">No active queue tasks.</p>
         </div>
     </section>
@@ -129,14 +127,13 @@
         <div id="dashboard-maintenance-list" class="dashboard-maintenance-list"><p class="empty-state">Loading recent maintenance…</p></div>
     </section>
 
-    <!-- Bottom Row: Activity and quick actions -->
     <div class="bottom-split">
-        <section class="panel" style="padding: 0; overflow: hidden;">
-            <div style="background: var(--bg-surface-alt); padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; gap: 12px; align-items: center;">
-                <div><span class="library-eyebrow">Download history</span><h2 style="margin: 2px 0 0; font-size: 1.1rem;">Activity timeline</h2></div>
+        <section class="panel dashboard-stream-panel">
+            <div class="dashboard-stream-header">
+                <div><span class="library-eyebrow">Download history</span><h2>Activity timeline</h2></div>
                 <a href="/downloads" class="dashboard-panel-link">Open downloads →</a>
             </div>
-            <div id="recent-activity" class="activity-list" style="padding: 24px;">
+            <div id="recent-activity" class="activity-list dashboard-stream-content">
                 <p class="empty-state">No recent activity.</p>
             </div>
         </section>

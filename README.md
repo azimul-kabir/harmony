@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.6.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v2.0.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,10 +25,11 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v1.6.0**
+Current stable version: **v2.0.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v1.6.0 release notes](docs/releases/v1.6.0.md) for upgrade guidance.
+[v2.0.0 release notes](docs/releases/v2.0.0.md) for the direct upgrade from
+v1.5.0. Harmony v1.6.0 was never published.
 
 ---
 
@@ -97,6 +98,13 @@ Features include:
 - Download only missing songs
 - Automatic M3U generation
 - Direct `.m3u` downloads from the web interface
+- Direct, order-preserving Navidrome playlist synchronization with safe M3U
+  fallback
+- Playlist availability counts, filtering, and one-click source resync
+- Ordered playlist Library-file management and safe saved-playlist deletion
+- Per-source scheduled auto-sync (hourly, every 6 or 12 hours, daily, or weekly)
+- Auto-generated Recently Added and Recently Downloaded playlists with a
+  configurable 1–500-song limit
 
 ---
 
@@ -268,8 +276,9 @@ apply only the changes you review and accept.
 - MusicBrainz requests are rate-limited, retried, and cached locally to make
   repeated discovery safe for public provider infrastructure.
 
-Metadata discovery and application currently support Songs. Album and Artist
-matching remains an internal foundation for future releases.
+Metadata discovery, canonical application, explicit tag writing, and rollback
+currently support Songs. Album and Artist matching remains an internal
+foundation for future releases.
 
 ### Repair missing genres
 
@@ -283,8 +292,9 @@ To enrich untagged songs from MusicBrainz, open **Library Health**, run
 **Metadata Analysis**, then find the **Missing genre** issues and choose
 **Discover match**. In the linked Song review, select a viable provider match,
 generate suggestions, accept the **Genre** suggestion, preview it, and apply
-it. Harmony records that canonical Library change in its history and does not
-write the audio file's tags; tag-writing remains a separate future workflow.
+it. Harmony records that canonical Library change in its history. To update the
+file itself, separately preview and run **Write canonical tags**; this explicit
+step can also embed cached artwork and is the step media servers observe.
 
 ---
 
@@ -326,6 +336,11 @@ Current configurable settings include:
 - Storage paths
 - Download engine
 - Spotify configuration
+- Optional Spotify genre enrichment
+- Optional YouTube Music download source
+- Navidrome connection and playlist synchronization
+- MusicBrainz provider and discovery limits
+- Appearance, date/time, and runtime behavior
 - System information
 
 Metadata discovery can also be tuned with the documented `MUSICBRAINZ_*` and
@@ -340,11 +355,12 @@ Harmony is designed for desktop and mobile devices.
 Features include:
 
 - Responsive layouts
-- Touch-friendly controls
+- Compact mobile navigation and discoverable Settings sections
+- Touch-friendly controls and safe-area spacing
 - Optimized album grids
 - Responsive artist cards
-- Mobile typography improvements
-- Smooth scrolling
+- Full-width mobile dialogs, drawers, and scrollable content regions
+- Mobile typography, focus, overflow, and reduced-motion improvements
 - Pagination optimized for smaller screens
 
 ---
@@ -569,11 +585,10 @@ Just a synchronized self-hosted music library.
 
 ### Operations and Automation
 
-- Editable application settings
-- Scheduled synchronization
 - Backup & restore
 - Import/export settings
-- Direct Navidrome integration beyond the existing M3U workflow
+- Additional media-server API integrations beyond Navidrome
+- Schedule history and missed-run visibility
 
 ---
 
@@ -583,7 +598,6 @@ Just a synchronized self-hosted music library.
 - Additional metadata providers and repair workflows
 - Duplicate detection and resolution
 - Manual artwork replacement
-- Cover Art Archive integration
 - Advanced search improvements
 
 ---
@@ -593,21 +607,21 @@ Just a synchronized self-hosted music library.
 - Favorites
 - Ratings
 - Tags
-- Smart Playlists
 - User-defined collection rules
+- More built-in auto-playlists based on playback signals when those signals are
+  available
 
 ---
 
 ## Future
 
 - Apple Music support
-- YouTube Music support
 - Deezer support
 - Multiple music providers
 - Multi-user support
 - Plugin system
 - API authentication and external integration hardening
-- Navidrome synchronization hooks
+- Additional Navidrome event hooks
 - Progressive Web App (PWA)
 - Lyrics support
 

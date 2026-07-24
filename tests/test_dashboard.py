@@ -274,8 +274,11 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     "severity": "warning",
                     "count": 1,
                     "title": "Library maintenance jobs",
-                    "description": "1 item requires attention",
-                    "href": "/library/health#library-jobs",
+                    "description": "1 job requires attention",
+                    "href": (
+                        "/library/health?job_status=attention"
+                        "&job_type=library_maintenance#library-jobs"
+                    ),
                     "action_label": "Review",
                     "recovery_action": None,
                     "recovery_label": None,
@@ -391,8 +394,11 @@ def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failure
                     "severity": "warning",
                     "count": 1,
                     "title": "Library bulk jobs",
-                    "description": "1 item requires attention",
-                    "href": "/library/health#library-jobs",
+                    "description": "1 job requires attention",
+                    "href": (
+                        "/library/health?job_status=attention"
+                        "&job_type=library_bulk#library-jobs"
+                    ),
                     "action_label": "Review",
                     "recovery_action": None,
                     "recovery_label": None,
@@ -401,6 +407,27 @@ def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failure
         }
         assert "private" not in str(attention)
         assert "path" not in str(attention)
+
+
+def test_dashboard_attention_excludes_reviewed_library_jobs():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(
+            Task(
+                name="Reviewed failure",
+                spotify_url="library://maintenance/reviewed",
+                task_type=TaskType.LIBRARY_MAINTENANCE.value,
+                status=TaskStatus.FAILED.value,
+                reviewed_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+        )
+        db.commit()
+
+        attention = get_dashboard_snapshot(db)["attention"]
+
+        assert attention["healthy"] is True
+        assert attention["items"] == []
 
 
 def test_dashboard_failed_attention_matches_downloads_failed_filter():

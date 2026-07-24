@@ -1,5 +1,8 @@
 # Library Jobs and Activity API
 
+> v2.0.0 API guide. Interactive OpenAPI contracts are available at `/docs`
+> while Harmony is running.
+
 Library jobs extend Harmony's existing durable Task API. All timestamps are UTC
 ISO-8601 values. Job responses include both the legacy progress keys
 (`total`, `completed`, `progress`) and explicit job keys (`total_items`,
@@ -17,6 +20,11 @@ ISO-8601 values. Job responses include both the legacy progress keys
 Job responses report `job_id`, `job_type`, `status`, timestamps, item counts,
 derived processed/progress values, the current item, structured error summary,
 cancellation time, initiator/source, resumability, and parsed recovery metadata.
+
+Reviewed failures can be acknowledged without deleting their history:
+
+- `POST /api/tasks/jobs/{job_id}/acknowledge`
+- `POST /api/tasks/jobs/acknowledge` for a bounded job category
 
 ## Cancel a job
 
@@ -54,12 +62,41 @@ the browser.
 
 These endpoints use the same persistent jobs and retain their existing response
 fields. Bulk operations are `delete`, `move`, `rename`, `refresh_metadata`,
-`refresh_artwork`, and `export`.
+`refresh_artwork`, `fetch_artwork`, `forget_missing`, and `export`.
+
+## Sources and automation
+
+- `GET /api/sources` lists source state and schedule fields.
+- `POST /api/sources` saves a Spotify source.
+- `POST /api/sources/{source_id}/sync` starts an immediate background sync.
+- `PATCH /api/sources/{source_id}` enables or disables a source.
+- `PATCH /api/sources/{source_id}/auto-sync` saves
+  `{ "enabled": true, "interval_minutes": 360 }`. The interval is bounded to
+  15–10,080 minutes; the v2.0.0 UI offers hourly, 6-hour, 12-hour, daily, and
+  weekly schedules.
+- `GET /api/sources/stream` streams source, playlist, task, and schedule state.
+
+- `GET /api/playlists/auto/definitions` lists built-in auto-playlist rules.
+- `POST /api/playlists/auto/{rule_id}/generate` accepts
+  `{ "limit": 50, "enabled": true }`. Supported v2.0.0 rules are
+  `recently_added` and `recently_downloaded`; limits are bounded to 1–500.
+
+## Playlist management
+
+- `GET /api/playlists/{playlist_id}/tracks` returns source-ordered tracks,
+  availability, artwork, and safe deletion eligibility.
+- `POST /api/playlists/{playlist_id}/download` starts durable deletion of
+  selected available Library files and refreshes affected M3Us.
+- `DELETE /api/playlists/{playlist_id}` deletes the saved playlist and its
+  generated M3U, not downloaded Songs or the associated Source.
+- `GET /api/playlists/{playlist_id}/download` returns the generated M3U.
+- `POST /api/playlists/import`, `/compare`, and `/download` retain the existing
+  import, availability comparison, and direct-download contracts.
 
 ## Metadata Intelligence API
 
 Metadata Intelligence uses the same durable Task lifecycle for discovery and
-application work. The public discovery and application scope in v1.6.0 is
+application work. The public discovery and application scope in v2.0.0 is
 Songs; requests never silently apply provider values.
 
 ### Provider diagnostics
@@ -119,6 +156,14 @@ Songs; requests never silently apply provider values.
 Use `GET /api/metadata/discoveries/capabilities` and
 `GET /api/metadata/application/capabilities` to obtain the supported entity
 types, fields, thresholds, and request limits before integrating a client.
+
+Canonical metadata and file tags remain separate:
+
+- `GET /api/library/songs/{song_id}/metadata/tag-preview` previews the file-tag
+  mutation.
+- `POST /api/library/songs/{song_id}/metadata/write-tags` explicitly writes one
+  Song.
+- `POST /api/library/metadata/write-tags` queues a bounded multi-Song write.
 
 ## Downloads queue snapshot
 

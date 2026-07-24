@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas.sync_source import (
     SyncSourceRequest,
+    SyncSourceAutoSyncRequest,
     SyncSourceUpdateRequest,
 )
 from app.database.crud_sync_sources import (
@@ -23,6 +24,7 @@ from app.database.session import get_db, SessionLocal
 from app.services.playlist_sync import sync_playlist
 from app.services.playlist_manager import count_m3u_entries, playlist_file_path
 from app.services.spotify.url import spotify_resource
+from app.services.source_auto_sync import next_sync_at
 
 router = APIRouter(
     prefix="/api/sources",
@@ -66,6 +68,10 @@ def list_sources(db: Session = Depends(get_db)):
             "name": source.name,
             "spotify_url": source.spotify_url,
             "enabled": source.enabled,
+            "auto_sync_enabled": source.auto_sync_enabled,
+            "auto_sync_interval_minutes": source.auto_sync_interval_minutes,
+            "auto_sync_last_attempt_at": source.auto_sync_last_attempt_at,
+            "next_auto_sync_at": next_sync_at(source) if source.auto_sync_enabled else None,
             "last_synced_at": source.last_synced_at,
         }
         for source in sources
@@ -117,6 +123,31 @@ def update_source(source_id: int, request: SyncSourceUpdateRequest, db: Session 
         raise HTTPException(status_code=404, detail="Source not found.")
     return {"id": source.id, "enabled": source.enabled}
 
+
+@router.patch("/{source_id}/auto-sync")
+def update_source_auto_sync(
+    source_id: int,
+    request: SyncSourceAutoSyncRequest,
+    db: Session = Depends(get_db),
+):
+    source = get_sync_source(db=db, sync_id=source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found.")
+    interval = max(15, min(request.interval_minutes, 10080))
+    source.auto_sync_enabled = request.enabled
+    source.auto_sync_interval_minutes = interval
+    if request.enabled and not source.enabled:
+        source.enabled = True
+    db.commit()
+    db.refresh(source)
+    return {
+        "id": source.id,
+        "enabled": source.enabled,
+        "auto_sync_enabled": source.auto_sync_enabled,
+        "auto_sync_interval_minutes": source.auto_sync_interval_minutes,
+        "next_auto_sync_at": next_sync_at(source),
+    }
+
 @router.get("/stream")
 async def stream_sources_data(request: Request):
     async def event_generator():
@@ -160,6 +191,10 @@ async def stream_sources_data(request: Request):
                         "name": source.name,
                         "spotify_url": source.spotify_url,
                         "enabled": source.enabled,
+                        "auto_sync_enabled": source.auto_sync_enabled,
+                        "auto_sync_interval_minutes": source.auto_sync_interval_minutes,
+                        "auto_sync_last_attempt_at": source.auto_sync_last_attempt_at.isoformat() if source.auto_sync_last_attempt_at else None,
+                        "next_auto_sync_at": next_sync_at(source).isoformat() if source.auto_sync_enabled else None,
                         "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None,
                         "playlist": {
                             "id": playlist.id,
