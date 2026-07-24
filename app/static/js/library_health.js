@@ -313,6 +313,39 @@ document.getElementById("library-job-acknowledge")?.addEventListener("click", as
     }
 });
 
+document.getElementById("library-activity-clear-open")?.addEventListener("click", () => {
+    document.getElementById("library-activity-clear-reviewed").checked = false;
+    document.getElementById("library-activity-clear-status").textContent = "";
+    document.getElementById("library-activity-clear-dialog").showModal();
+});
+
+document.getElementById("library-activity-clear-confirm")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const includeReviewed = document.getElementById("library-activity-clear-reviewed").checked;
+    button.disabled = true;
+    button.textContent = "Clearing…";
+    try {
+        const result = await healthJson("/api/tasks/jobs/clear", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({include_reviewed_attention: includeReviewed}),
+        });
+        document.getElementById("library-activity-clear-status").textContent =
+            result.cleared
+                ? `${result.cleared} activit${result.cleared === 1 ? "y" : "ies"} cleared.`
+                : "No eligible activity to clear.";
+        await loadLibraryJobs();
+        window.setTimeout(() => {
+            document.getElementById("library-activity-clear-dialog").close();
+        }, 550);
+    } catch (error) {
+        document.getElementById("library-activity-clear-status").textContent = error.message;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Clear activity";
+    }
+});
+
 document.getElementById("library-jobs-acknowledge-all")?.addEventListener("click", async (event) => {
     if (!healthState.jobType) return;
     const typeLabel = healthState.jobType === "library_bulk" ? "bulk" : "maintenance";

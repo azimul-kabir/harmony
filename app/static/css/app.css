@@ -1767,6 +1767,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .library-job-actions { display: flex; align-items: center; gap: 7px; }
 .library-job-actions button { min-height: 36px; padding: 6px 10px; }
 .library-activity-show-more { width: 100%; min-height: 42px; margin-top: 10px; font: inherit; }
+.library-job-panel-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.library-activity-clear-dialog { width: min(560px, calc(100vw - 24px)); }
+.library-activity-clear-option { grid-template-columns: auto minmax(0, 1fr) !important; align-items: start; }
+.library-activity-clear-option input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--primary); }
 .library-job-dialog { width: min(680px, calc(100vw - 24px)); }
 .library-job-dialog form { max-height: min(82vh, 760px); overflow-y: auto; }
 .library-job-dialog h3 { margin: 0 0 10px; font-size: .95rem; }
@@ -2127,6 +2131,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .health-section-heading small { text-align: left; }
     .health-job-panel-header { flex-direction: column; }
     .health-job-panel-header > .btn-secondary { width: 100%; min-height: 44px; }
+    .library-job-panel-controls { width: 100%; }
+    .library-job-panel-controls .btn-secondary { flex: 1 1 180px; min-height: 44px; }
     .metadata-issues-header { grid-template-columns: 1fr; }
     .metadata-issues-panel { padding: 16px; }
     .metadata-issue-summary { width: 100%; box-sizing: border-box; }

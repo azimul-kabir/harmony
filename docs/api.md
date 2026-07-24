@@ -136,6 +136,9 @@ compatible with conservative SQLite parameter limits.
 - `GET`, `POST`, and `DELETE /api/playlists/{playlist_id}/artwork` serve,
   atomically replace, or remove a Navidrome-compatible playlist sidecar image.
   Uploads accept JPEG, PNG, WebP, or GIF images up to 10 MB.
+- `POST /api/tasks/jobs/clear` removes completed and cancelled Library activity.
+  With `include_reviewed_attention=true`, it also removes reviewed terminal
+  warnings; active and unreviewed attention jobs are always retained.
 - `POST /api/playlists/import`, `/compare`, and `/download` retain the existing
   import, availability comparison, and direct-download contracts.
 

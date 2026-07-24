@@ -9,6 +9,7 @@ from app.domain.task import TaskStatus
 from app.core.time import utcnow_naive
 from app.services.task_service import (
     cancel_task,
+    clear_library_activity,
     pause_task,
     resume_task,
 )
@@ -27,6 +28,10 @@ ATTENTION_JOB_STATES = ("completed_with_errors", "failed", "interrupted")
 
 class AcknowledgeJobsRequest(BaseModel):
     job_type: str
+
+
+class ClearLibraryActivityRequest(BaseModel):
+    include_reviewed_attention: bool = False
 
 @router.get("")
 def list_tasks(db: Session = Depends(get_db)):
@@ -72,6 +77,18 @@ def active_jobs(db: Session = Depends(get_db)):
 def recent_jobs(limit: int = 25, db: Session = Depends(get_db)):
     jobs = db.scalars(select(Task).where(Task.task_type.in_(LIBRARY_TASK_TYPES)).order_by(Task.created_at.desc()).limit(min(max(limit, 1), 100))).all()
     return [serialize_task_progress(job) for job in jobs]
+
+
+@router.post("/jobs/clear", summary="Clear safe terminal Library activity")
+def clear_jobs(
+    request: ClearLibraryActivityRequest,
+    db: Session = Depends(get_db),
+):
+    return clear_library_activity(
+        db,
+        include_reviewed_attention=request.include_reviewed_attention,
+    )
+
 
 @router.get("/jobs/{task_id}", summary="Get persistent Library job details")
 def job_details(task_id: int, db: Session = Depends(get_db)):

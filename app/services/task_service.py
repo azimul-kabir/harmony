@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database.models import (MetadataApplicationBatch, MetadataApplicationLock,
     MetadataDiscovery, MetadataDiscoveryLock, Task, TaskItemFailure, SyncSource)
-from sqlalchemy import select, delete, update
+from sqlalchemy import and_, or_, select, delete, update
 from app.domain.task import (
     TaskStatus,
     TaskType,
@@ -247,6 +247,53 @@ def cleanup_library_jobs(db: Session, *, retain: int = 200) -> int:
         db.delete(task)
     db.commit()
     return len(old_ids)
+
+
+def clear_library_activity(
+    db: Session,
+    *,
+    include_reviewed_attention: bool = False,
+) -> dict[str, int]:
+    """Clear safe terminal Library history while preserving actionable jobs."""
+    safe_statuses = (
+        TaskStatus.CANCELLED.value,
+        TaskStatus.COMPLETED.value,
+    )
+    attention_statuses = (
+        TaskStatus.COMPLETED_WITH_ERRORS.value,
+        TaskStatus.FAILED.value,
+        TaskStatus.INTERRUPTED.value,
+    )
+    removable = Task.status.in_(safe_statuses)
+    if include_reviewed_attention:
+        removable = or_(
+            removable,
+            and_(
+                Task.status.in_(attention_statuses),
+                Task.reviewed_at.is_not(None),
+            ),
+        )
+    tasks = db.scalars(
+        select(Task).where(
+            Task.task_type.in_(
+                (
+                    TaskType.LIBRARY_BULK.value,
+                    TaskType.LIBRARY_MAINTENANCE.value,
+                )
+            ),
+            removable,
+        )
+    ).all()
+    reviewed_attention = sum(
+        task.status in attention_statuses for task in tasks
+    )
+    for task in tasks:
+        db.delete(task)
+    db.commit()
+    return {
+        "cleared": len(tasks),
+        "reviewed_attention_cleared": reviewed_attention,
+    }
 
 
 def recover_library_jobs(db: Session) -> int:

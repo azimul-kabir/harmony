@@ -11,10 +11,12 @@ from app.api.tasks import (
 from app.database.models import Task, TaskItemFailure
 from app.database.session import SessionLocal
 from app.domain.task import TaskStatus, TaskType
+from app.core.time import utcnow_naive
 from app.services.library_health import library_health
 from app.services.task_progress import serialize_task_progress
 from app.services.task_service import (
     cancel_task,
+    clear_library_activity,
     cleanup_library_jobs,
     create_task,
     record_item_failure,
@@ -137,6 +139,46 @@ def test_library_health_page_exposes_recent_activity_show_more():
     assert response.status_code == 200
     assert 'id="library-activity-show-more"' in response.text
     assert "Show 10 more" in response.text
+    assert 'id="library-activity-clear-open"' in response.text
+    assert 'id="library-activity-clear-dialog"' in response.text
+
+
+def test_clear_activity_preserves_active_and_unreviewed_attention_jobs():
+    with SessionLocal() as db:
+        completed = _maintenance_task(db, status=TaskStatus.COMPLETED, index=1)
+        cancelled = _maintenance_task(db, status=TaskStatus.CANCELLED, index=2)
+        active = _maintenance_task(db, status=TaskStatus.RUNNING, index=3)
+        unreviewed = _maintenance_task(db, status=TaskStatus.FAILED, index=4)
+        reviewed = _maintenance_task(
+            db,
+            status=TaskStatus.COMPLETED_WITH_ERRORS,
+            index=5,
+        )
+        reviewed.reviewed_at = utcnow_naive()
+        db.commit()
+        ids = {
+            "completed": completed.id,
+            "cancelled": cancelled.id,
+            "active": active.id,
+            "unreviewed": unreviewed.id,
+            "reviewed": reviewed.id,
+        }
+
+        first = clear_library_activity(db)
+
+        assert first == {"cleared": 2, "reviewed_attention_cleared": 0}
+        assert db.get(Task, ids["completed"]) is None
+        assert db.get(Task, ids["cancelled"]) is None
+        assert db.get(Task, ids["active"]) is not None
+        assert db.get(Task, ids["unreviewed"]) is not None
+        assert db.get(Task, ids["reviewed"]) is not None
+
+        second = clear_library_activity(db, include_reviewed_attention=True)
+
+        assert second == {"cleared": 1, "reviewed_attention_cleared": 1}
+        assert db.get(Task, ids["reviewed"]) is None
+        assert db.get(Task, ids["active"]) is not None
+        assert db.get(Task, ids["unreviewed"]) is not None
 
 
 def test_activity_can_filter_all_attention_jobs_by_type():

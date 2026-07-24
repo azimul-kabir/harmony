@@ -24,6 +24,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   message after live activity arrives.
 - Library recent job activity initially shows 10 entries and expands in
   10-entry batches through a Show more control.
+- Library activity can be cleared without removing active jobs or unreviewed
+  warnings, with a separate opt-in for reviewed error history.
 
 ### Planned
 
