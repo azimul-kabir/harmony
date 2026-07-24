@@ -496,14 +496,16 @@ function formatActivityTime(value) {
 function renderActivity(jobs) {
     const container = document.getElementById("recent-activity");
     if (!container) return;
+    jobs = Array.isArray(jobs) ? jobs.slice(0, 10) : [];
 
-    if (!jobs || jobs.length === 0) {
+    if (jobs.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-state";
         empty.textContent = "No recent download activity.";
         container.replaceChildren(empty);
         return;
     }
+    container.querySelector(".empty-state")?.remove();
 
     const existing = new Map(
         Array.from(container.querySelectorAll("[data-activity-id]")).map((row) => [row.dataset.activityId, row])
@@ -516,6 +518,10 @@ function renderActivity(jobs) {
             row.dataset.activityId = key;
             const marker = document.createElement("span");
             marker.className = "activity-marker";
+            const artwork = document.createElement("span");
+            artwork.className = "activity-artwork activity-artwork-placeholder";
+            artwork.setAttribute("aria-hidden", "true");
+            artwork.textContent = "♪";
             const content = document.createElement("div");
             content.className = "activity-content";
             const title = document.createElement("strong");
@@ -527,13 +533,38 @@ function renderActivity(jobs) {
             const status = document.createElement("span");
             const time = document.createElement("time");
             meta.append(status, time);
-            row.append(marker, content, meta);
+            row.append(marker, artwork, content, meta);
         }
         const details = activityDetails(job.status);
         row.className = `activity-item activity-${details.status}`;
         row.href = ["failed", "cancelled"].includes(details.status) ? "/downloads?status=failed" : "/downloads";
-        const [marker, content, meta] = row.children;
+        const [marker, artwork, content, meta] = row.children;
         marker.setAttribute("aria-hidden", "true");
+        if (job.cover_url) {
+            if (artwork.tagName !== "IMG") {
+                const image = document.createElement("img");
+                image.className = "activity-artwork";
+                image.alt = "";
+                image.loading = "lazy";
+                image.addEventListener("error", () => {
+                    const placeholder = document.createElement("span");
+                    placeholder.className = "activity-artwork activity-artwork-placeholder";
+                    placeholder.setAttribute("aria-hidden", "true");
+                    placeholder.textContent = "♪";
+                    image.replaceWith(placeholder);
+                }, {once: true});
+                artwork.replaceWith(image);
+                image.src = job.cover_url;
+            } else if (artwork.src !== new URL(job.cover_url, window.location.href).href) {
+                artwork.src = job.cover_url;
+            }
+        } else if (artwork.tagName === "IMG") {
+            const placeholder = document.createElement("span");
+            placeholder.className = "activity-artwork activity-artwork-placeholder";
+            placeholder.setAttribute("aria-hidden", "true");
+            placeholder.textContent = "♪";
+            artwork.replaceWith(placeholder);
+        }
         content.querySelector("strong").textContent = job.title || "Unknown title";
         content.querySelector("span").textContent = job.artist || "Unknown artist";
         meta.querySelector("span").textContent = details.label;

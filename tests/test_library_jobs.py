@@ -1,3 +1,4 @@
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.api.tasks import (
@@ -19,6 +20,7 @@ from app.services.task_service import (
     record_item_failure,
     recover_library_jobs,
 )
+from app.main import app
 
 
 def _maintenance_task(db, *, status=TaskStatus.COMPLETED, index=0):
@@ -127,6 +129,14 @@ def test_activity_excludes_active_jobs():
 
         assert len(activity) == 1
         assert activity[0]["status"] == "completed"
+
+
+def test_library_health_page_exposes_recent_activity_show_more():
+    response = TestClient(app).get("/library/health")
+
+    assert response.status_code == 200
+    assert 'id="library-activity-show-more"' in response.text
+    assert "Show 10 more" in response.text
 
 
 def test_activity_can_filter_all_attention_jobs_by_type():

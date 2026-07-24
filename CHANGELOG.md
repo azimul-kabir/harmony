@@ -17,6 +17,14 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Duplicate candidate file details now use labeled, evenly aligned statistics
   with square cover artwork and a full-width keeper choice on small screens.
 
+### Changed
+
+- Dashboard download history is capped at 10 songs and now displays square
+  album artwork with a graceful placeholder, without retaining a stale empty
+  message after live activity arrives.
+- Library recent job activity initially shows 10 entries and expands in
+  10-entry batches through a Show more control.
+
 ### Planned
 
 - Additional media-server API integrations beyond Navidrome.

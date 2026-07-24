@@ -147,6 +147,7 @@ def serialize_dashboard_activity(job: DownloadJob) -> dict:
         "status": job.status,
         "title": job.title,
         "artist": job.artist,
+        "cover_url": job.cover_url,
         "event_at": event_at.isoformat() if event_at else None,
     }
 

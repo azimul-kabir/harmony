@@ -3,6 +3,8 @@ const healthState = {
     timer: null,
     attentionJobs: false,
     jobType: null,
+    recentJobs: [],
+    recentVisible: 10,
     selectedIssues: new Set(),
 };
 const healthCheckDestinations = {
@@ -153,7 +155,7 @@ async function loadLibraryJobs() {
         ? requestedType
         : null;
     const activityParams = new URLSearchParams({
-        limit: attentionOnly ? "100" : "20",
+        limit: "100",
     });
     if (attentionOnly) activityParams.set("attention_only", "true");
     if (["library_bulk", "library_maintenance"].includes(requestedType)) {
@@ -178,21 +180,45 @@ async function loadLibraryJobs() {
       <span class="health-check-indicator" aria-hidden="true"></span><div><strong>${escapeHealth(job.name)}</strong><small>${escapeHealth(job.status)} · ${job.processed}/${job.total}${job.error_code ? ` · ${escapeHealth(job.error_code)}` : ""}</small></div>
       <div class="library-job-actions"><button class="btn-secondary" data-job-details="${job.id}">Details</button>${["queued", "running", "cancelling"].includes(job.status) ? `<button class="btn-secondary" data-job-cancel="${job.id}">Cancel</button>` : ""}</div></article>`).join("") : `<p>${empty}</p>`;
     };
+    const bindJobDetails = (target) => {
+        target.querySelectorAll("[data-job-details]").forEach((button) => {
+            button.addEventListener("click", () => openLibraryJobDetails(button.dataset.jobDetails));
+        });
+    };
+    const renderRecentJobs = () => {
+        const recentTarget = document.getElementById("library-recent-activity");
+        const visible = healthState.attentionJobs
+            ? healthState.recentJobs
+            : healthState.recentJobs.slice(0, healthState.recentVisible);
+        renderJobs(
+            recentTarget,
+            visible,
+            healthState.attentionJobs
+                ? `No ${typeLabel} jobs currently require attention.`
+                : "No recent activity.",
+        );
+        bindJobDetails(recentTarget);
+        const showMore = document.getElementById("library-activity-show-more");
+        showMore.hidden = healthState.attentionJobs
+            || healthState.recentVisible >= healthState.recentJobs.length;
+        const remaining = Math.max(0, healthState.recentJobs.length - healthState.recentVisible);
+        showMore.textContent = `Show ${Math.min(10, remaining)} more`;
+    };
     const activeTarget = document.getElementById("library-active-jobs");
     renderJobs(activeTarget, active, "No active jobs.");
-    const recentTarget = document.getElementById("library-recent-activity");
-    renderJobs(
-        recentTarget,
-        recent,
-        attentionOnly ? `No ${typeLabel} jobs currently require attention.` : "No recent activity.",
-    );
+    healthState.recentJobs = recent;
+    healthState.recentVisible = 10;
+    renderRecentJobs();
     activeTarget.querySelectorAll("[data-job-cancel]").forEach((button) => button.addEventListener("click", async () => {
         await healthJson(`/api/tasks/jobs/${button.dataset.jobCancel}/cancel`, {method: "POST"});
         loadLibraryJobs();
     }));
-    document.querySelectorAll("[data-job-details]").forEach((button) => {
-        button.addEventListener("click", () => openLibraryJobDetails(button.dataset.jobDetails));
-    });
+    bindJobDetails(activeTarget);
+    const showMore = document.getElementById("library-activity-show-more");
+    showMore.onclick = () => {
+        healthState.recentVisible += 10;
+        renderRecentJobs();
+    };
 }
 
 async function openLibraryJobDetails(taskId) {
