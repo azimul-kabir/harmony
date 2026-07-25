@@ -59,31 +59,16 @@ def download_resolved_playlist(
         for tracks in playlist_batches(playlist.url):
             append_playlist_batch(db, db_playlist.id, tracks, discovered_count)
 
-            # For each chunk, queue
-            for track in tracks:
-                try:
-                    result = enqueue_track(
-                        db=db,
-                        track=track,
-                        task_id=task.id,
-                        queue_position=discovered_count + 1,
-                    )
+            # Prepare chunk for bulk queueing
+            queueable = []
+            for idx, track in enumerate(tracks):
+                pos = discovered_count + idx + 1
 
-                    if result.status == QueueStatus.CREATED:
-                        queued += 1
-                        status = TrackDownloadStatus.QUEUED
-                    else:
-                        already_queued += 1
-                        status = TrackDownloadStatus.ALREADY_QUEUED
-                    track_results.append(
-                        TrackDownloadResult(
-                            title=track.title,
-                            artist=track.artist,
-                            status=status,
-                            job_id=result.job_id,
-                        )
-                    )
-                except TrackAlreadyExistsError:
+                # Check directly to mimic old behavior and populate results correctly
+                from app.services.download_queue import _can_enqueue
+                if _can_enqueue(db, track):
+                    queueable.append((pos, track))
+                else:
                     owned += 1
                     track_results.append(
                         TrackDownloadResult(
@@ -92,7 +77,27 @@ def download_resolved_playlist(
                             status=TrackDownloadStatus.OWNED,
                         )
                     )
-                discovered_count += 1
+
+            # Bulk enqueue
+            results = bulk_enqueue_tracks(
+                db=db,
+                tracks_with_positions=queueable,
+                task_id=task.id,
+            )
+
+            queued += len(results)
+            # Map results to tracks we successfully queued
+            for (pos, track), result in zip(queueable, results):
+                track_results.append(
+                    TrackDownloadResult(
+                        title=track.title,
+                        artist=track.artist,
+                        status=TrackDownloadStatus.QUEUED,
+                        job_id=result.job_id,
+                    )
+                )
+
+            discovered_count += len(tracks)
 
         complete_playlist_refresh(db, db_playlist)
 
@@ -152,9 +157,21 @@ def download_playlist(
     db: Session,
     url: str,
 ) -> PlaylistDownloadSummary:
-    # First just get high level info quickly to stub the playlist
     from app.services.spotify.metadata import _extract_id, get_client
     from app.domain.playlist import Playlist
+    from app.api.downloads import detect_source
+
+    source = detect_source(url.strip())
+    if source is not None:
+        resource, source_id = source.detect_url(url.strip()) or ("unsupported", "")
+        if resource == "playlist" and hasattr(source, "resolve_playlist"):
+            playlist = source.resolve_playlist(url.strip())
+            return download_resolved_playlist(
+                db,
+                playlist,
+                source_provider=source.identifier,
+                source_id=source_id,
+            )
 
     playlist_id = _extract_id(url, "playlist")
 
@@ -168,7 +185,7 @@ def download_playlist(
     playlist = Playlist(
         name=name,
         url=url,
-        tracks=[] # The paginator will retrieve tracks incrementally
+        tracks=[] # The paginator will retrieve tracks incrementally for Spotify
     )
 
     resource, spotify_id = spotify_resource(url)

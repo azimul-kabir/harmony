@@ -103,9 +103,10 @@ def sync_playlist(
             )
 
             queueable_tracks = []
-            for track in tracks:
+            for idx, track in enumerate(tracks):
+                queue_position = discovered_count + idx + 1
                 if _can_enqueue(db=db, track=track):
-                    queueable_tracks.append(track)
+                    queueable_tracks.append((queue_position, track))
                 else:
                     skipped_count += 1
 
@@ -119,9 +120,8 @@ def sync_playlist(
 
             results = bulk_enqueue_tracks(
                 db=db,
-                tracks=queueable_tracks,
+                tracks_with_positions=queueable_tracks,
                 task_id=task.id,
-                start_queue_pos=discovered_count,
             )
 
             queued_count += len(results)
