@@ -3,7 +3,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.schemas.sync_source import (
@@ -19,7 +19,7 @@ from app.database.crud_sync_sources import (
     create_sync_source,
     get_sync_source_by_spotify_id,
 )
-from app.database.models import Playlist, Task
+from app.database.models import DownloadJob, Playlist, Task
 from app.database.session import get_db, SessionLocal
 from app.services.playlist_sync import sync_playlist
 from app.services.playlist_manager import count_m3u_entries, playlist_file_path
@@ -30,6 +30,25 @@ router = APIRouter(
     prefix="/api/sources",
     tags=["sources"],
 )
+
+
+def _task_stage(task: Task) -> str:
+    if task.status == "failed":
+        return "failed"
+    current = task.current_item or ""
+    if current.startswith("Fetching Spotify playlist metadata"):
+        return "metadata"
+    if current.startswith("Saving playlist"):
+        return "saving"
+    if current.startswith("Creating the initial M3U"):
+        return "exporting"
+    if current.startswith("Checking which tracks"):
+        return "deduplicating"
+    if current.startswith("Queueing "):
+        return "queueing"
+    if "waiting for workers" in current:
+        return "downloading"
+    return "downloading" if task.total_items else "starting"
 
 def run_background_sync(source_id: int):
     db = SessionLocal()
@@ -175,6 +194,11 @@ async def stream_sources_data(request: Request):
                     
                     task_data = None
                     if latest_task:
+                        queued_downloads = db.scalar(
+                            select(func.count(DownloadJob.id)).where(
+                                DownloadJob.task_id == latest_task.id
+                            )
+                        ) or 0
                         task_data = {
                             "id": latest_task.id,
                             "status": latest_task.status,
@@ -183,6 +207,12 @@ async def stream_sources_data(request: Request):
                             "failed": latest_task.failed_items,
                             "skipped": latest_task.skipped_items,
                             "current": latest_task.current_item,
+                            "stage": _task_stage(latest_task),
+                            "queued_downloads": queued_downloads,
+                            "started_at": latest_task.started_at.isoformat() if latest_task.started_at else None,
+                            "completed_at": latest_task.completed_at.isoformat() if latest_task.completed_at else None,
+                            "error_code": latest_task.error_code,
+                            "error_summary": latest_task.error_summary,
                         }
                     
                     payload.append({

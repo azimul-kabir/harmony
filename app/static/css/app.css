@@ -664,11 +664,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .source-outcome { display: flex; flex-wrap: wrap; gap: 6px; color: var(--text-muted); font-size: .78rem; }
 .source-outcome span { padding: 4px 7px; border-radius: 999px; background: var(--bg-surface-alt); }
 .source-outcome .has-failures { color: var(--danger); background: var(--error-bg); }
+.source-sync-error { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius: 10px; color: var(--danger); background: var(--error-bg); font-size: .82rem; }
+.source-sync-error span, .source-sync-error small { color: var(--text-muted); }
 
 /* Task Progress */
 .task-progress-container { background: var(--bg-surface-alt); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); }
 .task-progress-bar { height: 8px; background: var(--border-color); border-radius: 999px; overflow: hidden; margin-top: 8px; }
 .task-progress-fill { height: 100%; background: var(--primary); transition: width 0.3s ease; }
+.task-progress-fill.is-indeterminate { animation: source-progress-indeterminate 1.4s ease-in-out infinite alternate; }
+@keyframes source-progress-indeterminate {
+    from { transform: translateX(-90%); }
+    to { transform: translateX(280%); }
+}
 
 .task-item { padding: 20px; background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 16px; }
 .task-item.fading-out { opacity: 0.3; }

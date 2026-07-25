@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 import shutil
@@ -20,6 +21,8 @@ class SpotDLClient:
         self,
         url: str,
     ) -> Playlist:
+        self.validate_executable()
+        timeout = self.settings.spotify_playlist_metadata_timeout_seconds
         result = self._run(
             [
                 "save",
@@ -29,7 +32,7 @@ class SpotDLClient:
                 "--save-file",
                 "-",
             ],
-            timeout=1200  # 20 MINUTES: Generous timeout for massive playlist scraping
+            timeout=timeout,
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr)
@@ -54,6 +57,22 @@ class SpotDLClient:
             name=first.list_name or "Unknown Playlist",
             url=first.list_url or url,
             tracks=tracks,
+        )
+
+    def validate_executable(self) -> str:
+        """Return the usable SpotDL command or fail with an actionable message."""
+        configured = self.settings.spotdl_path
+        candidate = Path(configured)
+        if candidate.is_absolute():
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return configured
+        else:
+            resolved = shutil.which(configured)
+            if resolved:
+                return resolved
+        raise RuntimeError(
+            "SpotDL is unavailable. Check SPOTDL_PATH in Harmony's runtime "
+            "environment; Docker deployments should normally use 'spotdl'."
         )
 
     def download(

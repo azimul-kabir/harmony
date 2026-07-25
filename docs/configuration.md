@@ -38,6 +38,22 @@ yt-dlp without cookies or authenticated catalogue scraping and remains subject
 to provider availability and restrictions. Timeout, playlist/search/queue
 limits, enabled state, and default source are available under Settings.
 
+## Large Spotify playlists
+
+Spotify playlist downloads first run SpotDL's metadata-only `save` operation.
+Harmony shows this as a distinct Source sync stage and does not create download
+jobs until the complete ordered track list is available. The metadata timeout
+defaults to 3600 seconds and can be changed under Settings → Downloads or with:
+
+```env
+SPOTIFY_PLAYLIST_METADATA_TIMEOUT_SECONDS=3600
+```
+
+The accepted range is 300–14400 seconds. A timeout or missing SpotDL executable
+is recorded as an actionable Source task failure. In Docker, executable settings
+should normally be `SPOTDL_PATH=spotdl` and `YT_DLP_PATH=yt-dlp`; do not use host
+virtual-environment paths inside the container.
+
 ## MusicBrainz and artwork
 
 Set `MUSICBRAINZ_*` values to tune timeout, retry, request rate, cache TTL, and

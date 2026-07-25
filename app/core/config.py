@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     spotdl_path: str = "spotdl"
+    spotify_playlist_metadata_timeout_seconds: int = 3600
     yt_dlp_path: str = "yt-dlp"
     youtube_music_enabled: bool = True
     default_download_source: str = "spotify"
