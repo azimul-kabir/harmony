@@ -105,7 +105,7 @@ def index_file(
     )
 
     try:
-        artwork = artwork_service.resolve_for_song(db, path, existing_song=song)
+        artwork = artwork_service.resolve_for_song(db, path, existing_song=song, cover_url=cover_url)
     except Exception:
         artwork = None
         logger.exception("Failed to resolve local artwork for {}", path)
