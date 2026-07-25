@@ -39,8 +39,8 @@ def playlist_batches(playlist_url: str, batch_size: int = 50) -> Generator[List[
                 album=album_data.get("name"),
                 track=track_data.get("track_number"),
                 disc=track_data.get("disc_number"),
-                isrc=track_data.get("external_ids", {}).get("isrc"),
-                spotify_url=track_data.get("external_urls", {}).get("spotify"),
+                isrc=(track_data.get("external_ids") or {}).get("isrc"),
+                spotify_url=(track_data.get("external_urls") or {}).get("spotify"),
             )
 
             pending.append(track)

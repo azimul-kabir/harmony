@@ -71,10 +71,21 @@ def sync_playlist(
         # 2. Consume the generator
         for batch_number, tracks in enumerate(playlist_batches(source.spotify_url), 1):
 
-            if source.name == "Fetching Playlist Data..." and batch_number == 1 and tracks:
-                # Need to lookup playlist name from the API or SpotDL, for now just use first track album as fallback
-                # or we just rely on the API to eventually give a better name.
-                pass
+
+            if source.name == "Fetching Playlist Data..." and batch_number == 1:
+                try:
+                    from spotapi import PublicPlaylist
+                    playlist_id = source.spotify_url.split("playlist/")[-1].split("?")[0]
+                    info = PublicPlaylist(playlist_id).get_playlist_info(limit=1)
+                    real_name = info.get("data", {}).get("playlistV2", {}).get("name")
+                    if real_name:
+                        source.name = real_name
+                        db_playlist.name = real_name
+                        task.name = real_name
+                        db.commit()
+                except Exception as e:
+                    logger.warning(f"Could not fetch real playlist name: {e}")
+
 
             # Persist batch durable state
             batch_record = PlaylistImportBatch(

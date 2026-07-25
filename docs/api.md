@@ -233,7 +233,13 @@ Canonical metadata and file tags remain separate:
 
 Harmony supports importing massive Spotify playlists incrementally in batches. This allows immediate processing and queuing without timing out waiting for Spotify's API to fetch the whole list.
 
+
+## Massive Playlist Imports
+
+Harmony supports importing massive Spotify playlists incrementally in batches. This allows immediate processing and queuing without timing out waiting for Spotify's API to fetch the whole list.
+
 ## Downloads queue snapshot
+
 
 
 `GET /api/downloads/snapshot` returns the bounded read model used by the Downloads
