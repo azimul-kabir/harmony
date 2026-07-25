@@ -1,3 +1,4 @@
+from app.domain.track import Track
 import os
 import tempfile
 from pathlib import Path
@@ -118,6 +119,78 @@ def save_database_playlist(
     db.commit()
     db.refresh(playlist)
     return playlist
+
+
+
+def begin_playlist_refresh(db: Session, playlist: Playlist) -> None:
+    """
+    Clears out the previous tracks of a playlist to prepare for a fresh import.
+    This should be called before appending the first batch.
+    """
+    db.query(PlaylistTrack).filter(PlaylistTrack.playlist_id == playlist.id).delete()
+    db.commit()
+
+
+def append_playlist_batch(
+    db: Session,
+    playlist_id: int,
+    tracks: list[Track],
+    start_position: int,
+    source_provider: str = "spotify",
+) -> None:
+    """
+    Appends a batch of tracks to the playlist, honoring the starting position.
+    """
+    # source_identity is already defined in this file
+
+    current_track_ids: set[str] = set()
+    for idx, track in enumerate(tracks):
+        track_id = track.spotify_track_id
+        if source_provider != "spotify" and track.source_item_id:
+            track_id = source_identity(source_provider, track.source_item_id)
+
+        if track_id:
+            current_track_ids.add(track_id)
+
+            # Upsert using standard query to allow recovery if batches overlap or restart
+            existing = db.query(PlaylistTrack).filter(
+                PlaylistTrack.playlist_id == playlist_id,
+                PlaylistTrack.spotify_track_id == track_id
+            ).first()
+
+            if not existing:
+                pt = PlaylistTrack(
+                    playlist_id=playlist_id,
+                    spotify_track_id=track_id,
+                    position=start_position + idx + 1,
+                    title=track.title,
+                    artist=track.artist,
+                    album=track.album,
+                    album_artist=track.album_artist,
+                    track_number=track.track,
+                    duration=track.duration,
+                )
+                db.add(pt)
+            else:
+                existing.position = start_position + idx + 1
+                existing.title = track.title
+                existing.artist = track.artist
+                existing.album = track.album
+                existing.album_artist = track.album_artist
+                existing.track_number = track.track
+                existing.duration = track.duration
+
+    db.flush()
+    db.commit()
+
+
+def complete_playlist_refresh(db: Session, playlist: Playlist) -> None:
+    """
+    Updates the playlist's track count and timestamps after all batches are imported.
+    """
+    playlist.track_count = db.query(PlaylistTrack).filter(PlaylistTrack.playlist_id == playlist.id).count()
+    db.commit()
+    db.refresh(playlist)
 
 
 def sync_database_playlist(

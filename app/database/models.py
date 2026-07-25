@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
+    UniqueConstraint,
     Boolean,
     CheckConstraint,
     Column,
@@ -539,6 +540,28 @@ class PlaylistTrack(Base):
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
     playlist: Mapped["Playlist"] = relationship(back_populates="tracks")
+
+
+class PlaylistImportBatch(Base):
+    __tablename__ = "playlist_import_batches"
+    __table_args__ = (
+        UniqueConstraint("task_id", "batch_number", name="uix_task_batch"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False, index=True)
+    playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id"), nullable=False, index=True)
+    batch_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_position: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_position: Mapped[int] = mapped_column(Integer, nullable=False)
+    discovered_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    queued_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
 
 class AppSetting(Base):
     __tablename__ = "app_settings"
