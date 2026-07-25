@@ -15,11 +15,13 @@ from app.services.download_queue import (
     enqueue_track,
 )
 from app.services.playlist_download import download_playlist
+from app.services.playlist_download import download_resolved_playlist
 from app.services.spotify.metadata import resolve_track
 from app.services.spotify.url import spotify_resource
 from app.providers.download_sources import detect_source, get_source
 from app.core.config import get_settings
 from app.domain.download import JobStatus
+from app.domain.playlist import Playlist as DomainPlaylist
 from app.services.download_dashboard import (
     TERMINAL_STATUSES, download_counts, download_details, download_history,
     get_download_snapshot, serialize_outcome,
@@ -56,10 +58,19 @@ def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
         if source is not None:
             if not _youtube_music_enabled(db):
                 raise HTTPException(status_code=403, detail={"code": "provider_disabled", "message": "YouTube Music downloads are disabled in Settings."})
-            resource, _ = source.detect_url(request.url.strip()) or ("unsupported", "")
+            resource, source_id = source.detect_url(request.url.strip()) or ("unsupported", "")
             if resource == "artist":
                 raise HTTPException(status_code=422, detail={"code": "unsupported_youtube_music_url", "message": "Artist URLs cannot be downloaded directly. Choose a song, album, or playlist."})
-            tracks = source.resolve(request.url.strip())
+            resolved_playlist = (
+                source.resolve_playlist(request.url.strip())
+                if resource == "playlist" and hasattr(source, "resolve_playlist")
+                else None
+            )
+            tracks = (
+                resolved_playlist.tracks
+                if resolved_playlist is not None
+                else source.resolve(request.url.strip())
+            )
             if len(tracks) > get_settings().youtube_music_max_queue_items:
                 raise HTTPException(status_code=422, detail={"code": "queue_limit_exceeded", "message": "This collection exceeds Harmony's queue request limit."})
             if resource == "track":
@@ -68,6 +79,19 @@ def queue_download(request: DownloadRequest, db: Session = Depends(get_db)):
                 except TrackAlreadyExistsError:
                     return {"status": "owned"}
                 return {"status": result.status.value, "job_id": result.job_id}
+            if resource == "playlist":
+                playlist = resolved_playlist or DomainPlaylist(
+                    name=tracks[0].album or "YouTube Music Playlist",
+                    url=request.url.strip(),
+                    tracks=tracks,
+                )
+                summary = download_resolved_playlist(
+                    db,
+                    playlist,
+                    source_provider=source.identifier,
+                    source_id=source_id,
+                )
+                return {"status": "queued", "summary": summary}
             results = []
             for track in tracks:
                 try:

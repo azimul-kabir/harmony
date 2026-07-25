@@ -95,6 +95,33 @@ def test_completed_track_refreshes_only_containing_playlists(monkeypatch):
         db.close()
 
 
+def test_completed_youtube_music_track_refreshes_containing_playlist(monkeypatch):
+    db = SessionLocal()
+    try:
+        affected = _playlist(
+            db,
+            spotify_id="youtube_music:playlist-1",
+            name="YouTube Mix",
+            track_id="youtube_music:video-1",
+        )
+        exported = []
+        monkeypatch.setattr(
+            playlist_manager,
+            "export_m3u",
+            lambda session, playlist: exported.append(playlist.id) or 1,
+        )
+
+        assert playlist_manager.export_m3us_for_source_track(
+            db,
+            "youtube_music",
+            "video-1",
+            None,
+        ) == 1
+        assert exported == [affected.id]
+    finally:
+        db.close()
+
+
 def test_export_prefers_indexed_song_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
         playlist_manager,
