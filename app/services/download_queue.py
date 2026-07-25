@@ -190,3 +190,33 @@ def _can_enqueue(
         return False
 
     return True
+
+
+
+def bulk_enqueue_tracks(
+    db: Session,
+    tracks: list[Track],
+    task_id: int,
+    start_queue_pos: int = 0,
+) -> list[QueueResult]:
+    """
+    Efficiently checks and inserts multiple tracks at once.
+    Returns QueueResults for each track that was queued.
+    """
+    results = []
+
+    # Simple loop for now to reuse the existing `_can_enqueue` logic
+    # but we will just pass in a predefined task id to save task creations
+    for idx, track in enumerate(tracks):
+        try:
+            res = enqueue_track(
+                db=db,
+                track=track,
+                task_id=task_id,
+                queue_position=start_queue_pos + idx + 1,
+            )
+            results.append(res)
+        except TrackAlreadyExistsError:
+            pass
+
+    return results

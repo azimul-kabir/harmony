@@ -29,15 +29,18 @@ def test_playlist_download_saves_playlist_without_creating_sync_source(monkeypat
     queued_positions = []
     exported = []
 
+
     monkeypatch.setattr(
         playlist_download,
-        "import_playlist",
-        lambda requested_url: domain_playlist,
+        "playlist_batches",
+        lambda requested_url: [domain_playlist.tracks],
     )
+
+
     monkeypatch.setattr(
         playlist_download,
         "enqueue_track",
-        lambda db, track, queue_position=None: (
+        lambda db, track, task_id=None, queue_position=None: (
             queued_positions.append(queue_position)
             or QueueResult(job_id=queue_position, status=QueueStatus.CREATED)
         ),
@@ -53,6 +56,7 @@ def test_playlist_download_saves_playlist_without_creating_sync_source(monkeypat
 
     db = SessionLocal()
     try:
+
         summary = playlist_download.download_playlist(db, url)
 
         saved = db.scalar(
@@ -70,7 +74,7 @@ def test_playlist_download_saves_playlist_without_creating_sync_source(monkeypat
             )
         ] == [("track-1", 1), ("track-2", 2)]
         assert db.scalar(select(SyncSource.id)) is None
-        assert exported == [("one-off-playlist", domain_playlist.tracks)]
+        assert exported == [("one-off-playlist", None)]
         assert queued_positions == [1, 2]
         assert summary.playlist_name == "One-off Mix"
         assert summary.queued == 2
