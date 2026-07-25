@@ -1,5 +1,4 @@
 from sqlalchemy import select
-
 from app.database.models import Playlist, PlaylistTrack, SyncSource
 from app.database.session import SessionLocal
 from app.domain.playlist import Playlist as DomainPlaylist
@@ -29,22 +28,20 @@ def test_playlist_download_saves_playlist_without_creating_sync_source(monkeypat
     queued_positions = []
     exported = []
 
-
     monkeypatch.setattr(
         playlist_download,
         "playlist_batches",
         lambda requested_url: [domain_playlist.tracks],
     )
-
-
     monkeypatch.setattr(
         playlist_download,
-        "enqueue_track",
-        lambda db, track, task_id=None, queue_position=None: (
-            queued_positions.append(queue_position)
-            or QueueResult(job_id=queue_position, status=QueueStatus.CREATED)
-        ),
+        "bulk_enqueue_tracks",
+        lambda db, tracks_with_positions, task_id=None: [
+            (queued_positions.append(pos) or QueueResult(job_id=pos, status=QueueStatus.CREATED))
+            for pos, track in tracks_with_positions
+        ]
     )
+    monkeypatch.setattr("app.services.download_queue._can_enqueue", lambda db, track: True)
     monkeypatch.setattr(
         playlist_download,
         "export_m3u",
@@ -56,7 +53,6 @@ def test_playlist_download_saves_playlist_without_creating_sync_source(monkeypat
 
     db = SessionLocal()
     try:
-
         summary = playlist_download.download_playlist(db, url)
 
         saved = db.scalar(

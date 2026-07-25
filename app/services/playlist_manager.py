@@ -155,7 +155,7 @@ def append_playlist_batch(
             # Upsert using standard query to allow recovery if batches overlap or restart
             existing = db.query(PlaylistTrack).filter(
                 PlaylistTrack.playlist_id == playlist_id,
-                PlaylistTrack.spotify_track_id == track_id
+                PlaylistTrack.position == start_position + idx + 1
             ).first()
 
             if not existing:

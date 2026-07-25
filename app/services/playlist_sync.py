@@ -71,10 +71,21 @@ def sync_playlist(
         # 2. Consume the generator
         for batch_number, tracks in enumerate(playlist_batches(source.spotify_url), 1):
 
-            if source.name == "Fetching Playlist Data..." and batch_number == 1 and tracks:
-                # Need to lookup playlist name from the API or SpotDL, for now just use first track album as fallback
-                # or we just rely on the API to eventually give a better name.
-                pass
+
+            if source.name == "Fetching Playlist Data..." and batch_number == 1:
+                try:
+                    from spotapi import PublicPlaylist
+                    playlist_id = source.spotify_url.split("playlist/")[-1].split("?")[0]
+                    info = PublicPlaylist(playlist_id).get_playlist_info(limit=1)
+                    real_name = info.get("data", {}).get("playlistV2", {}).get("name")
+                    if real_name:
+                        source.name = real_name
+                        db_playlist.name = real_name
+                        task.name = real_name
+                        db.commit()
+                except Exception as e:
+                    logger.warning(f"Could not fetch real playlist name: {e}")
+
 
             # Persist batch durable state
             batch_record = PlaylistImportBatch(
@@ -103,9 +114,10 @@ def sync_playlist(
             )
 
             queueable_tracks = []
-            for track in tracks:
+            for idx, track in enumerate(tracks):
+                queue_position = discovered_count + idx + 1
                 if _can_enqueue(db=db, track=track):
-                    queueable_tracks.append(track)
+                    queueable_tracks.append((queue_position, track))
                 else:
                     skipped_count += 1
 
@@ -119,9 +131,8 @@ def sync_playlist(
 
             results = bulk_enqueue_tracks(
                 db=db,
-                tracks=queueable_tracks,
+                tracks_with_positions=queueable_tracks,
                 task_id=task.id,
-                start_queue_pos=discovered_count,
             )
 
             queued_count += len(results)

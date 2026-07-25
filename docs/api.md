@@ -227,7 +227,43 @@ Canonical metadata and file tags remain separate:
   Song.
 - `POST /api/library/metadata/write-tags` queues a bounded multi-Song write.
 
+
+
+## Massive Playlist Imports
+
+Harmony supports importing massive Spotify playlists incrementally in batches. This allows immediate processing and queuing without timing out waiting for Spotify's API to fetch the whole list.
+
+
+## Massive Playlist Imports
+
+Harmony supports importing massive Spotify playlists incrementally in batches. This allows immediate processing and queuing without timing out waiting for Spotify's API to fetch the whole list.
+
 ## Downloads queue snapshot
+
+
+
+`GET /api/downloads/snapshot` returns the bounded read model used by the Downloads
+Operations Center. `counts` contains separate `running`, `queued`, `paused`,
+`completed`, `failed`, and `cancelled` totals. `active`, `queued`, and `paused`
+lists are capped at 25 entries; the recent-history list is capped at 100.
+
+Waiting entries are ordered exactly as the download worker claims them: oldest
+`created_at`, then stable job ID. Running entries are ordered by `started_at`,
+then ID. Queue positions are supplied only for this bounded waiting order.
+The response intentionally excludes provider URLs, output paths, task payloads,
+filesystem metadata, and raw errors. Active downloads include persisted
+`progress`, `stage`, `heartbeat_at`, `worker`, `bytes_downloaded`,
+`bytes_total`, `transfer_rate_bps`, and `eta_seconds`. Optional values are
+`null` when the provider cannot measure them; clients must not infer missing
+byte progress or ETA. Failed history filtering includes cancelled
+jobs, matching the Dashboard attention link; `/downloads?status=cancelled`
+remains available for cancelled-only history.
+
+### `POST /api/downloads/bulk`
+Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
+
+Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.
+
 
 `GET /api/downloads/snapshot` returns the bounded read model used by the Downloads
 Operations Center. `counts` contains separate `running`, `queued`, `paused`,

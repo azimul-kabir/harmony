@@ -7,6 +7,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Added
 - Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 - Playlist cover upload, preview, replacement, and removal using
   Navidrome-compatible sidecar images beside exported M3U files.

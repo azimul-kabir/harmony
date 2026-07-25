@@ -195,28 +195,57 @@ def _can_enqueue(
 
 def bulk_enqueue_tracks(
     db: Session,
-    tracks: list[Track],
+    tracks_with_positions: list[tuple[int, Track]],
     task_id: int,
-    start_queue_pos: int = 0,
 ) -> list[QueueResult]:
     """
-    Efficiently checks and inserts multiple tracks at once.
-    Returns QueueResults for each track that was queued.
+    Efficiently checks and inserts multiple tracks at once, respecting positions.
+    Expects a list of (queue_position, Track) tuples.
     """
-    results = []
+    from app.database.models import DownloadJob
 
-    # Simple loop for now to reuse the existing `_can_enqueue` logic
-    # but we will just pass in a predefined task id to save task creations
-    for idx, track in enumerate(tracks):
-        try:
-            res = enqueue_track(
-                db=db,
-                track=track,
-                task_id=task_id,
-                queue_position=start_queue_pos + idx + 1,
-            )
-            results.append(res)
-        except TrackAlreadyExistsError:
-            pass
+    # Pre-check duplicates and ownership
+    valid_items = []
+    for pos, track in tracks_with_positions:
+        if _can_enqueue(db, track):
+            valid_items.append((pos, track))
 
-    return results
+    if not valid_items:
+        return []
+
+    jobs = []
+    for pos, track in valid_items:
+        job = DownloadJob(
+            task_id=task_id,
+            spotify_url=track.source_url or track.spotify_url,
+            source_provider=track.source_provider,
+            source_item_id=track.source_item_id,
+            title=track.title or "Unknown Title",
+            artist=track.artist or "Unknown Artist",
+            spotify_track_id=track.spotify_track_id,
+            spotify_album_id=track.spotify_album_id,
+            album=track.album,
+            album_artist=track.album_artist,
+            track=track.track,
+            queue_position=pos,
+            disc=track.disc,
+            year=track.year,
+            isrc=track.isrc,
+            genre=track.genre,
+            spotify_artist_ids=",".join(track.spotify_artist_ids) if track.spotify_artist_ids else None,
+            genre_provenance=track.genre_provenance,
+            cover_url=track.cover_url,
+        )
+        jobs.append(job)
+
+    db.bulk_save_objects(jobs)
+    db.commit()
+
+    # Refresh to get IDs
+    saved_jobs = db.query(DownloadJob).filter(
+        DownloadJob.task_id == task_id,
+    ).order_by(DownloadJob.id.desc()).limit(len(jobs)).all()
+
+    saved_jobs.reverse() # They were ordered by desc
+
+    return [QueueResult(job_id=j.id, status=QueueStatus.CREATED) for j in saved_jobs]
