@@ -6,6 +6,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 ## [Unreleased]
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 - Playlist cover upload, preview, replacement, and removal using
   Navidrome-compatible sidecar images beside exported M3U files.
@@ -43,6 +47,7 @@ with the Downloads Operations Center, Navidrome playlist synchronization,
 playlist file management, automation, and a comprehensive responsive UI pass.
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 - **Metadata Health Engine:** Added durable, provider-neutral health rules for
   missing, inconsistent, and malformed metadata, with severity, evidence,
@@ -148,6 +153,7 @@ built on top of it. Playback remains delegated to compatible media servers;
 direct Navidrome integration remains future work.
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 - **Persistent Library Index:** Stores file identity, descriptive and technical
   metadata, external identifiers, download provenance, artwork state, file
@@ -233,6 +239,7 @@ direct Navidrome integration remains future work.
 This release significantly enhances Harmony's Library, transforming it into a modern music collection manager with multiple browsing modes, advanced search, flexible sorting, and an improved mobile experience.
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 - **Multiple Library Views:** Added **Songs**, **Albums**, and **Artists** tabs for browsing the library in different ways.
 - **Album View:** Introduced a visual album grid with artwork, track counts, durations, and click-to-filter functionality.
@@ -355,6 +362,7 @@ The improvements in v1.3.0 provide the foundation for upcoming releases, includi
 This release introduces a major architectural shift, making Harmony the single source of truth for your playlists. It natively bridges the gap with Navidrome (and other media servers) through fully automated `.m3u` playlist generation.
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 - **Native Playlist Database:** Harmony now natively tracks Spotify playlists and track positions in the database without duplicating audio files.
 - **Automatic M3U Export:** Playlists are instantly exported as standard `.m3u` files using relative paths to a dedicated `/Playlists` folder. Navidrome, Plex, and Jellyfin can now automatically mirror Harmony's playlists.
 - **Playlists UI:** Added a new dedicated "Playlists" tab to the sidebar. Users can view synced playlists, track counts, last sync timestamps, and M3U export statuses as mobile-friendly cards.
@@ -371,6 +379,7 @@ This release introduces a major architectural shift, making Harmony the single s
 ## [1.1.0] - 2026-07-18
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 - Added a persistent floating **Download Status Bar** that remains visible across all pages and displays real-time download progress.
 - Added a global **Quick Add** floating action button (FAB) for instantly queueing Spotify tracks, albums, and playlists from anywhere in the application.
@@ -415,6 +424,7 @@ This release introduces a major architectural shift, making Harmony the single s
 ## [1.0.0] - 2026-07-16
 
 ### Added
+- Support for fast, incremental processing of very large Spotify playlists without creating a recurring sync source.
 
 #### Download Engine
 

@@ -55,7 +55,7 @@ def test_playlist_sync_persists_actionable_metadata_timeout(monkeypatch):
 
         monkeypatch.setattr(
             playlist_sync,
-            "import_playlist",
+            "playlist_batches",
             lambda _: (_ for _ in ()).throw(
                 RuntimeError("SpotDL execution timed out after 3600 seconds.")
             ),

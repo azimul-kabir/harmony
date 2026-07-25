@@ -112,6 +112,7 @@ class ArtworkService:
         audio_path: str | Path,
         *,
         existing_song: Song | None = None,
+        cover_url: str | None = None,
     ) -> Artwork | None:
         path = Path(audio_path)
         candidate = self._embedded_candidate(path)
@@ -127,7 +128,23 @@ class ArtworkService:
         if candidate is not None:
             return self.cache(db, candidate)
 
+        if cover_url:
+            candidate = self._remote_candidate(cover_url)
+            if candidate is not None:
+                return self.cache(db, candidate)
+
         return None
+
+    def _remote_candidate(self, cover_url: str) -> ArtworkCandidate | None:
+        try:
+            req = Request(cover_url, headers={'User-Agent': 'Harmony/2.0.0'})
+            with urlopen(req, timeout=15) as response:
+                data = response.read()
+                mime_type = response.headers.get_content_type()
+                return ArtworkCandidate(data=data, mime_type=mime_type, source="remote", original_url=cover_url)
+        except Exception as e:
+            logger.warning(f"Failed to fetch remote artwork from {cover_url}: {e}")
+            return None
 
     def cache(self, db: Session, candidate: ArtworkCandidate) -> Artwork:
         checksum = sha256(candidate.data).hexdigest()

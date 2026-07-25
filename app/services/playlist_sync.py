@@ -6,9 +6,14 @@ from app.core.config import get_settings
 from app.database.models import SyncSource, Task
 from app.domain.task import TaskType
 from app.domain.track import Track
-from app.services.download_queue import _can_enqueue, enqueue_track
+from app.services.download_queue import _can_enqueue, enqueue_track, bulk_enqueue_tracks
+from app.services.spotify.playlist_batches import playlist_batches
+from app.services.playlist_manager import begin_playlist_refresh, append_playlist_batch, complete_playlist_refresh
+from app.database.crud_sync_sources import get_sync_source_by_spotify_id
+from app.database.models import PlaylistImportBatch, Playlist
+from sqlalchemy import select
 from app.services.playlist import import_playlist
-from app.services.playlist_manager import sync_database_playlist, export_m3u
+from app.services.playlist_manager import sync_database_playlist, export_m3u, save_database_playlist
 from app.services.task_service import (
     create_task,
     _finish_if_complete,
@@ -17,6 +22,7 @@ from app.services.task_service import (
     _fail_task,
 )
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
+
 
 def sync_playlist(
     db: Session,
@@ -41,83 +47,123 @@ def sync_playlist(
     set_current_item(
         db=db,
         task=task,
-        item=f"Fetching Spotify playlist metadata (timeout: {timeout_minutes} minutes)…",
+        item=f"Fetching Spotify metadata (timeout: {timeout_minutes} minutes)…",
     )
     
     try:
-        # 2. Run the heavy SpotDL process
-        domain_playlist = import_playlist(source.spotify_url)
+        # Resolve the db playlist so we can write to it progressively
+        db_playlist = db.execute(
+            select(Playlist).where(Playlist.spotify_id == source.spotify_id)
+        ).scalar_one_or_none()
         
-        # 3. Update the names now that we have real data
-        if source.name == "Fetching Playlist Data...":
-            source.name = domain_playlist.name
+        if not db_playlist:
+            # We need to bootstrap a mostly empty playlist just to have the ID
+            from app.domain.playlist import Playlist as DomainPlaylist
+            temp_dp = DomainPlaylist(name=source.name, url=source.spotify_url, tracks=[])
+            db_playlist = save_database_playlist(db, source.spotify_id, temp_dp)
             
-        task.name = domain_playlist.name
-        task.total_items = len(domain_playlist.tracks)
+        begin_playlist_refresh(db, db_playlist)
         
-        db.commit()
-        db.refresh(source)
-        db.refresh(task)
+        discovered_count = 0
+        queued_count = 0
+        skipped_count = 0
         
-        logger.info("Playlist '{}' contains {} tracks.", domain_playlist.name, len(domain_playlist.tracks))
-        
-        # 4. Update the Playlist Database with the latest Spotify structure
-        set_current_item(db=db, task=task, item="Saving playlist structure…")
-        db_playlist = sync_database_playlist(db, source, domain_playlist)
+        # 2. Consume the generator
+        for batch_number, tracks in enumerate(playlist_batches(source.spotify_url), 1):
+
+
+            if source.name == "Fetching Playlist Data..." and batch_number == 1:
+                try:
+                    from spotapi import PublicPlaylist
+                    playlist_id = source.spotify_url.split("playlist/")[-1].split("?")[0]
+                    info = PublicPlaylist(playlist_id).get_playlist_info(limit=1)
+                    real_name = info.get("data", {}).get("playlistV2", {}).get("name")
+                    if real_name:
+                        source.name = real_name
+                        db_playlist.name = real_name
+                        task.name = real_name
+                        db.commit()
+                except Exception as e:
+                    logger.warning(f"Could not fetch real playlist name: {e}")
+
+
+            # Persist batch durable state
+            batch_record = PlaylistImportBatch(
+                task_id=task.id,
+                playlist_id=db_playlist.id,
+                batch_number=batch_number,
+                start_position=discovered_count,
+                end_position=discovered_count + len(tracks),
+                discovered_count=len(tracks),
+            )
+            db.add(batch_record)
+
+            # Save playlist structure chunk
+            append_playlist_batch(
+                db=db,
+                playlist_id=db_playlist.id,
+                tracks=tracks,
+                start_position=discovered_count,
+            )
+
+            # Check duplicates and queue missing tracks for this chunk
+            set_current_item(
+                db=db,
+                task=task,
+                item=f"Batch {batch_number}: Checking your library for {len(tracks)} tracks…"
+            )
+
+            queueable_tracks = []
+            for idx, track in enumerate(tracks):
+                queue_position = discovered_count + idx + 1
+                if _can_enqueue(db=db, track=track):
+                    queueable_tracks.append((queue_position, track))
+                else:
+                    skipped_count += 1
+
+            batch_record.skipped_count = skipped_count
+
+            set_current_item(
+                db=db,
+                task=task,
+                item=f"Batch {batch_number}: Creating {len(queueable_tracks)} download jobs…"
+            )
+
+            results = bulk_enqueue_tracks(
+                db=db,
+                tracks_with_positions=queueable_tracks,
+                task_id=task.id,
+            )
+
+            queued_count += len(results)
+            discovered_count += len(tracks)
+            batch_record.queued_count = len(results)
+            batch_record.status = "completed"
+            batch_record.completed_at = datetime.now(UTC)
+
+            # Progressively update task stats
+            task.total_items = discovered_count
+            task.skipped_items = skipped_count
+            db.commit()
+
+        # Completion
+        complete_playlist_refresh(db, db_playlist)
+        db_playlist.last_synced_at = datetime.now(UTC)
         source.last_synced_at = datetime.now(UTC)
         db.commit()
-        db.refresh(source)
         
-        # 5. Export M3U immediately, passing the freshly scraped domains tracks to fix historic library duplicates
-        set_current_item(db=db, task=task, item="Creating the initial M3U playlist…")
-        export_m3u(db, db_playlist, domain_tracks=domain_playlist.tracks)
+        # We need the full tracks for the M3U export
+        domain_tracks = [] # We just pass none, the manager will lookup by ID
+        set_current_item(db=db, task=task, item="Creating M3U…")
+        export_m3u(db, db_playlist)
 
-        if not domain_playlist.tracks:
-            logger.warning("Playlist '{}' is empty.", domain_playlist.name)
+        if discovered_count == 0:
+            logger.warning("Playlist '{}' is empty.", source.name)
             _finish_if_complete(db=db, task=task)
             navidrome_playlist_reimport.schedule(task.id)
             return task
             
-        # 6. Check duplicates and queue missing tracks
-        queueable_tracks: list[tuple[int, Track]] = []
-        skipped_count = 0
-        set_current_item(db=db, task=task, item="Checking which tracks are already owned…")
-        
-        for position, track in enumerate(domain_playlist.tracks, 1):
-            if _can_enqueue(db=db, track=track):
-                queueable_tracks.append((position, track))
-            else:
-                skipped_count += 1
-                
-        if skipped_count > 0:
-            task.skipped_items = skipped_count
-            db.commit()
-            db.refresh(task)
-            
-        set_current_item(
-            db=db,
-            task=task,
-            item=f"Queueing 0 of {len(queueable_tracks)} missing tracks…",
-        )
-        
-        for queued_index, (position, track) in enumerate(queueable_tracks, 1):
-            enqueue_track(
-                db=db,
-                track=track,
-                task_id=task.id,
-                queue_position=position,
-            )
-            if queued_index % 25 == 0 or queued_index == len(queueable_tracks):
-                set_current_item(
-                    db=db,
-                    task=task,
-                    item=(
-                        f"Queueing {queued_index} of "
-                        f"{len(queueable_tracks)} missing tracks…"
-                    ),
-                )
-            
-        if not queueable_tracks:
+        if queued_count == 0:
             _finish_if_complete(db=db, task=task)
             navidrome_playlist_reimport.schedule(task.id)
         else:
@@ -125,7 +171,7 @@ def sync_playlist(
                 db=db,
                 task=task,
                 item=(
-                    f"{len(queueable_tracks)} downloads queued; "
+                    f"{queued_count} downloads queued; "
                     "waiting for workers…"
                 ),
             )
