@@ -62,3 +62,38 @@ def test_reader_rejects_non_playlist_url():
 
 def test_spotdl_internal_api_version_is_pinned():
     assert version("spotdl") == playlist_batches.SUPPORTED_SPOTDL_VERSION
+
+
+def test_formatted_track_keeps_album_metadata_and_artwork(monkeypatch):
+    monkeypatch.setattr(
+        playlist_batches.SpotifyFormatter,
+        "formatPlaylistTrack",
+        lambda _item: {
+            "track": {
+                "id": "track-id",
+                "type": "track",
+                "name": "Song",
+                "artists": [{"name": "Track Artist"}],
+                "album": {
+                    "id": "album-id",
+                    "name": "Album",
+                    "artists": [{"name": "Album Artist"}],
+                    "images": [{"url": "https://images.example/cover.jpg"}],
+                    "release_date": "2026-07-26",
+                },
+                "duration_ms": 180000,
+                "track_number": 2,
+                "disc_number": 1,
+                "external_urls": {"spotify": "https://open.spotify.com/track/track-id"},
+            }
+        },
+    )
+
+    track = playlist_batches._format_track({})
+
+    assert track is not None
+    assert track.album == "Album"
+    assert track.album_artist == "Album Artist"
+    assert track.spotify_album_id == "album-id"
+    assert track.cover_url == "https://images.example/cover.jpg"
+    assert track.year == 2026

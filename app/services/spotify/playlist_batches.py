@@ -89,14 +89,34 @@ def _format_track(raw_item: dict) -> Track | None:
         track_id = meta.get("id")
         if not track_id or not artists or not meta.get("name"):
             return None
+        album = meta.get("album") or {}
+        images = album.get("images") or []
+        cover_url = next(
+            (image.get("url") for image in images if image.get("url")),
+            None,
+        )
         return Track(
             title=meta["name"],
             artist=artists[0],
             artists=artists,
+            album=album.get("name"),
+            album_artist=next(
+                (
+                    artist.get("name")
+                    for artist in album.get("artists", [])
+                    if artist.get("name")
+                ),
+                None,
+            ),
             track=meta.get("track_number"),
             disc=meta.get("disc_number"),
             duration=(meta.get("duration_ms") or 0) / 1000,
+            year=int(album["release_date"][:4])
+            if str(album.get("release_date", ""))[:4].isdigit()
+            else None,
+            cover_url=cover_url,
             spotify_track_id=track_id,
+            spotify_album_id=album.get("id"),
             spotify_url=meta.get("external_urls", {}).get("spotify"),
             source_provider="spotify",
             source_item_id=track_id,
