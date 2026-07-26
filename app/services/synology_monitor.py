@@ -23,11 +23,6 @@ DISK_COLUMNS = {
     "temperature_c": "1.3.6.1.4.1.6574.2.1.1.6",
 }
 
-# Give FastAPI's lifespan generator time to yield before doing any PySNMP
-# setup.  In particular, address resolution performed by a transport target
-# must never delay Uvicorn's "Application startup complete" transition.
-STARTUP_POLL_DELAY_SECONDS = 0.25
-
 
 def _int(value: Any) -> int | None:
     try:
@@ -100,13 +95,6 @@ class SynologyMonitor:
         self._last_good: SynologySystemHealth | None = None
         self._error_category: str | None = None
 
-    async def _get(self, oids: list[str]) -> list[Any]:
-        """Apply a hard outer deadline in addition to PySNMP's UDP deadline."""
-        attempts = max(0, self.settings.synology_snmp_retries) + 1
-        deadline = max(0.1, self.settings.synology_snmp_timeout_seconds) * attempts + 1
-        async with asyncio.timeout(deadline):
-            return await self._getter(self.settings, oids)
-
     def snapshot(self, now: datetime | None = None) -> SynologySystemHealth:
         if not self.settings.synology_monitoring_enabled:
             return SynologySystemHealth(enabled=False, available=False, stale=False)
@@ -126,22 +114,13 @@ class SynologyMonitor:
             return self.snapshot()
         async with self._lock:
             try:
-                scalar_values = await self._get(list(SCALARS.values()))
+                scalar_values = await self._getter(self.settings, list(SCALARS.values()))
                 scalars = normalize_scalars(dict(zip(SCALARS, scalar_values)))
                 disks = []
                 for index in range(max(0, self.settings.synology_disk_max_index) + 1):
-                    try:
-                        values = await self._get(
-                            [f"{oid}.{index}" for oid in DISK_COLUMNS.values()]
-                        )
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        # DSM installations can fail an individual absent
-                        # index instead of returning NoSuchInstance varbinds.
-                        # Disk discovery is best-effort; scalar health remains
-                        # a valid successful sample in that case.
-                        continue
+                    values = await self._getter(
+                        self.settings, [f"{oid}.{index}" for oid in DISK_COLUMNS.values()]
+                    )
                     disk = normalize_disk(index, dict(zip(DISK_COLUMNS, values)))
                     if disk:
                         disks.append(disk)
@@ -162,7 +141,6 @@ class SynologyMonitor:
             return self.snapshot()
 
     async def _run(self) -> None:
-        await asyncio.sleep(STARTUP_POLL_DELAY_SECONDS)
         while True:
             await self.poll()
             await asyncio.sleep(max(1, self.settings.synology_metrics_interval_seconds))

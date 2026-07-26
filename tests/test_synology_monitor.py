@@ -55,41 +55,6 @@ def test_indexed_get_probes_zero_through_configured_max_and_ignores_missing():
     assert all(len(call) == len(DISK_COLUMNS) for call in calls[1:])
 
 
-def test_individual_disk_request_failure_does_not_discard_scalar_sample():
-    async def getter(_settings, oids):
-        if oids == list(SCALARS.values()):
-            return [40, 10, 20, 1, 50, 100]
-        index = int(oids[0].rsplit(".", 1)[1])
-        if index == 1:
-            raise TimeoutError
-        return (["Disk 4", "Model", 1, 38] if index == 2
-                else ["No Such Instance currently exists", None, None, None])
-
-    snapshot = asyncio.run(SynologyMonitor(settings(), getter).poll())
-    assert snapshot.available is True
-    assert snapshot.system_temperature_c == 40
-    assert [disk.id for disk in snapshot.disks] == ["Disk 4"]
-
-
-def test_start_never_runs_snmp_inline_or_during_initial_lifespan_yield():
-    calls = 0
-
-    async def getter(_settings, _oids):
-        nonlocal calls
-        calls += 1
-        return []
-
-    async def exercise():
-        monitor = SynologyMonitor(settings(), getter)
-        monitor.start()
-        assert calls == 0
-        await asyncio.sleep(0)
-        assert calls == 0
-        await monitor.stop()
-
-    asyncio.run(exercise())
-
-
 def test_failure_retains_last_good_and_stale_is_calculated():
     should_fail = False
 
