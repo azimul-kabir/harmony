@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
+from app.domain.track import Track
 from app.services.library_paths import _safe
 from app.services.library_search import library_search
 
@@ -132,6 +133,63 @@ def sync_database_playlist(
         domain_playlist,
         synced_at=datetime.now(UTC),
     )
+
+
+def begin_incremental_playlist(
+    db: Session,
+    source: SyncSource,
+    name: str,
+) -> Playlist:
+    """Create a clean playlist shell before incremental discovery begins."""
+    playlist = db.scalar(select(Playlist).where(Playlist.spotify_id == source.spotify_id))
+    if playlist is None:
+        playlist = Playlist(spotify_id=source.spotify_id, name=name)
+        db.add(playlist)
+        db.flush()
+    else:
+        playlist.name = name
+        db.query(PlaylistTrack).where(PlaylistTrack.playlist_id == playlist.id).delete()
+    playlist.track_count = 0
+    playlist.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(playlist)
+    return playlist
+
+
+def append_incremental_playlist_batch(
+    db: Session,
+    playlist: Playlist,
+    tracks: list[Track],
+    starting_position: int,
+) -> None:
+    """Append one ordered discovery batch and make it durable immediately."""
+    existing_ids = set(
+        db.scalars(
+            select(PlaylistTrack.spotify_track_id).where(
+                PlaylistTrack.playlist_id == playlist.id
+            )
+        ).all()
+    )
+    for offset, track in enumerate(tracks):
+        if not track.spotify_track_id or track.spotify_track_id in existing_ids:
+            continue
+        existing_ids.add(track.spotify_track_id)
+        db.add(
+            PlaylistTrack(
+                playlist_id=playlist.id,
+                spotify_track_id=track.spotify_track_id,
+                position=starting_position + offset + 1,
+                title=track.title,
+                artist=track.artist,
+                album=track.album,
+                album_artist=track.album_artist,
+                track_number=track.track,
+                duration=track.duration,
+            )
+        )
+    playlist.track_count = len(existing_ids)
+    playlist.updated_at = datetime.now(UTC)
+    db.commit()
 
 def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
     """Generates an M3U file, tracking down existing library songs via ID or text matching."""

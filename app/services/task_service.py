@@ -155,7 +155,10 @@ def _finish_if_complete(
     task.current_item = None
     task.completed_at = utcnow_naive()
 
-    if task.failed_items > 0:
+    # A parent operation can fail after it has already committed child jobs
+    # (for example, a later playlist discovery page). Those jobs may finish,
+    # but their counters must not erase the parent operation's failure.
+    if task.status == TaskStatus.FAILED.value or task.failed_items > 0:
         task.status = TaskStatus.FAILED.value
     else:
         task.status = TaskStatus.COMPLETED.value
