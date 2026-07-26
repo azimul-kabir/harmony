@@ -17,6 +17,8 @@ def create_job(
     track: Track,
     task_id: int | None = None,
     queue_position: int | None = None,
+    *,
+    commit: bool = True,
 ) -> DownloadJob:
     job = DownloadJob(
         task_id=task_id,
@@ -43,8 +45,11 @@ def create_job(
     )
 
     db.add(job)
-    db.commit()
-    db.refresh(job)
+    if commit:
+        db.commit()
+        db.refresh(job)
+    else:
+        db.flush()
 
     return job
 

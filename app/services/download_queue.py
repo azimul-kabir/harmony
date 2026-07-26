@@ -21,6 +21,8 @@ def enqueue_track(
     track: Track,
     task_id: int | None = None,
     queue_position: int | None = None,
+    *,
+    commit: bool = True,
 ) -> QueueResult:
 
     if not _can_enqueue(
@@ -53,12 +55,33 @@ def enqueue_track(
         track=track,
         task_id=task_id,
         queue_position=queue_position,
+        commit=commit,
     )
 
     return QueueResult(
         job_id=job.id,
         status=QueueStatus.CREATED,
     )
+
+
+def enqueue_tracks_bulk(
+    db: Session,
+    tracks: list[tuple[int, Track]],
+    task_id: int,
+) -> list[QueueResult]:
+    """Insert a validated playlist batch using one SQLite transaction."""
+    results = [
+        enqueue_track(
+            db=db,
+            track=track,
+            task_id=task_id,
+            queue_position=position,
+            commit=False,
+        )
+        for position, track in tracks
+    ]
+    db.commit()
+    return results
 
 
 def enqueue_album(
