@@ -1,4 +1,4 @@
-const CACHE_VERSION = "harmony-shell-v2";
+const CACHE_VERSION = "harmony-shell-v3";
 const APP_SHELL = [
     "/static/css/app.css",
     "/static/js/app.js",
@@ -54,18 +54,14 @@ self.addEventListener("fetch", (event) => {
 
     if (url.pathname.startsWith("/static/")) {
         event.respondWith(
-            caches.match(request).then((cached) => {
-                if (cached) {
-                    return cached;
-                }
-                return fetch(request).then((response) => {
+            fetch(request).then((response) => {
                     if (response.ok) {
                         const copy = response.clone();
                         caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
                     }
                     return response;
-                });
-            })
+                })
+                .catch(() => caches.match(request))
         );
     }
 });
