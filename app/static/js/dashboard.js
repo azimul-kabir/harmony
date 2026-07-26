@@ -242,6 +242,60 @@ function renderDashboard(snapshot) {
     renderAlbumInsight("insight-oldest-album", analytics.oldest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
     renderMaintenance(snapshot.maintenance || []);
     renderCollections(snapshot.collections || []);
+    renderSynologyHealth(snapshot.synology || {});
+}
+
+function renderSynologyHealth(health) {
+    const card = document.getElementById("synology-health-card");
+    const disks = document.getElementById("synology-disks");
+    if (!card || !disks) return;
+    const enabled = health.enabled === true;
+    card.hidden = !enabled;
+    if (!enabled) return;
+
+    const state = health.stale ? "Stale" : (health.available ? "Available" : "Unavailable");
+    setText("synology-health-state", state);
+    card.dataset.state = state.toLowerCase();
+    setText("synology-health-message", health.stale
+        ? "Showing the last successful sample; current data may be out of date."
+        : (health.available ? "Latest NAS metrics." : "NAS monitoring is temporarily unavailable."));
+    const metric = (value, suffix = "") => value === null || value === undefined ? "—" : `${value}${suffix}`;
+    setText("synology-cpu", metric(health.cpu_percent, "%"));
+    setText("synology-memory", metric(health.memory_percent, "%"));
+    setText("synology-temperature", metric(health.system_temperature_c, "°C"));
+    setText("synology-load", metric(health.load_average_1m));
+    setText("synology-uptime", health.uptime_seconds == null ? "—" : formatDuration(health.uptime_seconds));
+    setText("synology-thermal", health.thermal_status || "unknown");
+
+    const rows = Array.isArray(health.disks) ? health.disks : [];
+    const existing = new Map(Array.from(disks.children).map(row => [row.dataset.snmpIndex, row]));
+    rows.forEach(disk => {
+        const key = String(disk.snmp_index);
+        let row = existing.get(key);
+        if (!row) {
+            row = document.createElement("div");
+            row.className = "synology-disk-row";
+            row.dataset.snmpIndex = key;
+            for (const className of ["synology-disk-id", "synology-disk-model", "synology-disk-status", "synology-disk-temperature"]) {
+                const element = document.createElement(className === "synology-disk-id" ? "strong" : "span");
+                element.className = className;
+                row.appendChild(element);
+            }
+            disks.appendChild(row);
+        }
+        row.querySelector(".synology-disk-id").textContent = disk.id || "Unknown disk";
+        row.querySelector(".synology-disk-model").textContent = disk.model || "Unknown model";
+        row.querySelector(".synology-disk-status").textContent = disk.status || "unknown";
+        row.querySelector(".synology-disk-temperature").textContent = metric(disk.temperature_c, "°C");
+        existing.delete(key);
+    });
+    existing.forEach(row => row.remove());
+    if (!rows.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state synology-disks-empty";
+        empty.textContent = "No disks were reported by DSM.";
+        disks.replaceChildren(empty);
+    }
 }
 
 function renderAttention(attention) {
