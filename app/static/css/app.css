@@ -339,6 +339,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-attention-item.severity-info .dashboard-attention-severity { color: var(--primary); }
 .dashboard-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-md); }
 .dashboard-summary-card { padding: 18px; }
+.dashboard-card--full { grid-column: 1 / -1; }
+
+.synology-metrics-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.synology-metric-label { display: block; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 2px; }
+
+.synology-disks-grid { border-top: 1px solid var(--border-color); padding-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.synology-disk-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: 8px; }
+.synology-disk-left strong, .synology-disk-right strong { display: block; font-size: 0.85rem; }
+.synology-disk-left span, .synology-disk-right span { display: block; color: var(--text-muted); font-size: 0.75rem; }
+.synology-disk-left { min-width: 0; }
+.synology-disk-left span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.synology-disk-right { text-align: right; flex-shrink: 0; padding-left: 1rem; }
+
 .dashboard-operations-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 .dashboard-operations-card { padding: 18px; min-width: 0; }
 .navidrome-panel { padding: 18px; }
@@ -510,6 +523,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .activity-failed .activity-meta span, .activity-cancelled .activity-meta span { color: var(--danger); font-weight: 700; }
 
 @media (max-width: 900px) {
+    .synology-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-summary-grid, .dashboard-operations-grid { grid-template-columns: 1fr; }
     .navidrome-content { grid-template-columns: 1fr; }
     .navidrome-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -519,6 +533,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @media (max-width: 640px) {
+    .synology-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .dashboard-header { align-items: start; flex-direction: column; }
     .dashboard-header-actions { width: 100%; }
     .dashboard-header-actions > * {

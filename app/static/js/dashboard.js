@@ -753,7 +753,7 @@ function renderSynology(data) {
     if (thermalEl) {
         thermalEl.textContent = data.thermal_status || "—";
         if (data.thermal_status_code === 2) {
-            thermalEl.style.color = "var(--danger-color, red)";
+            thermalEl.style.color = "var(--danger)";
         } else {
             thermalEl.style.color = "";
         }
@@ -767,41 +767,31 @@ function renderSynology(data) {
         } else {
             data.disks.forEach(disk => {
                 const row = document.createElement("div");
-                row.style.display = "flex";
-                row.style.justifyContent = "space-between";
-                row.style.alignItems = "center";
-                row.style.padding = "0.5rem 0";
-                row.style.borderBottom = "1px solid var(--border-color)";
-                if (data.disks.indexOf(disk) === data.disks.length - 1) {
-                    row.style.borderBottom = "none";
-                }
+                row.className = "synology-disk-item";
 
                 const left = document.createElement("div");
+                left.className = "synology-disk-left";
+
                 const title = document.createElement("strong");
-                title.style.display = "block";
-                title.style.fontSize = "0.85rem";
                 title.textContent = disk.id || `Disk ${disk.snmp_index}`;
+
                 const model = document.createElement("span");
-                model.className = "text-secondary";
-                model.style.fontSize = "0.75rem";
                 model.textContent = disk.model || "Unknown model";
+                model.title = disk.model || "Unknown model";
+
                 left.appendChild(title);
                 left.appendChild(model);
 
                 const right = document.createElement("div");
-                right.style.textAlign = "right";
+                right.className = "synology-disk-right";
 
                 const status = document.createElement("strong");
-                status.style.display = "block";
-                status.style.fontSize = "0.85rem";
                 status.textContent = disk.status;
                 if (disk.status_code !== 1) {
-                    status.style.color = "var(--danger-color, red)";
+                    status.style.color = "var(--danger)";
                 }
 
                 const temp = document.createElement("span");
-                temp.className = "text-secondary";
-                temp.style.fontSize = "0.75rem";
                 temp.textContent = disk.temperature_c !== null ? `${disk.temperature_c}°C` : "—";
 
                 right.appendChild(status);

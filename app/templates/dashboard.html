@@ -51,7 +51,7 @@
             <div id="dashboard-collections" class="dashboard-collections"><p class="empty-state">Loading collections…</p></div>
         </article>
 
-        <article class="panel dashboard-summary-card" id="synology-health-card" hidden>
+        <article class="panel dashboard-summary-card dashboard-card--full" id="synology-health-card" hidden>
             <div class="dashboard-panel-heading">
                 <div>
                     <span class="library-eyebrow">Hardware</span>
@@ -60,16 +60,16 @@
                 <span id="synology-status-badge" class="badge">Checking...</span>
             </div>
 
-            <div id="synology-metrics" class="synology-metrics-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                <div><span class="text-secondary" style="font-size: 0.75rem; text-transform: uppercase;">CPU</span><br><strong id="synology-cpu">—</strong></div>
-                <div><span class="text-secondary" style="font-size: 0.75rem; text-transform: uppercase;">Memory</span><br><strong id="synology-ram">—</strong></div>
-                <div><span class="text-secondary" style="font-size: 0.75rem; text-transform: uppercase;">Temp</span><br><strong id="synology-temp">—</strong></div>
-                <div><span class="text-secondary" style="font-size: 0.75rem; text-transform: uppercase;">Load (1m)</span><br><strong id="synology-load">—</strong></div>
-                <div><span class="text-secondary" style="font-size: 0.75rem; text-transform: uppercase;">Uptime</span><br><strong id="synology-uptime">—</strong></div>
-                <div><span class="text-secondary" style="font-size: 0.75rem; text-transform: uppercase;">Thermal</span><br><strong id="synology-thermal">—</strong></div>
+            <div id="synology-metrics" class="synology-metrics-grid">
+                <div><span class="synology-metric-label">CPU</span><strong id="synology-cpu">—</strong></div>
+                <div><span class="synology-metric-label">Memory</span><strong id="synology-ram">—</strong></div>
+                <div><span class="synology-metric-label">Temp</span><strong id="synology-temp">—</strong></div>
+                <div><span class="synology-metric-label">Load (1m)</span><strong id="synology-load">—</strong></div>
+                <div><span class="synology-metric-label">Uptime</span><strong id="synology-uptime">—</strong></div>
+                <div><span class="synology-metric-label">Thermal</span><strong id="synology-thermal">—</strong></div>
             </div>
 
-            <div id="synology-disks-container" style="border-top: 1px solid var(--border-color); padding-top: 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch;">
+            <div id="synology-disks-container" class="synology-disks-grid">
                 <!-- Disk rows will be inserted here -->
             </div>
         </article>
