@@ -16,6 +16,7 @@ from app.services.spotify.playlist_batches import UnofficialSpotifyPlaylistReade
 from app.services.task_service import (
     create_task,
     _finish_if_complete,
+    increment_skipped,
     start_task,
     set_current_item,
     _fail_task,
@@ -82,6 +83,7 @@ def sync_playlist(
             append_incremental_playlist_batch(db, db_playlist, batch, batch_start)
 
             queueable_tracks: list[tuple[int, Track]] = []
+            batch_skipped_count = 0
             for offset, track in enumerate(batch, batch_start + 1):
                 source_url = track.source_url or track.spotify_url
                 if (
@@ -93,8 +95,12 @@ def sync_playlist(
                     seen_queue_urls.add(source_url)
                 else:
                     skipped_count += 1
-            task.skipped_items = skipped_count
-            db.commit()
+                    batch_skipped_count += 1
+            increment_skipped(
+                db=db,
+                task=task,
+                amount=batch_skipped_count,
+            )
 
             if queueable_tracks:
                 enqueue_tracks_bulk(db, queueable_tracks, task.id)

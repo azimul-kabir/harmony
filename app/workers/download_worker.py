@@ -32,6 +32,7 @@ from app.services.task_service import (
     increment_completed,
     increment_failed,
     increment_skipped,
+    reconcile_stalled_playlist_tasks,
     set_current_item,
     start_task,
 )
@@ -44,6 +45,9 @@ def worker_loop() -> None:
     db = SessionLocal()
     try:
         recover_running_jobs(db)
+        repaired_task_ids = reconcile_stalled_playlist_tasks(db)
+        for task_id in repaired_task_ids:
+            navidrome_playlist_reimport.schedule(task_id)
     finally:
         db.close()
         
