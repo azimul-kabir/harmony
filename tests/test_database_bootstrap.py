@@ -88,6 +88,36 @@ def test_existing_database_upgrades_without_precreating_future_tables(
     assert revision == "20260725_0026"
 
 
+def test_published_v1_5_revision_is_translated_before_upgrade(tmp_path, monkeypatch):
+    """The released v1.5 marker must remain upgradeable by the renamed chain."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'published-v1.5.db'}")
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs ("
+            "id INTEGER PRIMARY KEY, path VARCHAR NOT NULL UNIQUE, "
+            "filename VARCHAR NOT NULL, modified_time INTEGER, created_at DATETIME)"
+        )
+        config.attributes["connection"] = connection
+        command.upgrade(config, "20260721_0008")
+        connection.execute(
+            text("UPDATE alembic_version SET version_num = '1f8d82846508'")
+        )
+
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+
+    with engine.connect() as connection:
+        revision = connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one()
+    assert revision == "20260725_0026"
+    assert "metadata_suggestions" in inspect(engine).get_table_names()
+
+
 def test_existing_database_retries_interrupted_metadata_migration(
     tmp_path, monkeypatch
 ):
