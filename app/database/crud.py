@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database.models import Song
+from app.database.models import Song, SongSourceIdentity
 
 
 class UpsertStatus(str, Enum):
@@ -29,6 +29,9 @@ def find_song(
 
         if song is not None:
             return song
+        alias = db.get(SongSourceIdentity, ("spotify", spotify_track_id))
+        if alias is not None:
+            return alias.song
 
     if isrc:
         song = db.scalar(select(Song).where(Song.isrc == isrc))
@@ -45,6 +48,40 @@ def find_song(
             func.lower(Song.artist) == artist.lower(),
         )
     )
+
+
+def find_song_by_source(
+    db: Session,
+    provider: str,
+    item_id: str | None,
+) -> Song | None:
+    if not item_id:
+        return None
+    alias = db.get(SongSourceIdentity, (provider or "spotify", item_id))
+    return alias.song if alias is not None else None
+
+
+def link_song_source(
+    db: Session,
+    song: Song,
+    provider: str,
+    item_id: str | None,
+) -> None:
+    """Remember that a provider item resolves to an indexed library file."""
+    if not item_id:
+        return
+    key = (provider or "spotify", item_id)
+    alias = db.get(SongSourceIdentity, key)
+    if alias is None:
+        db.add(
+            SongSourceIdentity(
+                provider=key[0],
+                item_id=key[1],
+                song_id=song.id,
+            )
+        )
+    else:
+        alias.song_id = song.id
 
 
 def library_statistics(db: Session) -> dict:

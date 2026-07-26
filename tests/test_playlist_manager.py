@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from app.database.crud import link_song_source
 from app.database.models import Playlist, PlaylistTrack, Song
 from app.database.session import SessionLocal
 from app.services import playlist_manager
@@ -195,5 +196,45 @@ def test_export_resolves_owned_song_with_different_spotify_identity(
         assert playlist_manager.export_m3u(db, playlist) == 1
         content = (tmp_path / "Playlists" / "Overlapping.m3u").read_text()
         assert "../Artist/Album/song.mp3" in content
+    finally:
+        db.close()
+
+
+def test_export_resolves_provider_alias_when_titles_differ(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        playlist_manager,
+        "get_settings",
+        lambda: SimpleNamespace(music_path=str(tmp_path)),
+    )
+    actual = tmp_path / "Cameo" / "Word Up" / "01 - Word Up.mp3"
+    actual.parent.mkdir(parents=True)
+    actual.write_bytes(b"audio")
+
+    db = SessionLocal()
+    try:
+        playlist = _playlist(
+            db,
+            spotify_id="funky",
+            name="Funky Groove Mix",
+            track_id="single-version-id",
+        )
+        playlist.tracks[0].title = "Word Up! - Single Version"
+        playlist.tracks[0].artist = "Cameo"
+        song = Song(
+            path=str(actual),
+            filename=actual.name,
+            artist="Cameo",
+            title="Word Up",
+            album="Word Up",
+        )
+        db.add(song)
+        db.flush()
+        link_song_source(db, song, "spotify", "single-version-id")
+        db.commit()
+
+        assert playlist_manager.export_m3u(db, playlist) == 1
+        assert "../Cameo/Word Up/01 - Word Up.mp3" in (
+            tmp_path / "Playlists" / "Funky Groove Mix.m3u"
+        ).read_text()
     finally:
         db.close()

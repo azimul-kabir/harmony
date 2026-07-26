@@ -98,6 +98,22 @@ class Song(Base):
         index=True,
     )
 
+
+class SongSourceIdentity(Base):
+    """Provider identities known to refer to one physical library song."""
+
+    __tablename__ = "song_source_identities"
+    provider: Mapped[str] = mapped_column(String(80), primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    song_id: Mapped[int] = mapped_column(
+        ForeignKey("songs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    song: Mapped["Song"] = relationship()
+
+
 class MetadataSuggestion(Base):
     """Provider-neutral proposed metadata; never canonical until separately applied."""
     __tablename__ = "metadata_suggestions"

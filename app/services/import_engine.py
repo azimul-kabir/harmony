@@ -54,7 +54,10 @@ def import_download(
     )
 
     if is_duplicate(destination):
-        raise DuplicateTrackError(f"{destination} already exists.")
+        raise DuplicateTrackError(
+            f"{destination} already exists.",
+            existing_path=destination,
+        )
 
     destination.parent.mkdir(
         parents=True,

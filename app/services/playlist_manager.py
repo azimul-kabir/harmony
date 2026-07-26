@@ -6,7 +6,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.database.crud import find_song
+from app.database.crud import find_song, find_song_by_source
 from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
@@ -227,6 +227,9 @@ def resolve_playlist_songs(
             album=track.album,
             spotify_track_id=track.spotify_track_id,
         )
+        if song is None and ":" in track.spotify_track_id:
+            provider, item_id = track.spotify_track_id.split(":", 1)
+            song = find_song_by_source(db, provider, item_id)
         if song is not None:
             resolved[track.spotify_track_id] = song
     return resolved

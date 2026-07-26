@@ -212,3 +212,30 @@ def test_playlist_metadata_migrates_existing_playlist_tracks(tmp_path):
                 "WHERE playlist_id=1"
             )
         ).scalar_one() == "track-1"
+
+
+def test_song_source_identity_migration_backfills_spotify_ids(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'aliases.db'}")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs ("
+            "id INTEGER PRIMARY KEY, path VARCHAR, filename VARCHAR, "
+            "spotify_track_id VARCHAR)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO songs VALUES (1, '/music/song.mp3', 'song.mp3', 'track-1')"
+        )
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.stamp(config, "20260725_0026")
+        command.upgrade(config, "head")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text(
+                "SELECT provider, item_id, song_id "
+                "FROM song_source_identities"
+            )
+        ).one() == ("spotify", "track-1", 1)
