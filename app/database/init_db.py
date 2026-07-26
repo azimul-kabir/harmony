@@ -11,6 +11,15 @@ from app.database.database import engine
 from app.database import models  # noqa: F401
 
 
+# The published v1.5.0 image used Alembic's generated revision identifier for
+# the Library Foundation head.  The v2 migration chain renamed those revisions
+# to sortable identifiers, so translate the released marker before asking
+# Alembic to resolve the upgrade path.
+_LEGACY_REVISION_ALIASES = {
+    "1f8d82846508": "20260721_0008",
+}
+
+
 _METADATA_APPLICATION_SONG_COLUMNS = (
     # ``cover_url`` predates the Alembic chain and can be absent from an
     # upgraded legacy database even though current ORM queries select it.
@@ -93,6 +102,25 @@ def _repair_stamped_download_schema(connection) -> None:
         )
 
 
+def _translate_legacy_revision(connection) -> None:
+    """Map published revision IDs to their equivalent point in this chain."""
+    if "alembic_version" not in inspect(connection).get_table_names():
+        return
+
+    revision = connection.execute(
+        text("SELECT version_num FROM alembic_version")
+    ).scalar_one_or_none()
+    replacement = _LEGACY_REVISION_ALIASES.get(revision)
+    if replacement is not None:
+        connection.execute(
+            text(
+                "UPDATE alembic_version SET version_num = :replacement "
+                "WHERE version_num = :revision"
+            ),
+            {"replacement": replacement, "revision": revision},
+        )
+
+
 def init_db() -> None:
     # A brand-new installation is bootstrapped from the current ORM schema and
     # stamped at head.  The migration chain deliberately starts from Harmony's
@@ -118,6 +146,7 @@ def init_db() -> None:
             # metadata_suggestions) before Alembic reaches the revision that
             # owns them, causing the upgrade to fail with "table already
             # exists" and the container to restart continuously.
+            _translate_legacy_revision(connection)
             command.upgrade(config, "head")
 
         # Older v1.6 deployments could be stamped at head despite an
