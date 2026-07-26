@@ -12,6 +12,7 @@ from app.services.dashboard import get_dashboard_snapshot, serialize_dashboard_a
 from app.domain.task import TaskStatus
 from app.domain.download import JobStatus
 from app.core.config import get_settings
+from app.services.synology_monitor import synology_monitor
 
 settings = get_settings()
 
@@ -123,12 +124,15 @@ async def stream_dashboard_data(request: Request):
                     for j in running_jobs
                 ]
 
+                synology_snapshot = await synology_monitor.get_snapshot()
+
                 payload = {
                     **snapshot,
                     "activity": activity,
                     "tasks": active_tasks,
                     "workers": workers,
                     "max_workers": settings.max_parallel_downloads,
+                    "synology": synology_snapshot.model_dump(),
                 }
 
                 yield f"data: {json.dumps(payload)}\n\n"
