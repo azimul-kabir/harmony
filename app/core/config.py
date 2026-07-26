@@ -92,6 +92,16 @@ class Settings(BaseSettings):
     metadata_discovery_chunk_size: int = 25
     metadata_discovery_max_batch_songs: int = 500
 
+    synology_monitoring_enabled: bool = False
+    synology_snmp_host: str = ""
+    synology_snmp_port: int = 161
+    synology_snmp_community: str = "public"
+    synology_snmp_timeout_seconds: float = 2.0
+    synology_snmp_retries: int = 1
+    synology_metrics_interval_seconds: float = 30.0
+    synology_metrics_stale_seconds: float = 120.0
+    synology_disk_max_index: int = 15
+
 
 @lru_cache
 def get_settings():
