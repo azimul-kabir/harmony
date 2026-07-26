@@ -5,13 +5,22 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+## [v2.0.1] - 2026-07-26
+
 ### Added
 
 - Playlist cover upload, preview, replacement, and removal using
   Navidrome-compatible sidecar images beside exported M3U files.
+- GitHub Actions CI for Python 3.12 compilation, the complete test suite, and
+  production-container builds.
+- Separate `/health/live` and `/health/ready` probes. Readiness verifies the
+  database migration marker and required writable storage while returning only
+  bounded, non-secret failure reasons.
 
 ### Fixed
 
+- Updated the PWA regression test to match the current v3 application-shell
+  cache.
 - Library hero controls now use consistent typography and sizing on desktop,
   and remain on-canvas as a full-width action row on mobile.
 - Duplicate candidate file details now use labeled, evenly aligned statistics
@@ -19,6 +28,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Changed
 
+- Consolidated SQLAlchemy engine and session-factory ownership in
+  `app.database.session`, removing the competing database bootstrap module.
+- Bumped application and package metadata to v2.0.1 and reconciled roadmap
+  entries that had already shipped.
 - Dashboard download history is capped at 10 songs and now displays square
   album artwork with a graceful placeholder, without retaining a stale empty
   message after live activity arrives.
@@ -26,11 +39,6 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   10-entry batches through a Show more control.
 - Library activity can be cleared without removing active jobs or unreviewed
   warnings, with a separate opt-in for reviewed error history.
-
-### Planned
-
-- Additional media-server API integrations beyond Navidrome.
-- Duplicate detection and user-defined smart-playlist rules.
 
 ---
 

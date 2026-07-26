@@ -1,12 +1,22 @@
 # Library Jobs and Activity API
 
-> v2.0.0 API guide. Interactive OpenAPI contracts are available at `/docs`
+> v2.0.1 API guide. Interactive OpenAPI contracts are available at `/docs`
 > while Harmony is running.
 
 Library jobs extend Harmony's existing durable Task API. All timestamps are UTC
 ISO-8601 values. Job responses include both the legacy progress keys
 (`total`, `completed`, `progress`) and explicit job keys (`total_items`,
 `successful_items`, `progress_percentage`) for additive compatibility.
+
+## Health probes
+
+- `GET /health` remains the compatibility liveness probe.
+- `GET /health/live` returns process liveness and the Harmony version without
+  querying dependencies.
+- `GET /health/ready` verifies the database and Alembic marker plus readable,
+  writable music, download, staging, failed-download, and artwork-cache
+  directories. It returns HTTP 503 and bounded component reasons while any
+  required dependency is unavailable.
 
 ## Read jobs
 

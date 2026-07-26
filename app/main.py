@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import downloads, library
 from app.api.artwork import router as artwork_router
+from app.api.health import router as health_router
 from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
 from app.api.library_bulk import router as library_bulk_router
@@ -118,6 +119,7 @@ app.mount(
 )
 
 app.include_router(tasks_router)
+app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
 app.include_router(system_health_router)
@@ -192,12 +194,3 @@ def home(request: Request):
         )
     finally:
         db.close()
-
-@app.get("/health")
-def health():
-    return JSONResponse(
-        {
-            "status": "ok",
-            "version": settings.app_version,
-        }
-    )

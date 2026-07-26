@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "2.0.0"
+    app_version: str = "2.0.1"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     navidrome_playlist_reimport_scan_timeout_seconds: float = 900.0
 
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
-    musicbrainz_user_agent: str = "Harmony/2.0.0 (https://github.com/azimul-kabir/harmony)"
+    musicbrainz_user_agent: str = "Harmony/2.0.1 (https://github.com/azimul-kabir/harmony)"
     musicbrainz_timeout_seconds: float = 10.0
     musicbrainz_max_retries: int = 3
     musicbrainz_backoff_seconds: float = 0.5

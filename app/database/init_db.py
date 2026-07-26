@@ -5,7 +5,7 @@ from alembic.config import Config
 from sqlalchemy import inspect, text
 
 from app.database.base import Base
-from app.database.database import engine
+from app.database.session import engine
 
 # Import models so SQLAlchemy knows about them.
 from app.database import models  # noqa: F401
