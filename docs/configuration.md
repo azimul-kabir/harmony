@@ -115,10 +115,15 @@ Harmony uses PySNMP directly; it neither mounts the Docker socket nor invokes
 command-line SNMP programs. Only normalized system and disk health is exposed.
 The community, raw OIDs, SNMP responses, and internal exception details remain
 server-private. If DSM is unreachable, the last successful sample remains
-visible and is marked unavailable or stale.
+visible and is marked unavailable or stale. The poller starts only after the
+FastAPI lifespan has yielded, so DNS resolution or an unavailable SNMP target
+cannot hold Harmony in its application-startup phase. Every request also has a
+hard outer deadline in addition to the configured PySNMP timeout and retries.
 
 Disk discovery deliberately probes indexed columns with bounded GET requests
 from index `.0` through `SYNOLOGY_DISK_MAX_INDEX` (default `.15`). Some DSM
 versions return no disk rows from an SNMP walk even though indexed GET requests
 work. Missing indexes are ignored, and DSM's returned disk ID—not the SNMP
-index—is the displayed disk label.
+index—is the displayed disk label. A timeout or malformed response for one
+disk index is treated like a missing row and does not invalidate successfully
+sampled system metrics or other disk indexes.
