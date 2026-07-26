@@ -464,16 +464,13 @@ function renderWorkers(workers, maxWorkers) {
 
             const media = document.createElement("div");
             media.className = "worker-media";
-            const artwork = worker.cover_url
-                ? document.createElement("img")
-                : document.createElement("div");
-            artwork.className = worker.cover_url ? "worker-artwork" : "worker-artwork worker-artwork-empty";
             if (worker.cover_url) {
+                const artwork = document.createElement("img");
+                artwork.className = "worker-artwork";
                 artwork.src = worker.cover_url;
                 artwork.alt = "";
-            } else {
-                artwork.textContent = "♫";
-                artwork.setAttribute("aria-hidden", "true");
+                artwork.addEventListener("error", () => artwork.remove(), {once: true});
+                media.appendChild(artwork);
             }
             const copy = document.createElement("div");
             copy.className = "worker-copy";
@@ -486,7 +483,7 @@ function renderWorkers(workers, maxWorkers) {
             artist.textContent = worker.artist || "Unknown Artist";
             artist.title = artist.textContent;
             copy.append(title, artist);
-            media.append(artwork, copy);
+            media.appendChild(copy);
             card.appendChild(media);
 
             const progress = document.createElement("div");
@@ -547,6 +544,27 @@ function formatActivityTime(value) {
     return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+function syncActivityArtwork(row, coverUrl) {
+    const current = row.querySelector(".activity-artwork");
+    row.classList.toggle("has-artwork", Boolean(coverUrl));
+    if (!coverUrl) {
+        current?.remove();
+        return;
+    }
+    if (current) {
+        if (current.src !== new URL(coverUrl, window.location.href).href) current.src = coverUrl;
+        return;
+    }
+    const image = document.createElement("img");
+    image.className = "activity-artwork";
+    image.src = coverUrl;
+    image.alt = "";
+    image.loading = "lazy";
+    image.addEventListener("error", () => image.remove(), {once: true});
+    image.addEventListener("error", () => row.classList.remove("has-artwork"), {once: true});
+    row.insertBefore(image, row.querySelector(".activity-content"));
+}
+
 function renderActivity(jobs) {
     const container = document.getElementById("recent-activity");
     if (!container) return;
@@ -572,10 +590,6 @@ function renderActivity(jobs) {
             row.dataset.activityId = key;
             const marker = document.createElement("span");
             marker.className = "activity-marker";
-            const artwork = document.createElement("span");
-            artwork.className = "activity-artwork activity-artwork-placeholder";
-            artwork.setAttribute("aria-hidden", "true");
-            artwork.textContent = "♪";
             const content = document.createElement("div");
             content.className = "activity-content";
             const title = document.createElement("strong");
@@ -587,38 +601,16 @@ function renderActivity(jobs) {
             const status = document.createElement("span");
             const time = document.createElement("time");
             meta.append(status, time);
-            row.append(marker, artwork, content, meta);
+            row.append(marker, content, meta);
         }
         const details = activityDetails(job.status);
         row.className = `activity-item activity-${details.status}`;
         row.href = ["failed", "cancelled"].includes(details.status) ? "/downloads?status=failed" : "/downloads";
-        const [marker, artwork, content, meta] = row.children;
+        const marker = row.querySelector(".activity-marker");
+        const content = row.querySelector(".activity-content");
+        const meta = row.querySelector(".activity-meta");
         marker.setAttribute("aria-hidden", "true");
-        if (job.cover_url) {
-            if (artwork.tagName !== "IMG") {
-                const image = document.createElement("img");
-                image.className = "activity-artwork";
-                image.alt = "";
-                image.loading = "lazy";
-                image.addEventListener("error", () => {
-                    const placeholder = document.createElement("span");
-                    placeholder.className = "activity-artwork activity-artwork-placeholder";
-                    placeholder.setAttribute("aria-hidden", "true");
-                    placeholder.textContent = "♪";
-                    image.replaceWith(placeholder);
-                }, {once: true});
-                artwork.replaceWith(image);
-                image.src = job.cover_url;
-            } else if (artwork.src !== new URL(job.cover_url, window.location.href).href) {
-                artwork.src = job.cover_url;
-            }
-        } else if (artwork.tagName === "IMG") {
-            const placeholder = document.createElement("span");
-            placeholder.className = "activity-artwork activity-artwork-placeholder";
-            placeholder.setAttribute("aria-hidden", "true");
-            placeholder.textContent = "♪";
-            artwork.replaceWith(placeholder);
-        }
+        syncActivityArtwork(row, job.cover_url);
         content.querySelector("strong").textContent = job.title || "Unknown title";
         content.querySelector("span").textContent = job.artist || "Unknown artist";
         meta.querySelector("span").textContent = details.label;
