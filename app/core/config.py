@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "2.0.0"
+    app_version: str = "2.0.1"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     spotdl_path: str = "spotdl"
+    spotify_playlist_metadata_timeout_seconds: int = 3600
     yt_dlp_path: str = "yt-dlp"
     youtube_music_enabled: bool = True
     default_download_source: str = "spotify"
@@ -78,7 +79,7 @@ class Settings(BaseSettings):
     navidrome_playlist_reimport_scan_timeout_seconds: float = 900.0
 
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
-    musicbrainz_user_agent: str = "Harmony/2.0.0 (https://github.com/azimul-kabir/harmony)"
+    musicbrainz_user_agent: str = "Harmony/2.0.1 (https://github.com/azimul-kabir/harmony)"
     musicbrainz_timeout_seconds: float = 10.0
     musicbrainz_max_retries: int = 3
     musicbrainz_backoff_seconds: float = 0.5
@@ -90,6 +91,16 @@ class Settings(BaseSettings):
     cover_art_archive_max_bytes: int = 15 * 1024 * 1024
     metadata_discovery_chunk_size: int = 25
     metadata_discovery_max_batch_songs: int = 500
+
+    synology_monitoring_enabled: bool = False
+    synology_snmp_host: str = ""
+    synology_snmp_port: int = 161
+    synology_snmp_community: str = "public"
+    synology_snmp_timeout_seconds: float = 2.0
+    synology_snmp_retries: int = 1
+    synology_metrics_interval_seconds: float = 30.0
+    synology_metrics_stale_seconds: float = 120.0
+    synology_disk_max_index: int = 15
 
 
 @lru_cache

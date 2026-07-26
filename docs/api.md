@@ -1,12 +1,22 @@
 # Library Jobs and Activity API
 
-> v2.0.0 API guide. Interactive OpenAPI contracts are available at `/docs`
+> v2.0.1 API guide. Interactive OpenAPI contracts are available at `/docs`
 > while Harmony is running.
 
 Library jobs extend Harmony's existing durable Task API. All timestamps are UTC
 ISO-8601 values. Job responses include both the legacy progress keys
 (`total`, `completed`, `progress`) and explicit job keys (`total_items`,
 `successful_items`, `progress_percentage`) for additive compatibility.
+
+## Health probes
+
+- `GET /health` remains the compatibility liveness probe.
+- `GET /health/live` returns process liveness and the Harmony version without
+  querying dependencies.
+- `GET /health/ready` verifies the database and Alembic marker plus readable,
+  writable music, download, staging, failed-download, and artwork-cache
+  directories. It returns HTTP 503 and bounded component reasons while any
+  required dependency is unavailable.
 
 ## Read jobs
 
@@ -64,6 +74,49 @@ These endpoints use the same persistent jobs and retain their existing response
 fields. Bulk operations are `delete`, `move`, `rename`, `refresh_metadata`,
 `refresh_artwork`, `fetch_artwork`, `forget_missing`, and `export`.
 
+Duplicate intelligence is read-only:
+
+- `GET /api/library/duplicates` returns paginated candidate groups. Optional
+  `tier` values are `exact`, `strong`, `probable`, and `possible`; missing
+  records are excluded unless `include_missing=true`.
+- `GET /api/library/duplicates/{group_id}` returns one comparison group.
+- `GET /api/library/duplicates/{group_id}/resolution-preview?keep_song_id=...`
+  revalidates the group and reports the exact removal set, reclaimable bytes,
+  playlist impacts, warnings, and a short-lived confirmation token.
+- `POST /api/library/duplicates/{group_id}/resolve` requires the preview's
+  keeper, exact candidate/removal sets, token, and `confirm_delete=true`, then
+  queues the removals through the durable Library bulk task.
+
+Groups include stable Song IDs, evidence, confidence, quality attributes, and
+a non-binding `recommended_keep_id`. Detection and preview are read-only.
+Resolution deletes only the confirmed non-keeper audio files and retains their
+Library records as missing provenance.
+
+Manual artwork replacement uses multipart uploads:
+
+- `POST /api/artwork/songs/{song_id}` accepts one `file` containing JPEG, PNG,
+  or WebP data up to 15 MB and associates the validated content-addressed
+  resource with the Song.
+- `DELETE /api/artwork/songs/{song_id}` removes only the Song association.
+
+Replacement and removal do not modify embedded audio-file artwork or delete
+shared cached resources.
+
+Advanced Library search remains available through `GET /api/library/search`.
+The `q` value supports:
+
+- field qualifiers: `title`, `artist`, `album`, `genre`, `playlist`,
+  `filename`, `spotify`, `musicbrainz`, and `isrc`;
+- quoted phrases, such as `title:"Northern Lights"`;
+- exclusions, such as `artist:Aurora -genre:live`;
+- intelligence filters: `has:issues`, `has:artwork`, `is:duplicate`,
+  `is:missing`, `is:available`, `missing:artwork`, and `missing:metadata`.
+
+Terms use AND semantics. Queries are bounded to 200 characters and 20 terms.
+Unknown fields, unsupported filters, and unmatched quotes return HTTP 400.
+Duplicate-only filtering is bounded to 800 candidate Songs so it remains
+compatible with conservative SQLite parameter limits.
+
 ## Sources and automation
 
 - `GET /api/sources` lists source state and schedule fields.
@@ -90,6 +143,12 @@ fields. Bulk operations are `delete`, `move`, `rename`, `refresh_metadata`,
 - `DELETE /api/playlists/{playlist_id}` deletes the saved playlist and its
   generated M3U, not downloaded Songs or the associated Source.
 - `GET /api/playlists/{playlist_id}/download` returns the generated M3U.
+- `GET`, `POST`, and `DELETE /api/playlists/{playlist_id}/artwork` serve,
+  atomically replace, or remove a Navidrome-compatible playlist sidecar image.
+  Uploads accept JPEG, PNG, WebP, or GIF images up to 10 MB.
+- `POST /api/tasks/jobs/clear` removes completed and cancelled Library activity.
+  With `include_reviewed_attention=true`, it also removes reviewed terminal
+  warnings; active and unreviewed attention jobs are always retained.
 - `POST /api/playlists/import`, `/compare`, and `/download` retain the existing
   import, availability comparison, and direct-download contracts.
 
@@ -101,13 +160,15 @@ Songs; requests never silently apply provider values.
 
 ### Provider diagnostics
 
-- `GET /api/providers/capabilities` lists configured metadata provider
-  capabilities.
+- `GET /api/providers/capabilities` lists MusicBrainz and Spotify metadata
+  provider capabilities.
 - `GET /api/providers/status` reports provider availability and cache-aware
   operational status.
 - `POST /api/providers/test-search` and `POST /api/providers/lookup` provide
-  bounded MusicBrainz diagnostics. Provider failures return a clean structured
-  error response with a retryability flag.
+  bounded provider diagnostics. Spotify currently supports recording search
+  and lookup only and returns `not_configured` when optional credentials are
+  absent. Provider failures return a clean structured error response with a
+  retryability flag.
 
 ### Health, discovery, and suggestions
 
@@ -120,7 +181,9 @@ Songs; requests never silently apply provider values.
   Song; `POST /api/metadata/discoveries/songs` accepts an explicit Song scope.
 - `POST /api/metadata/discoveries/health-rules` and
   `POST /api/metadata/discoveries/health-issues` submit discovery from metadata
-  health findings.
+  health findings. Issue repair accepts 1–500 explicit issue IDs and a
+  provider; Library Health supports individual or selected-issue batches
+  through MusicBrainz or configured Spotify.
 - `GET /api/metadata/discoveries` lists durable discovery records;
   `GET /api/metadata/discoveries/{discovery_id}` returns the selected candidate
   and explainable matching evidence.
@@ -140,6 +203,15 @@ Songs; requests never silently apply provider values.
 - `GET /api/library/songs/{song_id}/metadata` returns canonical values and
   review state. Song-scoped suggestion and history lists are available through
   `/metadata/suggestions` and `/metadata/history`.
+- `GET /api/library/songs/{song_id}/lyrics` returns bounded lyrics indexed from
+  embedded audio tags or same-name `.lrc`/`.txt` sidecars. Library Song list
+  responses expose only `has_lyrics`, `lyrics_source`, and `lyrics_synced`, not
+  the full text.
+- `POST /api/library/songs/{song_id}/metadata/manual-preview` normalizes and
+  validates explicit operator edits without persistence.
+  `POST /api/library/songs/{song_id}/metadata/manual-apply` queues changed,
+  valid fields through the durable audit and rollback pipeline as provider
+  `manual`; it never modifies audio files.
 - `GET` or `POST /api/library/songs/{song_id}/metadata/application-preview`
   previews accepted or explicitly selected changes without writing them.
 - `POST /api/library/songs/{song_id}/metadata/apply` queues accepted changes;

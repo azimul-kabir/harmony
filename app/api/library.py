@@ -3,7 +3,7 @@ from queue import Empty
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
@@ -11,7 +11,7 @@ from app.database.models import Song
 from app.services.artwork import artwork_url
 from app.services.library_service import index_library_file, rescan_library
 from app.services.library_events import library_events
-from app.services.library_search import SearchFilters, library_search
+from app.services.library_search import SearchFilters, SearchQueryError, library_search
 from app.services.library_filters import (
     LibraryFilters,
     apply_song_filters,
@@ -19,6 +19,8 @@ from app.services.library_filters import (
 )
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
+from app.services.duplicate_detector import TIERS, duplicate_detector
+from app.services.library_bulk import create_bulk_task
 from app.services.library_catalog import (
     playlist_sources_for_tracks,
     serialize_song,
@@ -30,6 +32,7 @@ from app.api.schemas.library import (
     ArtistProjectionResponse,
     SearchPageResponse,
     SongResponse,
+    LyricsResponse,
 )
 
 router = APIRouter(
@@ -44,9 +47,98 @@ class IndexFileRequest(BaseModel):
     download_source: str | None = None
 
 
+class DuplicateResolutionRequest(BaseModel):
+    keep_song_id: int = Field(ge=1)
+    remove_song_ids: list[int] = Field(min_length=1, max_length=99)
+    candidate_song_ids: list[int] = Field(min_length=2, max_length=100)
+    confirmation_token: str = Field(min_length=64, max_length=64)
+    confirm_delete: bool = False
+    initiated_by: str | None = Field(default=None, max_length=120)
+
+
 @router.get("/analytics", summary="Get Library analytics")
 def get_library_analytics(db: Session = Depends(get_db)):
     return library_analytics.calculate(db)
+
+
+@router.get("/duplicates", summary="List explainable duplicate candidate groups")
+def list_duplicates(
+    db: Session = Depends(get_db),
+    tier: str | None = Query(default=None),
+    include_missing: bool = False,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    if tier is not None and tier not in TIERS:
+        raise HTTPException(status_code=400, detail="Unsupported duplicate tier")
+    return duplicate_detector.list(
+        db, tier=tier, include_missing=include_missing, limit=limit, offset=offset
+    )
+
+
+@router.get("/duplicates/{group_id}", summary="Compare one duplicate candidate group")
+def get_duplicate_group(
+    group_id: str,
+    include_missing: bool = False,
+    db: Session = Depends(get_db),
+):
+    group = duplicate_detector.get(db, group_id, include_missing=include_missing)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Duplicate group not found")
+    return group
+
+
+@router.get("/duplicates/{group_id}/resolution-preview", summary="Preview safe duplicate resolution")
+def preview_duplicate_resolution(
+    group_id: str,
+    keep_song_id: int = Query(ge=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        return duplicate_detector.resolution_preview(db, group_id, keep_song_id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post("/duplicates/{group_id}/resolve", summary="Queue confirmed duplicate file removal")
+def resolve_duplicate_group(
+    group_id: str,
+    request: DuplicateResolutionRequest,
+    db: Session = Depends(get_db),
+):
+    if not request.confirm_delete:
+        raise HTTPException(status_code=409, detail="Explicit file-deletion confirmation is required")
+    try:
+        preview = duplicate_detector.resolution_preview(db, group_id, request.keep_song_id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if (
+        sorted(set(request.remove_song_ids)) != preview["remove_song_ids"]
+        or sorted(set(request.candidate_song_ids)) != preview["candidate_song_ids"]
+        or request.confirmation_token != preview["confirmation_token"]
+    ):
+        raise HTTPException(status_code=409, detail="Duplicate group changed; review a fresh resolution preview")
+    try:
+        task = create_bulk_task(
+            db,
+            operation="delete",
+            song_ids=preview["remove_song_ids"],
+            options={
+                "duplicate_group_id": group_id,
+                "duplicate_keep_song_id": str(request.keep_song_id),
+            },
+            initiated_by=request.initiated_by,
+            task_name="Resolve Duplicate Group",
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {
+        "job_id": task.id,
+        "status": task.status,
+        "keep_song_id": request.keep_song_id,
+        "remove_song_ids": preview["remove_song_ids"],
+        "message": "Duplicate resolution queued as a durable Library deletion task.",
+    }
 
 
 _playlist_sources = playlist_sources_for_tracks
@@ -129,28 +221,31 @@ def search_library(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
-    page = library_search.search(
-        db,
-        q,
-        filters=SearchFilters(
-            artist=artist,
-            album=album,
-            genre=genre,
-            codec=codec,
-            playlist_id=playlist_id,
-            year=year,
-            min_bitrate=min_bitrate,
-            max_bitrate=max_bitrate,
-            downloaded_today=downloaded_today,
-            recently_added=recently_added,
-            missing_artwork=missing_artwork,
-            missing_metadata=missing_metadata,
-            include_missing=include_missing,
-        ),
-        sort_by=sort_by,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        page = library_search.search(
+            db,
+            q,
+            filters=SearchFilters(
+                artist=artist,
+                album=album,
+                genre=genre,
+                codec=codec,
+                playlist_id=playlist_id,
+                year=year,
+                min_bitrate=min_bitrate,
+                max_bitrate=max_bitrate,
+                downloaded_today=downloaded_today,
+                recently_added=recently_added,
+                missing_artwork=missing_artwork,
+                missing_metadata=missing_metadata,
+                include_missing=include_missing,
+            ),
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+        )
+    except SearchQueryError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     songs = db.scalars(
         with_song_artwork(select(Song).where(Song.id.in_(page.song_ids)))
     ).all()
@@ -256,6 +351,25 @@ def get_song(song_id: int, db: Session = Depends(get_db)):
         {song.spotify_track_id} if song.spotify_track_id else set(),
     )
     return serialize_song(song, sources.get(song.spotify_track_id or "", []))
+
+
+@router.get(
+    "/songs/{song_id}/lyrics",
+    response_model=LyricsResponse,
+    summary="Get locally indexed lyrics for one Song",
+)
+def get_song_lyrics(song_id: int, db: Session = Depends(get_db)):
+    song = db.get(Song, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return {
+        "song_id": song.id,
+        "title": song.title or song.filename,
+        "artist": song.artist,
+        "lyrics": song.lyrics,
+        "source": song.lyrics_source,
+        "synchronized": bool(song.lyrics_synced),
+    }
 
 
 @router.get(

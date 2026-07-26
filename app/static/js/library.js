@@ -77,8 +77,110 @@ const icons = {
 
 async function fetchJson(url) {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    if (!response.ok) {
+        let message = `Request failed: ${response.status}`;
+        try {
+            const payload = await response.json();
+            message = payload.detail || payload.error?.message || message;
+        } catch (_) { /* Keep the bounded HTTP fallback. */ }
+        throw new Error(message);
+    }
     return response.json();
+}
+
+async function loadDuplicateCandidates() {
+    const status = document.getElementById("duplicate-review-status");
+    const target = document.getElementById("duplicate-review-groups");
+    const tier = document.getElementById("duplicate-tier").value;
+    status.textContent = "Analyzing indexed identity signals…";
+    target.innerHTML = "";
+    try {
+        const result = await fetchJson(`/api/library/duplicates?limit=200${tier ? `&tier=${encodeURIComponent(tier)}` : ""}`);
+        status.textContent = `${result.total} candidate ${result.total === 1 ? "group" : "groups"} · ${result.duplicate_songs} indexed songs`;
+        target.innerHTML = result.items.map((group) => `
+            <article class="duplicate-group-card">
+                <header><div><h3>${escapeHtml(group.songs[0]?.title || "Untitled candidates")}</h3><small>${escapeHtml(group.songs[0]?.artist || "Unknown artist")} · ${group.song_count} candidates</small></div><span class="duplicate-tier-badge">${escapeHtml(group.tier)} · ${Math.round(group.confidence * 100)}%</span></header>
+                <p class="duplicate-evidence">${escapeHtml([...new Set(group.evidence.map((item) => item.message))].join(" · "))}</p>
+                <div class="duplicate-song-list">${group.songs.map((song) => `
+                    <div class="duplicate-song-row">
+                        ${song.cover_url
+                            ? `<img class="duplicate-song-artwork" src="${escapeHtml(song.cover_url)}" alt="" loading="lazy" data-duplicate-artwork>`
+                            : '<span class="duplicate-song-artwork duplicate-song-artwork-placeholder" aria-hidden="true">♪</span>'}
+                        <div class="duplicate-song-copy"><strong>${escapeHtml(song.filename)}</strong><small>${escapeHtml(song.album || "Album unknown")} · ${escapeHtml(song.codec || "codec unknown")}</small>${song.id === group.recommended_keep_id ? '<span class="duplicate-keeper">Suggested keeper — review before resolving</span>' : ""}</div>
+                        <span class="duplicate-song-stat duplicate-song-duration"><small>Duration</small>${escapeHtml(formatDuration(song.duration))}</span>
+                        <span class="duplicate-song-stat duplicate-song-bitrate"><small>Bitrate</small>${escapeHtml(formatBitrate(song.bitrate))}</span>
+                        <span class="duplicate-song-stat duplicate-song-size"><small>File size</small>${escapeHtml(formatBytes(song.file_size))}</span>
+                        <label class="duplicate-keeper-control"><input type="radio" name="duplicate-keeper-${group.id}" value="${song.id}" ${song.id === group.recommended_keep_id ? "checked" : ""}> Keep this file</label>
+                    </div>`).join("")}</div>
+                <div class="library-actions"><button class="btn-secondary" type="button" data-preview-duplicate-resolution="${group.id}">Preview resolution</button></div>
+                <div data-duplicate-resolution="${group.id}"></div>
+            </article>`).join("") || '<p class="library-search-status">No duplicate candidates match this tier.</p>';
+        target.querySelectorAll("[data-preview-duplicate-resolution]").forEach((button) => {
+            button.addEventListener("click", () => previewDuplicateResolution(button.dataset.previewDuplicateResolution));
+        });
+        target.querySelectorAll("[data-duplicate-artwork]").forEach((image) => {
+            image.addEventListener("error", () => {
+                const placeholder = document.createElement("span");
+                placeholder.className = "duplicate-song-artwork duplicate-song-artwork-placeholder";
+                placeholder.setAttribute("aria-hidden", "true");
+                placeholder.textContent = "♪";
+                image.replaceWith(placeholder);
+            }, {once: true});
+        });
+    } catch (_) {
+        status.textContent = "Duplicate analysis is unavailable.";
+    }
+}
+
+async function previewDuplicateResolution(groupId) {
+    const target = document.querySelector(`[data-duplicate-resolution="${groupId}"]`);
+    const keeper = document.querySelector(`input[name="duplicate-keeper-${groupId}"]:checked`);
+    if (!keeper) { target.textContent = "Choose exactly one file to keep."; return; }
+    target.innerHTML = '<p class="library-search-status">Revalidating this duplicate group…</p>';
+    try {
+        const preview = await fetchJson(`/api/library/duplicates/${groupId}/resolution-preview?keep_song_id=${keeper.value}`);
+        const playlistCount = preview.playlist_impacts.reduce((total, item) => total + item.playlists.length, 0);
+        target.innerHTML = `<article class="metadata-suggestion-card duplicate-resolution-preview">
+            <strong>Resolution preview</strong>
+            <p>Keep Song ${preview.keep_song_id}; remove ${preview.remove_song_ids.length} ${preview.remove_song_ids.length === 1 ? "file" : "files"} and reclaim up to ${escapeHtml(formatBytes(preview.reclaimable_bytes))}.</p>
+            ${playlistCount ? `<p><strong>Playlist impact:</strong> ${playlistCount} saved playlist ${playlistCount === 1 ? "reference" : "references"} may become unavailable.</p>` : ""}
+            ${preview.warnings.map((warning) => `<small>${escapeHtml(warning)}</small>`).join("")}
+            <button class="library-bulk-delete" type="button" data-confirm-duplicate-resolution>Delete non-keepers</button>
+        </article>`;
+        target.querySelector("[data-confirm-duplicate-resolution]").onclick = () => submitDuplicateResolution(preview, target);
+    } catch (error) {
+        target.textContent = error.message;
+    }
+}
+
+async function submitDuplicateResolution(preview, target) {
+    if (!window.confirm(`Permanently delete ${preview.remove_song_ids.length} non-keeper audio ${preview.remove_song_ids.length === 1 ? "file" : "files"}? Library records will remain marked missing.`)) return;
+    const button = target.querySelector("[data-confirm-duplicate-resolution]");
+    button.disabled = true;
+    const response = await fetch(`/api/library/duplicates/${preview.group_id}/resolve`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({...preview, confirm_delete: true, initiated_by: "duplicate-ui"}),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+        target.textContent = result.detail || "Duplicate resolution could not be queued.";
+        return;
+    }
+    let task = await fetchJson(`/api/library/bulk/${result.job_id}`);
+    while (["queued", "running", "cancelling"].includes(task.status)) {
+        target.textContent = `${task.status.replaceAll("_", " ")} · ${task.processed_items}/${task.total_items}`;
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        task = await fetchJson(`/api/library/bulk/${result.job_id}`);
+    }
+    target.textContent = task.status === "completed"
+        ? "Duplicate resolution completed. Removed files remain as missing Library records."
+        : `Duplicate resolution ${task.status.replaceAll("_", " ")}. Review the Library task for details.`;
+    await Promise.all([loadDuplicateCandidates(), loadLibraryData({preserveState: true}), loadAnalytics()]);
+}
+
+function openDuplicateReview() {
+    document.getElementById("duplicate-review-dialog").showModal();
+    loadDuplicateCandidates();
 }
 
 async function loadAnalytics() {
@@ -428,9 +530,9 @@ async function performSearch() {
     } catch (error) {
         if (request !== libraryState.searchRequest) return;
         console.error("Library search error:", error);
-        status.textContent = "Search unavailable";
+        status.textContent = error.message || "Search unavailable";
         const errorBox = document.getElementById("library-error");
-        errorBox.textContent = "Harmony could not search the Library Index. Try again in a moment.";
+        errorBox.textContent = error.message || "Harmony could not search the Library Index. Try again in a moment.";
         errorBox.hidden = false;
     }
 }
@@ -480,7 +582,10 @@ function renderSongs() {
                 <td data-label="Album">${escapeHtml(song.album || "Unknown album")}</td>
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
-                <td data-label="Metadata"><button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button></td>
+                <td data-label="Actions"><div class="library-row-actions">
+                    ${song.has_lyrics ? `<button class="btn-secondary" type="button" data-lyrics-song="${song.id}">Lyrics</button>` : ""}
+                    <button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button>
+                </div></td>
             </tr>
         `).join("");
     }
@@ -496,9 +601,39 @@ function renderSongs() {
     body.querySelectorAll("[data-review-song]").forEach((button) => {
         button.addEventListener("click", () => openMetadataReview(Number(button.dataset.reviewSong)));
     });
+    body.querySelectorAll("[data-lyrics-song]").forEach((button) => {
+        button.addEventListener("click", () => openLyrics(Number(button.dataset.lyricsSong)));
+    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
+}
+
+async function openLyrics(songId) {
+    const dialog = document.getElementById("lyrics-dialog");
+    const title = document.getElementById("lyrics-title");
+    const byline = document.getElementById("lyrics-byline");
+    const status = document.getElementById("lyrics-status");
+    const content = document.getElementById("lyrics-content");
+    title.textContent = "Loading lyrics…";
+    byline.textContent = "";
+    status.textContent = "";
+    content.textContent = "";
+    dialog.showModal();
+    try {
+        const result = await fetchJson(`/api/library/songs/${songId}/lyrics`);
+        title.textContent = result.title;
+        byline.textContent = result.artist || "Unknown artist";
+        status.textContent = result.lyrics
+            ? `${result.synchronized ? "Synchronized" : "Plain"} lyrics · ${String(result.source || "local").replaceAll("_", " ")}`
+            : "No locally indexed lyrics are available.";
+        content.textContent = result.lyrics || "";
+        content.hidden = !result.lyrics;
+    } catch (error) {
+        title.textContent = "Lyrics unavailable";
+        status.textContent = "Harmony could not load lyrics for this song.";
+        content.hidden = true;
+    }
 }
 
 function metadataValue(value) {
@@ -513,6 +648,128 @@ function evidenceText(value) {
     return String(value);
 }
 
+const manualMetadataFields = [
+    ["title", "Title", "text"], ["artist", "Artist", "text"],
+    ["album", "Album", "text"], ["album_artist", "Album artist", "text"],
+    ["genre", "Genre", "text"], ["year", "Year", "number"],
+    ["track_number", "Track number", "number"], ["total_tracks", "Total tracks", "number"],
+    ["disc_number", "Disc number", "number"], ["total_discs", "Total discs", "number"],
+    ["isrc", "ISRC", "text"], ["musicbrainz_recording_id", "MusicBrainz recording ID", "text"],
+    ["musicbrainz_release_id", "MusicBrainz release ID", "text"],
+    ["musicbrainz_release_group_id", "MusicBrainz release-group ID", "text"],
+    ["musicbrainz_artist_id", "MusicBrainz artist ID", "text"],
+    ["musicbrainz_release_artist_id", "MusicBrainz release artist ID", "text"],
+];
+
+function renderManualMetadataForm(review) {
+    const current = Object.fromEntries(review.fields.map((item) => [item.field_name, item.current_value]));
+    const form = document.getElementById("metadata-manual-form");
+    form.innerHTML = manualMetadataFields.map(([field, label, type]) => {
+        const value = current[field] ?? "";
+        const numeric = type === "number" ? ' min="1" step="1"' : "";
+        return `<label>${escapeHtml(label)}<input type="${type}" data-manual-field="${field}" value="${escapeAttribute(String(value))}"${numeric}></label>`;
+    }).join("");
+    form.querySelectorAll("[data-manual-field]").forEach((input) => input.addEventListener("input", () => {
+        document.getElementById("metadata-apply-manual").disabled = true;
+        document.getElementById("metadata-manual-preview").textContent = "";
+    }));
+}
+
+function renderManualArtwork(songId) {
+    const song = libraryState.songs.find((item) => item.id === songId);
+    const target = document.getElementById("metadata-manual-artwork");
+    const remove = document.getElementById("metadata-artwork-remove");
+    remove.disabled = !song?.cover_url;
+    target.innerHTML = song?.cover_url
+        ? `<img src="${escapeAttribute(song.cover_url)}" alt=""><div><strong>Current canonical artwork</strong><small>Rendered as a square in Harmony. Uploading a replacement does not alter the audio file.</small></div>`
+        : '<div class="metadata-artwork-placeholder">No art</div><div><strong>No canonical artwork</strong><small>Choose an image to create a content-addressed cache resource.</small></div>';
+}
+
+async function uploadManualArtwork(songId, file) {
+    const status = document.getElementById("metadata-review-status");
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    status.textContent = "Validating and caching artwork…";
+    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "POST", body});
+    const result = await response.json();
+    if (!response.ok) {
+        status.textContent = result.detail || "Artwork could not be uploaded.";
+        return;
+    }
+    const song = libraryState.songs.find((item) => item.id === songId);
+    if (song) {
+        song.cover_url = result.artwork.url;
+        song.artwork_id = result.artwork.id;
+        song.artwork_status = "manual";
+    }
+    renderManualArtwork(songId);
+    await previewFileTags(songId);
+    status.textContent = result.message;
+}
+
+async function removeManualArtwork(songId) {
+    if (!window.confirm("Remove Harmony's canonical artwork association? Cached and audio-file artwork will remain unchanged.")) return;
+    const status = document.getElementById("metadata-review-status");
+    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "DELETE"});
+    const result = await response.json();
+    if (!response.ok) {
+        status.textContent = result.detail || "Artwork association could not be removed.";
+        return;
+    }
+    const song = libraryState.songs.find((item) => item.id === songId);
+    if (song) {
+        song.cover_url = null;
+        song.artwork_id = null;
+        song.artwork_status = "missing";
+    }
+    renderManualArtwork(songId);
+    await previewFileTags(songId);
+    status.textContent = result.message;
+}
+
+function manualMetadataChanges() {
+    return Object.fromEntries([...document.querySelectorAll("[data-manual-field]")].map((input) => {
+        const value = input.value.trim();
+        return [input.dataset.manualField, input.type === "number" && value ? Number(value) : value || null];
+    }));
+}
+
+async function previewManualMetadata(songId) {
+    const target = document.getElementById("metadata-manual-preview");
+    const apply = document.getElementById("metadata-apply-manual");
+    apply.disabled = true;
+    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-preview`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
+    });
+    const result = await response.json();
+    if (!response.ok) { target.textContent = result.error?.message || "Manual edit preview is unavailable."; return; }
+    const invalid = result.operations.some((item) => item.status === "invalid");
+    const applicable = result.operations.some((item) => item.status === "applicable");
+    apply.disabled = invalid || !applicable;
+    target.innerHTML = result.operations.filter((item) => item.status !== "unchanged").map((item) =>
+        `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small></article>`
+    ).join("") || '<p class="library-search-status">No manual changes to apply.</p>';
+}
+
+async function applyManualMetadata(songId) {
+    const status = document.getElementById("metadata-review-status");
+    const button = document.getElementById("metadata-apply-manual");
+    button.disabled = true;
+    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-apply`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+        status.textContent = result.error?.message || "Manual metadata edits could not be queued.";
+        return;
+    }
+    status.textContent = `Manual edit queued (job ${result.job_id}).`;
+    await pollMetadataApplication(result.job_id, songId);
+}
+
 async function openMetadataReview(songId) {
     const dialog = document.getElementById("metadata-review-dialog");
     dialog.dataset.songId = String(songId);
@@ -523,6 +780,13 @@ async function openMetadataReview(songId) {
     document.getElementById("metadata-preview-accepted").onclick = () => previewMetadataApplication(songId);
     document.getElementById("metadata-apply-selected").onclick = () => submitMetadataApplication(songId, false);
     document.getElementById("metadata-apply-accepted").onclick = () => submitMetadataApplication(songId, true);
+    document.getElementById("metadata-preview-manual").onclick = () => previewManualMetadata(songId);
+    document.getElementById("metadata-apply-manual").onclick = () => applyManualMetadata(songId);
+    document.getElementById("metadata-artwork-file").onchange = (event) => {
+        const file = event.target.files?.[0];
+        uploadManualArtwork(songId, file).finally(() => { event.target.value = ""; });
+    };
+    document.getElementById("metadata-artwork-remove").onclick = () => removeManualArtwork(songId);
     await loadMetadataReview(songId);
 }
 
@@ -577,8 +841,9 @@ async function discoverMetadataMatch(songId) {
     status.textContent = "Discovering bounded provider candidates…";
     target.innerHTML = '<p class="library-search-status">Contacting metadata provider…</p>';
     try {
+        const provider = document.getElementById("metadata-provider").value;
         const response = await fetch(`/api/metadata/discoveries/songs/${songId}`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "musicbrainz" }),
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }),
         });
         const started = await response.json();
         if (!response.ok) throw new Error(started.error?.message || "Discovery failed");
@@ -662,6 +927,8 @@ async function loadMetadataReview(songId) {
         document.getElementById("metadata-current").innerHTML = review.fields
             .filter((field) => field.current_value !== null && field.current_value !== "")
             .map((field) => `<div><dt>${escapeHtml(field.field_name.replaceAll("_", " "))}</dt><dd>${escapeHtml(metadataValue(field.current_value))}</dd></div>`).join("") || "<p>No canonical metadata is indexed.</p>";
+        renderManualMetadataForm(review);
+        renderManualArtwork(songId);
         const pending = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "pending");
         document.getElementById("metadata-suggestions").innerHTML = pending.map((item) => `
             <article class="metadata-suggestion-card">
@@ -1105,6 +1372,10 @@ document.getElementById("library-select-page").addEventListener("change", (event
     renderSongs();
 });
 document.getElementById("metadata-review-close").addEventListener("click", () => document.getElementById("metadata-review-dialog").close());
+document.getElementById("lyrics-close").addEventListener("click", () => document.getElementById("lyrics-dialog").close());
+document.getElementById("library-duplicates-open").addEventListener("click", openDuplicateReview);
+document.getElementById("duplicate-review-close").addEventListener("click", () => document.getElementById("duplicate-review-dialog").close());
+document.getElementById("duplicate-tier").addEventListener("change", loadDuplicateCandidates);
 
 document.getElementById("library-clear-selection").addEventListener("click", clearBulkSelection);
 document.querySelectorAll("[data-bulk-action]").forEach((button) => {
@@ -1155,6 +1426,16 @@ document.getElementById("library-search").addEventListener("input", (event) => {
             performSearch();
         }
     }, 180);
+});
+document.querySelectorAll("[data-search-example]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const input = document.getElementById("library-search");
+        input.value = button.dataset.searchExample;
+        libraryState.query = input.value;
+        Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
+        performSearch();
+        input.focus();
+    });
 });
 
 document.getElementById("library-sort").addEventListener("change", (event) => {

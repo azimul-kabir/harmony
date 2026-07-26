@@ -88,8 +88,21 @@ document.addEventListener("DOMContentLoaded", () => {
         modalForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const targetUrl = modalInput.value.trim();
-            
-            resultBox.innerHTML = '<div class="success-message"><span class="spinner" style="border-top-color:var(--primary);"></span> Analyzing metadata...</div>';
+            const isPlaylist = /(?:\/playlist[/?]|open\.spotify\.com\/playlist\/)/i.test(targetUrl);
+            const metadataStartedAt = Date.now();
+            const updateMetadataElapsed = () => {
+                const elapsed = Math.max(0, Math.floor((Date.now() - metadataStartedAt) / 1000));
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                const elapsedNode = document.getElementById("modal-metadata-elapsed");
+                if (elapsedNode) {
+                    elapsedNode.textContent = minutes
+                        ? `${minutes}m ${seconds}s elapsed`
+                        : `${seconds}s elapsed`;
+                }
+            };
+            resultBox.innerHTML = `<div class="success-message"><span class="spinner" style="border-top-color:var(--primary);"></span> ${isPlaylist ? "Fetching the complete playlist track list" : "Analyzing metadata"}… <small id="modal-metadata-elapsed">0s elapsed</small>${isPlaylist ? "<br><small>Large Spotify playlists can remain at this stage for several minutes. Downloads are created after metadata finishes.</small>" : ""}</div>`;
+            const metadataTimer = window.setInterval(updateMetadataElapsed, 1000);
             modalSubmit.disabled = true;
 
             try {
@@ -100,7 +113,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || "Ingestion thread error.");
+                if (!response.ok) {
+                    const detail = data.detail;
+                    throw new Error(
+                        typeof detail === "string"
+                            ? detail
+                            : detail?.message || "Ingestion failed.",
+                    );
+                }
 
                 if (data.summary) {
                     resultBox.innerHTML = `
@@ -124,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (err) {
                 resultBox.innerHTML = `<div class="error-message" style="margin-top:12px;">${err.message}</div>`;
             } finally {
+                window.clearInterval(metadataTimer);
                 modalSubmit.disabled = false;
                 modalSubmit.textContent = "Start Ingestion";
             }

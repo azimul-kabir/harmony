@@ -435,7 +435,11 @@ maximum (500 by default), and are processed in bounded order without loading
 the full Library. Health discovery is explicit and resolves supported open
 song, album-projection, and artist-projection issues into a bounded deduplicated
 Song scope. Health analysis never starts discovery, and discovery never changes
-issue state.
+issue state. The Library Health repair toolbar exposes only supported issue
+rules, permits explicit multi-issue selection, and submits the selected
+MusicBrainz or configured Spotify provider into this same durable lifecycle.
+Provider availability is read from diagnostics; unavailable optional providers
+are disabled rather than attempted implicitly.
 
 Normalized recording candidates now include album artist, track/disc totals,
 release/original dates and year, ISRC, compilation context, recording/release
@@ -678,6 +682,19 @@ Playlist sources are resolved from the persistent `playlists` and
 `playlist_tracks` index using the Spotify track ID. This avoids duplicating
 playlist membership on each song row while still exposing it in Library APIs.
 
+Lyrics are local indexed metadata. Same-name `.lrc` and `.txt` sidecars take
+precedence over embedded ID3, Vorbis/FLAC, or MP4 lyrics; `.lrc` and synchronized
+ID3 frames retain their synchronized flag. Inputs are bounded before
+persistence. Song list responses expose only availability/source flags, while
+full text is returned by the dedicated per-Song lyrics endpoint. The filesystem
+watcher maps sidecar changes back to the sibling audio file for re-indexing.
+
+Playlist artwork is stored beside each exported M3U with the same sanitized
+base filename, for example `Playlists/Night Drive.m3u` and
+`Playlists/Night Drive.jpg`. This is both Harmony's durable manual replacement
+and Navidrome's native sidecar format. Replacement uses a validated temporary
+file and atomic rename; deleting the playlist also removes supported sidecars.
+
 Incremental indexing compares file size and modified time before parsing tags.
 Unchanged files are skipped. Re-indexing forces tag extraction and compares the
 metadata hash. Files absent during reconciliation are marked `missing`, not
@@ -806,6 +823,21 @@ The web Library search box queries this API with a debounce and projects the
 ranked Song matches into the Songs, Albums, and Artists views. Collection names
 remain locally filtered UI navigation rather than FTS content.
 
+## Advanced query grammar
+
+Simple whitespace searches retain prefix matching across every FTS field.
+Advanced syntax adds allow-listed field qualifiers, quoted phrases, and
+leading-hyphen exclusions. Special index-only controls filter Songs with open
+metadata issues, artwork presence/absence, missing metadata, availability, or
+membership in an explainable duplicate candidate group.
+
+The parser never passes raw operators or column names through to SQLite. It
+emits escaped FTS phrases, parameterized exclusion subqueries, and fixed SQL
+predicates. Queries are bounded to 200 characters and 20 terms. Duplicate
+membership is derived from the detector and limited to 800 bound Song IDs for
+compatibility with conservative SQLite builds. A control-only query uses
+stable Library sorting because BM25 relevance requires a positive FTS term.
+
 ## Sorting and Filtering
 
 Library listing and FTS search share the immutable `LibraryFilters` query model.
@@ -892,12 +924,18 @@ Artwork API:
 - `GET /api/artwork` lists resource metadata with offset/limit pagination.
 - `GET /api/artwork/{id}` returns one resource's metadata and public URL.
 - `GET /api/artwork/{id}/file` serves immutable cached bytes.
+- `POST /api/artwork/songs/{song_id}` validates, caches, and associates a
+  bounded manual upload.
+- `DELETE /api/artwork/songs/{song_id}` removes only that Song association.
 
 The model stores `provider`, `provider_id`, and `original_url` for Cover Art
-Archive provenance and future providers. Manual replacement will create or
-reuse a content-addressed resource and change an association; it must never
-overwrite shared bytes in place. Manual upload
-endpoints are intentionally outside this foundation.
+Archive provenance and future providers. Manual replacement creates or reuses
+a content-addressed resource and changes only an association; it never
+overwrites or deletes shared bytes in place. JPEG, PNG, and WebP uploads are
+bounded to 15 MB and 10,000 pixels per dimension. File signatures and
+dimensions are verified independently of the client-supplied filename and
+content type. Explicit tag writing remains the only operation that embeds the
+new canonical artwork into an audio file.
 
 ---
 
@@ -905,9 +943,17 @@ endpoints are intentionally outside this foundation.
 
 Harmony owns metadata.
 
-Future metadata providers
-
 Spotify
+
+Spotify is an optional recording-only discovery provider. It uses client
+credentials lazily, performs bounded track search/lookup, and normalizes track,
+artist, album, duration, position, date, and ISRC data into the same candidate
+model used by MusicBrainz. Candidate selection, field-level suggestion
+generation, acceptance, application, audit, and tag writing remain separate.
+Spotify identities are retained as provider evidence and never written into
+MusicBrainz ID fields.
+
+Future metadata providers
 
 MusicBrainz
 
@@ -1078,29 +1124,43 @@ not recomputed in UI code.
 
 ---
 
-# Duplicate Detection (Future)
+# Duplicate Detection
 
-Detection priority
+Duplicate intelligence is a read-only, index-only service. It never opens,
+fingerprints, moves, or deletes audio files. Candidate groups use conservative,
+explainable tiers:
 
-Spotify ID
+1. `exact`: a shared MusicBrainz recording or Spotify track identity.
+2. `strong`: a shared ISRC.
+3. `probable`: normalized artist/title plus a duration difference of at most
+   three seconds.
+4. `possible`: normalized artist/title/album plus a duration difference of at
+   most ten seconds, or unavailable duration.
 
-↓
+Conflicting external identities prevent fuzzy grouping. Overly broad
+artist/title buckets are bounded and skipped. Each stable group includes its
+evidence, confidence, audio-quality comparison, and a non-binding suggested
+keeper selected by availability, bitrate, sample rate, file size, and metadata
+completeness. Operators must review that recommendation; detection performs no
+resolution action.
 
-MusicBrainz Recording ID
+Audio fingerprinting and automatic metadata/identity merging remain future
+additive layers behind this service boundary.
 
-↓
+## Duplicate resolution
 
-ISRC
+Resolution is an explicit second phase. The operator chooses a keeper and
+requests a fresh preview. Harmony recomputes the group, returns the complete
+candidate and removal sets, storage estimate, playlist impacts, warnings, and
+a SHA-256 confirmation token bound to that group and keeper.
 
-↓
-
-Metadata Match
-
-↓
-
-Audio Fingerprint
-
-Duplicate handling is a separate service.
+Submission must echo the exact sets and token with explicit deletion
+confirmation. Any changed membership or availability invalidates the request.
+Accepted work becomes the existing durable Library bulk-delete task and
+inherits its managed-music-root check, item-level outcomes, cancellation,
+restart behavior, M3U refresh, and missing-record provenance. Cached artwork
+is not deleted. Harmony does not silently merge identifiers, playlist
+membership, metadata, or tags into the keeper.
 
 ---
 
@@ -1396,9 +1456,8 @@ API surface:
 
 `LibraryHealthService` provides a reusable, index-only health snapshot. It
 combines the existing analytics aggregates with registered health checks for
-artwork completeness, metadata completeness, and future duplicate detection.
-The duplicate check is explicitly unavailable until a detector exists; clients
-must not treat the placeholder as a zero-duplicate result.
+artwork completeness, metadata completeness, and explainable duplicate
+candidate groups.
 
 The Health Score is a bounded 0–100 completeness indicator. Missing metadata,
 missing artwork, and missing files currently contribute weighted penalties.
@@ -1430,6 +1489,14 @@ service/API boundaries, preserving the dashboard layout.
 
 # Canonical Metadata Application
 
+Manual Song edits use this same application boundary rather than updating
+database rows directly. Preview is read-only. Apply creates already-reviewed
+`manual` proposals for changed fields, then queues the normal durable task.
+Consequently manual edits retain per-Song locking, stale-write protection,
+immutable history, rollback, FTS maintenance, and metadata-health refresh.
+Writing the resulting canonical values to an audio file remains a separate
+explicit action.
+
 Accepted metadata is applied only to canonical `Song` database columns by a
 durable `library_maintenance` Task. The application service never opens an
 audio file, writes tags, downloads artwork, calls a provider, or accepts a
@@ -1450,6 +1517,9 @@ edits or deletes the original row.
 
 Stable API surface:
 
+- `POST /api/library/songs/{song_id}/metadata/manual-preview` and
+  `POST /api/library/songs/{song_id}/metadata/manual-apply` preview and queue
+  validated operator edits.
 - `GET|POST /api/library/songs/{song_id}/metadata/application-preview` previews
   all accepted or explicitly selected suggestions without queuing work.
 - `POST /api/library/songs/{song_id}/metadata/apply` and

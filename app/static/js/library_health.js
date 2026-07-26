@@ -3,6 +3,9 @@ const healthState = {
     timer: null,
     attentionJobs: false,
     jobType: null,
+    recentJobs: [],
+    recentVisible: 10,
+    selectedIssues: new Set(),
 };
 const healthCheckDestinations = {
     artwork: "/library?missing_artwork=true",
@@ -77,16 +80,24 @@ async function loadMetadataIssues() {
             ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>`
             : item.status === "open" ? `<button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>` : "";
         const discoverable = ["missing_musicbrainz_recording_id","missing_musicbrainz_release_id","missing_musicbrainz_artist_id","missing_title","placeholder_title","filename_derived_title","missing_artist","placeholder_artist","missing_album","placeholder_album","missing_genre","suspicious_whitespace","inconsistent_capitalization"].includes(item.rule_id);
-        const discover = discoverable ? `<button class="btn-secondary" data-discover-issue="${item.id}">Find MusicBrainz candidates</button>` : "";
+        const discover = discoverable ? `<label class="metadata-repair-select"><input type="checkbox" data-select-issue="${item.id}" ${healthState.selectedIssues.has(item.id) ? "checked" : ""}> Select for repair</label><button class="btn-secondary" data-discover-issue="${item.id}">Find candidates</button>` : "";
         return `<details class="health-check status-${escapeHealth(item.severity)}"><summary><span class="health-check-indicator"></span><div><strong>${escapeHealth(item.title)}</strong><small>${escapeHealth(item.rule_id)} · ${escapeHealth(item.entity_type)} · ${escapeHealth(item.severity)}</small></div></summary><p>${escapeHealth(item.explanation)}</p><p><strong>Next action:</strong> ${escapeHealth(item.suggested_action)}</p><div>${destination}${action}${discover}</div></details>`;
     }).join("") : `<p>${status === "open" ? "No open metadata issues. Run an analysis to refresh results." : `No ${escapeHealth(status)} metadata issues match these filters.`}</p>`;
     target.querySelectorAll("[data-metadata-ignore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataIgnore}/ignore`, {method:"POST"}); loadMetadataIssues(); });
     target.querySelectorAll("[data-metadata-restore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataRestore}/restore`, {method:"POST"}); loadMetadataIssues(); });
     target.querySelectorAll("[data-metadata-resolve]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataResolve}/resolve`, {method:"POST"}); loadMetadataIssues(); });
-    target.querySelectorAll("[data-discover-issue]").forEach((button) => button.onclick = async () => {
-        const result=await healthJson("/api/metadata/discoveries/health-issues",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_ids:[Number(button.dataset.discoverIssue)],initiated_by:"library-health-ui"})});
-        button.textContent=`Candidate search queued (job ${result.job.id})`;button.disabled=true;
+    target.querySelectorAll("[data-select-issue]").forEach((checkbox) => checkbox.onchange = () => {
+        const issueId=Number(checkbox.dataset.selectIssue);
+        checkbox.checked ? healthState.selectedIssues.add(issueId) : healthState.selectedIssues.delete(issueId);
+        updateRepairSelection();
     });
+    target.querySelectorAll("[data-discover-issue]").forEach((button) => button.onclick = async () => {
+        const provider=document.getElementById("metadata-repair-provider").value;
+        const result=await healthJson("/api/metadata/discoveries/health-issues",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_ids:[Number(button.dataset.discoverIssue)],provider,initiated_by:"library-health-ui"})});
+        button.textContent=`Candidate search queued (job ${result.job.id})`;button.disabled=true;
+        healthState.taskId=result.job.id;renderHealthTask(result.job);pollHealthTask();
+    });
+    updateRepairSelection();
     const summary = await healthJson("/api/library/health/metadata/summary");
     document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issue records · ${summary.score.inputs.ignored_issues} ignored historical records (diagnostic only). Warnings reduce this score.`;
     const severityCounts = Object.fromEntries((summary.counts.severity || []).map((row) => [row.value, row.count]));
@@ -114,6 +125,27 @@ async function loadMetadataIssues() {
     ruleSummary.replaceChildren(ruleIcon, ruleCopy);
 }
 
+function updateRepairSelection() {
+    const count=healthState.selectedIssues.size;
+    document.getElementById("metadata-repair-count").textContent=String(count);
+    document.getElementById("metadata-repair-selected").disabled=!count;
+    document.getElementById("metadata-repair-clear").disabled=!count;
+}
+
+async function loadRepairProviders() {
+    try {
+        const data=await healthJson("/api/providers/status");
+        const byName=Object.fromEntries(data.providers.map((item)=>[item.provider,item]));
+        const select=document.getElementById("metadata-repair-provider");
+        [...select.options].forEach((option)=>{
+            const available=byName[option.value]?.available !== false;
+            option.disabled=!available;
+            option.textContent=`${option.value === "musicbrainz" ? "MusicBrainz" : "Spotify"}${available ? "" : " (not configured)"}`;
+        });
+        if (select.selectedOptions[0]?.disabled) select.value="musicbrainz";
+    } catch (_) { /* MusicBrainz remains the conservative default. */ }
+}
+
 async function loadLibraryJobs() {
     const pageParams = new URLSearchParams(window.location.search);
     const attentionOnly = pageParams.get("job_status") === "attention";
@@ -123,7 +155,7 @@ async function loadLibraryJobs() {
         ? requestedType
         : null;
     const activityParams = new URLSearchParams({
-        limit: attentionOnly ? "100" : "20",
+        limit: "100",
     });
     if (attentionOnly) activityParams.set("attention_only", "true");
     if (["library_bulk", "library_maintenance"].includes(requestedType)) {
@@ -148,21 +180,45 @@ async function loadLibraryJobs() {
       <span class="health-check-indicator" aria-hidden="true"></span><div><strong>${escapeHealth(job.name)}</strong><small>${escapeHealth(job.status)} · ${job.processed}/${job.total}${job.error_code ? ` · ${escapeHealth(job.error_code)}` : ""}</small></div>
       <div class="library-job-actions"><button class="btn-secondary" data-job-details="${job.id}">Details</button>${["queued", "running", "cancelling"].includes(job.status) ? `<button class="btn-secondary" data-job-cancel="${job.id}">Cancel</button>` : ""}</div></article>`).join("") : `<p>${empty}</p>`;
     };
+    const bindJobDetails = (target) => {
+        target.querySelectorAll("[data-job-details]").forEach((button) => {
+            button.addEventListener("click", () => openLibraryJobDetails(button.dataset.jobDetails));
+        });
+    };
+    const renderRecentJobs = () => {
+        const recentTarget = document.getElementById("library-recent-activity");
+        const visible = healthState.attentionJobs
+            ? healthState.recentJobs
+            : healthState.recentJobs.slice(0, healthState.recentVisible);
+        renderJobs(
+            recentTarget,
+            visible,
+            healthState.attentionJobs
+                ? `No ${typeLabel} jobs currently require attention.`
+                : "No recent activity.",
+        );
+        bindJobDetails(recentTarget);
+        const showMore = document.getElementById("library-activity-show-more");
+        showMore.hidden = healthState.attentionJobs
+            || healthState.recentVisible >= healthState.recentJobs.length;
+        const remaining = Math.max(0, healthState.recentJobs.length - healthState.recentVisible);
+        showMore.textContent = `Show ${Math.min(10, remaining)} more`;
+    };
     const activeTarget = document.getElementById("library-active-jobs");
     renderJobs(activeTarget, active, "No active jobs.");
-    const recentTarget = document.getElementById("library-recent-activity");
-    renderJobs(
-        recentTarget,
-        recent,
-        attentionOnly ? `No ${typeLabel} jobs currently require attention.` : "No recent activity.",
-    );
+    healthState.recentJobs = recent;
+    healthState.recentVisible = 10;
+    renderRecentJobs();
     activeTarget.querySelectorAll("[data-job-cancel]").forEach((button) => button.addEventListener("click", async () => {
         await healthJson(`/api/tasks/jobs/${button.dataset.jobCancel}/cancel`, {method: "POST"});
         loadLibraryJobs();
     }));
-    document.querySelectorAll("[data-job-details]").forEach((button) => {
-        button.addEventListener("click", () => openLibraryJobDetails(button.dataset.jobDetails));
-    });
+    bindJobDetails(activeTarget);
+    const showMore = document.getElementById("library-activity-show-more");
+    showMore.onclick = () => {
+        healthState.recentVisible += 10;
+        renderRecentJobs();
+    };
 }
 
 async function openLibraryJobDetails(taskId) {
@@ -254,6 +310,39 @@ document.getElementById("library-job-acknowledge")?.addEventListener("click", as
     } finally {
         button.disabled = false;
         button.textContent = "Mark reviewed";
+    }
+});
+
+document.getElementById("library-activity-clear-open")?.addEventListener("click", () => {
+    document.getElementById("library-activity-clear-reviewed").checked = false;
+    document.getElementById("library-activity-clear-status").textContent = "";
+    document.getElementById("library-activity-clear-dialog").showModal();
+});
+
+document.getElementById("library-activity-clear-confirm")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const includeReviewed = document.getElementById("library-activity-clear-reviewed").checked;
+    button.disabled = true;
+    button.textContent = "Clearing…";
+    try {
+        const result = await healthJson("/api/tasks/jobs/clear", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({include_reviewed_attention: includeReviewed}),
+        });
+        document.getElementById("library-activity-clear-status").textContent =
+            result.cleared
+                ? `${result.cleared} activit${result.cleared === 1 ? "y" : "ies"} cleared.`
+                : "No eligible activity to clear.";
+        await loadLibraryJobs();
+        window.setTimeout(() => {
+            document.getElementById("library-activity-clear-dialog").close();
+        }, 550);
+    } catch (error) {
+        document.getElementById("library-activity-clear-status").textContent = error.message;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Clear activity";
     }
 });
 
@@ -397,7 +486,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const requestedStatus = new URLSearchParams(window.location.search).get("metadata_status");
     const status = document.getElementById("metadata-status");
     if (requestedStatus && status && [...status.options].some((option) => option.value === requestedStatus)) status.value = requestedStatus;
+    loadRepairProviders();
     loadHealth();
+});
+document.getElementById("metadata-repair-selected")?.addEventListener("click", async (event) => {
+    const button=event.currentTarget;button.disabled=true;
+    try {
+        const provider=document.getElementById("metadata-repair-provider").value;
+        const result=await healthJson("/api/metadata/discoveries/health-issues",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_ids:[...healthState.selectedIssues],provider,initiated_by:"library-health-ui"})});
+        healthState.selectedIssues.clear();updateRepairSelection();
+        healthState.taskId=result.job.id;renderHealthTask(result.job);pollHealthTask();
+    } catch (error) {
+        document.getElementById("health-error").textContent=`Repair discovery could not start: ${error.message}`;
+        document.getElementById("health-error").hidden=false;
+    } finally { updateRepairSelection(); }
+});
+document.getElementById("metadata-repair-clear")?.addEventListener("click", () => {
+    healthState.selectedIssues.clear();
+    document.querySelectorAll("[data-select-issue]").forEach((item)=>{item.checked=false;});
+    updateRepairSelection();
 });
 document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
 document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);

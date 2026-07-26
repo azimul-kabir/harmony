@@ -1,6 +1,6 @@
 [project]
 name = "harmony"
-version = "2.0.0"
+version = "2.0.1"
 description = "Self-hosted music downloader and organizer for Navidrome."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
+    "python-multipart>=0.0.20",
     "loguru>=0.7.3",
     "mutagen>=1.47",
     "watchdog>=6.0",
@@ -26,6 +27,7 @@ dependencies = [
     "spotdl==4.5.2",
     "spotipy>=2.25.0",
     "yt-dlp>=2025.1.1",
+    "pysnmp>=7.1,<8",
 ]
 
 [project.optional-dependencies]

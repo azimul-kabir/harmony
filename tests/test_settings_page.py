@@ -13,6 +13,8 @@ def test_settings_page_exposes_editable_operational_settings_not_env_dump():
     assert 'data-category="navidrome"' in response.text
     assert 'name="navidrome_direct_playlist_sync_enabled"' in response.text
     assert 'name="library_watcher_debounce_seconds"' in response.text
+    assert 'id="settings-section-picker"' in response.text
+    assert "min-height: 56px" in response.text
     assert "MUSICBRAINZ_BASE_URL" not in response.text
     assert "DATABASE_URL" not in response.text
     assert "NAVIDROME_PASSWORD" not in response.text

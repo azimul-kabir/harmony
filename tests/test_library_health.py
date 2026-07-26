@@ -5,7 +5,7 @@ from app.database.session import SessionLocal
 from app.services.library_health import LibraryMaintenanceWorker, library_health
 
 
-def test_health_snapshot_reports_completeness_and_future_duplicates():
+def test_health_snapshot_reports_completeness_and_duplicate_intelligence():
     with SessionLocal() as db:
         db.query(Song).delete()
         db.add_all([
@@ -44,10 +44,10 @@ def test_health_snapshot_reports_completeness_and_future_duplicates():
         assert health["storage_bytes"] == 300
         assert health["missing_artwork"] == 1
         assert health["missing_metadata"] == 1
-        assert health["duplicates"] is None
+        assert health["duplicates"] == 0
         assert health["health_score"] == 60
         assert health["last_updated"] == datetime(2026, 7, 21, 5, 0)
-        assert health["checks"][2]["available"] is False
+        assert health["checks"][2]["available"] is True
 
 
 def test_health_action_uses_durable_task_system():

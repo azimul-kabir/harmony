@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.session import SessionLocal
+from app.domain.playlist import Playlist
 from app.domain.track import Track
 from app.providers.download_source import SourceResult
 from app.services import settings_service
@@ -103,7 +104,7 @@ class YouTubeMusicSource:
         entries = data.get("entries") or []
         return [self._result(entry) for entry in entries if entry and entry.get("id")]
 
-    def resolve(self, url: str) -> list[Track]:
+    def _resolve(self, url: str) -> tuple[str, list[Track]]:
         target = normalize_url(url)
         detected = self.detect_url(target)
         if not detected:
@@ -128,7 +129,14 @@ class YouTubeMusicSource:
             tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or data.get("title"), album_artist=result.album_artist, track=result.track_number or index, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=result.source_url))
         if not tracks:
             raise ValueError("YouTube Music collection is empty or unavailable.")
-        return tracks
+        return clean_title(data.get("title")) or "YouTube Music Playlist", tracks
+
+    def resolve(self, url: str) -> list[Track]:
+        return self._resolve(url)[1]
+
+    def resolve_playlist(self, url: str) -> Playlist:
+        name, tracks = self._resolve(url)
+        return Playlist(name=name, url=normalize_url(url), tracks=tracks)
 
     def download(self, track: Track, output_dir: str, job_id: int | None = None) -> Path:
         target = track.source_url or track.spotify_url

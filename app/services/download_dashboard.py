@@ -36,7 +36,7 @@ def _timestamp(value: datetime | None) -> str | None:
 
 def _job_columns():
     return load_only(DownloadJob.id, DownloadJob.task_id, DownloadJob.status, DownloadJob.title,
-                     DownloadJob.artist, DownloadJob.album, DownloadJob.created_at,
+                     DownloadJob.artist, DownloadJob.album, DownloadJob.cover_url, DownloadJob.created_at,
                      DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at,
                      DownloadJob.reason_code, DownloadJob.reason_message, DownloadJob.failure_stage,
                      DownloadJob.provider, DownloadJob.retryable, DownloadJob.technical_detail,
@@ -94,7 +94,8 @@ def _history_job(job: DownloadJob) -> dict:
     outcome = serialize_outcome(job)
     return {"id": job.id, "task_id": job.task_id, "title": job.title,
             "queue_position": job.queue_position,
-            "artist": job.artist, "album": job.album, "created_at": _timestamp(job.created_at),
+            "artist": job.artist, "album": job.album, "cover_url": job.cover_url,
+            "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "completed_at": _timestamp(job.completed_at),
             "updated_at": _timestamp(job.updated_at), "error_category": outcome["reason_message"],
             **outcome, "capabilities": capabilities(job)}

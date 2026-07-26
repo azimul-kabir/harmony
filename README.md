@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.0.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v2.0.1-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,11 +25,11 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v2.0.0**
+Current stable version: **v2.0.1**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v2.0.0 release notes](docs/releases/v2.0.0.md) for the direct upgrade from
-v1.5.0. Harmony v1.6.0 was never published.
+[v2.0.1 release notes](docs/releases/v2.0.1.md) for stabilization changes.
+Harmony v1.6.0 was never published.
 
 ---
 
@@ -355,6 +355,8 @@ Harmony is designed for desktop and mobile devices.
 Features include:
 
 - Responsive layouts
+- Installable Progressive Web App on supported browsers
+- Offline connection screen when the Harmony server cannot be reached
 - Compact mobile navigation and discoverable Settings sections
 - Touch-friendly controls and safe-area spacing
 - Optimized album grids
@@ -362,6 +364,21 @@ Features include:
 - Full-width mobile dialogs, drawers, and scrollable content regions
 - Mobile typography, focus, overflow, and reduced-motion improvements
 - Pagination optimized for smaller screens
+
+---
+
+## Lyrics Support
+
+Harmony indexes lyrics already stored with the local audio file. It supports
+embedded ID3, Vorbis/FLAC, and MP4 lyrics plus same-name `.lrc` and `.txt`
+sidecar files. `.lrc` sidecars take precedence so synchronized timestamps are
+preserved. Lyrics are available from each Song's **Lyrics** action in the
+Library; full text is loaded only when opened and is not included in Library
+list responses.
+
+Lyrics files are bounded to 512 KiB. Harmony does not contact an external lyrics
+provider, and adding, editing, or downloading lyrics remains outside this
+initial local-library implementation.
 
 ---
 
@@ -622,8 +639,6 @@ Just a synchronized self-hosted music library.
 - Plugin system
 - API authentication and external integration hardening
 - Additional Navidrome event hooks
-- Progressive Web App (PWA)
-- Lyrics support
 
 ---
 

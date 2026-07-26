@@ -3,6 +3,7 @@ from app.database.models import AppSetting
 from app.core.config import get_settings
 
 RUNTIME_SETTING_DEFINITIONS = {
+    "spotify_playlist_metadata_timeout_seconds": ("downloads", "int", 300, 14400),
     "youtube_music_timeout_seconds": ("downloads", "int", 30, 3600),
     "youtube_music_max_playlist_items": ("downloads", "int", 1, 5000),
     "youtube_music_max_search_results": ("downloads", "int", 1, 100),

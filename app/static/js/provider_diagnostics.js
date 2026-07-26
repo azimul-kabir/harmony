@@ -25,7 +25,7 @@
     event.preventDefault(); result.textContent = "Searching…";
     try {
       const response = await fetch("/api/providers/test-search", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
-        provider: "musicbrainz", entity_type: document.getElementById("provider-entity").value,
+        provider: document.getElementById("provider-name").value, entity_type: document.getElementById("provider-entity").value,
         query: document.getElementById("provider-query").value, limit: 10
       })});
       const data = await response.json();

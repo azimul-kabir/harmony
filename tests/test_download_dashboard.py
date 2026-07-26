@@ -41,6 +41,19 @@ def test_snapshot_counts_order_bounds_and_safe_serialization():
         assert len(snapshot["jobs"]) <= HISTORY_LIMIT and QUEUE_LIMIT == 25
 
 
+def test_download_history_includes_album_art_url():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(job("secret://artwork", "Artwork song", "completed", cover_url="https://images.example/album.jpg"))
+        db.commit()
+
+        snapshot = get_download_snapshot(db)
+
+        item = next(job for job in snapshot["jobs"] if job["title"] == "Artwork song")
+        assert item["cover_url"] == "https://images.example/album.jpg"
+
+
 def test_empty_queue_and_cancelled_terminal_history():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

@@ -93,6 +93,9 @@ class SongResponse(BaseModel):
     track: int | None
     disc: int | None
     genre: str | None
+    has_lyrics: bool
+    lyrics_source: str | None
+    lyrics_synced: bool
     year: int | None
     duration: float | None
     bitrate: int | None
@@ -113,6 +116,15 @@ class SongResponse(BaseModel):
     isrc: str | None
     download_source: str
     playlist_sources: list[PlaylistSourceResponse]
+
+
+class LyricsResponse(BaseModel):
+    song_id: int
+    title: str
+    artist: str | None
+    lyrics: str | None
+    source: str | None
+    synchronized: bool
 
 
 class AlbumProjectionResponse(BaseModel):

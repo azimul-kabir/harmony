@@ -3,12 +3,17 @@ from logging.config import fileConfig
 from alembic import context
 
 from app.database.base import Base
-from app.database.database import engine
+from app.database.session import engine
 from app.database import models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Alembic runs inside Uvicorn during Harmony's FastAPI lifespan.  The
+    # default ``fileConfig`` behavior disables every logger not declared in
+    # alembic.ini, including ``uvicorn.error``.  That suppresses Uvicorn's
+    # "Application startup complete" message and makes a healthy container
+    # look permanently stuck at migration startup.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

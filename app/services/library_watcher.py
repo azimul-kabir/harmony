@@ -67,10 +67,23 @@ class _WatchdogHandler(FileSystemEventHandler):
             self.watcher.enqueue(
                 PendingFileEvent(kind="modified", source=destination)
             )
+        else:
+            for lyrics_path in (source, destination):
+                audio_path = _audio_for_lyrics_path(lyrics_path)
+                if audio_path is not None:
+                    self.watcher.enqueue(
+                        PendingFileEvent(kind="modified", source=str(audio_path))
+                    )
 
     def _queue(self, kind: str, path: str, is_directory: bool) -> None:
-        if is_directory or not _is_audio_path(path):
+        if is_directory:
             return
+        if not _is_audio_path(path):
+            audio_path = _audio_for_lyrics_path(path)
+            if audio_path is None:
+                return
+            path = str(audio_path)
+            kind = "modified"
         self.watcher.enqueue(
             PendingFileEvent(kind=kind, source=str(Path(path).resolve()))
         )
@@ -78,6 +91,24 @@ class _WatchdogHandler(FileSystemEventHandler):
 
 def _is_audio_path(path: str | Path) -> bool:
     return Path(path).suffix.lower() in SUPPORTED_EXTENSIONS
+
+
+def _audio_for_lyrics_path(path: str | Path) -> Path | None:
+    candidate = Path(path)
+    if candidate.suffix.lower() not in {".lrc", ".txt"}:
+        return None
+    try:
+        siblings = candidate.parent.iterdir()
+    except OSError:
+        return None
+    for sibling in siblings:
+        if (
+            sibling.is_file()
+            and sibling.stem == candidate.stem
+            and sibling.suffix.lower() in SUPPORTED_EXTENSIONS
+        ):
+            return sibling.resolve()
+    return None
 
 
 def _coalesce(

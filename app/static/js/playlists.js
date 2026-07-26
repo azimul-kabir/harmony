@@ -197,6 +197,109 @@ document.querySelectorAll(".playlist-manage-btn").forEach(button => {
     button.addEventListener("click", () => openPlaylistTracks(button));
 });
 
+const playlistArtworkDialog = document.getElementById("playlist-artwork-dialog");
+const playlistArtworkPreview = document.getElementById("playlist-artwork-preview");
+const playlistArtworkPlaceholder = document.getElementById("playlist-artwork-placeholder");
+const playlistArtworkFile = document.getElementById("playlist-artwork-file");
+const playlistArtworkSave = document.getElementById("playlist-artwork-save");
+const playlistArtworkRemove = document.getElementById("playlist-artwork-remove");
+const playlistArtworkStatus = document.getElementById("playlist-artwork-status");
+let activeArtworkPlaylist = null;
+let artworkObjectUrl = null;
+
+function showArtworkPreview(url) {
+    playlistArtworkPreview.hidden = !url;
+    playlistArtworkPlaceholder.hidden = Boolean(url);
+    if (url) playlistArtworkPreview.src = url;
+    else playlistArtworkPreview.removeAttribute("src");
+}
+
+function openPlaylistArtwork(button) {
+    activeArtworkPlaylist = {
+        id: button.dataset.playlistId,
+        name: button.dataset.playlistName,
+        hasArtwork: button.dataset.artworkExists === "true",
+        sourceCover: button.dataset.coverUrl,
+    };
+    document.getElementById("playlist-artwork-title").textContent = activeArtworkPlaylist.name;
+    playlistArtworkFile.value = "";
+    playlistArtworkSave.disabled = true;
+    playlistArtworkRemove.disabled = !activeArtworkPlaylist.hasArtwork;
+    playlistArtworkStatus.textContent = activeArtworkPlaylist.hasArtwork
+        ? "This sidecar image overrides Navidrome’s generated playlist mosaic."
+        : "Harmony saves this beside the M3U so Navidrome can read it.";
+    showArtworkPreview(
+        activeArtworkPlaylist.hasArtwork
+            ? `/api/playlists/${activeArtworkPlaylist.id}/artwork?t=${Date.now()}`
+            : activeArtworkPlaylist.sourceCover
+    );
+    playlistArtworkDialog.showModal();
+}
+
+document.querySelectorAll(".playlist-artwork-btn").forEach(button => {
+    button.addEventListener("click", () => openPlaylistArtwork(button));
+});
+
+playlistArtworkFile?.addEventListener("change", () => {
+    if (artworkObjectUrl) URL.revokeObjectURL(artworkObjectUrl);
+    const file = playlistArtworkFile.files[0];
+    playlistArtworkSave.disabled = !file;
+    if (!file) {
+        showArtworkPreview(activeArtworkPlaylist?.hasArtwork
+            ? `/api/playlists/${activeArtworkPlaylist.id}/artwork?t=${Date.now()}`
+            : activeArtworkPlaylist?.sourceCover);
+        return;
+    }
+    artworkObjectUrl = URL.createObjectURL(file);
+    showArtworkPreview(artworkObjectUrl);
+    playlistArtworkStatus.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
+});
+
+playlistArtworkSave?.addEventListener("click", async () => {
+    const file = playlistArtworkFile.files[0];
+    if (!file || !activeArtworkPlaylist) return;
+    const form = new FormData();
+    form.append("artwork", file);
+    playlistArtworkSave.disabled = true;
+    playlistArtworkStatus.textContent = "Saving Navidrome sidecar…";
+    try {
+        const response = await fetch(`/api/playlists/${activeArtworkPlaylist.id}/artwork`, {
+            method: "POST",
+            body: form,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || "Playlist artwork could not be saved.");
+        playlistArtworkStatus.textContent = payload.message;
+        window.setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+        playlistArtworkStatus.textContent = error.message;
+        playlistArtworkSave.disabled = false;
+    }
+});
+
+playlistArtworkRemove?.addEventListener("click", async () => {
+    if (!activeArtworkPlaylist) return;
+    playlistArtworkRemove.disabled = true;
+    playlistArtworkStatus.textContent = "Removing sidecar…";
+    try {
+        const response = await fetch(`/api/playlists/${activeArtworkPlaylist.id}/artwork`, {
+            method: "DELETE",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || "Playlist artwork could not be removed.");
+        playlistArtworkStatus.textContent = payload.message;
+        window.setTimeout(() => window.location.reload(), 700);
+    } catch (error) {
+        playlistArtworkStatus.textContent = error.message;
+        playlistArtworkRemove.disabled = false;
+    }
+});
+
+playlistArtworkDialog?.addEventListener("close", () => {
+    if (artworkObjectUrl) URL.revokeObjectURL(artworkObjectUrl);
+    artworkObjectUrl = null;
+});
+
 document.querySelectorAll(".playlist-delete-btn").forEach(button => {
     button.addEventListener("click", async () => {
         const sourceWarning = button.dataset.sourceExists === "true"

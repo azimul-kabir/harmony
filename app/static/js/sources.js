@@ -1,6 +1,29 @@
 // State tracker to prevent unneeded DOM thrashing
 let currentlySyncing = new Set();
 
+function elapsedLabel(startedAt, completedAt = null) {
+    if (!startedAt) return "";
+    const started = Date.parse(startedAt);
+    const ended = completedAt ? Date.parse(completedAt) : Date.now();
+    if (Number.isNaN(started) || Number.isNaN(ended)) return "";
+    const seconds = Math.max(0, Math.floor((ended - started) / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainder = seconds % 60;
+    return hours
+        ? `${hours}h ${minutes}m elapsed`
+        : minutes ? `${minutes}m ${remainder}s elapsed` : `${remainder}s elapsed`;
+}
+
+function updateSourceElapsedTimes() {
+    document.querySelectorAll("[data-sync-started-at]").forEach(node => {
+        node.textContent = elapsedLabel(
+            node.dataset.syncStartedAt,
+            node.dataset.syncCompletedAt || null,
+        );
+    });
+}
+
 function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
         "&": "&amp;",
@@ -115,9 +138,19 @@ function renderSources(sources) {
                 currentlySyncing.add(source.id);
                 const finished = t.completed + t.failed + t.skipped;
                 const percent = t.total === 0 ? 0 : (finished / t.total) * 100;
+                const stageLabels = {
+                    starting: "Starting",
+                    metadata: "Fetching Spotify metadata",
+                    saving: "Saving playlist",
+                    exporting: "Creating M3U",
+                    deduplicating: "Checking your library",
+                    queueing: "Creating download jobs",
+                    downloading: "Downloading tracks",
+                };
+                const stageLabel = stageLabels[t.stage] || "Syncing";
                 
                 let taskActions = "";
-                if (status === "RUNNING" || status === "QUEUED") {
+                if ((status === "RUNNING" || status === "QUEUED") && t.stage === "downloading") {
                     taskActions = `
                         <button class="btn-secondary pause-btn" data-task-id="${t.id}">⏸ Pause</button>
                         <button class="btn-secondary cancel-btn" data-task-id="${t.id}" style="color: var(--danger); border-color: var(--danger);">🚫 Cancel</button>
@@ -132,13 +165,17 @@ function renderSources(sources) {
                 taskHtml = `
                     <div class="task-progress-container" style="margin-top: 16px;">
                         <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight: 600; color: var(--text-main);">
-                            <span>${status === 'RUNNING' ? 'Syncing...' : status}</span>
-                            <span>${finished} / ${t.total} Tracks</span>
+                            <span>${escapeHtml(stageLabel)}</span>
+                            <span>${t.total ? `${finished} / ${t.total} tracks` : "Reading playlist…"}</span>
                         </div>
                         <div class="task-progress-bar">
-                            <div class="task-progress-fill" style="width:${percent}%"></div>
+                            <div class="task-progress-fill${t.total ? "" : " is-indeterminate"}" style="width:${t.total ? percent : 35}%"></div>
                         </div>
-                        ${t.current ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Downloading: ${escapeHtml(t.current)}</div>` : ""}
+                        ${t.current ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">${escapeHtml(t.current)}</div>` : ""}
+                        <div style="display:flex; justify-content:space-between; gap:12px; font-size:0.78rem; color:var(--text-muted); margin-top:6px;">
+                            <span data-sync-started-at="${escapeHtml(t.started_at || "")}">${elapsedLabel(t.started_at)}</span>
+                            <span>${Number(t.queued_downloads || 0).toLocaleString()} download jobs created</span>
+                        </div>
                         <div style="margin-top: 12px; display:flex; gap: 8px;">
                             ${taskActions}
                         </div>
@@ -176,6 +213,13 @@ function renderSources(sources) {
                 <span>${source.task.skipped} already owned</span>
                 <span class="${source.task.failed ? "has-failures" : ""}">${source.task.failed} failed</span>
             </div>
+            ${source.task.error_summary ? `
+                <div class="source-sync-error" role="alert">
+                    <strong>Sync failed</strong>
+                    <span>${escapeHtml(source.task.error_summary)}</span>
+                    <small data-sync-started-at="${escapeHtml(source.task.started_at || "")}" data-sync-completed-at="${escapeHtml(source.task.completed_at || "")}">${elapsedLabel(source.task.started_at, source.task.completed_at)}</small>
+                </div>
+            ` : ""}
         ` : "";
 
         const innerHTML = `
@@ -235,6 +279,7 @@ function renderSources(sources) {
     }
 
     bindEvents();
+    updateSourceElapsedTimes();
 }
 
 function bindEvents() {
@@ -395,3 +440,4 @@ function connectSourcesSSE() {
 }
 
 connectSourcesSSE();
+window.setInterval(updateSourceElapsedTimes, 1000);

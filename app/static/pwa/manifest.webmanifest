@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "Harmony",
+  "short_name": "Harmony",
+  "description": "Self-hosted music acquisition, playlist synchronization, and library management.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080c1c",
+  "theme_color": "#080c1c",
+  "icons": [
+    {
+      "src": "/static/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

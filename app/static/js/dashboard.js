@@ -242,6 +242,60 @@ function renderDashboard(snapshot) {
     renderAlbumInsight("insight-oldest-album", analytics.oldest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
     renderMaintenance(snapshot.maintenance || []);
     renderCollections(snapshot.collections || []);
+    renderSynologyHealth(snapshot.synology || {});
+}
+
+function renderSynologyHealth(health) {
+    const card = document.getElementById("synology-health-card");
+    const disks = document.getElementById("synology-disks");
+    if (!card || !disks) return;
+    const enabled = health.enabled === true;
+    card.hidden = !enabled;
+    if (!enabled) return;
+
+    const state = health.stale ? "Stale" : (health.available ? "Available" : "Unavailable");
+    setText("synology-health-state", state);
+    card.dataset.state = state.toLowerCase();
+    setText("synology-health-message", health.stale
+        ? "Showing the last successful sample; current data may be out of date."
+        : (health.available ? "Latest NAS metrics." : "NAS monitoring is temporarily unavailable."));
+    const metric = (value, suffix = "") => value === null || value === undefined ? "—" : `${value}${suffix}`;
+    setText("synology-cpu", metric(health.cpu_percent, "%"));
+    setText("synology-memory", metric(health.memory_percent, "%"));
+    setText("synology-temperature", metric(health.system_temperature_c, "°C"));
+    setText("synology-load", metric(health.load_average_1m));
+    setText("synology-uptime", health.uptime_seconds == null ? "—" : formatDuration(health.uptime_seconds));
+    setText("synology-thermal", health.thermal_status || "unknown");
+
+    const rows = Array.isArray(health.disks) ? health.disks : [];
+    const existing = new Map(Array.from(disks.children).map(row => [row.dataset.snmpIndex, row]));
+    rows.forEach(disk => {
+        const key = String(disk.snmp_index);
+        let row = existing.get(key);
+        if (!row) {
+            row = document.createElement("div");
+            row.className = "synology-disk-row";
+            row.dataset.snmpIndex = key;
+            for (const className of ["synology-disk-id", "synology-disk-model", "synology-disk-status", "synology-disk-temperature"]) {
+                const element = document.createElement(className === "synology-disk-id" ? "strong" : "span");
+                element.className = className;
+                row.appendChild(element);
+            }
+            disks.appendChild(row);
+        }
+        row.querySelector(".synology-disk-id").textContent = disk.id || "Unknown disk";
+        row.querySelector(".synology-disk-model").textContent = disk.model || "Unknown model";
+        row.querySelector(".synology-disk-status").textContent = disk.status || "unknown";
+        row.querySelector(".synology-disk-temperature").textContent = metric(disk.temperature_c, "°C");
+        existing.delete(key);
+    });
+    existing.forEach(row => row.remove());
+    if (!rows.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state synology-disks-empty";
+        empty.textContent = "No disks were reported by DSM.";
+        disks.replaceChildren(empty);
+    }
 }
 
 function renderAttention(attention) {
@@ -410,16 +464,13 @@ function renderWorkers(workers, maxWorkers) {
 
             const media = document.createElement("div");
             media.className = "worker-media";
-            const artwork = worker.cover_url
-                ? document.createElement("img")
-                : document.createElement("div");
-            artwork.className = worker.cover_url ? "worker-artwork" : "worker-artwork worker-artwork-empty";
             if (worker.cover_url) {
+                const artwork = document.createElement("img");
+                artwork.className = "worker-artwork";
                 artwork.src = worker.cover_url;
                 artwork.alt = "";
-            } else {
-                artwork.textContent = "♫";
-                artwork.setAttribute("aria-hidden", "true");
+                artwork.addEventListener("error", () => artwork.remove(), {once: true});
+                media.appendChild(artwork);
             }
             const copy = document.createElement("div");
             copy.className = "worker-copy";
@@ -432,7 +483,7 @@ function renderWorkers(workers, maxWorkers) {
             artist.textContent = worker.artist || "Unknown Artist";
             artist.title = artist.textContent;
             copy.append(title, artist);
-            media.append(artwork, copy);
+            media.appendChild(copy);
             card.appendChild(media);
 
             const progress = document.createElement("div");
@@ -493,17 +544,40 @@ function formatActivityTime(value) {
     return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+function syncActivityArtwork(row, coverUrl) {
+    const current = row.querySelector(".activity-artwork");
+    row.classList.toggle("has-artwork", Boolean(coverUrl));
+    if (!coverUrl) {
+        current?.remove();
+        return;
+    }
+    if (current) {
+        if (current.src !== new URL(coverUrl, window.location.href).href) current.src = coverUrl;
+        return;
+    }
+    const image = document.createElement("img");
+    image.className = "activity-artwork";
+    image.src = coverUrl;
+    image.alt = "";
+    image.loading = "lazy";
+    image.addEventListener("error", () => image.remove(), {once: true});
+    image.addEventListener("error", () => row.classList.remove("has-artwork"), {once: true});
+    row.insertBefore(image, row.querySelector(".activity-content"));
+}
+
 function renderActivity(jobs) {
     const container = document.getElementById("recent-activity");
     if (!container) return;
+    jobs = Array.isArray(jobs) ? jobs.slice(0, 10) : [];
 
-    if (!jobs || jobs.length === 0) {
+    if (jobs.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-state";
         empty.textContent = "No recent download activity.";
         container.replaceChildren(empty);
         return;
     }
+    container.querySelector(".empty-state")?.remove();
 
     const existing = new Map(
         Array.from(container.querySelectorAll("[data-activity-id]")).map((row) => [row.dataset.activityId, row])
@@ -532,8 +606,11 @@ function renderActivity(jobs) {
         const details = activityDetails(job.status);
         row.className = `activity-item activity-${details.status}`;
         row.href = ["failed", "cancelled"].includes(details.status) ? "/downloads?status=failed" : "/downloads";
-        const [marker, content, meta] = row.children;
+        const marker = row.querySelector(".activity-marker");
+        const content = row.querySelector(".activity-content");
+        const meta = row.querySelector(".activity-meta");
         marker.setAttribute("aria-hidden", "true");
+        syncActivityArtwork(row, job.cover_url);
         content.querySelector("strong").textContent = job.title || "Unknown title";
         content.querySelector("span").textContent = job.artist || "Unknown artist";
         meta.querySelector("span").textContent = details.label;

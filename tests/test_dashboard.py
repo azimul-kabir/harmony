@@ -16,6 +16,7 @@ from app.database.models import (
 )
 from app.domain.download import JobStatus
 from app.domain.task import TaskStatus, TaskType
+from app.api.dashboard import dashboard_activity
 from app.services.dashboard import (
     get_download_trends,
     get_dashboard_snapshot,
@@ -492,6 +493,7 @@ def test_dashboard_activity_serialization_is_timestamped_and_privacy_safe():
         spotify_url="spotify:track:timeline",
         title="Timeline song",
         artist="Timeline artist",
+        cover_url="https://images.example/album.jpg",
         status=JobStatus.FAILED.value,
         completed_at=timestamp,
         error="Do not expose internal diagnostic details",
@@ -505,7 +507,29 @@ def test_dashboard_activity_serialization_is_timestamped_and_privacy_safe():
         "status": "failed",
         "title": "Timeline song",
         "artist": "Timeline artist",
+        "cover_url": "https://images.example/album.jpg",
         "event_at": timestamp.isoformat(),
     }
     assert "private" not in str(activity)
     assert "diagnostic" not in str(activity)
+
+
+def test_dashboard_activity_is_capped_at_ten_newest_jobs():
+    with SessionLocal() as db:
+        for index in range(12):
+            db.add(
+                DownloadJob(
+                    spotify_url=f"spotify:track:{index}",
+                    title=f"Song {index}",
+                    artist="Artist",
+                    status=JobStatus.COMPLETED.value,
+                )
+            )
+        db.commit()
+
+        activity = dashboard_activity(db)
+
+    assert len(activity) == 10
+    assert [item["title"] for item in activity] == [
+        f"Song {index}" for index in range(11, 1, -1)
+    ]

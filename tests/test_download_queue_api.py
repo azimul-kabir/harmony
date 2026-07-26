@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from app.api import downloads
 from app.api.schemas.download import DownloadRequest
-from app.database.models import DownloadJob, Song
+from app.database.models import DownloadJob, Playlist, PlaylistTrack, Song, SyncSource
 from app.database.session import SessionLocal
 from app.domain.track import Track
 from app.services.download_dashboard import serialize_outcome
@@ -65,6 +65,59 @@ def test_playlist_post_returns_queue_summary(monkeypatch):
     response, db = call_queue(url)
     try:
         assert response == {"status": "queued", "summary": {"queued": 3}}
+    finally:
+        db.close()
+
+
+def test_youtube_music_playlist_post_creates_one_off_playlist(monkeypatch):
+    url = "https://music.youtube.com/playlist?list=PLoneoff"
+
+    class Source:
+        identifier = "youtube_music"
+
+        def detect_url(self, value):
+            return ("playlist", "PLoneoff") if value == url else None
+
+        def resolve(self, value):
+            assert value == url
+            return [
+                Track(
+                    title=f"Song {position}",
+                    artist="Artist",
+                    album="YouTube Mix",
+                    track=position,
+                    source_provider=self.identifier,
+                    source_item_id=f"video-{position}",
+                    source_url=f"https://www.youtube.com/watch?v=video-{position}",
+                )
+                for position in (1, 2)
+            ]
+
+    monkeypatch.setattr(downloads, "detect_source", lambda _: Source())
+    monkeypatch.setattr(downloads, "_youtube_music_enabled", lambda _: True)
+    monkeypatch.setattr(
+        "app.services.playlist_download.export_m3u",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    response, db = call_queue(url)
+    try:
+        playlist = db.query(Playlist).filter_by(
+            spotify_id="youtube_music:PLoneoff"
+        ).one()
+        tracks = db.query(PlaylistTrack).filter_by(
+            playlist_id=playlist.id
+        ).order_by(PlaylistTrack.position).all()
+
+        assert response["status"] == "queued"
+        assert response["summary"].playlist_name == "YouTube Mix"
+        assert response["summary"].queued == 2
+        assert [track.spotify_track_id for track in tracks] == [
+            "youtube_music:video-1",
+            "youtube_music:video-2",
+        ]
+        assert db.query(DownloadJob).count() == 2
+        assert db.query(SyncSource).count() == 0
     finally:
         db.close()
 

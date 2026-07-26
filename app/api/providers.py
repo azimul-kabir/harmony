@@ -34,7 +34,7 @@ def _provider(name: str):
 
 
 def _error(exc: ProviderError) -> JSONResponse:
-    status = 499 if exc.code == "cancelled" else 404 if exc.code == "not_found" else 400 if exc.code == "validation_failure" else 504 if exc.code == "timeout" else 502
+    status = 499 if exc.code == "cancelled" else 404 if exc.code == "not_found" else 400 if exc.code == "validation_failure" else 503 if exc.code == "not_configured" else 504 if exc.code == "timeout" else 502
     return JSONResponse(status_code=status, content={"error": {"code": exc.code, "message": exc.message,
         "provider": exc.provider, "operation": exc.operation, "retryable": exc.retryable}})
 

@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import tempfile
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -13,7 +17,12 @@ from app.services.artwork import artwork_url
 from app.services.comparison import compare_with_library
 from app.services.playlist import import_playlist
 from app.services.playlist_download import download_playlist
-from app.services.playlist_manager import playlist_file_path
+from app.services.playlist_manager import (
+    PLAYLIST_ARTWORK_SUFFIXES,
+    playlist_artwork_path,
+    playlist_file_path,
+    remove_playlist_artwork,
+)
 from app.services import auto_playlists
 
 router = APIRouter(
@@ -28,6 +37,32 @@ class PlaylistDownloadRequest(BaseModel):
 class AutoPlaylistRequest(BaseModel):
     limit: int = 50
     enabled: bool = True
+
+
+PLAYLIST_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
+PLAYLIST_ARTWORK_TYPES = {
+    "image/jpeg": (".jpg", (b"\xff\xd8\xff",)),
+    "image/png": (".png", (b"\x89PNG\r\n\x1a\n",)),
+    "image/webp": (".webp", (b"RIFF",)),
+    "image/gif": (".gif", (b"GIF87a", b"GIF89a")),
+}
+
+
+def _playlist_artwork_type(content_type: str | None, content: bytes) -> tuple[str, str]:
+    normalized_type = (content_type or "").lower().split(";", 1)[0]
+    configured = PLAYLIST_ARTWORK_TYPES.get(normalized_type)
+    if configured is None:
+        raise HTTPException(
+            status_code=415,
+            detail="Playlist artwork must be JPEG, PNG, WebP, or GIF.",
+        )
+    suffix, signatures = configured
+    valid = any(content.startswith(signature) for signature in signatures)
+    if normalized_type == "image/webp":
+        valid = valid and len(content) >= 12 and content[8:12] == b"WEBP"
+    if not valid:
+        raise HTTPException(status_code=415, detail="The uploaded image is invalid.")
+    return normalized_type, suffix
 
 
 @router.get("/auto/definitions")
@@ -118,6 +153,97 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/{playlist_id}/artwork")
+def playlist_artwork(playlist_id: int, db: Session = Depends(get_db)):
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    file_path = playlist_artwork_path(playlist.name)
+    if file_path is None:
+        raise HTTPException(status_code=404, detail="Playlist artwork not found")
+    media_type = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }[file_path.suffix.lower()]
+    return FileResponse(file_path, media_type=media_type)
+
+
+@router.post("/{playlist_id}/artwork")
+async def replace_playlist_artwork(
+    playlist_id: int,
+    artwork: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    content = await artwork.read(PLAYLIST_ARTWORK_MAX_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="Choose an image to upload.")
+    if len(content) > PLAYLIST_ARTWORK_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Playlist artwork cannot exceed 10 MB.")
+    media_type, suffix = _playlist_artwork_type(artwork.content_type, content)
+
+    target = playlist_file_path(playlist.name).with_suffix(suffix)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=target.parent,
+            prefix=f".{target.stem}.",
+            suffix=f"{suffix}.tmp",
+            delete=False,
+        ) as file:
+            temporary_path = Path(file.name)
+            file.write(content)
+        os.replace(temporary_path, target)
+        temporary_path = None
+        base_path = playlist_file_path(playlist.name).with_suffix("")
+        for old_suffix in PLAYLIST_ARTWORK_SUFFIXES:
+            old_path = base_path.with_suffix(old_suffix)
+            if old_path != target:
+                old_path.unlink(missing_ok=True)
+    except OSError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Harmony could not write the playlist artwork sidecar.",
+        ) from error
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+    return {
+        "id": playlist.id,
+        "filename": target.name,
+        "media_type": media_type,
+        "artwork_url": f"/api/playlists/{playlist.id}/artwork",
+        "message": "Playlist artwork replaced. Scan Navidrome to display it.",
+    }
+
+
+@router.delete("/{playlist_id}/artwork")
+def delete_playlist_artwork(playlist_id: int, db: Session = Depends(get_db)):
+    playlist = db.get(Playlist, playlist_id)
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    try:
+        remove_playlist_artwork(playlist.name)
+    except OSError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="Harmony could not remove the playlist artwork.",
+        ) from error
+    return {
+        "id": playlist.id,
+        "message": "Playlist artwork removed. Navidrome will generate a tiled cover.",
+    }
+
+
 @router.delete("/{playlist_id}")
 def delete_playlist(playlist_id: int, db: Session = Depends(get_db)):
     playlist = db.get(Playlist, playlist_id)
@@ -134,10 +260,11 @@ def delete_playlist(playlist_id: int, db: Session = Depends(get_db)):
         file_path = playlist_file_path(playlist.name)
         try:
             file_path.unlink(missing_ok=True)
+            remove_playlist_artwork(playlist.name)
         except OSError as error:
             raise HTTPException(
                 status_code=409,
-                detail="Harmony could not remove the playlist M3U.",
+                detail="Harmony could not remove the playlist files.",
             ) from error
 
     name = playlist.name

@@ -63,6 +63,7 @@
             </aside>
         </div>
         <div class="library-filter-row metadata-issue-filters"><input id="metadata-search" type="search" placeholder="Search issues" aria-label="Search metadata issues"><select id="metadata-status" aria-label="Issue status"><option value="open">Open</option><option value="resolved">Resolved</option><option value="ignored">Ignored</option></select><select id="metadata-severity" aria-label="Issue severity"><option value="">All severities</option><option>critical</option><option>error</option><option>warning</option><option>info</option></select><select id="metadata-entity" aria-label="Issue entity"><option value="">Songs, albums &amp; artists</option><option value="song">Songs</option><option value="album">Albums</option><option value="artist">Artists</option></select></div>
+        <div class="metadata-repair-toolbar"><strong><span id="metadata-repair-count">0</span> selected</strong><select id="metadata-repair-provider" aria-label="Repair metadata provider"><option value="musicbrainz">MusicBrainz</option><option value="spotify">Spotify</option></select><button id="metadata-repair-selected" class="btn-primary" type="button" disabled>Find candidates for selected</button><button id="metadata-repair-clear" class="btn-secondary" type="button" disabled>Clear</button></div>
         <div id="metadata-issues" class="health-check-list" aria-live="polite"><p>Loading metadata issues…</p></div>
     </section>
 
@@ -81,11 +82,18 @@
                 <h2 id="library-jobs-title">Library Jobs &amp; Activity</h2>
                 <p id="library-jobs-description">Active and recent persistent operations</p>
             </div>
-            <button id="library-jobs-acknowledge-all" class="btn-secondary" type="button" hidden>Mark all shown reviewed</button>
+            <div class="library-job-panel-controls">
+                <button id="library-jobs-acknowledge-all" class="btn-secondary" type="button" hidden>Mark all shown reviewed</button>
+                <button id="library-activity-clear-open" class="btn-secondary" type="button">Clear activity</button>
+            </div>
         </div>
         <div class="health-job-columns">
             <div><h3>Active jobs</h3><div id="library-active-jobs" class="health-check-list" aria-live="polite"></div></div>
-            <div><h3>Recent activity</h3><div id="library-recent-activity" class="health-check-list" aria-live="polite"></div></div>
+            <div>
+                <h3>Recent activity</h3>
+                <div id="library-recent-activity" class="health-check-list" aria-live="polite"></div>
+                <button id="library-activity-show-more" class="btn-secondary library-activity-show-more" type="button" hidden>Show 10 more</button>
+            </div>
         </div>
     </section>
 </section>
@@ -105,6 +113,25 @@
         <div class="library-bulk-dialog-actions">
             <button id="library-job-acknowledge" class="btn-primary" type="button" hidden>Mark reviewed</button>
             <button class="btn-secondary" value="cancel">Close</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="library-activity-clear-dialog" class="library-bulk-dialog library-activity-clear-dialog">
+    <form method="dialog">
+        <div>
+            <span class="library-eyebrow">Activity retention</span>
+            <h2>Clear Library activity?</h2>
+            <p>Completed and cancelled jobs will be removed. Active jobs and unreviewed warnings are always preserved.</p>
+        </div>
+        <label class="library-activity-clear-option">
+            <input id="library-activity-clear-reviewed" type="checkbox">
+            <span>Also remove failed, interrupted, or completed-with-errors jobs that were already marked reviewed.</span>
+        </label>
+        <p id="library-activity-clear-status" aria-live="polite"></p>
+        <div class="library-bulk-dialog-actions">
+            <button class="btn-secondary" value="cancel">Cancel</button>
+            <button id="library-activity-clear-confirm" class="btn-danger" type="button">Clear activity</button>
         </div>
     </form>
 </dialog>

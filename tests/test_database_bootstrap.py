@@ -1,11 +1,26 @@
 """Fresh-install contract: bootstrap current schema, then stamp Alembic head."""
 
+import logging
+
 from sqlalchemy import create_engine, inspect, text
 from alembic import command
 from alembic.config import Config
 from pathlib import Path
 
 from app.database import init_db as database_init
+
+
+def test_alembic_keeps_uvicorn_startup_logger_enabled(tmp_path, monkeypatch):
+    engine = create_engine(f"sqlite:///{tmp_path / 'logging.db'}")
+    monkeypatch.setattr(database_init, "engine", engine)
+    uvicorn_logger = logging.getLogger("uvicorn.error")
+    previously_disabled = uvicorn_logger.disabled
+    uvicorn_logger.disabled = False
+    try:
+        database_init.init_db()
+        assert uvicorn_logger.disabled is False
+    finally:
+        uvicorn_logger.disabled = previously_disabled
 
 
 def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
@@ -25,7 +40,7 @@ def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
         "metadata_application_batches",
         "metadata_application_locks",
     } <= tables
-    assert revision == "20260724_0025"
+    assert revision == "20260725_0026"
 
     # A second bootstrap detects the existing database and is an Alembic no-op.
     database_init.init_db()
@@ -70,7 +85,37 @@ def test_existing_database_upgrades_without_precreating_future_tables(
         .scalar_one()
     )
     assert {"metadata_suggestions", "metadata_application_locks"} <= tables
-    assert revision == "20260724_0025"
+    assert revision == "20260725_0026"
+
+
+def test_published_v1_5_revision_is_translated_before_upgrade(tmp_path, monkeypatch):
+    """The released v1.5 marker must remain upgradeable by the renamed chain."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'published-v1.5.db'}")
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs ("
+            "id INTEGER PRIMARY KEY, path VARCHAR NOT NULL UNIQUE, "
+            "filename VARCHAR NOT NULL, modified_time INTEGER, created_at DATETIME)"
+        )
+        config.attributes["connection"] = connection
+        command.upgrade(config, "20260721_0008")
+        connection.execute(
+            text("UPDATE alembic_version SET version_num = '1f8d82846508'")
+        )
+
+    monkeypatch.setattr(database_init, "engine", engine)
+    database_init.init_db()
+
+    with engine.connect() as connection:
+        revision = connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one()
+    assert revision == "20260725_0026"
+    assert "metadata_suggestions" in inspect(engine).get_table_names()
 
 
 def test_existing_database_retries_interrupted_metadata_migration(
@@ -103,7 +148,7 @@ def test_existing_database_retries_interrupted_metadata_migration(
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
     )
-    assert revision == "20260724_0025"
+    assert revision == "20260725_0026"
 
 
 def test_existing_database_retries_interrupted_metadata_health_migration(
@@ -136,7 +181,7 @@ def test_existing_database_retries_interrupted_metadata_health_migration(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0025"
+        == "20260725_0026"
     )
 
 
@@ -170,7 +215,7 @@ def test_existing_database_retries_interrupted_metadata_health_indexes_migration
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0025"
+        == "20260725_0026"
     )
 
 
@@ -210,7 +255,7 @@ def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0025"
+        == "20260725_0026"
     )
 
 
@@ -274,7 +319,7 @@ def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260724_0025"
+        == "20260725_0026"
     )
 
 

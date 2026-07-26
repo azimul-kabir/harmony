@@ -2,15 +2,23 @@ import os
 import tempfile
 from pathlib import Path
 from datetime import datetime, UTC
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
+from app.domain.track import Track
 from app.services.library_paths import _safe
 from app.services.library_search import library_search
+
+PLAYLIST_ARTWORK_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+
+
+def source_identity(provider: str, item_id: str) -> str:
+    """Fit provider-neutral identities into legacy playlist identifier columns."""
+    return item_id if provider == "spotify" else f"{provider}:{item_id}"
 
 
 def playlist_file_path(name: str) -> Path:
@@ -19,6 +27,23 @@ def playlist_file_path(name: str) -> Path:
     for char in '<>:"/\\|?*':
         safe_name = safe_name.replace(char, "_")
     return Path(settings.music_path) / "Playlists" / f"{safe_name}.m3u"
+
+
+def playlist_artwork_path(name: str) -> Path | None:
+    """Return the first Navidrome-compatible sidecar for a playlist."""
+    base_path = playlist_file_path(name).with_suffix("")
+    for suffix in PLAYLIST_ARTWORK_SUFFIXES:
+        candidate = base_path.with_suffix(suffix)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def remove_playlist_artwork(name: str) -> None:
+    """Remove every supported sidecar variant for a playlist."""
+    base_path = playlist_file_path(name).with_suffix("")
+    for suffix in PLAYLIST_ARTWORK_SUFFIXES:
+        base_path.with_suffix(suffix).unlink(missing_ok=True)
 
 
 def count_m3u_entries(file_path: Path) -> int:
@@ -32,17 +57,26 @@ def count_m3u_entries(file_path: Path) -> int:
         return 0
 
 
-def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: DomainPlaylist) -> Playlist:
-    """Updates the database with the latest Spotify playlist structure."""
-    playlist = db.scalar(select(Playlist).where(Playlist.spotify_id == source.spotify_id))
+def save_database_playlist(
+    db: Session,
+    source_id: str,
+    domain_playlist: DomainPlaylist,
+    *,
+    source_provider: str = "spotify",
+    synced_at: datetime | None = None,
+) -> Playlist:
+    """Persist an ordered source playlist independently of sync scheduling."""
+    playlist_id = source_identity(source_provider, source_id)
+    playlist = db.scalar(select(Playlist).where(Playlist.spotify_id == playlist_id))
     
     if not playlist:
-        playlist = Playlist(spotify_id=source.spotify_id)
+        playlist = Playlist(spotify_id=playlist_id)
         db.add(playlist)
     
     playlist.name = domain_playlist.name
     playlist.track_count = len(domain_playlist.tracks)
-    playlist.last_synced_at = datetime.now(UTC)
+    if synced_at is not None:
+        playlist.last_synced_at = synced_at
     playlist.updated_at = datetime.now(UTC)
     
     if hasattr(domain_playlist, 'snapshot_id'):
@@ -62,11 +96,14 @@ def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: Dom
     db.query(PlaylistTrack).where(PlaylistTrack.playlist_id == playlist.id).delete()
     current_track_ids: set[str] = set()
     for idx, track in enumerate(domain_playlist.tracks):
-        if track.spotify_track_id:
-            current_track_ids.add(track.spotify_track_id)
+        track_id = track.spotify_track_id
+        if source_provider != "spotify" and track.source_item_id:
+            track_id = source_identity(source_provider, track.source_item_id)
+        if track_id:
+            current_track_ids.add(track_id)
             pt = PlaylistTrack(
                 playlist_id=playlist.id,
-                spotify_track_id=track.spotify_track_id,
+                spotify_track_id=track_id,
                 position=idx + 1,
                 title=track.title,
                 artist=track.artist,
@@ -82,6 +119,77 @@ def sync_database_playlist(db: Session, source: SyncSource, domain_playlist: Dom
     db.commit()
     db.refresh(playlist)
     return playlist
+
+
+def sync_database_playlist(
+    db: Session,
+    source: SyncSource,
+    domain_playlist: DomainPlaylist,
+) -> Playlist:
+    """Update a saved playlist as part of an explicit source sync."""
+    return save_database_playlist(
+        db,
+        source.spotify_id,
+        domain_playlist,
+        synced_at=datetime.now(UTC),
+    )
+
+
+def begin_incremental_playlist(
+    db: Session,
+    source: SyncSource,
+    name: str,
+) -> Playlist:
+    """Create a clean playlist shell before incremental discovery begins."""
+    playlist = db.scalar(select(Playlist).where(Playlist.spotify_id == source.spotify_id))
+    if playlist is None:
+        playlist = Playlist(spotify_id=source.spotify_id, name=name)
+        db.add(playlist)
+        db.flush()
+    else:
+        playlist.name = name
+        db.query(PlaylistTrack).where(PlaylistTrack.playlist_id == playlist.id).delete()
+    playlist.track_count = 0
+    playlist.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(playlist)
+    return playlist
+
+
+def append_incremental_playlist_batch(
+    db: Session,
+    playlist: Playlist,
+    tracks: list[Track],
+    starting_position: int,
+) -> None:
+    """Append one ordered discovery batch and make it durable immediately."""
+    existing_ids = set(
+        db.scalars(
+            select(PlaylistTrack.spotify_track_id).where(
+                PlaylistTrack.playlist_id == playlist.id
+            )
+        ).all()
+    )
+    for offset, track in enumerate(tracks):
+        if not track.spotify_track_id or track.spotify_track_id in existing_ids:
+            continue
+        existing_ids.add(track.spotify_track_id)
+        db.add(
+            PlaylistTrack(
+                playlist_id=playlist.id,
+                spotify_track_id=track.spotify_track_id,
+                position=starting_position + offset + 1,
+                title=track.title,
+                artist=track.artist,
+                album=track.album,
+                album_artist=track.album_artist,
+                track_number=track.track,
+                duration=track.duration,
+            )
+        )
+    playlist.track_count = len(existing_ids)
+    playlist.updated_at = datetime.now(UTC)
+    db.commit()
 
 def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
     """Generates an M3U file, tracking down existing library songs via ID or text matching."""
@@ -112,11 +220,37 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
     
     # 2. Map downloading/queued jobs
     from app.database.models import DownloadJob
-    jobs = db.query(DownloadJob).filter(DownloadJob.spotify_track_id.in_(track_ids)).all()
-    job_map = {j.spotify_track_id: j for j in jobs}
+    provider_item_ids = {
+        identity.split(":", 1)[1]
+        for identity in track_ids
+        if identity.startswith("youtube_music:")
+    }
+    jobs = db.query(DownloadJob).filter(
+        or_(
+            DownloadJob.spotify_track_id.in_(track_ids),
+            (
+                (DownloadJob.source_provider == "youtube_music")
+                & DownloadJob.source_item_id.in_(provider_item_ids)
+            ),
+        )
+    ).all()
+    job_map = {
+        (
+            source_identity(job.source_provider, job.source_item_id)
+            if job.source_provider != "spotify" and job.source_item_id
+            else job.spotify_track_id
+        ): job
+        for job in jobs
+    }
     
     # 3. Map freshly scraped domain metadata if provided
-    domain_map = {t.spotify_track_id: t for t in domain_tracks} if domain_tracks else {}
+    domain_map = {}
+    for track in domain_tracks or []:
+        identity = track.spotify_track_id
+        if track.source_provider != "spotify" and track.source_item_id:
+            identity = source_identity(track.source_provider, track.source_item_id)
+        if identity:
+            domain_map[identity] = track
     
     exported_count = 0
     temporary_path = None
@@ -225,6 +359,19 @@ def export_m3us_for_track(db: Session, spotify_track_id: str | None) -> int:
     if not spotify_track_id:
         return 0
     return export_m3us_for_tracks(db, [spotify_track_id])
+
+
+def export_m3us_for_source_track(
+    db: Session,
+    source_provider: str,
+    source_item_id: str | None,
+    spotify_track_id: str | None,
+) -> int:
+    """Refresh playlists using the stable identity for the download provider."""
+    item_id = spotify_track_id
+    if source_provider != "spotify" and source_item_id:
+        item_id = source_identity(source_provider, source_item_id)
+    return export_m3us_for_track(db, item_id)
 
 
 def export_m3us_for_tracks(

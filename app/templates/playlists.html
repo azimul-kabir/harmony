@@ -58,17 +58,28 @@
     {% for card in playlists %}
     {% set p = card.playlist %}
     <div class="source-card playlist-card" data-playlist-name="{{ p.name|lower }}">
-        <div class="source-header">
-            <h3>🎵 {{ p.name }}</h3>
-            {% if p.playlist_kind == 'smart' %}
-                <span class="badge badge-running">Auto</span>
-            {% elif card.exported_count == p.track_count %}
-                <span class="badge badge-completed">Ready</span>
-            {% elif card.exported_count %}
-                <span class="badge playlist-partial">Partial</span>
-            {% else %}
-                <span class="badge badge-cancelled">Empty</span>
-            {% endif %}
+        <div class="playlist-card-heading">
+            <div class="playlist-cover-wrap">
+                {% if card.artwork_exists %}
+                <img class="playlist-cover" src="/api/playlists/{{ p.id }}/artwork" alt="" loading="lazy">
+                {% elif p.cover_url %}
+                <img class="playlist-cover" src="{{ p.cover_url }}" alt="" loading="lazy">
+                {% else %}
+                <span class="playlist-cover playlist-cover-placeholder" aria-hidden="true">♫</span>
+                {% endif %}
+            </div>
+            <div class="source-header">
+                <h3>{{ p.name }}</h3>
+                {% if p.playlist_kind == 'smart' %}
+                    <span class="badge badge-running">Auto</span>
+                {% elif card.exported_count == p.track_count %}
+                    <span class="badge badge-completed">Ready</span>
+                {% elif card.exported_count %}
+                    <span class="badge playlist-partial">Partial</span>
+                {% else %}
+                    <span class="badge badge-cancelled">Empty</span>
+                {% endif %}
+            </div>
         </div>
         <div class="playlist-counts">
             <div><strong>{{ p.track_count }}</strong><span>Source tracks</span></div>
@@ -119,6 +130,14 @@
             >Manage songs</button>
             <button
                 type="button"
+                class="btn-secondary playlist-artwork-btn"
+                data-playlist-id="{{ p.id }}"
+                data-playlist-name="{{ p.name }}"
+                data-artwork-exists="{{ 'true' if card.artwork_exists else 'false' }}"
+                data-cover-url="{{ p.cover_url or '' }}"
+            >Cover image</button>
+            <button
+                type="button"
                 class="btn-secondary playlist-delete-btn"
                 data-playlist-id="{{ p.id }}"
                 data-playlist-name="{{ p.name }}"
@@ -150,6 +169,32 @@
             <button id="playlist-delete-selected" class="btn-danger" type="button" disabled>
                 Delete selected files
             </button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="playlist-artwork-dialog" class="library-bulk-dialog playlist-artwork-dialog">
+    <form method="dialog">
+        <div>
+            <span class="library-eyebrow">Navidrome sidecar artwork</span>
+            <h2 id="playlist-artwork-title">Playlist cover</h2>
+            <p>Upload a square JPEG, PNG, WebP, or GIF up to 10 MB.</p>
+        </div>
+        <div class="playlist-artwork-preview-wrap">
+            <img id="playlist-artwork-preview" class="playlist-artwork-preview" alt="Playlist artwork preview">
+            <span id="playlist-artwork-placeholder" class="playlist-artwork-preview playlist-cover-placeholder">♫</span>
+        </div>
+        <label class="playlist-artwork-file">
+            <span>Choose replacement image</span>
+            <input id="playlist-artwork-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+        </label>
+        <p id="playlist-artwork-status" class="playlist-artwork-status">
+            Harmony saves this beside the M3U so Navidrome can read it.
+        </p>
+        <div class="library-bulk-dialog-actions">
+            <button class="btn-secondary" value="cancel">Close</button>
+            <button id="playlist-artwork-remove" class="btn-danger" type="button">Remove cover</button>
+            <button id="playlist-artwork-save" class="btn-primary" type="button" disabled>Save cover</button>
         </div>
     </form>
 </dialog>
