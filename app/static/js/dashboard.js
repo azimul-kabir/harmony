@@ -707,5 +707,110 @@ function connectSSE() {
         renderWorkers(data.workers || [], data.max_workers || 4); // NEW: Render workers
         renderActivity(data.activity);
         renderTasks(data.tasks);
+        renderSynology(data.synology);
     };
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return "0s";
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
+function renderSynology(data) {
+    const card = document.getElementById("synology-health-card");
+    if (!card) return;
+
+    if (!data || !data.enabled) {
+        card.hidden = true;
+        return;
+    }
+    card.hidden = false;
+
+    const badge = document.getElementById("synology-status-badge");
+    if (!data.available) {
+        badge.textContent = data.safe_error_category || "Unavailable";
+        badge.className = "badge danger";
+    } else if (data.stale) {
+        badge.textContent = "Stale";
+        badge.className = "badge warning";
+    } else {
+        badge.textContent = "Online";
+        badge.className = "badge success";
+    }
+
+    setText("synology-cpu", data.cpu_percent !== null ? `${data.cpu_percent}%` : "—");
+    setText("synology-ram", data.memory_percent !== null ? `${data.memory_percent}%` : "—");
+    setText("synology-temp", data.system_temperature_c !== null ? `${data.system_temperature_c}°C` : "—");
+    setText("synology-load", data.load_average_1m !== null ? data.load_average_1m.toFixed(2) : "—");
+    setText("synology-uptime", data.uptime_seconds !== null ? formatDuration(data.uptime_seconds) : "—");
+
+    const thermalEl = document.getElementById("synology-thermal");
+    if (thermalEl) {
+        thermalEl.textContent = data.thermal_status || "—";
+        if (data.thermal_status_code === 2) {
+            thermalEl.style.color = "var(--danger-color, red)";
+        } else {
+            thermalEl.style.color = "";
+        }
+    }
+
+    const disksContainer = document.getElementById("synology-disks-container");
+    if (disksContainer && data.disks) {
+        disksContainer.innerHTML = "";
+        if (data.disks.length === 0) {
+            disksContainer.innerHTML = '<span class="text-secondary" style="font-size: 0.85rem;">No disks found.</span>';
+        } else {
+            data.disks.forEach(disk => {
+                const row = document.createElement("div");
+                row.style.display = "flex";
+                row.style.justifyContent = "space-between";
+                row.style.alignItems = "center";
+                row.style.padding = "0.5rem 0";
+                row.style.borderBottom = "1px solid var(--border-color)";
+                if (data.disks.indexOf(disk) === data.disks.length - 1) {
+                    row.style.borderBottom = "none";
+                }
+
+                const left = document.createElement("div");
+                const title = document.createElement("strong");
+                title.style.display = "block";
+                title.style.fontSize = "0.85rem";
+                title.textContent = disk.id || `Disk ${disk.snmp_index}`;
+                const model = document.createElement("span");
+                model.className = "text-secondary";
+                model.style.fontSize = "0.75rem";
+                model.textContent = disk.model || "Unknown model";
+                left.appendChild(title);
+                left.appendChild(model);
+
+                const right = document.createElement("div");
+                right.style.textAlign = "right";
+
+                const status = document.createElement("strong");
+                status.style.display = "block";
+                status.style.fontSize = "0.85rem";
+                status.textContent = disk.status;
+                if (disk.status_code !== 1) {
+                    status.style.color = "var(--danger-color, red)";
+                }
+
+                const temp = document.createElement("span");
+                temp.className = "text-secondary";
+                temp.style.fontSize = "0.75rem";
+                temp.textContent = disk.temperature_c !== null ? `${disk.temperature_c}°C` : "—";
+
+                right.appendChild(status);
+                right.appendChild(temp);
+
+                row.appendChild(left);
+                row.appendChild(right);
+                disksContainer.appendChild(row);
+            });
+        }
+    }
 }

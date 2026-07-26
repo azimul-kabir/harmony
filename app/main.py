@@ -21,6 +21,7 @@ from app.api.settings import router as settings_router
 from app.api.sync_sources import router as sync_sources_router
 from app.api.tasks import router as tasks_router
 from app.api.providers import router as providers_router
+from app.api.synology import router as synology_router
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
@@ -43,6 +44,7 @@ from app.services.settings_service import initialize_defaults
 from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.source_auto_sync import source_auto_sync_scheduler
+from app.services.synology_monitor import synology_monitor
 
 settings = get_settings()
 
@@ -65,6 +67,7 @@ async def lifespan(app: FastAPI):
     library_maintenance_worker.start()
     navidrome_playlist_reimport.start()
     source_auto_sync_scheduler.start()
+    synology_monitor.start()
     
     logger.info("Starting Harmony...")
     logger.info(
@@ -96,6 +99,7 @@ async def lifespan(app: FastAPI):
         library_maintenance_worker.stop()
         navidrome_playlist_reimport.stop()
         source_auto_sync_scheduler.stop()
+        await synology_monitor.stop()
         await close_providers()
         if library_watcher is not None:
             library_watcher.stop()
@@ -133,6 +137,7 @@ app.include_router(playlist_router)
 app.include_router(sync_sources_router)
 app.include_router(providers_router)
 app.include_router(providers_page_router)
+app.include_router(synology_router)
 
 PWA_ASSET_DIR = Path("app/static/pwa")
 
