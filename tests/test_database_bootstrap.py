@@ -1,11 +1,26 @@
 """Fresh-install contract: bootstrap current schema, then stamp Alembic head."""
 
+import logging
+
 from sqlalchemy import create_engine, inspect, text
 from alembic import command
 from alembic.config import Config
 from pathlib import Path
 
 from app.database import init_db as database_init
+
+
+def test_alembic_keeps_uvicorn_startup_logger_enabled(tmp_path, monkeypatch):
+    engine = create_engine(f"sqlite:///{tmp_path / 'logging.db'}")
+    monkeypatch.setattr(database_init, "engine", engine)
+    uvicorn_logger = logging.getLogger("uvicorn.error")
+    previously_disabled = uvicorn_logger.disabled
+    uvicorn_logger.disabled = False
+    try:
+        database_init.init_db()
+        assert uvicorn_logger.disabled is False
+    finally:
+        uvicorn_logger.disabled = previously_disabled
 
 
 def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
