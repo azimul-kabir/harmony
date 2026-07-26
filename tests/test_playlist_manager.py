@@ -158,3 +158,42 @@ def test_export_prefers_indexed_song_path(monkeypatch, tmp_path):
         assert "../Different Artist/Different Album/song.mp3" in content
     finally:
         db.close()
+
+
+def test_export_resolves_owned_song_with_different_spotify_identity(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        playlist_manager,
+        "get_settings",
+        lambda: SimpleNamespace(music_path=str(tmp_path)),
+    )
+    actual = tmp_path / "Artist" / "Album" / "song.mp3"
+    actual.parent.mkdir(parents=True)
+    actual.write_bytes(b"audio")
+
+    db = SessionLocal()
+    try:
+        playlist = _playlist(
+            db,
+            spotify_id="new-playlist",
+            name="Overlapping",
+            track_id="new-playlist-track-id",
+        )
+        db.add(
+            Song(
+                path=str(actual),
+                filename=actual.name,
+                artist="Stored artist",
+                title="Stored title",
+                album="Stored album",
+                spotify_track_id="original-playlist-track-id",
+            )
+        )
+        db.commit()
+
+        assert playlist_manager.export_m3u(db, playlist) == 1
+        content = (tmp_path / "Playlists" / "Overlapping.m3u").read_text()
+        assert "../Artist/Album/song.mp3" in content
+    finally:
+        db.close()

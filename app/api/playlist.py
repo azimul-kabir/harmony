@@ -22,6 +22,7 @@ from app.services.playlist_manager import (
     playlist_artwork_path,
     playlist_file_path,
     remove_playlist_artwork,
+    resolve_playlist_songs,
 )
 from app.services import auto_playlists
 
@@ -100,12 +101,7 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Playlist not found")
 
     spotify_ids = [track.spotify_track_id for track in playlist.tracks]
-    songs = db.scalars(
-        select(Song).where(Song.spotify_track_id.in_(spotify_ids))
-    ).all()
-    songs_by_spotify_id = {
-        song.spotify_track_id: song for song in songs
-    }
+    songs_by_spotify_id = resolve_playlist_songs(db, playlist.tracks)
     jobs = db.scalars(
         select(DownloadJob)
         .where(DownloadJob.spotify_track_id.in_(spotify_ids))

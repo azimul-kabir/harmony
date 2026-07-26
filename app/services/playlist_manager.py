@@ -6,6 +6,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.database.crud import find_song
 from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
@@ -191,6 +192,46 @@ def append_incremental_playlist_batch(
     playlist.updated_at = datetime.now(UTC)
     db.commit()
 
+
+def resolve_playlist_songs(
+    db: Session,
+    tracks: list[PlaylistTrack],
+) -> dict[str, Song]:
+    """Resolve playlist identities to library songs using download preflight rules.
+
+    A library song can predate Spotify metadata or have been acquired through a
+    different playlist/Spotify release.  Download preflight already treats its
+    ISRC or title/artist identity as owned; playlist projection must make the
+    same decision instead of requiring only an exact Spotify track ID.
+    """
+    track_ids = [
+        track.spotify_track_id
+        for track in tracks
+        if not track.spotify_track_id.startswith("library:")
+    ]
+    songs = db.scalars(
+        select(Song).where(Song.spotify_track_id.in_(track_ids))
+    ).all()
+    resolved = {song.spotify_track_id: song for song in songs}
+
+    for track in tracks:
+        if (
+            track.spotify_track_id in resolved
+            or track.spotify_track_id.startswith("library:")
+        ):
+            continue
+        song = find_song(
+            db,
+            title=track.title,
+            artist=track.artist,
+            album=track.album,
+            spotify_track_id=track.spotify_track_id,
+        )
+        if song is not None:
+            resolved[track.spotify_track_id] = song
+    return resolved
+
+
 def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
     """Generates an M3U file, tracking down existing library songs via ID or text matching."""
     settings = get_settings()
@@ -205,8 +246,7 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
         for pt in playlist.tracks
         if not pt.spotify_track_id.startswith("library:")
     ]
-    songs = db.query(Song).filter(Song.spotify_track_id.in_(track_ids)).all()
-    song_id_map = {s.spotify_track_id: s for s in songs}
+    song_id_map = resolve_playlist_songs(db, list(playlist.tracks))
     local_song_ids = [
         int(pt.spotify_track_id.removeprefix("library:"))
         for pt in playlist.tracks
