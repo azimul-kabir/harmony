@@ -459,6 +459,7 @@ class DownloadJob(Base):
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True)
     genre: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     spotify_artist_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     genre_provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
     
