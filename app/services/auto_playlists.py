@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, UTC
+from pathlib import PurePosixPath
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,12 +21,36 @@ class AutoPlaylistDefinition:
 
 
 AUTO_PLAYLISTS = (
-    AutoPlaylistDefinition("recently-added", "Recently Added", "The newest songs added to the Library Index.", True),
-    AutoPlaylistDefinition("recently-downloaded", "Recently Downloaded", "The newest songs acquired through Harmony.", True),
-    AutoPlaylistDefinition("new-and-unplayed", "New & Unplayed", "New library songs that have not been played.", False, "Requires Navidrome play history."),
-    AutoPlaylistDefinition("favorites", "Favorites", "Songs starred in Navidrome.", False, "Requires Navidrome favorite data."),
-    AutoPlaylistDefinition("rediscovery", "Rediscovery", "Older favorites that have not been played recently.", False, "Requires Navidrome play history."),
-    AutoPlaylistDefinition("most-played", "Most Played", "The songs you play most often.", False, "Requires Navidrome play counts."),
+    AutoPlaylistDefinition(
+        "recently-added",
+        "Recently Added",
+        "The newest songs added to the Library Index.",
+        True,
+    ),
+    AutoPlaylistDefinition(
+        "recently-downloaded",
+        "Recently Downloaded",
+        "The newest songs acquired through Harmony.",
+        True,
+    ),
+    AutoPlaylistDefinition(
+        "new-and-unplayed",
+        "New & Unplayed",
+        "New library songs that have not been played.",
+        True,
+    ),
+    AutoPlaylistDefinition(
+        "favorites", "Favorites", "Songs starred in Navidrome.", True
+    ),
+    AutoPlaylistDefinition(
+        "rediscovery",
+        "Rediscovery",
+        "Older favorites that have not been played recently.",
+        True,
+    ),
+    AutoPlaylistDefinition(
+        "most-played", "Most Played", "The songs you play most often.", True
+    ),
 )
 
 
@@ -43,7 +68,9 @@ def definitions(db: Session) -> list[dict]:
             "description": definition.description,
             "available": definition.available,
             "unavailable_reason": definition.unavailable_reason,
-            "enabled": bool(rows.get(definition.id) and rows[definition.id].smart_enabled),
+            "enabled": bool(
+                rows.get(definition.id) and rows[definition.id].smart_enabled
+            ),
             "limit": rows[definition.id].smart_limit if rows.get(definition.id) else 50,
             "playlist_id": rows[definition.id].id if rows.get(definition.id) else None,
         }
@@ -56,7 +83,9 @@ def _definition(rule_id: str) -> AutoPlaylistDefinition:
     if definition is None:
         raise KeyError(rule_id)
     if not definition.available:
-        raise ValueError(definition.unavailable_reason or "This auto-playlist is unavailable.")
+        raise ValueError(
+            definition.unavailable_reason or "This auto-playlist is unavailable."
+        )
     return definition
 
 
@@ -64,10 +93,79 @@ def _song_statement(rule_id: str, limit: int):
     statement = select(Song).where(Song.availability_status == "available")
     if rule_id == "recently-downloaded":
         statement = statement.where(Song.download_source != "filesystem")
-    return statement.order_by(Song.created_at.desc(), Song.id.desc()).limit(limit)
+    if rule_id == "new-and-unplayed":
+        statement = statement.where(Song.navidrome_play_count == 0).order_by(
+            Song.created_at.desc(), Song.id.desc()
+        )
+    elif rule_id == "favorites":
+        statement = statement.where(Song.navidrome_starred_at.is_not(None)).order_by(
+            Song.navidrome_starred_at.desc(), Song.id.desc()
+        )
+    elif rule_id == "rediscovery":
+        statement = statement.where(Song.navidrome_starred_at.is_not(None)).order_by(
+            Song.navidrome_last_played_at.asc().nulls_first(),
+            Song.created_at.asc(),
+            Song.id.asc(),
+        )
+    elif rule_id == "most-played":
+        statement = statement.where(Song.navidrome_play_count > 0).order_by(
+            Song.navidrome_play_count.desc(),
+            Song.navidrome_last_played_at.desc(),
+            Song.id.desc(),
+        )
+    else:
+        statement = statement.order_by(Song.created_at.desc(), Song.id.desc())
+    return statement.limit(limit)
 
 
-def generate(db: Session, rule_id: str, *, limit: int = 50, enabled: bool = True) -> dict:
+def _navidrome_datetime(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    except (TypeError, ValueError):
+        return None
+
+
+def update_navidrome_stats(db: Session, entries: list[dict]) -> int:
+    """Cache Navidrome playback metadata on matching Library Index songs."""
+    songs = db.scalars(select(Song)).all()
+    by_id = {song.navidrome_id: song for song in songs if song.navidrome_id}
+    by_path = {PurePosixPath(song.path).as_posix().lstrip("/"): song for song in songs}
+    now = datetime.now(UTC).replace(tzinfo=None)
+    updated = 0
+    for entry in entries:
+        entry_id = str(entry.get("id") or "")
+        relative_path = (
+            PurePosixPath(str(entry.get("path") or "")).as_posix().lstrip("/")
+        )
+        song = by_id.get(entry_id) or by_path.get(relative_path)
+        if song is None and relative_path:
+            song = next(
+                (
+                    candidate
+                    for path, candidate in by_path.items()
+                    if path.endswith(f"/{relative_path}")
+                    or relative_path.endswith(f"/{path}")
+                ),
+                None,
+            )
+        if song is None:
+            continue
+        song.navidrome_id = entry_id or song.navidrome_id
+        song.navidrome_play_count = max(0, int(entry.get("playCount") or 0))
+        song.navidrome_last_played_at = _navidrome_datetime(entry.get("played"))
+        song.navidrome_starred_at = _navidrome_datetime(entry.get("starred"))
+        song.navidrome_stats_synced_at = now
+        updated += 1
+    db.commit()
+    return updated
+
+
+def generate(
+    db: Session, rule_id: str, *, limit: int = 50, enabled: bool = True
+) -> dict:
     definition = _definition(rule_id)
     limit = max(1, min(int(limit), 500))
     playlist = db.scalar(select(Playlist).where(Playlist.smart_rule == rule_id))
