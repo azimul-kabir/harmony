@@ -10,13 +10,13 @@ Library workflows remain provider-neutral. Spotify acquisition uses SpotDL.
 Opt-in public YouTube Music and explicit YouTube URLs use yt-dlp. Provider
 adapters normalize metadata and outcomes before persistence.
 
-Spotify acquisition is exact-match-only. A track adapter invokes SpotDL once
-with the original Spotify track URL; it must not generate an artist/title query
-or pass `--dont-filter-results`. Success requires a zero exit status, exactly
-one supported audio output, and agreement between the requested metadata and
-the output's embedded primary artist, title, material version markers, and
-reliable duration. This rule does not prohibit a user from explicitly choosing
-the separate YouTube Music source.
+Spotify import is exact-match-only. A track adapter invokes SpotDL with the
+original Spotify track URL and may retry with an artist/title query when that
+attempt fails or produces no audio. Success from either route requires a zero
+exit status, exactly one supported audio output, and agreement between the
+requested metadata and the output's embedded primary artist, title, material
+version markers, and reliable duration. This rule does not prohibit a user
+from explicitly choosing the separate YouTube Music source.
 
 ## Consequences
 
