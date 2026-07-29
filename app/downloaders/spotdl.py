@@ -3,9 +3,11 @@ import os
 import subprocess
 import tempfile
 import shutil
+import re
 from pathlib import Path
 
 from app.core.config import get_settings
+from app.core.logging import logger
 from app.domain.playlist import Playlist
 from app.domain.track import Track
 from app.mappers.spotdl import spotdl_song_to_track
@@ -79,6 +81,7 @@ class SpotDLClient:
         self,
         track: Track,
         output_dir: Path,
+        job_id: int | None = None,
     ) -> Path:
         # Fetch current quality setting from database
         db = SessionLocal()
@@ -88,21 +91,27 @@ class SpotDLClient:
         finally:
             db.close()
 
-        # Define the queries as tuples: (query_string, use_loose_matching_flag)
-        queries_to_try = []
+        # Each query is attempted exactly once.  In particular, a successful
+        # SpotDL process is not necessarily a successful download: providers
+        # can report a skip and exit zero without creating an audio file.
+        queries_to_try: list[tuple[str, str]] = []
         if track.spotify_url:
-            queries_to_try.append((track.spotify_url, False))
+            queries_to_try.append(("spotify_url", track.spotify_url))
             
-        queries_to_try.append((f"{track.artist} - {track.title} audio", True))
+        queries_to_try.append(("loose_search", f"{track.artist} - {track.title} audio"))
         
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
-            output_template = f"{temp_path}/{{artist}} - {{title}}.{{output-ext}}"
-            
-            last_error = None
-            
-            # Loop through our query attempts
-            for query, loose_match in queries_to_try:
+            failures: list[dict[str, object]] = []
+
+            for attempt_number, (query_type, query) in enumerate(queries_to_try, 1):
+                attempt_path = temp_path / f"attempt-{attempt_number}"
+                attempt_path.mkdir()
+                output_template = str(attempt_path / "{artist} - {title}.{output-ext}")
+                return_code: int | None = None
+                output_count = 0
+                reason_category = "execution_failure"
+                diagnostic = "SpotDL failed before returning a result"
                 try:
                     command_args = [
                         query,
@@ -114,45 +123,141 @@ class SpotDLClient:
                     ]
                     
                     # Inject the override flag for the fallback attempt
-                    if loose_match:
+                    if query_type == "loose_search":
                         command_args.append("--dont-filter-results")
                         
                     result = self._run(command_args, timeout=300)
-                    
+                    return_code = result.returncode
+                    files = self._audio_files(attempt_path)
+                    output_count = len(files)
+                    diagnostic = self._diagnostic(result.stdout, result.stderr, attempt_path)
+
                     if result.returncode != 0:
-                        raise RuntimeError(result.stderr)
-                        
-                    files = sorted(
-                        temp_path.glob("*"),
-                        key=lambda file: file.stat().st_mtime,
-                        reverse=True,
-                    )
-                    
-                    if not files:
-                        error_msg = result.stdout.strip() or result.stderr.strip() or "No matching audio found."
-                        error_msg = error_msg.split('\n')[-1] 
-                        raise RuntimeError(f"SpotDL Skipped: {error_msg}")
-                        
-                    downloaded_file = files[0]
-                    final_path = output_dir / downloaded_file.name
-                    
-                    if final_path.exists():
-                        final_path.unlink()
-                        
-                    shutil.move(str(downloaded_file), str(final_path))
-                    
-                    return final_path
-                    
-                except RuntimeError as e:
-                    last_error = e
-                    # Silently catch the LookupError and proceed to the next fallback attempt
-                    if "LookupError" in str(e):
-                        continue
+                        reason_category = "nonzero_exit"
+                    elif not files:
+                        reason_category = "zero_exit_no_output"
+                        if diagnostic is None:
+                            diagnostic = "SpotDL completed without producing an output file"
                     else:
-                        raise e
-                        
-            # If all fallback attempts fail, raise the final error to the UI
-            raise last_error
+                        reason_category = "success"
+                        downloaded_file = files[0]
+                        final_path = output_dir / downloaded_file.name
+
+                        if final_path.exists():
+                            final_path.unlink()
+
+                        shutil.move(str(downloaded_file), str(final_path))
+                        self._log_attempt(
+                            job_id,
+                            query_type,
+                            return_code,
+                            output_count,
+                            reason_category,
+                            diagnostic,
+                        )
+                        return final_path
+
+                    diagnostic = diagnostic or "SpotDL did not provide a diagnostic"
+                except (LookupError, RuntimeError) as exc:
+                    diagnostic = self._bounded_diagnostic(str(exc), attempt_path)
+                    if isinstance(exc, LookupError) or "lookuperror" in str(exc).lower():
+                        reason_category = "matching_failure"
+
+                self._log_attempt(
+                    job_id,
+                    query_type,
+                    return_code,
+                    output_count,
+                    reason_category,
+                    diagnostic,
+                )
+                failures.append(
+                    {
+                        "query_type": query_type,
+                        "return_code": return_code,
+                        "category": reason_category,
+                        "diagnostic": diagnostic,
+                    }
+                )
+
+            final = failures[-1]
+            query_types = ", ".join(str(item["query_type"]) for item in failures)
+            if final["return_code"] is None:
+                result_summary = "SpotDL did not return an exit code"
+            elif final["return_code"] == 0:
+                result_summary = "SpotDL returned zero with no output"
+            else:
+                result_summary = f"SpotDL returned nonzero ({final['return_code']})"
+            raise RuntimeError(
+                f"Could not download {track.artist or 'Unknown artist'} - "
+                f"{track.title or 'Unknown title'} after {len(failures)} attempts "
+                f"({query_types}). {result_summary}. Diagnostic: {final['diagnostic']}"
+            )
+
+    _AUDIO_EXTENSIONS = frozenset(
+        {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma"}
+    )
+    _DIAGNOSTIC_PATTERN = re.compile(
+        r"skipping|skipped|error|failed|no results|no match|audioprovidererror|"
+        r"yt-dlp|\b403\b|\b429\b",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _audio_files(cls, directory: Path) -> list[Path]:
+        """Return actual audio outputs recursively in deterministic order."""
+        return sorted(
+            (
+                path
+                for path in directory.rglob("*")
+                if path.is_file() and path.suffix.lower() in cls._AUDIO_EXTENSIONS
+            ),
+            key=lambda path: path.relative_to(directory).as_posix(),
+        )
+
+    @classmethod
+    def _diagnostic(cls, stdout: str, stderr: str, temp_path: Path) -> str | None:
+        meaningful = [
+            line.strip()
+            for line in f"{stderr}\n{stdout}".splitlines()
+            if cls._DIAGNOSTIC_PATTERN.search(line)
+        ]
+        if not meaningful:
+            return None
+        return cls._bounded_diagnostic(" | ".join(meaningful[-3:]), temp_path)
+
+    @staticmethod
+    def _bounded_diagnostic(message: str, temp_path: Path, limit: int = 500) -> str:
+        safe_lines = [
+            line
+            for line in message.replace(str(temp_path), "[temporary output]").splitlines()
+            if not line.lstrip().startswith(("Traceback (most recent call last):", "File \""))
+        ]
+        cleaned = " ".join(" ".join(safe_lines).split())
+        # Provider diagnostics sometimes include local cache or output paths.
+        # Keep URLs intact while removing Unix and Windows absolute paths.
+        cleaned = re.sub(
+            r"(?<![\w:/])(?:[A-Za-z]:\\|/)[^\s|]+", "[local path]", cleaned
+        )
+        return (cleaned[: limit - 1] + "…") if len(cleaned) > limit else cleaned
+
+    @staticmethod
+    def _log_attempt(
+        job_id: int | None,
+        query_type: str,
+        return_code: int | None,
+        output_count: int,
+        reason_category: str,
+        diagnostic: str | None,
+    ) -> None:
+        logger.bind(
+            job_id=job_id,
+            query_type=query_type,
+            return_code=return_code,
+            output_file_count=output_count,
+            reason_category=reason_category,
+            diagnostic=diagnostic,
+        ).info("SpotDL download attempt completed")
 
     def download_url(
         self,
@@ -196,7 +301,9 @@ class SpotDLClient:
         )
         config_path.mkdir(parents=True, exist_ok=True)
         environment = os.environ.copy()
+        environment["HOME"] = "/tmp"
         environment["XDG_CONFIG_HOME"] = str(config_path)
+        environment["HARMONY_SPOTDL_CONFIG_DIR"] = str(config_path)
         
         try:
             return subprocess.run(

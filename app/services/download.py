@@ -15,4 +15,5 @@ def download_track(track: Track, job_id: int | None = None) -> Path:
     return client.download(
         track,
         Path(settings.staging_path),
+        job_id,
     )

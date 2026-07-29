@@ -59,7 +59,9 @@ def test_spotdl_run_uses_writable_xdg_config_directory(monkeypatch, tmp_path):
     client._run(["--version"])
 
     assert config_dir.is_dir()
+    assert observed["env"]["HOME"] == "/tmp"
     assert observed["env"]["XDG_CONFIG_HOME"] == str(config_dir)
+    assert observed["env"]["HARMONY_SPOTDL_CONFIG_DIR"] == str(config_dir)
 
 
 def test_playlist_sync_persists_actionable_metadata_timeout(monkeypatch):
