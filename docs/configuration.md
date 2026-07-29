@@ -56,19 +56,19 @@ virtual-environment paths inside the container.
 
 ## Exact Spotify track acquisition
 
-Spotify track acquisition has no loose-search setting. Harmony always invokes
-SpotDL once with the stored Spotify track URL; `--dont-filter-results` and
-generated artist/title fallback queries are deliberately unsupported. A
-successful process must produce exactly one supported audio file, and Harmony
-validates embedded artist/title identity, material recording-version markers,
-and reliable duration before the worker can import it.
+Spotify track acquisition has no loose-search setting. Harmony first invokes
+SpotDL with the stored Spotify track URL and automatically retries by
+artist/title if the provider fails or produces no audio. A successful process
+must produce exactly one supported audio file, and Harmony validates embedded
+artist/title identity, material recording-version markers, and reliable
+duration before the worker can import it.
 
 A zero exit with no audio or an identity rejection is recorded as
 `exact_match_unavailable` and is not automatically requeued indefinitely.
 Transient provider outcomes remain separately categorized, including rate
 limits and provider unavailability. Operators can manually retry the retained
-Spotify URL later. There is no environment or runtime option to re-enable loose
-substitution because library accuracy is the invariant.
+Spotify URL later. There is no environment or runtime option to bypass identity
+validation because library accuracy is the invariant.
 
 Rejected temporary output is removed. Harmony does not automatically delete
 previously imported Library files; incorrect historic files and associations

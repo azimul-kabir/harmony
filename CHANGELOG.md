@@ -13,9 +13,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Changed
 
-- Spotify tracks now use one exact original-URL SpotDL attempt. Removed the
-  generated artist/title fallback and `--dont-filter-results`, so provider
-  failure or no output can no longer import a loose substitute.
+- Restored SpotDL's generated artist/title fallback when the original Spotify
+  URL attempt fails or produces no audio. Fallback output now passes the same
+  strict identity validation as URL output, preventing loose substitutes from
+  entering the Library.
 - SpotDL output must contain exactly one supported audio file whose embedded
   primary artist, title, recording-version markers, and reliable duration match
   the requested track before import. Rejections use the stable, non-retryable

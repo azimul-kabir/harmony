@@ -41,25 +41,58 @@ def test_success_is_exactly_one_url_attempt(client, track, tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("failure", [LookupError("no match"), RuntimeError("provider failed")])
-def test_execution_failure_has_no_fallback(client, track, tmp_path, monkeypatch, failure):
+def test_execution_failure_uses_validated_fallback(client, track, tmp_path, monkeypatch, failure):
     calls = []
     def run(args, timeout):
         calls.append(args)
-        raise failure
+        if len(calls) == 1:
+            raise failure
+        (output_dir(args) / "fallback.mp3").write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
     monkeypatch.setattr(client, "_run", run)
-    with pytest.raises(DownloadFailed):
-        client.download(track, tmp_path)
-    assert len(calls) == 1
+    assert client.download(track, tmp_path).name == "fallback.mp3"
+    assert len(calls) == 2
+    assert "--dont-filter-results" in calls[1]
 
 
-def test_nonzero_and_zero_without_output_have_no_fallback(client, track, tmp_path, monkeypatch):
+def test_nonzero_and_zero_without_output_try_fallback(client, track, tmp_path, monkeypatch):
     for code in (1, 0):
         calls = []
         monkeypatch.setattr(client, "_run", lambda args, timeout: calls.append(args) or subprocess.CompletedProcess(args, code, "", "no match"))
         with pytest.raises(DownloadFailed) as error:
             client.download(track, tmp_path)
-        assert len(calls) == 1
+        assert len(calls) == 2
         assert error.value.reason_code == ("provider_no_match" if code else "exact_match_unavailable")
+
+
+def test_fallback_output_is_identity_validated(client, track, tmp_path, monkeypatch):
+    calls = []
+
+    def run(args, timeout):
+        calls.append(args)
+        if len(calls) == 2:
+            (output_dir(args) / "wrong.mp3").write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(client, "_run", run)
+    monkeypatch.setattr(
+        client, "_read_audio_identity",
+        lambda _: AudioIdentity("Different Song", "Different Artist", 180),
+    )
+    with pytest.raises(DownloadFailed) as error:
+        client.download(track, tmp_path)
+    assert error.value.reason_code == "exact_match_unavailable"
+    assert not list(tmp_path.iterdir())
+
+
+def test_unreadable_audio_is_a_typed_identity_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "app.downloaders.spotdl.MutagenFile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad audio")),
+    )
+    assert SpotDLClient._read_audio_identity(tmp_path / "bad.mp3") == AudioIdentity(
+        None, None, None
+    )
 
 
 def test_nested_audio_and_artifact_filtering(client, track, tmp_path, monkeypatch):
