@@ -22,29 +22,57 @@ const unloveButton = document.getElementById("navidrome-unlove-all");
 const loveStatus = document.getElementById("navidrome-love-progress");
 const loveProgress = document.getElementById("navidrome-love-progress-bar");
 let navPlaylists = [];
+let navLoadController = null;
+
+function setNavidromeStatus(message, state = "idle") {
+    const copy = loveStatus?.querySelector(".navidrome-status-copy");
+    if (copy) copy.textContent = message;
+    else if (loveStatus) loveStatus.textContent = message;
+    loveStatus?.classList.remove("is-loading", "is-error", "is-ready");
+    if (state !== "idle") loveStatus?.classList.add(`is-${state}`);
+}
 
 async function loadNavidromePlaylists() {
+    navLoadController?.abort();
+    const controller = new AbortController();
+    navLoadController = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 16000);
     navRefresh.disabled = true;
+    navSelect.disabled = true;
+    loveButton.disabled = true;
+    unloveButton.disabled = true;
+    navSelect.replaceChildren(new Option("Loading playlists…", ""));
+    setNavidromeStatus("Connecting to Navidrome…", "loading");
     try {
-        const response = await fetch("/api/navidrome/playlists");
-        const payload = await response.json();
+        const response = await fetch("/api/navidrome/playlists", {signal: controller.signal});
+        const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail?.message || "Navidrome playlists are unavailable.");
-        navPlaylists = payload.playlists;
+        navPlaylists = Array.isArray(payload.playlists) ? payload.playlists : [];
         navSelect.replaceChildren(new Option(navPlaylists.length ? "Select a playlist…" : "No playlists found", ""));
-        navPlaylists.forEach(item => navSelect.add(new Option(`${item.name} · ${item.track_count} tracks · ID ${item.id}`, item.id)));
-        loveStatus.textContent = navPlaylists.length ? "Select a playlist to continue." : "Navidrome returned no playlists.";
+        navPlaylists.forEach(item => navSelect.add(new Option(`${item.name} · ${item.track_count} tracks`, item.id)));
+        navSelect.disabled = navPlaylists.length === 0;
+        setNavidromeStatus(navPlaylists.length ? `${navPlaylists.length} playlist${navPlaylists.length === 1 ? "" : "s"} ready` : "Navidrome returned no playlists.", navPlaylists.length ? "ready" : "idle");
     } catch (error) {
-        navSelect.replaceChildren(new Option("Unavailable", "")); loveStatus.textContent = error.message;
-    } finally { navRefresh.disabled = false; }
+        navPlaylists = [];
+        navSelect.replaceChildren(new Option("Unable to load playlists", ""));
+        setNavidromeStatus(error.name === "AbortError" ? "Navidrome took too long to respond. Try again." : error.message, "error");
+    } finally {
+        window.clearTimeout(timeout);
+        navRefresh.disabled = false;
+    }
 }
-navSelect?.addEventListener("change", () => { loveButton.disabled = unloveButton.disabled = !navSelect.value; });
+navSelect?.addEventListener("change", () => {
+    loveButton.disabled = unloveButton.disabled = !navSelect.value;
+    const item = navPlaylists.find(playlist => playlist.id === navSelect.value);
+    setNavidromeStatus(item ? `${item.track_count} track${item.track_count === 1 ? "" : "s"} selected` : `${navPlaylists.length} playlist${navPlaylists.length === 1 ? "" : "s"} ready`, "ready");
+});
 navRefresh?.addEventListener("click", loadNavidromePlaylists);
 
 function pollLoveJob(id) {
     window.setTimeout(async () => {
         const response = await fetch(`/api/navidrome/jobs/${id}`); const job = await response.json();
         loveProgress.max = Math.max(1, job.total_tracks); loveProgress.value = job.processed_tracks;
-        loveStatus.textContent = `${job.status.replaceAll("_", " ")} · ${job.processed_tracks}/${job.total_tracks} tracks · batch ${job.current_batch}/${job.total_batches}` + (job.safe_error_message ? ` · ${job.safe_error_message}` : "");
+        setNavidromeStatus(`${job.status.replaceAll("_", " ")} · ${job.processed_tracks}/${job.total_tracks} tracks · batch ${job.current_batch}/${job.total_batches}` + (job.safe_error_message ? ` · ${job.safe_error_message}` : ""), "loading");
         if (["completed", "partially_completed", "failed", "cancelled"].includes(job.status)) { loveButton.disabled = unloveButton.disabled = false; return; }
         pollLoveJob(id);
     }, 600);
@@ -56,9 +84,9 @@ async function startLove(operation) {
         ? `Remove Loved status from every current track in “${item.name}” (${item.track_count} tracks) for the configured Navidrome user?\n\nThis is destructive and does not restore an earlier state.`
         : `Mark every current track in “${item.name}” (${item.track_count} tracks) as Loved for the configured Navidrome user?`;
     if (!window.confirm(message)) return;
-    loveButton.disabled = unloveButton.disabled = true; loveProgress.hidden = false; loveStatus.textContent = "Queueing operation…";
+    loveButton.disabled = unloveButton.disabled = true; loveProgress.hidden = false; setNavidromeStatus("Queueing operation…", "loading");
     const response = await fetch(`/api/navidrome/playlists/${encodeURIComponent(item.id)}/${operation}`, {method: "POST"}); const job = await response.json();
-    if (!response.ok) { loveStatus.textContent = job.detail?.message || "Operation could not be queued."; loveButton.disabled = unloveButton.disabled = false; return; }
+    if (!response.ok) { setNavidromeStatus(job.detail?.message || "Operation could not be queued.", "error"); loveButton.disabled = unloveButton.disabled = false; return; }
     pollLoveJob(job.job_id);
 }
 loveButton?.addEventListener("click", () => startLove("love"));

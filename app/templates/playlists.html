@@ -8,20 +8,32 @@
 </div>
 
 <section class="panel navidrome-love-panel" aria-labelledby="navidrome-love-title">
-    <div>
-        <span class="library-eyebrow">Configured Navidrome user</span>
-        <h2 id="navidrome-love-title">Playlist Loved status</h2>
-        <p>Choose a playlist retrieved directly from Navidrome. Harmony uses its stable ID and current song IDs.</p>
+    <div class="navidrome-love-intro">
+        <span class="navidrome-love-icon" aria-hidden="true">♥</span>
+        <div>
+            <span class="library-eyebrow">Navidrome library</span>
+            <h2 id="navidrome-love-title">Loved songs</h2>
+            <p>Apply Loved status to every song in one of your Navidrome playlists.</p>
+        </div>
     </div>
-    <label for="navidrome-playlist-select">Navidrome playlist</label>
-    <div class="navidrome-love-controls">
-        <select id="navidrome-playlist-select" aria-label="Navidrome playlist"><option value="">Loading playlists…</option></select>
-        <button id="navidrome-playlist-refresh" class="btn-secondary" type="button">↻ Refresh</button>
-        <button id="navidrome-love-all" class="btn-primary" type="button" disabled>Love all in Navidrome</button>
-        <button id="navidrome-unlove-all" class="btn-danger" type="button" disabled>Unlove all in Navidrome</button>
+    <div class="navidrome-love-workspace">
+        <div class="navidrome-playlist-field">
+            <label for="navidrome-playlist-select">Choose a playlist</label>
+            <div class="navidrome-select-row">
+                <select id="navidrome-playlist-select" aria-label="Navidrome playlist" aria-describedby="navidrome-love-progress" disabled><option value="">Loading playlists…</option></select>
+                <button id="navidrome-playlist-refresh" class="btn-secondary navidrome-refresh" type="button" aria-label="Refresh Navidrome playlists">↻ <span>Refresh</span></button>
+            </div>
+        </div>
+        <div class="navidrome-love-actions">
+            <button id="navidrome-love-all" class="btn-primary" type="button" disabled>♥ Love all songs</button>
+            <button id="navidrome-unlove-all" class="btn-secondary navidrome-unlove" type="button" disabled>Remove Loved status</button>
+        </div>
+        <div id="navidrome-love-progress" class="navidrome-love-status is-loading" role="status" aria-live="polite">
+            <span class="navidrome-status-indicator" aria-hidden="true"></span>
+            <span class="navidrome-status-copy">Connecting to Navidrome…</span>
+        </div>
+        <progress id="navidrome-love-progress-bar" value="0" max="1" hidden></progress>
     </div>
-    <div id="navidrome-love-progress" role="status" aria-live="polite">Select a playlist to continue.</div>
-    <progress id="navidrome-love-progress-bar" value="0" max="1" hidden></progress>
 </section>
 
 <section class="panel auto-playlists-panel" aria-labelledby="auto-playlists-title">
