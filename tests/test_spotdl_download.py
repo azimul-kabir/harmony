@@ -40,6 +40,32 @@ def test_success_is_exactly_one_url_attempt(client, track, tmp_path, monkeypatch
     assert "Test Artist - Test Title audio" not in calls[0]
 
 
+def test_attempt_log_includes_elapsed_time(client, track, tmp_path, monkeypatch):
+    log_context = {}
+
+    class BoundLogger:
+        def info(self, _message):
+            return None
+
+    def bind(**context):
+        log_context.update(context)
+        return BoundLogger()
+
+    monkeypatch.setattr("app.downloaders.spotdl.logger.bind", bind)
+    monkeypatch.setattr("app.downloaders.spotdl.time.monotonic", lambda: 12.345)
+
+    def run(args, timeout):
+        (output_dir(args) / "song.mp3").write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(client, "_run", run)
+    client.download(track, tmp_path, job_id=1973)
+
+    assert log_context["job_id"] == 1973
+    assert log_context["query_type"] == "spotify_url"
+    assert log_context["elapsed_seconds"] == 0.0
+
+
 @pytest.mark.parametrize("failure", [LookupError("no match"), RuntimeError("provider failed")])
 def test_execution_failure_uses_validated_fallback(client, track, tmp_path, monkeypatch, failure):
     calls = []
