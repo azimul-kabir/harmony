@@ -45,6 +45,7 @@ def create_job(
         year=track.year,
         isrc=track.isrc,
         genre=track.genre,
+        duration=track.duration,
         spotify_artist_ids=json.dumps(track.spotify_artist_ids),
         genre_provenance=track.genre_provenance,
         status=JobStatus.QUEUED.value,
