@@ -235,6 +235,28 @@ class NavidromeClient:
         result = envelope.get("searchResult3") or {}
         return self._as_list(result.get("song"))
 
+    async def library_songs(self, *, page_size: int = 500) -> list[dict[str, Any]]:
+        """Return the user's Navidrome songs, including playback/star metadata."""
+        size = max(1, min(int(page_size), 500))
+        songs: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            envelope = await self._request(
+                "search3",
+                extra_params={
+                    "query": "",
+                    "songCount": str(size),
+                    "songOffset": str(offset),
+                    "albumCount": "0",
+                    "artistCount": "0",
+                },
+            )
+            page = self._as_list((envelope.get("searchResult3") or {}).get("song"))
+            songs.extend(page)
+            if len(page) < size:
+                return songs
+            offset += size
+
     async def get_song(self, song_id: str) -> dict[str, Any]:
         envelope = await self._request("getSong", extra_params={"id": song_id})
         song = envelope.get("song")

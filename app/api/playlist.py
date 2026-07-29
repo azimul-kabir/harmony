@@ -12,7 +12,7 @@ from app.api.schemas.comparison import PlaylistComparisonResponse
 from app.api.schemas.playlist import PlaylistImportRequest
 from app.api.schemas.playlist_response import PlaylistResponse
 from app.database.session import get_db
-from app.database.models import DownloadJob, Playlist, Song
+from app.database.models import DownloadJob, Playlist
 from app.services.artwork import artwork_url
 from app.services.comparison import compare_with_library
 from app.services.playlist import import_playlist
@@ -25,11 +25,13 @@ from app.services.playlist_manager import (
     resolve_playlist_songs,
 )
 from app.services import auto_playlists
+from app.services.navidrome import NavidromeClient, NavidromeError
 
 router = APIRouter(
     prefix="/api/playlists",
     tags=["Playlists"],
 )
+
 
 class PlaylistDownloadRequest(BaseModel):
     url: str
@@ -72,12 +74,16 @@ def auto_playlist_definitions(db: Session = Depends(get_db)):
 
 
 @router.post("/auto/{rule_id}/generate")
-def generate_auto_playlist(
+async def generate_auto_playlist(
     rule_id: str,
     request: AutoPlaylistRequest,
     db: Session = Depends(get_db),
 ):
     try:
+        if rule_id in {"new-and-unplayed", "favorites", "rediscovery", "most-played"}:
+            auto_playlists.update_navidrome_stats(
+                db, await NavidromeClient().library_songs()
+            )
         return auto_playlists.generate(
             db,
             rule_id,
@@ -85,9 +91,13 @@ def generate_auto_playlist(
             enabled=request.enabled,
         )
     except KeyError as error:
-        raise HTTPException(status_code=404, detail="Auto-playlist definition not found.") from error
+        raise HTTPException(
+            status_code=404, detail="Auto-playlist definition not found."
+        ) from error
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except NavidromeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @router.get("/{playlist_id}/tracks")
@@ -135,9 +145,7 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
                 "availability": (
                     song.availability_status if song else "not_in_library"
                 ),
-                "selectable": bool(
-                    song and song.availability_status != "missing"
-                ),
+                "selectable": bool(song and song.availability_status != "missing"),
             }
         )
     return {
@@ -181,7 +189,9 @@ async def replace_playlist_artwork(
     if not content:
         raise HTTPException(status_code=400, detail="Choose an image to upload.")
     if len(content) > PLAYLIST_ARTWORK_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Playlist artwork cannot exceed 10 MB.")
+        raise HTTPException(
+            status_code=413, detail="Playlist artwork cannot exceed 10 MB."
+        )
     media_type, suffix = _playlist_artwork_type(artwork.content_type, content)
 
     target = playlist_file_path(playlist.name).with_suffix(suffix)
@@ -278,6 +288,7 @@ def import_spotify_playlist(request: PlaylistImportRequest):
     playlist = import_playlist(request.url)
     return PlaylistResponse.model_validate(playlist)
 
+
 @router.post("/compare", response_model=PlaylistComparisonResponse)
 def compare_spotify_playlist(
     request: PlaylistImportRequest,
@@ -286,6 +297,7 @@ def compare_spotify_playlist(
     playlist = import_playlist(request.url)
     comparison = compare_with_library(db, playlist)
     return PlaylistComparisonResponse.model_validate(comparison)
+
 
 @router.post("/download")
 def download(
@@ -297,19 +309,20 @@ def download(
         url=request.url,
     )
 
+
 @router.get("/{playlist_id}/download")
 def download_m3u(playlist_id: int, db: Session = Depends(get_db)):
     playlist = db.get(Playlist, playlist_id)
     if not playlist:
         raise HTTPException(status_code=404, detail="Playlist not found")
-        
+
     file_path = playlist_file_path(playlist.name)
-    
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="M3U file not found on disk")
-        
+
     return FileResponse(
-        path=file_path, 
+        path=file_path,
         filename=file_path.name,
-        media_type="application/vnd.apple.mpegurl"
+        media_type="application/vnd.apple.mpegurl",
     )
