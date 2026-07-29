@@ -142,22 +142,64 @@ document.querySelectorAll(".playlist-sync-btn").forEach(button => {
 });
 
 const navidromeScan = document.getElementById("scan-navidrome");
+const navidromeScanStatus = document.getElementById("scan-navidrome-status");
+
+function navidromeErrorMessage(payload, fallback) {
+    if (typeof payload?.detail === "string") return payload.detail;
+    if (typeof payload?.detail?.message === "string") return payload.detail.message;
+    return fallback;
+}
+
+function setNavidromeScanState(label, message, disabled) {
+    navidromeScan.textContent = label;
+    navidromeScan.disabled = disabled;
+    if (navidromeScanStatus) navidromeScanStatus.textContent = message;
+}
+
+async function pollNavidromeScan(initiallyScanning = false) {
+    // Navidrome may acknowledge startScan before its scanner flips to active.
+    // Poll long enough to show a real completion state instead of leaving the
+    // button permanently disabled after the first click.
+    let observedScanning = initiallyScanning;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const response = await fetch("/api/navidrome/status");
+        const status = await response.json().catch(() => ({}));
+        if (!response.ok || !status.reachable) {
+            throw new Error(status.error || "Navidrome scan status is unavailable.");
+        }
+        if (status.scanning) {
+            observedScanning = true;
+            setNavidromeScanState(
+                "Scanning Navidrome…",
+                `${Number(status.scan_count || 0).toLocaleString()} items processed`,
+                true,
+            );
+            continue;
+        }
+        if (observedScanning || attempt >= 2) {
+            setNavidromeScanState("↻ Scan Navidrome", "Navidrome scan completed.", false);
+            return;
+        }
+    }
+    setNavidromeScanState("↻ Scan Navidrome", "Scan is still running; check the dashboard for status.", false);
+}
+
 navidromeScan?.addEventListener("click", async () => {
-    navidromeScan.disabled = true;
-    navidromeScan.textContent = "Requesting scan…";
+    setNavidromeScanState("Requesting scan…", "Sending scan request to Navidrome…", true);
     try {
         const response = await fetch("/api/navidrome/rescan?full_scan=false", {
             method: "POST",
         });
+        const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            throw new Error(payload.detail || "Navidrome scan could not be started.");
+            throw new Error(navidromeErrorMessage(payload, "Navidrome scan could not be started."));
         }
-        navidromeScan.textContent = "Scan requested";
+        if (payload.accepted !== true) throw new Error("Navidrome did not accept the scan request.");
+        setNavidromeScanState("Scan requested", "Navidrome accepted the library scan.", true);
+        await pollNavidromeScan(Boolean(payload.scanning));
     } catch (error) {
-        alert(error.message);
-        navidromeScan.disabled = false;
-        navidromeScan.textContent = "↻ Scan Navidrome";
+        setNavidromeScanState("↻ Scan Navidrome", error.message, false);
     }
 });
 
