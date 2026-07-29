@@ -139,6 +139,7 @@ def process_job(
             source_item_id=job.source_item_id,
             source_url=job.source_url,
             genre=job.genre,
+            duration=job.duration,
             spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
             genre_provenance=job.genre_provenance,
         )

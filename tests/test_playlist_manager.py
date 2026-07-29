@@ -32,7 +32,7 @@ def _playlist(db, *, spotify_id: str, name: str, track_id: str) -> Playlist:
     return playlist
 
 
-def test_export_uses_persisted_metadata_and_only_writes_existing_files(
+def test_export_does_not_count_predicted_path_without_canonical_association(
     monkeypatch, tmp_path
 ):
     monkeypatch.setattr(
@@ -53,17 +53,40 @@ def test_export_uses_persisted_metadata_and_only_writes_existing_files(
             track_id="track-1",
         )
 
-        assert playlist_manager.export_m3u(db, playlist) == 1
-
-        content = (tmp_path / "Playlists" / "Reliable.m3u").read_text()
-        assert "#EXTINF:123,Stored artist - Stored title" in content
-        assert "../Stored artist/Stored album/03 - Stored title.mp3" in content
+        assert playlist_manager.export_m3u(db, playlist) == 0
+        assert (tmp_path / "Playlists" / "Reliable.m3u").read_text() == "#EXTM3U\n"
 
         expected.unlink()
         assert playlist_manager.export_m3u(db, playlist) == 0
         assert (
             tmp_path / "Playlists" / "Reliable.m3u"
         ).read_text() == "#EXTM3U\n"
+    finally:
+        db.close()
+
+
+def test_future_cut_copy_file_does_not_make_spotify_item_available(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        playlist_manager, "get_settings",
+        lambda: SimpleNamespace(music_path=str(tmp_path)),
+    )
+    wrong = tmp_path / "Cut Copy" / "Future" / "04 - Future - Instrumental.mp3"
+    wrong.parent.mkdir(parents=True)
+    wrong.write_bytes(b"audio")
+    db = SessionLocal()
+    try:
+        playlist = _playlist(
+            db, spotify_id="future-playlist", name="99 of 100",
+            track_id="future-fukk-a-interview",
+        )
+        playlist.tracks[0].title = "Fukk A Interview"
+        playlist.tracks[0].artist = "Future"
+        db.commit()
+
+        assert playlist_manager.export_m3u(db, playlist) == 0
+        assert "Instrumental" not in (
+            tmp_path / "Playlists" / "99 of 100.m3u"
+        ).read_text()
     finally:
         db.close()
 

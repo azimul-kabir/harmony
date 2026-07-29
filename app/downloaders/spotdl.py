@@ -4,7 +4,11 @@ import subprocess
 import tempfile
 import shutil
 import re
+import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
+
+from mutagen import File as MutagenFile
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -14,6 +18,64 @@ from app.mappers.spotdl import spotdl_song_to_track
 from app.schemas.spotdl import SpotDLSong
 from app.services import settings_service
 from app.database.session import SessionLocal
+from app.domain.download_outcome import DownloadFailed
+
+
+@dataclass(frozen=True, slots=True)
+class AudioIdentity:
+    title: str | None
+    artist: str | None
+    duration: float | None
+
+
+_VERSION_MARKERS = (
+    "instrumental", "karaoke", "live", "remix", "sped up", "slowed",
+    "acoustic", "demo", "radio edit", "remaster", "cover", "tribute",
+)
+
+
+def _normalized(value: str | None) -> str:
+    value = unicodedata.normalize("NFKC", value or "").casefold()
+    value = re.sub(r"\b(feat(?:uring)?|ft|with)\.?\s+.*$", "", value)
+    value = re.sub(r"\b(?:explicit|clean)(?: version)?\b", "", value)
+    value = re.sub(r"[^\w\s]", " ", value)
+    return " ".join(value.split())
+
+
+def _markers(value: str | None) -> frozenset[str]:
+    normalized = _normalized(value)
+    return frozenset(marker for marker in _VERSION_MARKERS if marker in normalized)
+
+
+def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
+    """Reject output whose embedded identity is not the requested recording."""
+    if not candidate.title or not candidate.artist:
+        raise DownloadFailed(
+            "exact_match_unavailable", "Exact match unavailable", "validation",
+            retryable=False, technical_detail="audio_identity_missing",
+        )
+    if _normalized(requested.artist) != _normalized(candidate.artist):
+        raise DownloadFailed(
+            "exact_match_unavailable", "Exact match unavailable", "validation",
+            retryable=False, technical_detail="artist_mismatch",
+        )
+    if _normalized(requested.title) != _normalized(candidate.title):
+        raise DownloadFailed(
+            "exact_match_unavailable", "Exact match unavailable", "validation",
+            retryable=False, technical_detail="title_mismatch",
+        )
+    if _markers(requested.title) != _markers(candidate.title):
+        raise DownloadFailed(
+            "exact_match_unavailable", "Exact match unavailable", "validation",
+            retryable=False, technical_detail="version_mismatch",
+        )
+    if requested.duration and candidate.duration:
+        tolerance = max(5.0, min(10.0, requested.duration * 0.04))
+        if abs(requested.duration - candidate.duration) > tolerance:
+            raise DownloadFailed(
+                "exact_match_unavailable", "Exact match unavailable", "validation",
+                retryable=False, technical_detail="duration_mismatch",
+            )
 
 class SpotDLClient:
     def __init__(self) -> None:
@@ -91,108 +153,85 @@ class SpotDLClient:
         finally:
             db.close()
 
-        # Each query is attempted exactly once.  In particular, a successful
-        # SpotDL process is not necessarily a successful download: providers
-        # can report a skip and exit zero without creating an audio file.
-        queries_to_try: list[tuple[str, str]] = []
-        if track.spotify_url:
-            queries_to_try.append(("spotify_url", track.spotify_url))
-            
-        queries_to_try.append(("loose_search", f"{track.artist} - {track.title} audio"))
+        if not track.spotify_url:
+            raise DownloadFailed(
+                "exact_match_unavailable", "Exact match unavailable", "download",
+                retryable=False, technical_detail="spotify_url_missing",
+            )
         
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
-            failures: list[dict[str, object]] = []
+            attempt_path = temp_path / "spotify-url"
+            attempt_path.mkdir()
+            output_template = str(attempt_path / "{artist} - {title}.{output-ext}")
+            return_code: int | None = None
+            output_count = 0
+            reason_category = "provider_error"
+            diagnostic = "SpotDL failed before returning a result"
+            try:
+                command_args = [
+                    track.spotify_url,
+                    "--audio", *self._audio_providers(),
+                    "--bitrate", quality,
+                    "--output", output_template,
+                    "--threads", "1",
+                ]
+                result = self._run(command_args, timeout=300)
+                return_code = result.returncode
+                files = self._audio_files(attempt_path)
+                output_count = len(files)
+                diagnostic = self._diagnostic(result.stdout, result.stderr, attempt_path)
 
-            for attempt_number, (query_type, query) in enumerate(queries_to_try, 1):
-                attempt_path = temp_path / f"attempt-{attempt_number}"
-                attempt_path.mkdir()
-                output_template = str(attempt_path / "{artist} - {title}.{output-ext}")
-                return_code: int | None = None
-                output_count = 0
-                reason_category = "execution_failure"
-                diagnostic = "SpotDL failed before returning a result"
-                try:
-                    command_args = [
-                        query,
-                        "--audio",
-                        *self._audio_providers(),
-                        "--bitrate", quality,
-                        "--output", output_template,
-                        "--threads", "1", 
-                    ]
-                    
-                    # Inject the override flag for the fallback attempt
-                    if query_type == "loose_search":
-                        command_args.append("--dont-filter-results")
-                        
-                    result = self._run(command_args, timeout=300)
-                    return_code = result.returncode
-                    files = self._audio_files(attempt_path)
-                    output_count = len(files)
-                    diagnostic = self._diagnostic(result.stdout, result.stderr, attempt_path)
+                if return_code != 0:
+                    reason_category = self._provider_reason(diagnostic)
+                    raise DownloadFailed(
+                        reason_category, "The download provider could not obtain the Spotify-linked track.",
+                        "download", retryable=reason_category != "provider_no_match",
+                        technical_detail=diagnostic or f"SpotDL exited with code {return_code}",
+                    )
+                if output_count == 0:
+                    reason_category = "exact_match_unavailable"
+                    diagnostic = diagnostic or "SpotDL completed without producing an audio file"
+                    raise DownloadFailed(
+                        reason_category,
+                        "Harmony could not obtain the Spotify-linked track. Loose substitute searches are disabled to protect library accuracy.",
+                        "download", retryable=False, technical_detail=diagnostic,
+                    )
+                if output_count != 1:
+                    reason_category = "unexpected_output_count"
+                    diagnostic = f"SpotDL produced {output_count} supported audio files"
+                    raise DownloadFailed(
+                        reason_category, "The provider returned an unexpected number of files.",
+                        "validation", retryable=False, technical_detail=diagnostic,
+                    )
 
-                    if result.returncode != 0:
-                        reason_category = "nonzero_exit"
-                    elif not files:
-                        reason_category = "zero_exit_no_output"
-                        if diagnostic is None:
-                            diagnostic = "SpotDL completed without producing an output file"
-                    else:
-                        reason_category = "success"
-                        downloaded_file = files[0]
-                        final_path = output_dir / downloaded_file.name
-
-                        if final_path.exists():
-                            final_path.unlink()
-
-                        shutil.move(str(downloaded_file), str(final_path))
-                        self._log_attempt(
-                            job_id,
-                            query_type,
-                            return_code,
-                            output_count,
-                            reason_category,
-                            diagnostic,
-                        )
-                        return final_path
-
-                    diagnostic = diagnostic or "SpotDL did not provide a diagnostic"
-                except (LookupError, RuntimeError) as exc:
-                    diagnostic = self._bounded_diagnostic(str(exc), attempt_path)
-                    if isinstance(exc, LookupError) or "lookuperror" in str(exc).lower():
-                        reason_category = "matching_failure"
-
-                self._log_attempt(
-                    job_id,
-                    query_type,
-                    return_code,
-                    output_count,
-                    reason_category,
-                    diagnostic,
+                downloaded_file = files[0]
+                validate_track_identity(track, self._read_audio_identity(downloaded_file))
+                reason_category = "success"
+                final_path = output_dir / downloaded_file.name
+                final_path.unlink(missing_ok=True)
+                shutil.move(str(downloaded_file), str(final_path))
+                return final_path
+            except DownloadFailed as exc:
+                reason_category = exc.reason_code
+                diagnostic = self._bounded_diagnostic(
+                    exc.technical_detail or exc.message, attempt_path
                 )
-                failures.append(
-                    {
-                        "query_type": query_type,
-                        "return_code": return_code,
-                        "category": reason_category,
-                        "diagnostic": diagnostic,
-                    }
-                )
-
-            final = failures[-1]
-            query_types = ", ".join(str(item["query_type"]) for item in failures)
-            if final["return_code"] is None:
-                result_summary = "SpotDL did not return an exit code"
-            elif final["return_code"] == 0:
-                result_summary = "SpotDL returned zero with no output"
-            else:
-                result_summary = f"SpotDL returned nonzero ({final['return_code']})"
-            raise RuntimeError(
-                f"Could not download {track.artist or 'Unknown artist'} - "
-                f"{track.title or 'Unknown title'} after {len(failures)} attempts "
-                f"({query_types}). {result_summary}. Diagnostic: {final['diagnostic']}"
-            )
+                raise DownloadFailed(
+                    exc.reason_code, exc.message, exc.stage, exc.provider,
+                    exc.retryable, diagnostic,
+                ) from None
+            except (LookupError, RuntimeError) as exc:
+                diagnostic = self._bounded_diagnostic(str(exc), attempt_path)
+                reason_category = "provider_no_match" if isinstance(exc, LookupError) else "provider_error"
+                raise DownloadFailed(
+                    reason_category, "The download provider could not obtain the Spotify-linked track.",
+                    "download", retryable=not isinstance(exc, LookupError),
+                    technical_detail=diagnostic,
+                ) from None
+            finally:
+                self._log_attempt(job_id, "spotify_url", return_code, output_count,
+                                  reason_category, diagnostic)
 
     _AUDIO_EXTENSIONS = frozenset(
         {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma"}
@@ -214,6 +253,30 @@ class SpotDLClient:
             ),
             key=lambda path: path.relative_to(directory).as_posix(),
         )
+
+    @staticmethod
+    def _read_audio_identity(path: Path) -> AudioIdentity:
+        audio = MutagenFile(path, easy=True)
+        if audio is None:
+            return AudioIdentity(None, None, None)
+
+        def first(name: str) -> str | None:
+            values = audio.tags.get(name, []) if audio.tags is not None else []
+            return str(values[0]) if values else None
+
+        duration = getattr(getattr(audio, "info", None), "length", None)
+        return AudioIdentity(first("title"), first("artist"), duration)
+
+    @staticmethod
+    def _provider_reason(diagnostic: str | None) -> str:
+        text = (diagnostic or "").casefold()
+        if "429" in text or "rate limit" in text:
+            return "provider_rate_limited"
+        if "no match" in text or "no results" in text or "not found" in text:
+            return "provider_no_match"
+        if "unavailable" in text or "403" in text:
+            return "provider_unavailable"
+        return "provider_error"
 
     @classmethod
     def _diagnostic(cls, stdout: str, stderr: str, temp_path: Path) -> str | None:

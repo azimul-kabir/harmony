@@ -28,7 +28,12 @@ That idea eventually became Harmony.
 
 **Under the Hood**
 *   Multi-threaded background queue for simultaneous downloads.
-*   Smart fallback search to grab hard-to-find regional or extended tracks.
+*   Exact-match-only Spotify downloads: Harmony uses the original Spotify track
+    URL once and never substitutes a generated artist/title search result.
+*   Artist, title, recording-version markers, and reliable duration are checked
+    before import. If the Spotify-linked recording is unavailable, the item
+    remains unavailable rather than making the playlist appear complete with a
+    remix, instrumental, karaoke, live, cover, or unrelated recording.
 *   Runs completely locally on your own computer or NAS via Docker.
 
 ### Harmony + Navidrome

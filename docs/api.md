@@ -256,6 +256,17 @@ byte progress or ETA. Failed history filtering includes cancelled
 jobs, matching the Dashboard attention link; `/downloads?status=cancelled`
 remains available for cancelled-only history.
 
+Spotify failures may expose the stable reason code
+`exact_match_unavailable` with the user-facing meaning **Exact match
+unavailable**: Harmony could not obtain or validate the Spotify-linked track,
+and loose substitute searches are disabled. This outcome preserves the original
+job identity for manual retry but is not automatically requeued indefinitely.
+Other bounded provider categories include `provider_no_match`,
+`provider_rate_limited`, `provider_unavailable`, and `provider_error`; an
+unexpected multi-file response uses `unexpected_output_count`. API read models
+must not expose provider stack traces, command arguments, credentials, cookies,
+or local paths with these outcomes.
+
 ### `POST /api/downloads/bulk`
 
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
