@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import shutil
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -174,6 +175,7 @@ class SpotDLClient:
             temp_path = Path(temp_dir)
             failures: list[DownloadFailed] = []
             for query_type, query, loose_match in attempts:
+                attempt_started = time.monotonic()
                 attempt_path = temp_path / query_type
                 attempt_path.mkdir()
                 output_template = str(attempt_path / "{artist} - {title}.{output-ext}")
@@ -260,7 +262,8 @@ class SpotDLClient:
                     ))
                 finally:
                     self._log_attempt(job_id, query_type, return_code, output_count,
-                                      reason_category, diagnostic)
+                                      reason_category, diagnostic,
+                                      time.monotonic() - attempt_started)
 
             raise failures[-1] from None
 
@@ -346,6 +349,7 @@ class SpotDLClient:
         output_count: int,
         reason_category: str,
         diagnostic: str | None,
+        elapsed_seconds: float,
     ) -> None:
         logger.bind(
             job_id=job_id,
@@ -354,6 +358,7 @@ class SpotDLClient:
             output_file_count=output_count,
             reason_category=reason_category,
             diagnostic=diagnostic,
+            elapsed_seconds=round(elapsed_seconds, 3),
         ).info("SpotDL download attempt completed")
 
     def download_url(
