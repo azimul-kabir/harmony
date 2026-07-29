@@ -214,6 +214,14 @@
         <div class="settings-section" id="tab-navidrome" style="display: none;">
             <h2 style="margin-top: 0;">Navidrome</h2>
             <p class="settings-help">Connection URL and credentials remain environment-only.</p>
+            <div class="settings-field-grid" aria-label="Navidrome connection configuration">
+                <label>Base URL<input class="form-control" value="{{ 'Configured' if settings.navidrome_url else 'Not configured' }}" readonly></label>
+                <label>Username<input class="form-control" value="{{ 'Configured' if settings.navidrome_username else 'Not configured' }}" readonly></label>
+                <label>Password<input class="form-control" type="password" value="" placeholder="{{ 'Stored server-side' if settings.navidrome_password else 'Not configured' }}" readonly></label>
+            </div>
+            <p class="settings-help">Set the Navidrome URL, username, and password in the server environment. Credentials are never rendered.</p>
+            <button id="navidrome-test-connection" class="btn-secondary" type="button">Test Connection</button>
+            <span id="navidrome-test-result" role="status" aria-live="polite"></span>
             <form class="settings-form" data-category="navidrome">
                 <div class="settings-toggle-list">
                     <label><input type="checkbox" name="navidrome_direct_playlist_sync_enabled" {% if navidrome.navidrome_direct_playlist_sync_enabled %}checked{% endif %}> Direct playlist sync</label>
@@ -551,6 +559,16 @@
     const spotifyToggle = document.querySelector('[name="spotify_genre_enrichment_enabled"]');
     if (spotifyToggle) spotifyToggle.addEventListener('change', () => {
         document.getElementById('spotify-credential-status').style.display = spotifyToggle.checked ? 'block' : 'none';
+    });
+    document.getElementById('navidrome-test-connection')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget; const result = document.getElementById('navidrome-test-result');
+        button.disabled = true; result.textContent = ' Testing…';
+        try {
+            const response = await fetch('/api/navidrome/test', {method: 'POST'}); const payload = await response.json();
+            if (!response.ok) throw new Error(payload.detail?.message || 'Connection failed.');
+            result.textContent = ` Connected${payload.server_version ? ` · Navidrome ${payload.server_version}` : ''}`;
+        } catch (error) { result.textContent = ` ${error.message}`; }
+        finally { button.disabled = false; }
     });
 </script>
 {% endblock %}

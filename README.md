@@ -112,6 +112,8 @@ Features include:
 - Direct `.m3u` downloads from the web interface
 - Direct, order-preserving Navidrome playlist synchronization with safe M3U
   fallback
+- Bulk Love/Unlove for playlists discovered directly through Navidrome, using
+  stable Navidrome playlist and song IDs in bounded batches
 - Playlist availability counts, filtering, and one-click source resync
 - Ordered playlist Library-file management and safe saved-playlist deletion
 - Per-source scheduled auto-sync (hourly, every 6 or 12 hours, daily, or weekly)

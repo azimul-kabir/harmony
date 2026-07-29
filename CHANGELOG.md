@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added native Navidrome playlist Love All and Unlove All actions with token
+  authentication, durable batch progress, safe partial failures, connection
+  testing, and mobile playlist selection.
+
 All notable changes to Harmony are documented in this file. The format is based
 on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
