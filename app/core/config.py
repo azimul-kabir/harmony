@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     navidrome_playlist_reimport_debounce_seconds: float = 10.0
     navidrome_playlist_reimport_poll_seconds: float = 2.0
     navidrome_playlist_reimport_scan_timeout_seconds: float = 900.0
+    navidrome_sync_health_enabled: bool = True
+    navidrome_sync_health_interval_minutes: int = 15
+    navidrome_sync_health_auto_reconcile: bool = False
 
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
     musicbrainz_user_agent: str = "Harmony/2.0.1 (https://github.com/azimul-kabir/harmony)"

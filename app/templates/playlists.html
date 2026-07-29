@@ -4,7 +4,10 @@
 {% block content %} 
 <div class="page-heading">
     <div><span class="library-eyebrow">Local exports</span><h1>Playlists</h1></div>
-    <button id="scan-navidrome" class="btn-secondary" type="button">↻ Scan Navidrome</button>
+    <div class="playlist-navidrome-scan">
+        <button id="scan-navidrome" class="btn-secondary" type="button" aria-describedby="scan-navidrome-status">↻ Scan Navidrome</button>
+        <span id="scan-navidrome-status" class="playlist-scan-status" role="status" aria-live="polite"></span>
+    </div>
 </div>
 
 <section class="playlist-library-section" aria-labelledby="playlist-library-title">

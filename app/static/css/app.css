@@ -351,6 +351,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .navidrome-status.is-offline { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 .navidrome-status.is-checking, .navidrome-status.is-unconfigured { background: var(--bg-surface-alt); color: var(--text-muted); }
 .navidrome-status.is-scanning { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+.playlist-navidrome-scan { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); flex-wrap: wrap; }
+.playlist-scan-status { color: var(--text-muted); font-size: .8rem; max-width: 22rem; text-align: right; }
+.navidrome-panel[data-sync-health="drift"] { border-color: color-mix(in srgb, var(--warning) 65%, var(--border-color)); }
+.navidrome-panel[data-sync-health="unavailable"] { border-color: color-mix(in srgb, var(--danger) 65%, var(--border-color)); }
 .navidrome-controls p { color: var(--text-muted); font-size: .85rem; margin: 0 0 10px; }
 .navidrome-controls > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .dashboard-trends-content { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(150px, .75fr); gap: 16px; align-items: end; }

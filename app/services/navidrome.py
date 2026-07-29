@@ -272,6 +272,36 @@ class NavidromeClient:
         playlists = envelope.get("playlists") or {}
         return self._as_list(playlists.get("playlist"))
 
+    async def get_albums(self, *, size: int = 500) -> list[dict[str, Any]]:
+        """Return every album visible to the configured Navidrome user."""
+        albums: list[dict[str, Any]] = []
+        offset = 0
+        page_size = max(1, min(int(size), 500))
+        while True:
+            envelope = await self._request(
+                "getAlbumList2",
+                extra_params={
+                    "type": "alphabeticalByName",
+                    "size": str(page_size),
+                    "offset": str(offset),
+                },
+            )
+            page = self._as_list((envelope.get("albumList2") or {}).get("album"))
+            albums.extend(page)
+            if len(page) < page_size:
+                return albums
+            offset += page_size
+
+    async def get_artists(self) -> list[dict[str, Any]]:
+        """Return every artist visible to the configured Navidrome user."""
+        envelope = await self._request("getArtists")
+        indexes = self._as_list((envelope.get("artists") or {}).get("index"))
+        return [
+            artist
+            for index in indexes
+            for artist in self._as_list(index.get("artist"))
+        ]
+
     async def get_playlist(self, playlist_id: str) -> dict[str, Any]:
         if not isinstance(playlist_id, str) or not playlist_id.strip():
             raise ValueError("A valid playlist ID is required.")

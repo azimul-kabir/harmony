@@ -88,6 +88,42 @@ function renderNavidromeStatus(status) {
     const enabled = Boolean(status.configured && status.reachable && !status.scanning);
     rescan.disabled = !enabled;
     fullRescan.disabled = !enabled;
+    const healthCheck = document.getElementById("navidrome-health-check");
+    if (healthCheck) healthCheck.disabled = !enabled;
+}
+
+function countComparison(health, key) {
+    if (!health.expected || !health.actual) return "—";
+    return `${Number(health.actual[key] || 0).toLocaleString()} / ${Number(health.expected[key] || 0).toLocaleString()}`;
+}
+
+function renderNavidromeSyncHealth(health) {
+    const panel = document.querySelector(".navidrome-panel");
+    if (panel) panel.dataset.syncHealth = health.state || "pending";
+    ["songs", "albums", "artists", "playlists"].forEach((key) => setText(`navidrome-health-${key}`, countComparison(health, key)));
+    setText("navidrome-health-missing", health.missing_tracks === undefined ? "—" : Number(health.missing_tracks).toLocaleString());
+    setText("navidrome-health-stale", health.stale_tracks === undefined ? "—" : Number(health.stale_tracks).toLocaleString());
+    const reconcile = document.getElementById("navidrome-reconcile");
+    if (reconcile) reconcile.disabled = health.state !== "drift";
+    const messages = {
+        healthy: `Navidrome matches Harmony. Verified ${formatNavidromeDate(health.checked_at)}.`,
+        drift: `Index drift detected${health.reconciliation_requested ? "; a reconciliation scan was requested" : ""}.`,
+        checking: "A sync health check is already running.",
+        unavailable: health.error || "Navidrome could not be checked.",
+        unconfigured: "Configure Navidrome to verify sync health.",
+        pending: "Sync health has not been verified yet.",
+    };
+    setText("navidrome-health-message", messages[health.state] || messages.pending);
+}
+
+async function refreshNavidromeSyncHealth(refresh = false) {
+    try {
+        const response = await fetch(`/api/navidrome/sync-health?refresh=${refresh}`);
+        if (!response.ok) throw new Error("Health request failed");
+        renderNavidromeSyncHealth(await response.json());
+    } catch (_) {
+        renderNavidromeSyncHealth({ state: "unavailable", error: "Harmony could not verify Navidrome sync health." });
+    }
 }
 
 async function refreshNavidromeStatus() {
@@ -135,8 +171,23 @@ function setupNavidromeControls() {
             startNavidromeScan(true, fullRescan);
         }
     });
+    const healthCheck = document.getElementById("navidrome-health-check");
+    const reconcile = document.getElementById("navidrome-reconcile");
+    if (healthCheck) healthCheck.addEventListener("click", async () => {
+        healthCheck.disabled = true;
+        setText("navidrome-health-message", "Comparing Harmony and Navidrome libraries…");
+        await refreshNavidromeSyncHealth(true);
+        healthCheck.disabled = false;
+    });
+    if (reconcile) reconcile.addEventListener("click", async () => {
+        reconcile.disabled = true;
+        const response = await fetch("/api/navidrome/sync-health/reconcile", { method: "POST" });
+        renderNavidromeSyncHealth(await response.json());
+    });
     refreshNavidromeStatus();
+    refreshNavidromeSyncHealth();
     window.setInterval(refreshNavidromeStatus, 15000);
+    window.setInterval(refreshNavidromeSyncHealth, 60000);
 }
 
 function renderDownloadTrends(trends) {

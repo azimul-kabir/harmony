@@ -115,6 +115,24 @@ def test_start_scan_passes_full_scan_flag(full_scan):
     assert result["scanning"] is True
 
 
+def test_rescan_api_handler_calls_navidrome_start_scan(monkeypatch):
+    from app.api import navidrome as navidrome_api
+
+    calls = []
+
+    class FakeClient:
+        async def start_scan(self, *, full_scan=False):
+            calls.append(full_scan)
+            return {"accepted": True, "scanning": True, "full_scan": full_scan}
+
+    monkeypatch.setattr(navidrome_api, "NavidromeClient", FakeClient)
+
+    result = asyncio.run(navidrome_api.navidrome_rescan(full_scan=False))
+
+    assert calls == [False]
+    assert result == {"accepted": True, "scanning": True, "full_scan": False}
+
+
 def test_api_errors_become_clean_navidrome_errors():
     transport = httpx.MockTransport(
         lambda request: httpx.Response(

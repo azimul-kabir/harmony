@@ -44,6 +44,7 @@ from app.workers.download_worker import worker_loop
 from app.services.settings_service import initialize_defaults
 from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
+from app.services.navidrome_sync_health import navidrome_sync_health_scheduler
 from app.services.source_auto_sync import source_auto_sync_scheduler
 from app.services.synology_monitor import synology_monitor
 
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
     library_bulk_worker.start()
     library_maintenance_worker.start()
     navidrome_playlist_reimport.start()
+    navidrome_sync_health_scheduler.start()
     source_auto_sync_scheduler.start()
     synology_monitor.start()
     
@@ -99,6 +101,7 @@ async def lifespan(app: FastAPI):
         library_bulk_worker.stop()
         library_maintenance_worker.stop()
         navidrome_playlist_reimport.stop()
+        navidrome_sync_health_scheduler.stop()
         source_auto_sync_scheduler.stop()
         await synology_monitor.stop()
         await close_providers()

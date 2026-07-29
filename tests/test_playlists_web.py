@@ -27,3 +27,15 @@ def test_playlist_page_orders_library_before_loved_and_auto_sections():
     ) < template.index('class="panel auto-playlists-panel"')
     assert 'id="playlist-library-title">Your playlists</h2>' in template
     assert 'for="playlist-search"' in template
+
+
+def test_playlist_navidrome_scan_has_endpoint_wiring_and_live_feedback():
+    template = Path("app/templates/playlists.html").read_text()
+    script = Path("app/static/js/playlists.js").read_text()
+
+    assert 'id="scan-navidrome"' in template
+    assert 'id="scan-navidrome-status"' in template
+    assert 'fetch("/api/navidrome/rescan?full_scan=false"' in script
+    assert 'fetch("/api/navidrome/status")' in script
+    assert "payload.accepted !== true" in script
+    assert "Navidrome scan completed." in script
