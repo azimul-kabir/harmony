@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 from datetime import datetime, UTC
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -11,7 +11,6 @@ from app.core.logging import logger
 from app.database.models import Playlist, PlaylistTrack, Song, SyncSource
 from app.domain.playlist import Playlist as DomainPlaylist
 from app.domain.track import Track
-from app.services.library_paths import _safe
 from app.services.library_search import library_search
 
 PLAYLIST_ARTWORK_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".gif")
@@ -210,7 +209,10 @@ def resolve_playlist_songs(
         if not track.spotify_track_id.startswith("library:")
     ]
     songs = db.scalars(
-        select(Song).where(Song.spotify_track_id.in_(track_ids))
+        select(Song).where(
+            Song.spotify_track_id.in_(track_ids),
+            Song.availability_status == "available",
+        )
     ).all()
     resolved = {song.spotify_track_id: song for song in songs}
 
@@ -230,7 +232,7 @@ def resolve_playlist_songs(
         if song is None and ":" in track.spotify_track_id:
             provider, item_id = track.spotify_track_id.split(":", 1)
             song = find_song_by_source(db, provider, item_id)
-        if song is not None:
+        if song is not None and song.availability_status == "available" and Path(song.path).is_file():
             resolved[track.spotify_track_id] = song
     return resolved
 
@@ -338,35 +340,10 @@ def export_m3u(db: Session, playlist: Playlist, domain_tracks=None) -> int:
                     elif job:
                         title = job.title
                         artist = job.artist
-                    
-                    if title and title != "Unknown Title":
-                        fallback_song = db.query(Song).filter(func.lower(Song.title) == title.lower()).first()
-                        if fallback_song:
-                            artist = fallback_song.artist or artist
-                            title = fallback_song.title or title
-                            duration = int(fallback_song.duration) if fallback_song.duration else -1
-                            full_song_path = Path(fallback_song.path)
-                            if not fallback_song.spotify_track_id:
-                                fallback_song.spotify_track_id = pt.spotify_track_id
-                                db.commit()
-                        elif job or pt.title:
-                            album_artist = _safe(
-                                (job.album_artist if job else pt.album_artist)
-                                or (job.artist if job else pt.artist)
-                                or "Unknown Artist"
-                            )
-                            source_album = job.album if job else pt.album
-                            source_track = job.track if job else pt.track_number
-                            album = _safe(source_album) if source_album else "Singles"
-                            track_num = f"{source_track:02d} - " if source_track is not None else ""
-                            filename = f"{track_num}{_safe(title)}.mp3"
-                            full_song_path = Path(settings.music_path) / album_artist / album / filename
-                        elif dt:
-                            album_artist = _safe(dt.album_artist or dt.artist or "Unknown Artist")
-                            album = _safe(dt.album) if dt.album else "Singles"
-                            track_num = f"{dt.track:02d} - " if dt.track is not None else ""
-                            filename = f"{track_num}{_safe(title)}.mp3"
-                            full_song_path = Path(settings.music_path) / album_artist / album / filename
+
+                    # A predicted path or completed job is not proof that this
+                    # playlist identity owns that file. Only a canonical Song
+                    # association may make a source item available.
                 
                 if not full_song_path or not full_song_path.is_file():
                     continue

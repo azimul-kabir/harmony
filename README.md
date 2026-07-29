@@ -38,6 +38,18 @@ Harmony v1.6.0 was never published.
 ## 🎵 Spotify Downloads
 
 - Download tracks, albums, and playlists
+- Exact-match-only acquisition: each track is requested from SpotDL once using
+  its original Spotify track URL. Harmony never retries a failed Spotify track
+  with a generated artist/title search and never enables unfiltered results.
+- Before import, Harmony requires exactly one audio file and validates its
+  embedded primary artist, title, material version markers, and duration
+  against the stored Spotify request. Instrumental, karaoke, live, remix,
+  sped-up, slowed, acoustic, demo, radio-edit, remaster, cover, and tribute
+  substitutions are rejected unless the requested title identifies the same
+  version.
+- A rejected or unavailable exact match stays failed and absent from the
+  Library and playlist availability count. It can be retried manually later
+  using the same Spotify URL.
 
 ## YouTube Music downloads
 
@@ -400,7 +412,13 @@ Generate M3U Playlists
 Queue Missing Songs
     │
     ▼
-Multi-worker Downloads
+Multi-worker Exact Spotify-URL Download
+    │
+    ▼
+Isolated Temporary Output
+    │
+    ▼
+Identity Validation
     │
     ▼
 Staging Folder

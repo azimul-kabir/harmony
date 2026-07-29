@@ -5,6 +5,20 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+### Changed
+
+- Spotify tracks now use one exact original-URL SpotDL attempt. Removed the
+  generated artist/title fallback and `--dont-filter-results`, so provider
+  failure or no output can no longer import a loose substitute.
+- SpotDL output must contain exactly one supported audio file whose embedded
+  primary artist, title, recording-version markers, and reliable duration match
+  the requested track before import. Rejections use the stable, non-retryable
+  `exact_match_unavailable` outcome; transient provider failures remain
+  separately categorized and manually retryable where appropriate.
+- Playlist availability now requires an available canonical Library Song and an
+  existing file. Completed jobs and predicted paths no longer make a source
+  item appear available.
+
 ## [v2.0.1] - 2026-07-26
 
 ### Added
