@@ -13,6 +13,7 @@ from app.core.time import utcnow_naive
 from app.database.models import Playlist, Song
 from app.database.session import SessionLocal
 from app.services.navidrome import NavidromeClient, NavidromeError
+from app.services.playlist_manager import resolve_playlist_songs
 
 
 class NavidromeDirectSyncError(RuntimeError):
@@ -199,20 +200,16 @@ class NavidromeDirectPlaylistSync:
                     f"Playlist #{playlist_id} no longer exists."
                 )
 
-            spotify_ids = [
-                track.spotify_track_id for track in playlist.tracks
-            ]
-            songs = db.scalars(
-                select(Song).where(Song.spotify_track_id.in_(spotify_ids))
-            ).all()
-            songs_by_spotify_id = {
-                song.spotify_track_id: song for song in songs
-            }
+            # Use the same identity, provider-alias, and metadata fallback
+            # rules as M3U export.  Exact Spotify-ID lookup alone caused the
+            # direct Navidrome playlist to omit tracks that Harmony correctly
+            # recognized as already present under a different release ID.
+            resolved_songs = resolve_playlist_songs(db, list(playlist.tracks))
             ordered_songs = [
-                songs_by_spotify_id[spotify_id]
-                for spotify_id in spotify_ids
-                if spotify_id in songs_by_spotify_id
-                and Path(songs_by_spotify_id[spotify_id].path).is_file()
+                resolved_songs[track.spotify_track_id]
+                for track in playlist.tracks
+                if track.spotify_track_id in resolved_songs
+                and Path(resolved_songs[track.spotify_track_id].path).is_file()
             ]
             if not ordered_songs:
                 raise NavidromeDirectSyncError(

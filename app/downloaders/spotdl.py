@@ -184,6 +184,19 @@ class SpotDLClient:
             self.settings.spotdl_path,
             *args,
         ]
+        # SpotDL initializes its cache during module import.  Containers may
+        # run with HOME unset or set to '/', where '/.config' is not writable.
+        # Give every invocation an explicit writable XDG location instead of
+        # allowing an otherwise valid download to fail before SpotDL starts.
+        config_path = Path(
+            os.environ.get(
+                "HARMONY_SPOTDL_CONFIG_DIR",
+                str(Path(tempfile.gettempdir()) / "harmony-spotdl"),
+            )
+        )
+        config_path.mkdir(parents=True, exist_ok=True)
+        environment = os.environ.copy()
+        environment["XDG_CONFIG_HOME"] = str(config_path)
         
         try:
             return subprocess.run(
@@ -191,6 +204,7 @@ class SpotDLClient:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env=environment,
             )
         except subprocess.TimeoutExpired as e:
             raise RuntimeError(f"SpotDL execution timed out after {timeout} seconds.") from e

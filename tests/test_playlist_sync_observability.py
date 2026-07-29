@@ -41,6 +41,27 @@ def test_spotdl_preflight_reports_invalid_runtime_path(tmp_path):
         client.validate_executable()
 
 
+def test_spotdl_run_uses_writable_xdg_config_directory(monkeypatch, tmp_path):
+    client = SpotDLClient()
+    client.settings = SimpleNamespace(spotdl_path="spotdl")
+    config_dir = tmp_path / "spotdl-config"
+    observed = {}
+
+    monkeypatch.setenv("HOME", "/")
+    monkeypatch.setenv("HARMONY_SPOTDL_CONFIG_DIR", str(config_dir))
+
+    def run(command, **kwargs):
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    client._run(["--version"])
+
+    assert config_dir.is_dir()
+    assert observed["env"]["XDG_CONFIG_HOME"] == str(config_dir)
+
+
 def test_playlist_sync_persists_actionable_metadata_timeout(monkeypatch):
     db = SessionLocal()
     try:

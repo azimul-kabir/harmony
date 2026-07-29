@@ -53,7 +53,15 @@ def update_telemetry(
     job.transfer_rate_bps = transfer_rate_bps
     job.eta_seconds = eta_seconds
     job.heartbeat_at = utcnow_naive()
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        # A failed SQLite flush leaves the SQLAlchemy session in the
+        # ``PendingRollbackError`` state.  The worker still needs this session
+        # to record the terminal outcome, so always make it usable again
+        # before propagating the original telemetry failure.
+        db.rollback()
+        raise
 
 
 def _heartbeat(job_id: int) -> None:

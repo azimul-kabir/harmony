@@ -61,6 +61,7 @@ def worker_loop() -> None:
                 
             process_job(db, job)
         except Exception:
+            db.rollback()
             logger.exception("Worker crashed while processing job.")
         finally:
             db.close()
@@ -304,6 +305,12 @@ def _cancelled(db, job, output_file):
 
 
 def _finish_with_outcome(db, job, status, outcome):
+    # Database errors raised by telemetry/heartbeat updates can leave the
+    # transaction inactive.  Recover it before refreshing and finalizing the
+    # job; otherwise one transient SQLite lock strands the parent task at
+    # 99/100 indefinitely.
+    if not db.is_active:
+        db.rollback()
     db.refresh(job)
     if job.status == JobStatus.CANCELLED.value:
         return
