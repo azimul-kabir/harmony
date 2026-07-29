@@ -272,3 +272,12 @@ or local paths with these outcomes.
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
 
 Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.
+
+## Navidrome Loved-status operations
+
+- `POST /api/navidrome/test` calls authenticated Subsonic `ping`.
+- `GET /api/navidrome/playlists` returns safe playlist IDs, names, counts, and owners.
+- `POST /api/navidrome/playlists/{playlist_id}/{love|unlove}` queues a durable operation.
+- `GET /api/navidrome/jobs/{job_id}` returns batch/track progress and safe categorized errors.
+
+Credentials come only from server configuration. Harmony calls `getPlaylist`, then `star` or `unstar` with repeated song IDs in bounded batches. Passwords, tokens, salts, authenticated URLs, and provider details are excluded from responses. Partial completion is explicit and reruns process the full current playlist.

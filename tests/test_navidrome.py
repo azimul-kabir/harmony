@@ -133,8 +133,56 @@ def test_api_errors_become_clean_navidrome_errors():
             NavidromeClient(_settings(), transport=transport).start_scan()
         )
 
-    assert caught.value.code == "navidrome_api_error"
-    assert str(caught.value) == "Wrong username or password"
+    assert caught.value.code == "authentication_failed"
+    assert str(caught.value) == "Navidrome authentication failed."
+
+
+@pytest.mark.parametrize(
+    ("count", "batches"), [(0, 0), (1, 1), (100, 1), (101, 2), (500, 5), (867, 9)]
+)
+def test_star_batches_repeated_ids_and_reports_progress(count, batches):
+    calls = []
+    progress = []
+
+    def handler(request):
+        calls.append(request.url.params.get_list("id"))
+        assert "secret" not in str(request.url)
+        return httpx.Response(200, json={"subsonic-response": {"status": "ok"}})
+
+    result = asyncio.run(
+        NavidromeClient(_settings(), transport=httpx.MockTransport(handler)).star_song_ids(
+            [f"song-{number}" for number in range(count)],
+            progress=lambda *values: progress.append(values),
+        )
+    )
+    assert len(calls) == batches
+    assert result == {
+        "total_tracks": count,
+        "processed_tracks": count,
+        "total_batches": batches,
+    }
+    assert all(len(batch) <= 100 for batch in calls)
+    if count:
+        assert progress[-1] == (batches, batches, count, count)
+
+
+def test_star_deduplicates_in_order_and_unstar_uses_repeated_ids():
+    def handler(request):
+        assert request.url.path == "/rest/unstar"
+        assert request.url.params.get_list("id") == ["b", "a", "c"]
+        return httpx.Response(200, json={"subsonic-response": {"status": "ok"}})
+
+    asyncio.run(
+        NavidromeClient(_settings(), transport=httpx.MockTransport(handler)).unstar_song_ids(
+            ["b", "a", "b", "c"]
+        )
+    )
+
+
+@pytest.mark.parametrize("ids", [["ok", ""], ["ok", None], "song"])
+def test_star_rejects_invalid_ids(ids):
+    with pytest.raises(ValueError):
+        asyncio.run(NavidromeClient(_settings()).star_song_ids(ids))
 
 
 def test_url_rejects_embedded_credentials():

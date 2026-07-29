@@ -7,6 +7,23 @@
     <button id="scan-navidrome" class="btn-secondary" type="button">↻ Scan Navidrome</button>
 </div>
 
+<section class="panel navidrome-love-panel" aria-labelledby="navidrome-love-title">
+    <div>
+        <span class="library-eyebrow">Configured Navidrome user</span>
+        <h2 id="navidrome-love-title">Playlist Loved status</h2>
+        <p>Choose a playlist retrieved directly from Navidrome. Harmony uses its stable ID and current song IDs.</p>
+    </div>
+    <label for="navidrome-playlist-select">Navidrome playlist</label>
+    <div class="navidrome-love-controls">
+        <select id="navidrome-playlist-select" aria-label="Navidrome playlist"><option value="">Loading playlists…</option></select>
+        <button id="navidrome-playlist-refresh" class="btn-secondary" type="button">↻ Refresh</button>
+        <button id="navidrome-love-all" class="btn-primary" type="button" disabled>Love all in Navidrome</button>
+        <button id="navidrome-unlove-all" class="btn-danger" type="button" disabled>Unlove all in Navidrome</button>
+    </div>
+    <div id="navidrome-love-progress" role="status" aria-live="polite">Select a playlist to continue.</div>
+    <progress id="navidrome-love-progress-bar" value="0" max="1" hidden></progress>
+</section>
+
 <section class="panel auto-playlists-panel" aria-labelledby="auto-playlists-title">
     <div class="auto-playlists-heading">
         <div>

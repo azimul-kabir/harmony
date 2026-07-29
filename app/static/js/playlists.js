@@ -15,6 +15,56 @@ function filterPlaylists() {
 
 search?.addEventListener("input", filterPlaylists);
 
+const navSelect = document.getElementById("navidrome-playlist-select");
+const navRefresh = document.getElementById("navidrome-playlist-refresh");
+const loveButton = document.getElementById("navidrome-love-all");
+const unloveButton = document.getElementById("navidrome-unlove-all");
+const loveStatus = document.getElementById("navidrome-love-progress");
+const loveProgress = document.getElementById("navidrome-love-progress-bar");
+let navPlaylists = [];
+
+async function loadNavidromePlaylists() {
+    navRefresh.disabled = true;
+    try {
+        const response = await fetch("/api/navidrome/playlists");
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail?.message || "Navidrome playlists are unavailable.");
+        navPlaylists = payload.playlists;
+        navSelect.replaceChildren(new Option(navPlaylists.length ? "Select a playlist…" : "No playlists found", ""));
+        navPlaylists.forEach(item => navSelect.add(new Option(`${item.name} · ${item.track_count} tracks · ID ${item.id}`, item.id)));
+        loveStatus.textContent = navPlaylists.length ? "Select a playlist to continue." : "Navidrome returned no playlists.";
+    } catch (error) {
+        navSelect.replaceChildren(new Option("Unavailable", "")); loveStatus.textContent = error.message;
+    } finally { navRefresh.disabled = false; }
+}
+navSelect?.addEventListener("change", () => { loveButton.disabled = unloveButton.disabled = !navSelect.value; });
+navRefresh?.addEventListener("click", loadNavidromePlaylists);
+
+function pollLoveJob(id) {
+    window.setTimeout(async () => {
+        const response = await fetch(`/api/navidrome/jobs/${id}`); const job = await response.json();
+        loveProgress.max = Math.max(1, job.total_tracks); loveProgress.value = job.processed_tracks;
+        loveStatus.textContent = `${job.status.replaceAll("_", " ")} · ${job.processed_tracks}/${job.total_tracks} tracks · batch ${job.current_batch}/${job.total_batches}` + (job.safe_error_message ? ` · ${job.safe_error_message}` : "");
+        if (["completed", "partially_completed", "failed", "cancelled"].includes(job.status)) { loveButton.disabled = unloveButton.disabled = false; return; }
+        pollLoveJob(id);
+    }, 600);
+}
+async function startLove(operation) {
+    const item = navPlaylists.find(p => p.id === navSelect.value); if (!item) return;
+    const destructive = operation === "unlove";
+    const message = destructive
+        ? `Remove Loved status from every current track in “${item.name}” (${item.track_count} tracks) for the configured Navidrome user?\n\nThis is destructive and does not restore an earlier state.`
+        : `Mark every current track in “${item.name}” (${item.track_count} tracks) as Loved for the configured Navidrome user?`;
+    if (!window.confirm(message)) return;
+    loveButton.disabled = unloveButton.disabled = true; loveProgress.hidden = false; loveStatus.textContent = "Queueing operation…";
+    const response = await fetch(`/api/navidrome/playlists/${encodeURIComponent(item.id)}/${operation}`, {method: "POST"}); const job = await response.json();
+    if (!response.ok) { loveStatus.textContent = job.detail?.message || "Operation could not be queued."; loveButton.disabled = unloveButton.disabled = false; return; }
+    pollLoveJob(job.job_id);
+}
+loveButton?.addEventListener("click", () => startLove("love"));
+unloveButton?.addEventListener("click", () => startLove("unlove"));
+if (navSelect) loadNavidromePlaylists();
+
 async function generateAutoPlaylist(button) {
     const rule = button.dataset.autoRule;
     const limitInput = document.querySelector(`[data-auto-limit="${CSS.escape(rule)}"]`);
