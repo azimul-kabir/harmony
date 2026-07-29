@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=0 \
+    HOME=/tmp/harmony \
+    XDG_CONFIG_HOME=/tmp/harmony/.config \
+    HARMONY_SPOTDL_CONFIG_DIR=/tmp/harmony/.config/spotdl \
     DENO_INSTALL=/root/.deno \
     PATH="/root/.deno/bin:${PATH}"
 
