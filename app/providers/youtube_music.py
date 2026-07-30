@@ -32,6 +32,14 @@ def clean_title(value: str | None) -> str:
     return _SUFFIX.sub("", value or "").strip()
 
 
+def _artist_names(data: dict) -> list[str]:
+    return [
+        str(artist["name"]).strip()
+        for artist in data.get("artists") or []
+        if isinstance(artist, dict) and artist.get("name")
+    ]
+
+
 def normalize_url(url: str) -> str:
     """Give public URLs without a scheme the same treatment as the FAB UI."""
     value = url.strip()
@@ -79,6 +87,37 @@ def _youtube_music_track(item_id: str) -> dict:
     )
 
 
+def _is_video_preview(url: str | None) -> bool:
+    if not url:
+        return False
+    hostname = urlparse(url).hostname or ""
+    return hostname == "img.youtube.com" or hostname.endswith(".ytimg.com")
+
+
+def _youtube_music_artwork(item_id: str) -> str | None:
+    """Resolve album artwork, rather than the watch page's video thumbnail."""
+    client = YTMusic()
+    tracks = client.get_watch_playlist(videoId=item_id, limit=1).get("tracks") or []
+    track = next(
+        (
+            candidate
+            for candidate in tracks
+            if candidate.get("videoId") == item_id
+            or (candidate.get("counterpart") or {}).get("videoId") == item_id
+        ),
+        tracks[0] if tracks else {},
+    )
+
+    album_id = (track.get("album") or {}).get("id")
+    if album_id:
+        album_url = _best_artwork(client.get_album(album_id))
+        if album_url and not _is_video_preview(album_url):
+            return album_url
+
+    track_url = _best_artwork(track)
+    return track_url if track_url and not _is_video_preview(track_url) else None
+
+
 def _square_jpeg(content: bytes) -> bytes:
     """Center-crop artwork to a bounded, high-quality 1:1 JPEG."""
     with Image.open(BytesIO(content)) as source:
@@ -94,9 +133,7 @@ def _fetch_artwork(url: str) -> bytes:
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise ValueError("Artwork URL is not HTTPS.")
-    if parsed.hostname and (
-        parsed.hostname == "img.youtube.com" or parsed.hostname.endswith(".ytimg.com")
-    ):
+    if _is_video_preview(url):
         raise ValueError("YouTube video previews are not album artwork.")
     request = Request(url, headers={"User-Agent": "Harmony/2 YouTubeMusicArtwork"})
     with urlopen(request, timeout=20) as response:
@@ -223,15 +260,26 @@ class YouTubeMusicSource:
                 music_data = _youtube_music_track(item_id)
             except Exception as exc:
                 logger.warning("Could not fetch canonical YouTube Music metadata for {}: {}", item_id, exc)
-        title = clean_title(data.get("track") or data.get("title")) or "Unknown title"
-        artist = data.get("artist") or data.get("uploader")
+        title = clean_title(
+            music_data.get("title") or data.get("track") or data.get("title")
+        ) or "Unknown title"
+        music_artists = _artist_names(music_data)
+        artist = ", ".join(music_artists) or data.get("artist") or data.get("uploader")
         if artist and artist.endswith(" - Topic"):
             artist = artist[:-8]
+        music_album = music_data.get("album") or {}
+        album = music_album.get("name") if isinstance(music_album, dict) else None
+        album = album or data.get("album")
+        album_artist = (
+            music_artists[0]
+            if music_artists
+            else data.get("album_artist") or artist
+        )
         # yt-dlp extracts the YouTube *video* preview.  The audio-only Music
         # watch card exposes the square album cover shown in YouTube Music.
         artwork = _best_artwork(music_data)
         canonical_url = watch_url(item_id) if _VIDEO_ID.fullmatch(item_id) else data.get("webpage_url")
-        return SourceResult(self.identifier, item_id, item_type, title, artist, data.get("album"), data.get("album_artist") or artist, data.get("duration"), data.get("release_year") or data.get("year"), data.get("track_number"), data.get("disc_number"), data.get("age_limit") == 18, artwork, canonical_url, data.get("playlist_count"))
+        return SourceResult(self.identifier, item_id, item_type, title, artist, album, album_artist, data.get("duration") or music_data.get("duration_seconds"), data.get("release_year") or data.get("year"), data.get("track_number"), data.get("disc_number"), music_data.get("isExplicit") or data.get("age_limit") == 18, artwork, canonical_url, data.get("playlist_count"))
 
     def search(self, query: str, limit: int = 20) -> list[SourceResult]:
         bounded = max(1, min(limit, self.settings.youtube_music_max_search_results))
@@ -253,7 +301,7 @@ class YouTubeMusicSource:
             raise ValueError(f"YouTube playlist exceeds the {self.max_collection_items}-track limit.")
         tracks: list[Track] = []
         seen: set[str] = set()
-        for index, entry in enumerate(entries or [], start=1):
+        for entry in entries or []:
             # Flat playlist records omit most music tags and frequently expose
             # only a widescreen video thumbnail. Hydrate every item before it
             # enters the durable queue so retries retain complete metadata.
@@ -266,7 +314,7 @@ class YouTubeMusicSource:
             if not result.item_id or result.item_id in seen:
                 continue
             seen.add(result.item_id)
-            tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or data.get("title"), album_artist=result.album_artist, track=result.track_number or index, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=result.source_url))
+            tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or "Singles", album_artist=result.album_artist, track=result.track_number, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=result.source_url))
         if not tracks:
             raise ValueError("YouTube Music collection is empty or unavailable.")
         return clean_title(data.get("title")) or "YouTube Music Playlist", tracks
