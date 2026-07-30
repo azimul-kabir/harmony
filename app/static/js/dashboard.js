@@ -181,8 +181,39 @@ function setupNavidromeControls() {
     });
     if (reconcile) reconcile.addEventListener("click", async () => {
         reconcile.disabled = true;
-        const response = await fetch("/api/navidrome/sync-health/reconcile", { method: "POST" });
-        renderNavidromeSyncHealth(await response.json());
+        setText("navidrome-health-message", "Requesting a Navidrome reconciliation scan…");
+        try {
+            const beforeResponse = await fetch("/api/navidrome/status");
+            const before = beforeResponse.ok ? await beforeResponse.json() : {};
+            const response = await fetch("/api/navidrome/sync-health/reconcile", { method: "POST" });
+            const health = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(health.detail?.message || "Reconciliation could not be started.");
+            renderNavidromeSyncHealth(health);
+            if (!health.reconciliation_requested) return;
+
+            let observedScanning = false;
+            for (let attempt = 0; attempt < 120; attempt += 1) {
+                await new Promise(resolve => window.setTimeout(resolve, 2000));
+                const statusResponse = await fetch("/api/navidrome/status");
+                const status = await statusResponse.json().catch(() => ({}));
+                if (!statusResponse.ok || !status.reachable) throw new Error(status.error || "Navidrome became unavailable.");
+                observedScanning = observedScanning || Boolean(status.scanning);
+                renderNavidromeStatus(status);
+                setText("navidrome-health-message", status.scanning
+                    ? `Reconciling Navidrome (${Number(status.scan_count || 0).toLocaleString()} items processed)…`
+                    : "Waiting for Navidrome to begin reconciliation…");
+                const completedQuickly = before.last_scan && status.last_scan !== before.last_scan;
+                if (!status.scanning && (observedScanning || completedQuickly)) {
+                    await refreshNavidromeSyncHealth(true);
+                    return;
+                }
+            }
+            throw new Error("Navidrome did not finish reconciliation within four minutes.");
+        } catch (error) {
+            setText("navidrome-health-message", error.message || "Navidrome reconciliation failed.");
+        } finally {
+            reconcile.disabled = false;
+        }
     });
     refreshNavidromeStatus();
     refreshNavidromeSyncHealth();

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,23 @@ def _same_path(local_path: str, remote_path: Any, music_path: str) -> bool:
     return local_key == remote or local_key.endswith(f"/{remote}") or remote.endswith(f"/{local_key}")
 
 
+def _local_path_keys(local_path: str, music_path: str) -> set[str]:
+    """Return the path forms Navidrome may expose for a Harmony song."""
+    local = Path(local_path)
+    keys = {_path_key(local)}
+    try:
+        keys.add(_path_key(local.resolve().relative_to(Path(music_path).resolve())))
+    except ValueError:
+        pass
+    return {key for key in keys if key}
+
+
+@dataclass(frozen=True)
+class _LocalSong:
+    path: str
+    navidrome_id: str | None
+
+
 class NavidromeSyncHealth:
     """Compare Harmony's authoritative catalog with Navidrome's current index."""
 
@@ -59,14 +77,27 @@ class NavidromeSyncHealth:
             return self._snapshot
         if not self._lock.acquire(blocking=False):
             return {**self.snapshot(), "state": "checking"}
-        db = self.session_factory()
         try:
-            local_songs = list(
-                db.scalars(
-                    select(Song).where(Song.availability_status == "available")
-                ).all()
-            )
-            local_playlists = list(db.scalars(select(Playlist)).all())
+            # Do not keep a SQLite session (and its read transaction) open while
+            # a large remote library is paged from Navidrome.
+            db = self.session_factory()
+            try:
+                local_songs = [
+                    _LocalSong(path=song.path, navidrome_id=song.navidrome_id)
+                    for song in db.scalars(
+                        select(Song).where(Song.availability_status == "available")
+                    ).all()
+                ]
+                local_playlist_names = list(db.scalars(select(Playlist.name)).all())
+                expected = {
+                    "songs": len(local_songs),
+                    "albums": db.scalar(select(func.count(func.distinct(Song.album))).where(Song.availability_status == "available", Song.album.is_not(None))) or 0,
+                    "artists": db.scalar(select(func.count(func.distinct(func.coalesce(Song.album_artist, Song.artist)))).where(Song.availability_status == "available", func.coalesce(Song.album_artist, Song.artist).is_not(None))) or 0,
+                    "playlists": len(local_playlist_names),
+                }
+            finally:
+                db.close()
+
             remote_songs, remote_albums, remote_artists, remote_playlists = await asyncio.gather(
                 self.client.library_songs(),
                 self.client.get_albums(),
@@ -75,14 +106,19 @@ class NavidromeSyncHealth:
             )
 
             remote_ids = {str(song.get("id")) for song in remote_songs if song.get("id")}
+            remote_by_path: dict[str, dict[str, Any]] = {}
+            for remote_song in remote_songs:
+                remote_path = _path_key(remote_song.get("path"))
+                if remote_path:
+                    remote_by_path[remote_path] = remote_song
             matched_remote_ids: set[str] = set()
-            missing: list[Song] = []
+            missing: list[_LocalSong] = []
             for song in local_songs:
                 if song.navidrome_id and song.navidrome_id in remote_ids:
                     matched_remote_ids.add(song.navidrome_id)
                     continue
                 match = next(
-                    (item for item in remote_songs if _same_path(song.path, item.get("path"), self.settings.music_path)),
+                    (remote_by_path[key] for key in _local_path_keys(song.path, self.settings.music_path) if key in remote_by_path),
                     None,
                 )
                 if match:
@@ -92,12 +128,6 @@ class NavidromeSyncHealth:
                     missing.append(song)
             stale = [song for song in remote_songs if str(song.get("id") or "") not in matched_remote_ids]
 
-            expected = {
-                "songs": len(local_songs),
-                "albums": db.scalar(select(func.count(func.distinct(Song.album))).where(Song.availability_status == "available", Song.album.is_not(None))) or 0,
-                "artists": db.scalar(select(func.count(func.distinct(func.coalesce(Song.album_artist, Song.artist)))).where(Song.availability_status == "available", func.coalesce(Song.album_artist, Song.artist).is_not(None))) or 0,
-                "playlists": len(local_playlists),
-            }
             actual = {
                 "songs": len(remote_songs),
                 "albums": len(remote_albums),
@@ -105,8 +135,8 @@ class NavidromeSyncHealth:
                 "playlists": len(remote_playlists),
             }
             missing_playlist_names = sorted(
-                playlist.name for playlist in local_playlists
-                if not any(str(item.get("name") or "").casefold() == playlist.name.casefold() for item in remote_playlists)
+                name for name in local_playlist_names
+                if not any(str(item.get("name") or "").casefold() == name.casefold() for item in remote_playlists)
             )
             healthy = not missing and not stale and not missing_playlist_names and expected == actual
             requested = False
@@ -129,7 +159,7 @@ class NavidromeSyncHealth:
                 "missing_playlists": missing_playlist_names[:10],
                 "reconciliation_requested": requested,
             }
-        except NavidromeError as error:
+        except Exception as error:
             self._snapshot = {
                 "configured": True, "state": "unavailable", "healthy": False,
                 "checked_at": utcnow_naive().isoformat() + "Z", "error": str(error),
@@ -137,7 +167,6 @@ class NavidromeSyncHealth:
             }
             logger.warning("Navidrome sync health check failed: {}", error)
         finally:
-            db.close()
             self._lock.release()
         return self._snapshot
 

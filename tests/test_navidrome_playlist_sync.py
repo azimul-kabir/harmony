@@ -58,9 +58,12 @@ def test_reconcile_scans_rewrites_then_scans_again(monkeypatch):
     events = []
 
     class Client:
+        def __init__(self):
+            self.statuses = iter([False, True, False, False, True, False])
+
         async def status(self):
             events.append("status")
-            return {"reachable": True, "scanning": False}
+            return {"reachable": True, "scanning": next(self.statuses), "last_scan": None}
 
         async def start_scan(self, *, full_scan=False):
             assert full_scan is False
@@ -85,9 +88,11 @@ def test_reconcile_scans_rewrites_then_scans_again(monkeypatch):
             "status",
             "scan",
             "status",
+            "status",
             f"export:{playlist.id}",
             "status",
             "scan",
+            "status",
             "status",
         ]
     finally:
@@ -104,13 +109,37 @@ def test_reconcile_is_disabled_without_credentials():
     assert asyncio.run(coordinator.reconcile({1})) is False
 
 
+def test_scan_completion_detected_when_scan_finishes_between_polls():
+    class Client:
+        def __init__(self):
+            self.statuses = iter(
+                [
+                    {"reachable": True, "scanning": False, "last_scan": "before"},
+                    {"reachable": True, "scanning": False, "last_scan": "after"},
+                ]
+            )
+
+        async def status(self):
+            return next(self.statuses)
+
+        async def start_scan(self, *, full_scan=False):
+            return {"accepted": True, "scanning": False}
+
+    coordinator = NavidromePlaylistReimportCoordinator(settings=_settings())
+
+    asyncio.run(coordinator._incremental_scan(Client()))
+
+
 def test_successful_direct_reconcile_skips_second_scan(monkeypatch):
     events = []
 
     class Client:
+        def __init__(self):
+            self.statuses = iter([False, True, False])
+
         async def status(self):
             events.append("status")
-            return {"reachable": True, "scanning": False}
+            return {"reachable": True, "scanning": next(self.statuses), "last_scan": None}
 
         async def start_scan(self, *, full_scan=False):
             events.append("scan")
@@ -147,6 +176,7 @@ def test_successful_direct_reconcile_skips_second_scan(monkeypatch):
         assert events == [
             "status",
             "scan",
+            "status",
             "status",
             f"export:{playlist.id}",
             f"direct:{playlist.id}",
