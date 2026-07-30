@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import (
@@ -500,11 +501,15 @@ class DownloadJob(Base):
 
 class SyncSource(Base):
     __tablename__ = "sync_sources"
+    __table_args__ = (UniqueConstraint("provider", "external_id", name="uq_sync_source_provider_external_id"),)
     tasks: Mapped[list["Task"]] = relationship(back_populates="source")
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     type: Mapped[str] = mapped_column(String, nullable=False)
     spotify_id: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
     spotify_url: Mapped[str] = mapped_column(String, nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="spotify", index=True)
+    external_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     auto_sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
@@ -515,8 +520,12 @@ class SyncSource(Base):
 
 class Playlist(Base):
     __tablename__ = "playlists"
+    __table_args__ = (UniqueConstraint("source_provider", "source_external_id", name="uq_playlist_source_identity"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     spotify_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    source_provider: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    source_external_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     spotify_snapshot_id: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)

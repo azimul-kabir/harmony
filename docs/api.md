@@ -120,7 +120,14 @@ compatible with conservative SQLite parameter limits.
 ## Sources and automation
 
 - `GET /api/sources` lists source state and schedule fields.
-- `POST /api/sources` saves a Spotify source.
+- `POST /api/sources` saves a Spotify or public YouTube Music playlist Source.
+  The preferred request is `{ "source_url": "..." }`; the legacy
+  `{ "spotify_url": "..." }` field remains accepted for compatibility.
+  Harmony canonicalizes provider URLs and deduplicates on
+  `(provider, external_id)`. Successful responses include `provider`,
+  `external_id`, and `source_url`. Invalid, non-playlist, and unsupported URLs
+  return HTTP 422 with `detail.code` and `detail.message` instead of an
+  unhandled server error.
 - `POST /api/sources/{source_id}/sync` starts an immediate background sync.
 - `PATCH /api/sources/{source_id}` enables or disables a source.
 - `PATCH /api/sources/{source_id}/auto-sync` saves
@@ -128,6 +135,8 @@ compatible with conservative SQLite parameter limits.
   15–10,080 minutes; the v2.0.0 UI offers hourly, 6-hour, 12-hour, daily, and
   weekly schedules.
 - `GET /api/sources/stream` streams source, playlist, task, and schedule state.
+  Source objects expose both the provider-neutral identity fields and the
+  legacy `spotify_url` compatibility mirror.
 
 - `GET /api/playlists/auto/definitions` lists built-in auto-playlist rules.
 - `POST /api/playlists/auto/{rule_id}/generate` accepts

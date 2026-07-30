@@ -108,7 +108,8 @@ class NavidromePlaylistReimportCoordinator:
                     select(Playlist.id)
                     .join(
                         SyncSource,
-                        SyncSource.spotify_id == Playlist.spotify_id,
+                        (SyncSource.provider == Playlist.source_provider)
+                        & (SyncSource.external_id == Playlist.source_external_id),
                     )
                     .join(Task, Task.source_id == SyncSource.id)
                     .where(

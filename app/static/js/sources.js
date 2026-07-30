@@ -45,7 +45,7 @@ function renderSources(sources) {
         container.innerHTML = `
             <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
                 <h3>No sources yet</h3>
-                <p>Add your first Spotify playlist above to start syncing.</p>
+                <p>Add your first Spotify or YouTube Music playlist above to start syncing.</p>
             </div>
         `;
         return;
@@ -140,7 +140,7 @@ function renderSources(sources) {
                 const percent = t.total === 0 ? 0 : (finished / t.total) * 100;
                 const stageLabels = {
                     starting: "Starting",
-                    metadata: "Fetching Spotify metadata",
+                    metadata: "Fetching playlist metadata",
                     saving: "Saving playlist",
                     exporting: "Creating M3U",
                     deduplicating: "Checking your library",
@@ -225,6 +225,7 @@ function renderSources(sources) {
         const innerHTML = `
             <div class="source-header">
                 <h3>${escapeHtml(source.name)}</h3>
+                <span class="badge source-provider-badge">${source.provider === "youtube_music" ? "YouTube Music" : "Spotify"}</span>
                 <span class="badge ${source.enabled ? "badge-completed" : "badge-cancelled"}">
                     ${source.enabled ? "Active" : "Disabled"}
                 </span>
@@ -239,7 +240,7 @@ function renderSources(sources) {
             ${taskHtml}
             <div class="source-actions" style="margin-top: 16px; align-items: center;">
                 ${actionsHtml}
-                <a class="btn-secondary source-open-link" href="${escapeHtml(source.spotify_url)}" target="_blank" rel="noopener">Spotify</a>
+                <a class="btn-secondary source-open-link" href="${escapeHtml(source.source_url || source.spotify_url)}" target="_blank" rel="noopener">${source.provider === "youtube_music" ? "YouTube Music" : "Spotify"}</a>
             </div>
         `;
 
@@ -273,7 +274,7 @@ function renderSources(sources) {
         container.innerHTML = `
             <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
                 <h3>No sources yet</h3>
-                <p>Add your first Spotify playlist above to start syncing.</p>
+                <p>Add your first Spotify or YouTube Music playlist above to start syncing.</p>
             </div>
         `;
     }
@@ -407,10 +408,14 @@ async function addSource(event) {
         const response = await fetch("/api/sources", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ spotify_url: input.value }),
+            body: JSON.stringify({ source_url: input.value }),
         });
         
-        if (!response.ok) throw new Error("Unable to add source.");
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const detail = payload.detail;
+            throw new Error((typeof detail === "string" ? detail : detail?.message) || "Unable to add source.");
+        }
         input.value = "";
     } catch (error) {
         alert(error.message);

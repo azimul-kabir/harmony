@@ -42,6 +42,18 @@ yt-dlp without cookies or authenticated catalogue scraping and remains subject
 to provider availability and restrictions. Timeout, playlist/search/queue
 limits, enabled state, and default source are available under Settings.
 
+The Sources page accepts public `music.youtube.com/playlist?list=...` URLs in
+addition to Spotify playlists. Extra YouTube Music query parameters are removed
+when the Source is saved. During synchronization Harmony uses flat playlist
+metadata extraction, skips unavailable/private/deleted entries, and creates
+download jobs for missing tracks with `youtube_music` source identity. Enable
+the YouTube Music download source before syncing when missing tracks should be
+acquired. Cookies and private playlists are not supported.
+
+Existing Spotify Sources are migrated in place. Their legacy Spotify columns
+remain compatibility mirrors, while `provider`, `external_id`, and `source_url`
+are the authoritative durable identity. Source uniqueness is scoped by provider.
+
 ## Large Spotify playlists
 
 Spotify playlist downloads first run SpotDL's metadata-only `save` operation.

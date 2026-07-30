@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added public YouTube Music playlists as durable Sources, including canonical
+  provider-aware identity, ordered flat metadata extraction, unavailable-entry
+  accounting, existing download-queue/M3U/Navidrome integration, actionable
+  URL errors, provider badges, and an in-place Spotify data migration.
 - Added native Navidrome playlist Love All and Unlove All actions with token
   authentication, durable batch progress, safe partial failures, connection
   testing, and mobile playlist selection.

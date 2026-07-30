@@ -29,7 +29,7 @@ def _playlist_sync_status(playlist: Playlist, exported_count: int) -> str:
 def playlists_page(request: Request, db: Session = Depends(get_db)):
     playlists = db.query(Playlist).order_by(Playlist.name).all()
     sources = {
-        source.spotify_id: source
+        (source.provider or "spotify", source.external_id or source.spotify_id): source
         for source in db.query(SyncSource).all()
     }
     playlist_cards = []
@@ -39,7 +39,7 @@ def playlists_page(request: Request, db: Session = Depends(get_db)):
         playlist_cards.append(
             {
                 "playlist": playlist,
-                "source": sources.get(playlist.spotify_id),
+                "source": sources.get((playlist.source_provider or "spotify", playlist.source_external_id or playlist.spotify_id)),
                 "exported_count": exported_count,
                 "m3u_exists": file_path.is_file(),
                 "artwork_exists": playlist_artwork_path(playlist.name) is not None,

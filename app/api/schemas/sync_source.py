@@ -2,7 +2,8 @@ from pydantic import BaseModel
 
 
 class SyncSourceRequest(BaseModel):
-    spotify_url: str
+    source_url: str | None = None
+    spotify_url: str | None = None
 
 
 class SyncSourceUpdateRequest(BaseModel):
