@@ -28,6 +28,8 @@ RUNTIME_SETTING_DEFINITIONS = {
     "navidrome_sync_health_enabled": ("navidrome", "boolean", None, None),
     "navidrome_sync_health_interval_minutes": ("navidrome", "int", 1, 1440),
     "navidrome_sync_health_auto_reconcile": ("navidrome", "boolean", None, None),
+    "navidrome_sync_health_scan_timeout_seconds": ("navidrome", "float", 10, 3600),
+    "navidrome_sync_health_full_scan_timeout_seconds": ("navidrome", "float", 600, 7200),
     "library_watcher_enabled": ("library", "boolean", None, None),
     "library_watcher_debounce_seconds": ("library", "float", 0.1, 60),
 }

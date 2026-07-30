@@ -36,8 +36,8 @@ async def navidrome_health_status(refresh: bool = Query(default=False)):
 
 
 @router.post("/sync-health/reconcile")
-async def reconcile_navidrome_health():
-    return await navidrome_sync_health.reconcile()
+async def reconcile_navidrome_health(full_scan: bool = Query(default=False)):
+    return await navidrome_sync_health.reconcile(full_scan=full_scan)
 
 
 @router.post("/rescan")

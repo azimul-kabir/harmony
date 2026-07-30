@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     navidrome_sync_health_interval_minutes: int = 15
     navidrome_sync_health_auto_reconcile: bool = False
     navidrome_sync_health_scan_timeout_seconds: float = 240.0
+    navidrome_sync_health_full_scan_timeout_seconds: float = 600.0
     navidrome_sync_health_poll_seconds: float = 1.0
 
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
