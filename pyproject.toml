@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "loguru>=0.7.3",
     "mutagen>=1.47",
+    "pillow>=11.0",
     "watchdog>=6.0",
     "httpx>=0.24,<0.25",
     # Pin the current SpotDL release to avoid resolver backtracking across

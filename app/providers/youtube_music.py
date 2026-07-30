@@ -3,10 +3,13 @@ import json
 import re
 import subprocess
 import tempfile
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from urllib.request import Request, urlopen
 
-
+from mutagen.id3 import APIC, COMM, ID3, ID3NoHeaderError, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TSRC, TXXX
+from PIL import Image, ImageOps
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.session import SessionLocal
@@ -19,6 +22,8 @@ from app.services.download_processes import download_processes
 
 _SUFFIX = re.compile(r"\s*[\[(](?:official (?:audio|video)|lyrics?|lyric video|visualizer)[^\])]*[\])]\s*$", re.I)
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
+_ARTWORK_MAX_BYTES = 15 * 1024 * 1024
+_ARTWORK_SIZE = 1200
 
 
 def clean_title(value: str | None) -> str:
@@ -35,6 +40,91 @@ def normalize_url(url: str) -> str:
 def watch_url(item_id: str) -> str:
     """Use the broadly supported watch endpoint for yt-dlp extraction."""
     return f"https://www.youtube.com/watch?v={item_id}"
+
+
+def _best_artwork(data: dict) -> str | None:
+    """Prefer a real square album image over YouTube's widescreen preview."""
+    candidates = [item for item in data.get("thumbnails") or [] if item.get("url")]
+    if not candidates:
+        return data.get("thumbnail")
+
+    def score(item: dict) -> tuple[float, int]:
+        width, height = item.get("width") or 0, item.get("height") or 0
+        if not width or not height:
+            return (-2.0, 0)
+        # Aspect ratio is more important than raw resolution. YouTube video
+        # previews are generally larger than the album cover thumbnails.
+        return (-abs(width / height - 1), min(width, height))
+
+    return max(candidates, key=score)["url"]
+
+
+def _square_jpeg(content: bytes) -> bytes:
+    """Center-crop artwork to a bounded, high-quality 1:1 JPEG."""
+    with Image.open(BytesIO(content)) as source:
+        source.load()
+        size = min(_ARTWORK_SIZE, source.width, source.height)
+        image = ImageOps.fit(source.convert("RGB"), (size, size), method=Image.Resampling.LANCZOS)
+        output = BytesIO()
+        image.save(output, "JPEG", quality=92, optimize=True)
+        return output.getvalue()
+
+
+def _fetch_artwork(url: str) -> bytes:
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError("Artwork URL is not HTTPS.")
+    request = Request(url, headers={"User-Agent": "Harmony/2 YouTubeMusicArtwork"})
+    with urlopen(request, timeout=20) as response:
+        content = response.read(_ARTWORK_MAX_BYTES + 1)
+    if len(content) > _ARTWORK_MAX_BYTES:
+        raise ValueError("Artwork exceeds the size limit.")
+    return _square_jpeg(content)
+
+
+def _write_download_tags(path: Path, track: Track, extracted: dict, artwork: bytes | None) -> None:
+    """Replace sparse extractor tags with Harmony's canonical queue metadata."""
+    artist = track.artist or extracted.get("artist") or extracted.get("uploader") or "Unknown Artist"
+    if artist.endswith(" - Topic"):
+        artist = artist[:-8]
+    album_artist = track.album_artist or extracted.get("album_artist") or artist
+    album = track.album or extracted.get("album") or "Singles"
+    title = track.title or clean_title(extracted.get("track") or extracted.get("title")) or "Unknown Title"
+    year = track.year or extracted.get("release_year") or extracted.get("release_date") or extracted.get("upload_date")
+
+    try:
+        tags = ID3(path)
+    except ID3NoHeaderError:
+        tags = ID3()
+    values = {
+        "TIT2": TIT2(encoding=3, text=title),
+        "TPE1": TPE1(encoding=3, text=artist),
+        "TPE2": TPE2(encoding=3, text=album_artist),
+        "TALB": TALB(encoding=3, text=album),
+    }
+    if track.track or extracted.get("track_number"):
+        values["TRCK"] = TRCK(encoding=3, text=str(track.track or extracted["track_number"]))
+    if track.disc or extracted.get("disc_number"):
+        values["TPOS"] = TPOS(encoding=3, text=str(track.disc or extracted["disc_number"]))
+    if year:
+        values["TDRC"] = TDRC(encoding=3, text=str(year)[:4])
+    if track.genre:
+        values["TCON"] = TCON(encoding=3, text=track.genre)
+    isrc = track.isrc or extracted.get("isrc")
+    if isrc:
+        values["TSRC"] = TSRC(encoding=3, text=str(isrc))
+    for frame_id, frame in values.items():
+        tags.setall(frame_id, [frame])
+    tags.delall("COMM")
+    tags.add(COMM(encoding=3, lang="eng", desc="Source", text=track.source_url or extracted.get("webpage_url") or "YouTube Music"))
+    tags.delall("TXXX:YouTube Music ID")
+    source_id = track.source_item_id or extracted.get("id")
+    if source_id:
+        tags.add(TXXX(encoding=3, desc="YouTube Music ID", text=str(source_id)))
+    if artwork:
+        tags.setall("APIC", [item for item in tags.getall("APIC") if item.type != 3])
+        tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=artwork))
+    tags.save(path, v2_version=3)
 
 
 class YouTubeMusicSource:
@@ -93,10 +183,9 @@ class YouTubeMusicSource:
         artist = data.get("artist") or data.get("uploader")
         if artist and artist.endswith(" - Topic"):
             artist = artist[:-8]
-        thumbs = data.get("thumbnails") or []
-        artwork = thumbs[-1].get("url") if thumbs else data.get("thumbnail")
+        artwork = _best_artwork(data)
         canonical_url = watch_url(item_id) if _VIDEO_ID.fullmatch(item_id) else data.get("webpage_url")
-        return SourceResult(self.identifier, item_id, item_type, title, artist, data.get("album"), data.get("album_artist"), data.get("duration"), data.get("release_year") or data.get("year"), data.get("track_number"), data.get("disc_number"), data.get("age_limit") == 18, artwork, canonical_url, data.get("playlist_count"))
+        return SourceResult(self.identifier, item_id, item_type, title, artist, data.get("album"), data.get("album_artist") or artist, data.get("duration"), data.get("release_year") or data.get("year"), data.get("track_number"), data.get("disc_number"), data.get("age_limit") == 18, artwork, canonical_url, data.get("playlist_count"))
 
     def search(self, query: str, limit: int = 20) -> list[SourceResult]:
         bounded = max(1, min(limit, self.settings.youtube_music_max_search_results))
@@ -122,6 +211,14 @@ class YouTubeMusicSource:
         tracks: list[Track] = []
         seen: set[str] = set()
         for index, entry in enumerate(entries or [], start=1):
+            # Flat playlist records omit most music tags and frequently expose
+            # only a widescreen video thumbnail. Hydrate every item before it
+            # enters the durable queue so retries retain complete metadata.
+            if item_type != "track" and entry.get("id"):
+                try:
+                    entry = self._run_json(watch_url(str(entry["id"])))
+                except ValueError:
+                    logger.warning("Could not hydrate YouTube Music playlist item {}; using flat metadata", entry.get("id"))
             result = self._result(entry)
             if not result.item_id or result.item_id in seen:
                 continue
@@ -172,10 +269,10 @@ class YouTubeMusicSource:
                 "mp3",
                 "--audio-quality",
                 quality,
-                "--embed-metadata",
+                "--write-info-json",
+                "--write-thumbnail",
                 "--convert-thumbnails",
                 "jpg",
-                "--embed-thumbnail",
                 "-o",
                 template,
                 target,
@@ -212,6 +309,31 @@ class YouTubeMusicSource:
             files = sorted(Path(temporary).glob("*.mp3"), key=lambda file: file.stat().st_mtime, reverse=True)
             if not files:
                 raise ValueError("YouTube Music did not produce an audio file.")
+            info_files = list(Path(temporary).glob("*.info.json"))
+            extracted = {}
+            if info_files:
+                try:
+                    extracted = json.loads(info_files[0].read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    logger.warning("YouTube Music produced unreadable metadata for job #{}", job_id)
+            artwork = None
+            if track.cover_url:
+                try:
+                    artwork = _fetch_artwork(track.cover_url)
+                except Exception as exc:
+                    logger.warning("Could not fetch YouTube Music album artwork for job #{}: {}", job_id, exc)
+            if artwork is None:
+                thumbnails = list(Path(temporary).glob("*.jpg"))
+                if thumbnails:
+                    try:
+                        artwork = _square_jpeg(thumbnails[0].read_bytes())
+                    except Exception as exc:
+                        logger.warning("Could not normalize YouTube Music artwork for job #{}: {}", job_id, exc)
+            try:
+                _write_download_tags(files[0], track, extracted, artwork)
+            except Exception as exc:
+                logger.error("Could not write YouTube Music metadata for job #{}: {}", job_id, exc)
+                raise ValueError("YouTube Music audio was downloaded but its metadata could not be written.") from exc
             destination = output / files[0].name
             files[0].replace(destination)
             return destination
