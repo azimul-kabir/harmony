@@ -106,6 +106,20 @@ def _fetch_artwork(url: str) -> bytes:
     return _square_jpeg(content)
 
 
+def _download_artwork_url(track: Track) -> str | None:
+    """Resolve album art lazily for playlist-sync jobs with flat metadata."""
+    if track.cover_url:
+        return track.cover_url
+
+    item_id = track.source_item_id
+    if not item_id and track.source_url:
+        parsed = urlparse(normalize_url(track.source_url))
+        item_id = (parse_qs(parsed.query).get("v") or [None])[0]
+    if not item_id or not _VIDEO_ID.fullmatch(item_id):
+        return None
+    return _best_artwork(_youtube_music_track(item_id))
+
+
 def _write_download_tags(path: Path, track: Track, extracted: dict, artwork: bytes | None) -> None:
     """Replace sparse extractor tags with Harmony's canonical queue metadata."""
     artist = track.artist or extracted.get("artist") or extracted.get("uploader") or "Unknown Artist"
@@ -343,9 +357,14 @@ class YouTubeMusicSource:
                 except (OSError, json.JSONDecodeError):
                     logger.warning("YouTube Music produced unreadable metadata for job #{}", job_id)
             artwork = None
-            if track.cover_url:
+            try:
+                artwork_url = _download_artwork_url(track)
+            except Exception as exc:
+                artwork_url = None
+                logger.warning("Could not resolve YouTube Music album artwork for job #{}: {}", job_id, exc)
+            if artwork_url:
                 try:
-                    artwork = _fetch_artwork(track.cover_url)
+                    artwork = _fetch_artwork(artwork_url)
                 except Exception as exc:
                     logger.warning("Could not fetch YouTube Music album artwork for job #{}: {}", job_id, exc)
             try:
