@@ -1,10 +1,10 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+
+from app.core.config import get_settings
 from app.database.models import Task
 from app.database.session import SessionLocal
-from app.core.config import get_settings
-from app.services.navidrome_love import create_job, public_job, run_job
-
 from app.services.navidrome import NavidromeClient, NavidromeError
+from app.services.navidrome_love import create_job, public_job, run_job
 from app.services.navidrome_sync_health import navidrome_sync_health
 
 router = APIRouter(prefix="/api/navidrome", tags=["navidrome"])
@@ -37,7 +37,7 @@ async def navidrome_health_status(refresh: bool = Query(default=False)):
 
 @router.post("/sync-health/reconcile")
 async def reconcile_navidrome_health():
-    return await navidrome_sync_health.check(reconcile=True)
+    return await navidrome_sync_health.reconcile()
 
 
 @router.post("/rescan")
