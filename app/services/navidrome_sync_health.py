@@ -23,6 +23,23 @@ from app.database.session import SessionLocal
 from app.services.navidrome import NavidromeClient
 
 
+def _normalize_track_filename(path: str) -> str:
+    """Canonicalize Harmony and Navidrome's deterministic track prefixes.
+
+    Older libraries can contain ``TT - title`` names while Navidrome exposes the
+    same file as ``DD-TT - title``.  Only the basename prefix is canonicalized;
+    the remainder of the filename and every directory component stay exact.
+    """
+    directory, separator, filename = path.rpartition("/")
+    filename = re.sub(
+        r"^(?:\d{2}-)?(\d{2})\s*-\s*",
+        r"\1 - ",
+        filename,
+        count=1,
+    )
+    return f"{directory}{separator}{filename}"
+
+
 def normalize_library_path(value: Any, music_path: str, *, remote: bool = False) -> str:
     """Return a lexical, Unicode-normalized path relative to the music library.
 
@@ -71,8 +88,11 @@ def normalize_library_path(value: Any, music_path: str, *, remote: bool = False)
             parts.pop(0)
         raw = "/".join(parts)
     # Case-folding is intentional for cross-platform identity; original paths
-    # remain in samples/logs for diagnostics.
-    return unicodedata.normalize("NFC", raw.strip("/")).casefold()
+    # remain in samples/logs for diagnostics. Track-prefix canonicalization is
+    # deliberately narrow: punctuation in directories (including ``_`` and
+    # ``|``) is retained so ID validation remains strict after normalization.
+    normalized = unicodedata.normalize("NFC", raw.strip("/")).casefold()
+    return _normalize_track_filename(normalized)
 
 
 def _same_path(local_path: str, remote_path: Any, music_path: str) -> bool:

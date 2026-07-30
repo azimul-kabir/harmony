@@ -152,45 +152,86 @@ def test_path_normalization_is_lexical_and_library_relative():
     )
 
 
-def test_production_music_folder_prefix_restores_one_to_one_path_matches():
-    local_paths = [f"/music/Artist/Album/{index}.mp3" for index in range(1794)]
+def test_disc_track_prefix_is_equivalent_to_track_prefix_only_in_filename():
+    assert normalize_library_path(
+        "/music/Artist/Album/02 - Song.mp3", "/music"
+    ) == normalize_library_path(
+        "Artist/Album/01-02 - Song.mp3", "/music", remote=True
+    )
+    assert normalize_library_path(
+        "/music/Artist_Name/Album/02 - Song.mp3", "/music"
+    ) != normalize_library_path(
+        "Artist|Name/Album/01-02 - Song.mp3", "/music", remote=True
+    )
+    assert normalize_library_path(
+        "/music/Artist/01-02 - Album/02 - Song.mp3", "/music"
+    ) != normalize_library_path(
+        "Artist/02 - Album/01-02 - Song.mp3", "/music", remote=True
+    )
+
+
+def test_production_disc_track_prefix_restores_one_to_one_path_matches():
+    local_paths = [
+        f"/music/Artist/Album/{index % 100:02d} - Song {index}.mp3"
+        for index in range(1794)
+    ]
     remote = [
         {
             "id": f"remote-{index}",
-            "path": (
-                f"Artist/Album/{index}.mp3"
-                if index == 1223
-                else f"1:Artist/Album/{index}.mp3"
-            ),
+            "path": f"Artist/Album/01-{index % 100:02d} - Song {index}.mp3",
         }
         for index in range(1782)
     ]
-    stored_ids = {index: f"remote-{index}" for index in range(1223)}
-
-    # This mirrors the production 1,223 stored-ID matches plus one path match.
-    before_remote_paths = {
-        str(item["path"]).casefold(): item for item in remote
-    }
-    before_matches = len(stored_ids) + sum(
-        path.removeprefix("/music/").casefold() in before_remote_paths
-        for path in local_paths[len(stored_ids) :]
-    )
     normalized_remote_paths = {
         normalize_library_path(item["path"], "/music", remote=True)
         for item in remote
     }
-    after_matches = len(stored_ids) + sum(
+    matches = sum(
         normalize_library_path(path, "/music") in normalized_remote_paths
-        for path in local_paths[len(stored_ids) :]
+        for path in local_paths
     )
 
-    assert before_matches == 1224
-    assert (len(local_paths) - before_matches, len(remote) - before_matches) == (
-        570,
-        558,
+    assert matches == 1782
+    assert (len(local_paths) - matches, len(remote) - matches) == (12, 0)
+
+
+def test_stored_id_accepts_disc_track_prefix_but_rejects_other_path_drift(monkeypatch):
+    seed_library()
+    db = SessionLocal()
+    try:
+        song = db.scalar(select(Song))
+        song.path = "/music/Artist/Album/02 - Song.mp3"
+        song.filename = "02 - Song.mp3"
+        song.navidrome_id = "remote-1"
+        db.commit()
+    finally:
+        db.close()
+    client = FakeNavidrome()
+
+    async def disc_track_song():
+        return [{"id": "remote-1", "path": "Artist/Album/01-02 - Song.mp3"}]
+
+    client.library_songs = disc_track_song
+    monkeypatch.setattr(
+        "app.services.navidrome_sync_health.os.path.isfile", lambda _: True
     )
-    assert after_matches == 1782
-    assert (len(local_paths) - after_matches, len(remote) - after_matches) == (12, 0)
+    monkeypatch.setattr("app.services.navidrome_sync_health.os.access", lambda *_: True)
+
+    matched = asyncio.run(
+        NavidromeSyncHealth(settings=settings(), client=client).check()
+    )
+    assert matched["missing_tracks"] == matched["stale_tracks"] == 0
+    assert matched["inconsistent_stored_navidrome_id"] == 0
+
+    async def drifted_directory_song():
+        return [{"id": "remote-1", "path": "Artist|Name/Album/01-02 - Song.mp3"}]
+
+    client.library_songs = drifted_directory_song
+    rejected = asyncio.run(
+        NavidromeSyncHealth(settings=settings(), client=client).check()
+    )
+    assert rejected["missing_tracks"] == rejected["stale_tracks"] == 1
+    assert rejected["inconsistent_stored_navidrome_id"] == 1
 
 
 def test_stale_id_is_recovered_and_persisted(monkeypatch):
