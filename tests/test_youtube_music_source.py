@@ -12,6 +12,7 @@ from app.providers import youtube_music
 from app.providers.youtube_music import (
     YouTubeMusicSource,
     _best_artwork,
+    _download_artwork_url,
     _fetch_artwork,
     _square_jpeg,
     _youtube_music_track,
@@ -88,6 +89,33 @@ def test_result_uses_music_album_art_instead_of_video_thumbnail(monkeypatch):
         "thumbnail": "https://i.ytimg.com/video-preview.jpg",
     })
     assert result.artwork_url == "https://lh3.googleusercontent.com/album"
+
+
+def test_synced_playlist_track_resolves_album_art_when_download_starts(monkeypatch):
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda item_id: {
+        "videoId": item_id,
+        "thumbnail": [
+            {"url": "https://lh3.googleusercontent.com/cover-60", "width": 60, "height": 60},
+            {"url": "https://lh3.googleusercontent.com/cover-544", "width": 544, "height": 544},
+        ],
+    })
+    track = Track(
+        source_provider="youtube_music",
+        source_item_id="video123",
+        source_url="https://music.youtube.com/watch?v=video123",
+    )
+
+    assert _download_artwork_url(track) == "https://lh3.googleusercontent.com/cover-544"
+
+
+def test_download_artwork_resolution_preserves_queued_cover(monkeypatch):
+    def unexpected_lookup(_item_id):
+        raise AssertionError("canonical metadata should not be fetched")
+
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", unexpected_lookup)
+    track = Track(cover_url="https://images.example/queued-cover.jpg")
+
+    assert _download_artwork_url(track) == "https://images.example/queued-cover.jpg"
 
 
 def test_artwork_is_center_cropped_to_square_and_bounded():

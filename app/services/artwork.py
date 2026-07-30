@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import logger
-from app.database.models import Artwork, Song
+from app.database.models import Artwork, Song, SongSourceIdentity
 
 
 FOLDER_ARTWORK_NAMES = ("cover", "folder", "front", "album")
@@ -254,6 +254,43 @@ class ArtworkService:
             ),
         )
 
+    def fetch_youtube_music_artwork(
+        self,
+        db: Session,
+        item_id: str,
+        *,
+        force_remote: bool = False,
+    ) -> Artwork:
+        """Cache the square cover from a linked YouTube Music source item."""
+        existing = db.scalar(
+            select(Artwork).where(
+                Artwork.provider == "youtube_music",
+                Artwork.provider_id == item_id,
+            )
+        )
+        if existing is not None and Path(existing.cache_path).is_file() and not force_remote:
+            return existing
+
+        # Keep provider/network dependencies out of Library startup. This path
+        # is reached only after an explicit Fetch album art action.
+        from app.providers.youtube_music import _best_artwork, _fetch_artwork, _youtube_music_track
+
+        artwork_url = _best_artwork(_youtube_music_track(item_id))
+        if not artwork_url:
+            raise ValueError("YouTube Music did not provide album artwork for this track")
+        data = _fetch_artwork(artwork_url)
+        return self.cache(
+            db,
+            ArtworkCandidate(
+                data=data,
+                mime_type="image/jpeg",
+                source="remote",
+                provider="youtube_music",
+                provider_id=item_id,
+                original_url=artwork_url,
+            ),
+        )
+
     def fetch_for_song(
         self, db: Session, song: Song, *, force_remote: bool = False
     ) -> tuple[Artwork, MusicBrainzReleaseResolution, bool]:
@@ -270,6 +307,21 @@ class ArtworkService:
             return song.artwork, resolution, True  # type: ignore[return-value]
         resolution = resolve_musicbrainz_release_id(song)
         if not resolution.resolved:
+            youtube_identity = db.scalar(
+                select(SongSourceIdentity).where(
+                    SongSourceIdentity.song_id == song.id,
+                    SongSourceIdentity.provider == "youtube_music",
+                ).order_by(SongSourceIdentity.created_at, SongSourceIdentity.item_id)
+            )
+            if youtube_identity is not None:
+                artwork = self.fetch_youtube_music_artwork(
+                    db, youtube_identity.item_id, force_remote=force_remote
+                )
+                logger.info(
+                    "Artwork operation=fetch_artwork song_id={} provider=youtube_music provider_response=success cache=miss",
+                    song.id,
+                )
+                return artwork, resolution, False
             logger.info("Artwork operation=fetch_artwork song_id={} resolver_outcome={} identifier_source={} provider_response=not_requested cache={}", song.id, resolution.outcome, resolution.source_field, "miss" if cached is None else "hit")
             raise ArtworkFetchSkipped(resolution)
         if force_remote:
