@@ -132,6 +132,9 @@ def process_job(
             album=job.album,
             album_artist=job.album_artist,
             track=job.track,
+            disc=job.disc,
+            year=job.year,
+            isrc=job.isrc,
             cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
             spotify_track_id=job.spotify_track_id, 
             spotify_url=job.source_url, 
