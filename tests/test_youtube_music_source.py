@@ -12,7 +12,9 @@ from app.providers import youtube_music
 from app.providers.youtube_music import (
     YouTubeMusicSource,
     _best_artwork,
+    _fetch_artwork,
     _square_jpeg,
+    _youtube_music_track,
     _write_download_tags,
     clean_title,
 )
@@ -27,7 +29,7 @@ def test_detects_public_youtube_music_and_standard_fallback_urls():
     assert source.detect_url("https://www.youtube.com/channel/channel") is None
 
 
-def test_resolve_uses_regular_watch_url_for_youtube_music_track(monkeypatch):
+def test_resolve_keeps_youtube_music_watch_url(monkeypatch):
     source = YouTubeMusicSource()
     targets: list[str] = []
 
@@ -36,10 +38,11 @@ def test_resolve_uses_regular_watch_url_for_youtube_music_track(monkeypatch):
         return {"id": "abc1234", "title": "Song", "uploader": "Artist"}
 
     monkeypatch.setattr(source, "_run_json", run_json)
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
     tracks = source.resolve("music.youtube.com/watch?v=abc1234")
 
-    assert targets == ["https://www.youtube.com/watch?v=abc1234"]
-    assert tracks[0].source_url == "https://www.youtube.com/watch?v=abc1234"
+    assert targets == ["https://music.youtube.com/watch?v=abc1234"]
+    assert tracks[0].source_url == "https://music.youtube.com/watch?v=abc1234"
 
 
 def test_metadata_cleanup_only_removes_known_presentation_suffixes():
@@ -55,6 +58,38 @@ def test_artwork_selection_prioritizes_square_album_cover():
     assert _best_artwork(data) == "https://example/cover.jpg"
 
 
+def test_artwork_selection_accepts_youtube_music_thumbnail_shape():
+    data = {"thumbnail": [
+        {"url": "https://example/cover-60.jpg", "width": 60, "height": 60},
+        {"url": "https://example/cover-544.jpg", "width": 544, "height": 544},
+    ]}
+    assert _best_artwork(data) == "https://example/cover-544.jpg"
+
+
+def test_youtube_music_track_matches_video_counterpart(monkeypatch):
+    class Client:
+        def get_watch_playlist(self, **kwargs):
+            assert kwargs == {"videoId": "video123", "limit": 1}
+            return {"tracks": [
+                {"videoId": "audio123", "counterpart": {"videoId": "video123"}, "thumbnail": []},
+            ]}
+
+    monkeypatch.setattr(youtube_music, "YTMusic", Client)
+    assert _youtube_music_track("video123")["videoId"] == "audio123"
+
+
+def test_result_uses_music_album_art_instead_of_video_thumbnail(monkeypatch):
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {
+        "thumbnail": [{"url": "https://lh3.googleusercontent.com/album", "width": 544, "height": 544}],
+    })
+    result = YouTubeMusicSource()._result({
+        "id": "video123",
+        "title": "Song",
+        "thumbnail": "https://i.ytimg.com/video-preview.jpg",
+    })
+    assert result.artwork_url == "https://lh3.googleusercontent.com/album"
+
+
 def test_artwork_is_center_cropped_to_square_and_bounded():
     source = BytesIO()
     Image.new("RGB", (2400, 1200), "red").save(source, "PNG")
@@ -62,6 +97,11 @@ def test_artwork_is_center_cropped_to_square_and_bounded():
     with Image.open(BytesIO(artwork)) as image:
         assert image.size == (1200, 1200)
         assert image.format == "JPEG"
+
+
+def test_video_preview_is_rejected_as_album_art():
+    with pytest.raises(ValueError, match="video previews"):
+        _fetch_artwork("https://i.ytimg.com/vi/video123/hqdefault.jpg")
 
 
 def test_download_tags_include_album_artist_hierarchy_and_source(tmp_path):
@@ -126,6 +166,7 @@ def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path,
     assert events == ["register", "communicate", "cancel", "unregister"]
     assert len(created) == 1 and not created[0].exists()
     assert "--write-info-json" in commands[0]
-    assert "--write-thumbnail" in commands[0]
+    assert "--write-thumbnail" not in commands[0]
     assert "--embed-thumbnail" not in commands[0]
-    assert commands[0][commands[0].index("--convert-thumbnails") + 1] == "jpg"
+    assert "--convert-thumbnails" not in commands[0]
+    assert commands[0][-1] == "https://music.youtube.com/watch?v=abc1234"
