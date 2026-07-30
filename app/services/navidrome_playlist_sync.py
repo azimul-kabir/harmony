@@ -170,7 +170,7 @@ class NavidromePlaylistReimportCoordinator:
                 )
         return all_succeeded
 
-    async def _wait_until_idle(self, client: NavidromeClient) -> None:
+    async def _wait_until_idle(self, client: NavidromeClient) -> dict:
         deadline = time.monotonic() + max(
             1.0,
             float(self.settings.navidrome_playlist_reimport_scan_timeout_seconds),
@@ -182,7 +182,7 @@ class NavidromePlaylistReimportCoordinator:
                     status.get("error") or "Harmony could not reach Navidrome."
                 )
             if not status.get("scanning"):
-                return
+                return status
             if time.monotonic() >= deadline:
                 raise NavidromeError(
                     "Timed out waiting for the Navidrome scan to finish.",
@@ -198,9 +198,35 @@ class NavidromePlaylistReimportCoordinator:
             )
 
     async def _incremental_scan(self, client: NavidromeClient) -> None:
-        await self._wait_until_idle(client)
-        await client.start_scan(full_scan=False)
-        await self._wait_until_idle(client)
+        before = await self._wait_until_idle(client)
+        started = await client.start_scan(full_scan=False)
+        deadline = time.monotonic() + max(
+            1.0,
+            float(self.settings.navidrome_playlist_reimport_scan_timeout_seconds),
+        )
+        observed_scanning = bool(started.get("scanning"))
+        previous_last_scan = before.get("last_scan")
+        while True:
+            status = await client.status()
+            if not status.get("reachable"):
+                raise NavidromeError(
+                    status.get("error") or "Harmony could not reach Navidrome."
+                )
+            observed_scanning = observed_scanning or bool(status.get("scanning"))
+            scan_completed = (
+                status.get("last_scan") is not None
+                and status.get("last_scan") != previous_last_scan
+            )
+            if not status.get("scanning") and (observed_scanning or scan_completed):
+                return
+            if time.monotonic() >= deadline:
+                raise NavidromeError(
+                    "Timed out waiting for Navidrome to start and finish its scan.",
+                    code="navidrome_scan_timeout",
+                )
+            await asyncio.sleep(
+                max(0.1, float(self.settings.navidrome_playlist_reimport_poll_seconds))
+            )
 
     async def reconcile(self, task_ids: Iterable[int]) -> bool:
         if not self.enabled:

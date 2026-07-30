@@ -35,6 +35,11 @@ class FakeNavidrome:
         self.scan_requests += 1
 
 
+class BrokenNavidrome(FakeNavidrome):
+    async def library_songs(self):
+        raise RuntimeError("unexpected response shape")
+
+
 def settings(*, auto_reconcile=False):
     return SimpleNamespace(
         music_path="/music",
@@ -77,3 +82,14 @@ def test_sync_health_requests_reconciliation_when_drift_is_detected():
     assert result["stale_tracks"] == 1
     assert result["reconciliation_requested"] is True
     assert client.scan_requests == 1
+
+
+def test_sync_health_returns_clean_unavailable_state_for_unexpected_failures():
+    health = NavidromeSyncHealth(settings=settings(), client=BrokenNavidrome())
+
+    result = asyncio.run(health.check())
+
+    assert result["state"] == "unavailable"
+    assert result["error"] == "unexpected response shape"
+    assert health._lock.acquire(blocking=False) is True
+    health._lock.release()
