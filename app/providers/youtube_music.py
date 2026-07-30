@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 
 from mutagen.id3 import APIC, COMM, ID3, ID3NoHeaderError, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, TSRC, TXXX
 from PIL import Image, ImageOps
+from ytmusicapi import YTMusic
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.session import SessionLocal
@@ -38,15 +39,20 @@ def normalize_url(url: str) -> str:
 
 
 def watch_url(item_id: str) -> str:
-    """Use the broadly supported watch endpoint for yt-dlp extraction."""
-    return f"https://www.youtube.com/watch?v={item_id}"
+    """Keep YouTube Music tracks on the Music watch endpoint."""
+    return f"https://music.youtube.com/watch?v={item_id}"
 
 
 def _best_artwork(data: dict) -> str | None:
     """Prefer a real square album image over YouTube's widescreen preview."""
-    candidates = [item for item in data.get("thumbnails") or [] if item.get("url")]
+    candidates = [
+        item
+        for item in (data.get("thumbnail") or data.get("thumbnails") or [])
+        if isinstance(item, dict) and item.get("url")
+    ]
     if not candidates:
-        return data.get("thumbnail")
+        thumbnail = data.get("thumbnail")
+        return thumbnail if isinstance(thumbnail, str) else None
 
     def score(item: dict) -> tuple[float, int]:
         width, height = item.get("width") or 0, item.get("height") or 0
@@ -57,6 +63,20 @@ def _best_artwork(data: dict) -> str | None:
         return (-abs(width / height - 1), min(width, height))
 
     return max(candidates, key=score)["url"]
+
+
+def _youtube_music_track(item_id: str) -> dict:
+    """Fetch the audio track card, whose thumbnail is the actual album cover."""
+    tracks = YTMusic().get_watch_playlist(videoId=item_id, limit=1).get("tracks") or []
+    return next(
+        (
+            track
+            for track in tracks
+            if track.get("videoId") == item_id
+            or (track.get("counterpart") or {}).get("videoId") == item_id
+        ),
+        tracks[0] if tracks else {},
+    )
 
 
 def _square_jpeg(content: bytes) -> bytes:
@@ -74,6 +94,10 @@ def _fetch_artwork(url: str) -> bytes:
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise ValueError("Artwork URL is not HTTPS.")
+    if parsed.hostname and (
+        parsed.hostname == "img.youtube.com" or parsed.hostname.endswith(".ytimg.com")
+    ):
+        raise ValueError("YouTube video previews are not album artwork.")
     request = Request(url, headers={"User-Agent": "Harmony/2 YouTubeMusicArtwork"})
     with urlopen(request, timeout=20) as response:
         content = response.read(_ARTWORK_MAX_BYTES + 1)
@@ -179,11 +203,19 @@ class YouTubeMusicSource:
 
     def _result(self, data: dict, item_type: str = "song") -> SourceResult:
         item_id = str(data.get("id") or data.get("url") or "")
+        music_data: dict = {}
+        if _VIDEO_ID.fullmatch(item_id):
+            try:
+                music_data = _youtube_music_track(item_id)
+            except Exception as exc:
+                logger.warning("Could not fetch canonical YouTube Music metadata for {}: {}", item_id, exc)
         title = clean_title(data.get("track") or data.get("title")) or "Unknown title"
         artist = data.get("artist") or data.get("uploader")
         if artist and artist.endswith(" - Topic"):
             artist = artist[:-8]
-        artwork = _best_artwork(data)
+        # yt-dlp extracts the YouTube *video* preview.  The audio-only Music
+        # watch card exposes the square album cover shown in YouTube Music.
+        artwork = _best_artwork(music_data)
         canonical_url = watch_url(item_id) if _VIDEO_ID.fullmatch(item_id) else data.get("webpage_url")
         return SourceResult(self.identifier, item_id, item_type, title, artist, data.get("album"), data.get("album_artist") or artist, data.get("duration"), data.get("release_year") or data.get("year"), data.get("track_number"), data.get("disc_number"), data.get("age_limit") == 18, artwork, canonical_url, data.get("playlist_count"))
 
@@ -198,9 +230,6 @@ class YouTubeMusicSource:
         detected = self.detect_url(target)
         if not detected:
             raise ValueError("Unsupported YouTube Music URL.")
-        item_type, _ = detected
-        # ``music.youtube.com`` is useful for identifying user input, but the
-        # regular watch endpoint is more reliably handled by yt-dlp.
         item_type, item_id = detected
         if item_type == "track":
             target = watch_url(item_id)
@@ -270,9 +299,6 @@ class YouTubeMusicSource:
                 "--audio-quality",
                 quality,
                 "--write-info-json",
-                "--write-thumbnail",
-                "--convert-thumbnails",
-                "jpg",
                 "-o",
                 template,
                 target,
@@ -322,13 +348,6 @@ class YouTubeMusicSource:
                     artwork = _fetch_artwork(track.cover_url)
                 except Exception as exc:
                     logger.warning("Could not fetch YouTube Music album artwork for job #{}: {}", job_id, exc)
-            if artwork is None:
-                thumbnails = list(Path(temporary).glob("*.jpg"))
-                if thumbnails:
-                    try:
-                        artwork = _square_jpeg(thumbnails[0].read_bytes())
-                    except Exception as exc:
-                        logger.warning("Could not normalize YouTube Music artwork for job #{}: {}", job_id, exc)
             try:
                 _write_download_tags(files[0], track, extracted, artwork)
             except Exception as exc:
