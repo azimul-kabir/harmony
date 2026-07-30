@@ -20,6 +20,7 @@ from app.core.logging import logger
 from app.core.time import utcnow_naive
 from app.database.models import Playlist, Song
 from app.database.session import SessionLocal
+from app.services.library_paths import sanitize_path_component
 from app.services.navidrome import NavidromeClient
 
 
@@ -54,6 +55,10 @@ def normalize_library_path(value: Any, music_path: str, *, remote: bool = False)
     # part of the path mounted in either container.
     if remote:
         raw = re.sub(r"^\d+:(?:/+)?", "", raw, count=1)
+        # Reject traversal syntax instead of allowing normpath to collapse it
+        # into a different synthetic identity.
+        if any(part in {".", ".."} for part in raw.split("/")):
+            return ""
     absolute = raw.startswith("/") or (len(raw) > 2 and raw[1] == ":" and raw[2] == "/")
     raw = posixpath.normpath(raw)
     if raw in {"", ".", "/"}:
@@ -87,10 +92,15 @@ def normalize_library_path(value: Any, music_path: str, *, remote: bool = False)
         if remote and parts and parts[0].casefold() == marker:
             parts.pop(0)
         raw = "/".join(parts)
+    # search3 paths are synthesized from unsanitized metadata rather than read
+    # from the filesystem. Apply the exact import sanitizer component-by-
+    # component after root removal. Local stored paths are already authoritative
+    # and must not be rewritten during comparison.
+    if remote:
+        raw = "/".join(sanitize_path_component(part) for part in raw.split("/"))
     # Case-folding is intentional for cross-platform identity; original paths
     # remain in samples/logs for diagnostics. Track-prefix canonicalization is
-    # deliberately narrow: punctuation in directories (including ``_`` and
-    # ``|``) is retained so ID validation remains strict after normalization.
+    # deliberately narrow and applies only to the basename.
     normalized = unicodedata.normalize("NFC", raw.strip("/")).casefold()
     return _normalize_track_filename(normalized)
 
@@ -343,6 +353,17 @@ class NavidromeSyncHealth:
                 ],
                 "missing_on_filesystem_samples": [s.path for s in missing_fs[:10]],
                 "ambiguous_match_samples": [s.path for s in ambiguous[:10]],
+                "duplicate_remote_path_samples": [
+                    {
+                        "normalized_path": normalized_path,
+                        "raw_paths": [
+                            str(item.get("path") or "") for item in candidates[:10]
+                        ],
+                    }
+                    for normalized_path, candidates in list(duplicate_remote.items())[
+                        :10
+                    ]
+                ],
                 "repaired_navidrome_ids": repaired,
                 "reconciliation_requested": False,
             }
