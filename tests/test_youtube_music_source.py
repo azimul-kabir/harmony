@@ -15,6 +15,7 @@ from app.providers.youtube_music import (
     _download_artwork_url,
     _fetch_artwork,
     _square_jpeg,
+    _youtube_music_artwork,
     _youtube_music_track,
     _write_download_tags,
     clean_title,
@@ -79,6 +80,46 @@ def test_youtube_music_track_matches_video_counterpart(monkeypatch):
     assert _youtube_music_track("video123")["videoId"] == "audio123"
 
 
+def test_youtube_music_artwork_uses_album_endpoint_instead_of_video_preview(monkeypatch):
+    class Client:
+        def get_watch_playlist(self, **kwargs):
+            assert kwargs == {"videoId": "video123", "limit": 1}
+            return {"tracks": [{
+                "videoId": "video123",
+                "album": {"id": "album123"},
+                "thumbnail": [{
+                    "url": "https://i.ytimg.com/vi/video123/hq720.jpg",
+                    "width": 1280,
+                    "height": 720,
+                }],
+            }]}
+
+        def get_album(self, album_id):
+            assert album_id == "album123"
+            return {"thumbnails": [{
+                "url": "https://lh3.googleusercontent.com/album-cover",
+                "width": 544,
+                "height": 544,
+            }]}
+
+    monkeypatch.setattr(youtube_music, "YTMusic", Client)
+
+    assert _youtube_music_artwork("video123") == "https://lh3.googleusercontent.com/album-cover"
+
+
+def test_youtube_music_artwork_does_not_return_video_preview(monkeypatch):
+    class Client:
+        def get_watch_playlist(self, **_kwargs):
+            return {"tracks": [{
+                "videoId": "video123",
+                "thumbnail": [{"url": "https://i.ytimg.com/vi/video123/hq720.jpg"}],
+            }]}
+
+    monkeypatch.setattr(youtube_music, "YTMusic", Client)
+
+    assert _youtube_music_artwork("video123") is None
+
+
 def test_result_uses_music_album_art_instead_of_video_thumbnail(monkeypatch):
     monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {
         "thumbnail": [{"url": "https://lh3.googleusercontent.com/album", "width": 544, "height": 544}],
@@ -89,6 +130,50 @@ def test_result_uses_music_album_art_instead_of_video_thumbnail(monkeypatch):
         "thumbnail": "https://i.ytimg.com/video-preview.jpg",
     })
     assert result.artwork_url == "https://lh3.googleusercontent.com/album"
+
+
+def test_result_prefers_canonical_youtube_music_metadata(monkeypatch):
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {
+        "title": "Canonical Song",
+        "artists": [{"name": "Primary Artist"}, {"name": "Guest Artist"}],
+        "album": {"name": "Canonical Album", "id": "album123"},
+        "duration_seconds": 243,
+        "isExplicit": True,
+    })
+
+    result = YouTubeMusicSource()._result({
+        "id": "video123",
+        "title": "Video title (Official Video)",
+        "uploader": "Uploader - Topic",
+        "album": "Imported Playlist Name",
+    })
+
+    assert result.title == "Canonical Song"
+    assert result.artist == "Primary Artist, Guest Artist"
+    assert result.album == "Canonical Album"
+    assert result.album_artist == "Primary Artist"
+    assert result.duration == 243
+    assert result.explicit is True
+
+
+def test_playlist_name_is_never_used_as_track_album(monkeypatch):
+    source = YouTubeMusicSource()
+    playlist = {
+        "title": "My Playlist",
+        "entries": [{"id": "video123", "title": "Flat title"}],
+    }
+    hydrated = {"id": "video123", "title": "Hydrated title"}
+    monkeypatch.setattr(
+        source,
+        "_run_json",
+        lambda target, *, flat=False: playlist if flat else hydrated,
+    )
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
+
+    resolved = source.resolve("https://music.youtube.com/playlist?list=PLabc")
+
+    assert resolved[0].album == "Singles"
+    assert resolved[0].track is None
 
 
 def test_synced_playlist_track_resolves_album_art_when_download_starts(monkeypatch):

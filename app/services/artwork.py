@@ -273,9 +273,9 @@ class ArtworkService:
 
         # Keep provider/network dependencies out of Library startup. This path
         # is reached only after an explicit Fetch album art action.
-        from app.providers.youtube_music import _best_artwork, _fetch_artwork, _youtube_music_track
+        from app.providers.youtube_music import _fetch_artwork, _youtube_music_artwork
 
-        artwork_url = _best_artwork(_youtube_music_track(item_id))
+        artwork_url = _youtube_music_artwork(item_id)
         if not artwork_url:
             raise ValueError("YouTube Music did not provide album artwork for this track")
         data = _fetch_artwork(artwork_url)
