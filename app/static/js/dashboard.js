@@ -152,13 +152,38 @@ async function startNavidromeScan(fullScan, button) {
         if (!response.ok) {
             throw new Error(payload.detail?.message || "Navidrome rejected the scan.");
         }
-        renderNavidromeStatus({ ...payload, scanning: true });
+        renderNavidromeStatus({ ...payload, scanning: Boolean(payload.scanning) });
+        setText("navidrome-message", "Scan request accepted; waiting for Navidrome to start…");
+        const completed = await pollNavidromeScan(payload);
+        if (!completed) throw new Error("Navidrome did not finish the scan within four minutes.");
+        setText("navidrome-message", "Scan completed; refreshing sync health…");
+        await refreshNavidromeSyncHealth(true);
     } catch (error) {
         setText("navidrome-message", error.message || "The Navidrome scan could not be started.");
     } finally {
         button.textContent = originalLabel;
-        window.setTimeout(refreshNavidromeStatus, 1000);
+        button.disabled = false;
+        await refreshNavidromeStatus();
     }
+}
+
+async function pollNavidromeScan(initial = {}, attempts = 120) {
+    let observed = Boolean(initial.scanning);
+    const previousLastScan = initial.last_scan;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const response = await fetch("/api/navidrome/status");
+        const status = await response.json().catch(() => ({}));
+        if (!response.ok || !status.reachable) throw new Error(status.error || "Navidrome scanner status is unavailable.");
+        observed = observed || Boolean(status.scanning);
+        renderNavidromeStatus(status);
+        setText("navidrome-message", status.scanning
+            ? `Scanning (${Number(status.scan_count || 0).toLocaleString()} items processed)…`
+            : "Waiting for Navidrome to begin scanning…");
+        const changed = status.last_scan && status.last_scan !== previousLastScan;
+        if (!status.scanning && (observed || changed)) return true;
+    }
+    return false;
 }
 
 function setupNavidromeControls() {
@@ -183,32 +208,15 @@ function setupNavidromeControls() {
         reconcile.disabled = true;
         setText("navidrome-health-message", "Requesting a Navidrome reconciliation scan…");
         try {
-            const beforeResponse = await fetch("/api/navidrome/status");
-            const before = beforeResponse.ok ? await beforeResponse.json() : {};
             const response = await fetch("/api/navidrome/sync-health/reconcile", { method: "POST" });
-            const health = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(health.detail?.message || "Reconciliation could not be started.");
-            renderNavidromeSyncHealth(health);
-            if (!health.reconciliation_requested) return;
-
-            let observedScanning = false;
-            for (let attempt = 0; attempt < 120; attempt += 1) {
-                await new Promise(resolve => window.setTimeout(resolve, 2000));
-                const statusResponse = await fetch("/api/navidrome/status");
-                const status = await statusResponse.json().catch(() => ({}));
-                if (!statusResponse.ok || !status.reachable) throw new Error(status.error || "Navidrome became unavailable.");
-                observedScanning = observedScanning || Boolean(status.scanning);
-                renderNavidromeStatus(status);
-                setText("navidrome-health-message", status.scanning
-                    ? `Reconciling Navidrome (${Number(status.scan_count || 0).toLocaleString()} items processed)…`
-                    : "Waiting for Navidrome to begin reconciliation…");
-                const completedQuickly = before.last_scan && status.last_scan !== before.last_scan;
-                if (!status.scanning && (observedScanning || completedQuickly)) {
-                    await refreshNavidromeSyncHealth(true);
-                    return;
-                }
-            }
-            throw new Error("Navidrome did not finish reconciliation within four minutes.");
+            const result = await response.json().catch(() => null);
+            if (!response.ok || !result || !result.post_scan_health) throw new Error(result?.detail?.message || "Reconciliation returned an invalid response.");
+            renderNavidromeSyncHealth(result.post_scan_health);
+            const scanResult = result.scan || {};
+            const remaining = Number(result.remaining_drift?.missing_tracks || 0);
+            const repaired = Number(result.repaired_navidrome_ids || 0);
+            const prefix = scanResult.completed ? "Scan completed." : scanResult.timed_out ? "Scan timed out." : "Scan ended without confirmed completion.";
+            setText("navidrome-health-message", `${prefix} Repaired ${repaired.toLocaleString()} Navidrome IDs. ${remaining.toLocaleString()} tracks remain missing.`);
         } catch (error) {
             setText("navidrome-health-message", error.message || "Navidrome reconciliation failed.");
         } finally {

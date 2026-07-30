@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     navidrome_sync_health_enabled: bool = True
     navidrome_sync_health_interval_minutes: int = 15
     navidrome_sync_health_auto_reconcile: bool = False
+    navidrome_sync_health_scan_timeout_seconds: float = 240.0
+    navidrome_sync_health_poll_seconds: float = 1.0
 
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
     musicbrainz_user_agent: str = "Harmony/2.0.1 (https://github.com/azimul-kabir/harmony)"
