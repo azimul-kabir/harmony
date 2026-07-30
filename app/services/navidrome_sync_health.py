@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import posixpath
+import re
 import threading
 import time
 import unicodedata
@@ -31,6 +32,11 @@ def normalize_library_path(value: Any, music_path: str, *, remote: bool = False)
     conservative mount marker (``/volume1/music/A`` -> ``A``).
     """
     raw = unicodedata.normalize("NFC", unquote(str(value or ""))).replace("\\", "/")
+    # Navidrome prefixes paths returned by search3 with the numeric music-folder
+    # id (for example ``1:Artist/Album/song.mp3``).  It is an API namespace, not
+    # part of the path mounted in either container.
+    if remote:
+        raw = re.sub(r"^\d+:(?:/+)?", "", raw, count=1)
     absolute = raw.startswith("/") or (len(raw) > 2 and raw[1] == ":" and raw[2] == "/")
     raw = posixpath.normpath(raw)
     if raw in {"", ".", "/"}:
@@ -81,6 +87,9 @@ class _LocalSong:
     path: str
     navidrome_id: str | None
     file_exists: bool
+    title: str | None
+    album: str | None
+    artist: str | None
 
 
 class NavidromeSyncHealth:
@@ -114,6 +123,9 @@ class NavidromeSyncHealth:
                     s.path,
                     s.navidrome_id,
                     os.path.isfile(s.path) and os.access(s.path, os.R_OK),
+                    s.title,
+                    s.album,
+                    s.artist,
                 )
                 for s in rows
             ]
@@ -206,17 +218,26 @@ class NavidromeSyncHealth:
             matched_remote: set[str] = set()
             missing: list[_LocalSong] = []
             invalid_ids: list[_LocalSong] = []
+            inconsistent_ids: list[_LocalSong] = []
             recovered: list[_LocalSong] = []
             ambiguous: list[_LocalSong] = []
             repairs: dict[int, str] = {}
             matched_by_id = 0
+            mismatch_diagnostics: list[dict[str, Any]] = []
             for song in local_songs:
                 stored = str(song.navidrome_id) if song.navidrome_id else None
                 if stored and stored in remote_by_id:
-                    matched_remote.add(stored)
-                    matched_by_id += 1
-                    continue
-                if stored:
+                    remote_song = remote_by_id[stored]
+                    if _same_path(song.path, remote_song.get("path"), self.settings.music_path):
+                        matched_remote.add(stored)
+                        matched_by_id += 1
+                        continue
+                    if len(mismatch_diagnostics) < 10:
+                        mismatch_diagnostics.append(
+                            self._diagnostic(song, remote_song, "stored_id_path_mismatch")
+                        )
+                    inconsistent_ids.append(song)
+                elif stored:
                     invalid_ids.append(song)
                 key = normalize_library_path(song.path, self.settings.music_path)
                 candidates = (
@@ -288,6 +309,7 @@ class NavidromeSyncHealth:
                 "stale_in_navidrome": len(stale),
                 "missing_on_filesystem": len(missing_fs),
                 "invalid_stored_navidrome_id": len(invalid_ids),
+                "inconsistent_stored_navidrome_id": len(inconsistent_ids),
                 "recovered_by_path": len(recovered),
                 "ambiguous_matches": len(ambiguous),
                 "duplicate_local_paths": len(duplicate_local),
@@ -304,6 +326,14 @@ class NavidromeSyncHealth:
                 "repaired_navidrome_ids": repaired,
                 "reconciliation_requested": False,
             }
+            # Add unpaired samples after the more useful stored-ID inconsistencies.
+            for song in missing:
+                if len(mismatch_diagnostics) >= 10:
+                    break
+                mismatch_diagnostics.append(
+                    self._diagnostic(song, None, "no_exact_path_match")
+                )
+            result["mismatch_diagnostics"] = mismatch_diagnostics
             logger.info(
                 "Navidrome health local={} remote={} id_matches={} path_matches={} invalid_ids={} ambiguous={} missing={} stale={} missing_files={} local_root={} remote_root=library-relative",
                 len(local_songs),
@@ -318,8 +348,8 @@ class NavidromeSyncHealth:
                 self.settings.music_path,
             )
             logger.debug(
-                "Navidrome health missing_samples={} stale_samples={}",
-                result["missing_track_samples"],
+                "Navidrome health mismatch_diagnostics={} stale_samples={}",
+                mismatch_diagnostics,
                 result["stale_track_samples"],
             )
             if not healthy and self.settings.navidrome_sync_health_auto_reconcile:
@@ -342,7 +372,51 @@ class NavidromeSyncHealth:
             self._lock.release()
         return self._snapshot
 
-    async def reconcile(self) -> dict[str, Any]:
+    def _diagnostic(
+        self,
+        local: _LocalSong,
+        remote: dict[str, Any] | None,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Build a capped, structured record without exposing credentials."""
+        remote = remote or {}
+        return {
+            "reason": reason,
+            "harmony": {
+                "id": local.id,
+                "path": local.path,
+                "navidrome_id": local.navidrome_id,
+                "path_exists": local.file_exists,
+                "normalized_path": normalize_library_path(
+                    local.path, self.settings.music_path
+                ),
+                "title": local.title,
+                "album": local.album,
+                "artist": local.artist,
+            },
+            "navidrome": {
+                "endpoint": "search3",
+                "id": remote.get("id"),
+                "path": remote.get("path"),
+                "normalized_path": normalize_library_path(
+                    remote.get("path"), self.settings.music_path, remote=True
+                ),
+                "title": remote.get("title"),
+                "album": remote.get("album"),
+                "artist": remote.get("artist"),
+                "parent_id": remote.get("parent"),
+                "music_folder_id": remote.get("musicFolderId"),
+            },
+            "stored_id_matches": bool(
+                local.navidrome_id
+                and str(local.navidrome_id) == str(remote.get("id") or "")
+            ),
+            "normalized_path_matches": _same_path(
+                local.path, remote.get("path"), self.settings.music_path
+            ),
+        }
+
+    async def reconcile(self, *, full_scan: bool = False) -> dict[str, Any]:
         started_at = time.monotonic()
         before = await self.check(repair_ids=False)
         scan = {
@@ -358,14 +432,18 @@ class NavidromeSyncHealth:
                 status_before.get("error") or "Navidrome is unavailable."
             )
         else:
-            response = await self.client.start_scan(full_scan=False)
+            response = await self.client.start_scan(full_scan=full_scan)
             scan["accepted"] = bool(response.get("accepted", True))
             scan["started"] = bool(response.get("scanning"))
             deadline = time.monotonic() + max(
                 1.0,
                 float(
                     getattr(
-                        self.settings, "navidrome_sync_health_scan_timeout_seconds", 240
+                        self.settings,
+                        "navidrome_sync_health_full_scan_timeout_seconds"
+                        if full_scan
+                        else "navidrome_sync_health_scan_timeout_seconds",
+                        600 if full_scan else 240,
                     )
                 ),
             )

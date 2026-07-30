@@ -135,6 +135,62 @@ def test_path_normalization_is_lexical_and_library_relative():
     assert normalize_library_path(
         "Artist/Cafe%CC%81/song.mp3", "/music"
     ) == normalize_library_path("Artist/Caf%C3%A9/song.mp3", "/music")
+    assert (
+        normalize_library_path(
+            "1:Gajendra Verma/Table No. 21/02 - Mann Mera.mp3",
+            "/music",
+            remote=True,
+        )
+        == "gajendra verma/table no. 21/02 - mann mera.mp3"
+    )
+    # A colon in a real filename and a non-numeric prefix are retained.
+    assert normalize_library_path("Artist/12: Song.mp3", "/music", remote=True) == (
+        "artist/12: song.mp3"
+    )
+    assert normalize_library_path("folder:Artist/song.mp3", "/music", remote=True) == (
+        "folder:artist/song.mp3"
+    )
+
+
+def test_production_music_folder_prefix_restores_one_to_one_path_matches():
+    local_paths = [f"/music/Artist/Album/{index}.mp3" for index in range(1794)]
+    remote = [
+        {
+            "id": f"remote-{index}",
+            "path": (
+                f"Artist/Album/{index}.mp3"
+                if index == 1223
+                else f"1:Artist/Album/{index}.mp3"
+            ),
+        }
+        for index in range(1782)
+    ]
+    stored_ids = {index: f"remote-{index}" for index in range(1223)}
+
+    # This mirrors the production 1,223 stored-ID matches plus one path match.
+    before_remote_paths = {
+        str(item["path"]).casefold(): item for item in remote
+    }
+    before_matches = len(stored_ids) + sum(
+        path.removeprefix("/music/").casefold() in before_remote_paths
+        for path in local_paths[len(stored_ids) :]
+    )
+    normalized_remote_paths = {
+        normalize_library_path(item["path"], "/music", remote=True)
+        for item in remote
+    }
+    after_matches = len(stored_ids) + sum(
+        normalize_library_path(path, "/music") in normalized_remote_paths
+        for path in local_paths[len(stored_ids) :]
+    )
+
+    assert before_matches == 1224
+    assert (len(local_paths) - before_matches, len(remote) - before_matches) == (
+        570,
+        558,
+    )
+    assert after_matches == 1782
+    assert (len(local_paths) - after_matches, len(remote) - after_matches) == (12, 0)
 
 
 def test_stale_id_is_recovered_and_persisted(monkeypatch):
