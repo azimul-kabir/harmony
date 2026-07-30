@@ -83,7 +83,11 @@ def resolve_album(
                 track=item.get("track_number"),
                 disc=item.get("disc_number"),
                 year=year,
-                duration=item.get("duration_ms"),
+                duration=(
+                    item["duration_ms"] / 1000
+                    if item.get("duration_ms") is not None
+                    else None
+                ),
                 spotify_track_id=item.get("id"),
                 spotify_album_id=album.get("id"),
                 spotify_url=external_urls.get("spotify"),
@@ -192,7 +196,11 @@ def _track_from_spotify(
         track=data.get("track_number"),
         disc=data.get("disc_number"),
         year=year,
-        duration=data.get("duration_ms"),
+        duration=(
+            data["duration_ms"] / 1000
+            if data.get("duration_ms") is not None
+            else None
+        ),
         spotify_track_id=data.get("id"),
         spotify_album_id=album.get("id"),
         spotify_url=external_urls.get("spotify") or fallback_url,

@@ -193,6 +193,13 @@ def test_duration_mismatch_fails(track):
         validate_track_identity(track, AudioIdentity("Test Title", "Test Artist", 240))
 
 
+def test_legacy_millisecond_duration_passes(track):
+    track.duration = 180_000
+    validate_track_identity(
+        track, AudioIdentity("Test Title", "Test Artist", 180)
+    )
+
+
 def test_confirmed_future_cut_copy_false_match_is_rejected():
     requested = Track(title="Fukk A Interview", artist="Future", duration=180)
     with pytest.raises(DownloadFailed) as error:

@@ -101,8 +101,14 @@ def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
             retryable=False, technical_detail="version_mismatch",
         )
     if requested.duration and candidate.duration:
-        tolerance = max(5.0, min(10.0, requested.duration * 0.04))
-        if abs(requested.duration - candidate.duration) > tolerance:
+        requested_duration = requested.duration
+        # Album and individual-track jobs created before the duration-unit fix
+        # stored Spotify's duration_ms value directly.  Keep retries of those
+        # existing queued jobs valid while all newly resolved tracks use seconds.
+        if requested_duration > candidate.duration * 100:
+            requested_duration /= 1000
+        tolerance = max(5.0, min(10.0, requested_duration * 0.04))
+        if abs(requested_duration - candidate.duration) > tolerance:
             raise DownloadFailed(
                 "exact_match_unavailable", "Exact match unavailable", "validation",
                 retryable=False, technical_detail="duration_mismatch",
