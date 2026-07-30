@@ -48,6 +48,36 @@ def _markers(value: str | None) -> frozenset[str]:
     return frozenset(marker for marker in _VERSION_MARKERS if marker in normalized)
 
 
+def _primary_artist(value: str | None) -> str:
+    """Return the first credited performer from a display-style artist value.
+
+    Spotify commonly supplies all track artists as one comma-separated value,
+    while Mutagen may expose only the first value from a multi-value artist tag.
+    Those representations describe the same recording and must not be rejected.
+    """
+    primary = re.split(
+        r"\s*(?:,|;|&|\+|/|\b(?:and|feat(?:uring)?|ft)\.?\b)\s*",
+        value or "",
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    return _normalized(primary)
+
+
+def _same_artist_credit(requested: str | None, candidate: str | None) -> bool:
+    requested_normalized = _normalized(requested)
+    candidate_normalized = _normalized(candidate)
+    if requested_normalized == candidate_normalized:
+        return True
+    # The primary performer is stable when one side contains the complete
+    # collaboration credit and the other side contains only its first tag.
+    return bool(
+        requested_normalized
+        and candidate_normalized
+        and _primary_artist(requested) == _primary_artist(candidate)
+    )
+
+
 def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
     """Reject output whose embedded identity is not the requested recording."""
     if not candidate.title or not candidate.artist:
@@ -55,7 +85,7 @@ def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="audio_identity_missing",
         )
-    if _normalized(requested.artist) != _normalized(candidate.artist):
+    if not _same_artist_credit(requested.artist, candidate.artist):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="artist_mismatch",
@@ -359,7 +389,12 @@ class SpotDLClient:
             reason_category=reason_category,
             diagnostic=diagnostic,
             elapsed_seconds=round(elapsed_seconds, 3),
-        ).info("SpotDL download attempt completed")
+        ).info(
+            "SpotDL download attempt completed job={} query_type={} return_code={} "
+            "output_files={} reason={} diagnostic={} elapsed_seconds={}",
+            job_id, query_type, return_code, output_count, reason_category,
+            diagnostic, round(elapsed_seconds, 3),
+        )
 
     def download_url(
         self,
