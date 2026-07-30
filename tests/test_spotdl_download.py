@@ -44,7 +44,7 @@ def test_attempt_log_includes_elapsed_time(client, track, tmp_path, monkeypatch)
     log_context = {}
 
     class BoundLogger:
-        def info(self, _message):
+        def info(self, _message, *_args):
             return None
 
     def bind(**context):
@@ -153,6 +153,28 @@ def test_multiple_outputs_are_rejected_and_cleaned(client, track, tmp_path, monk
 ])
 def test_safe_identity_variations_pass(track, candidate):
     validate_track_identity(track, candidate)
+
+
+@pytest.mark.parametrize("candidate_artist", [
+    "The Weeknd",
+    "The Weeknd; Daft Punk",
+    "The Weeknd & Daft Punk",
+])
+def test_multi_artist_tag_representations_pass(candidate_artist):
+    requested = Track(
+        title="Starboy", artist="The Weeknd, Daft Punk", duration=230
+    )
+    validate_track_identity(
+        requested, AudioIdentity("Starboy", candidate_artist, 230)
+    )
+
+
+def test_different_primary_artist_still_fails(track):
+    with pytest.raises(DownloadFailed) as error:
+        validate_track_identity(
+            track, AudioIdentity("Test Title", "Different Artist, Test Artist", 180)
+        )
+    assert error.value.technical_detail == "artist_mismatch"
 
 
 @pytest.mark.parametrize("title", ["Test Title (Instrumental)", "Test Title Live", "Test Title Remix", "Test Title Karaoke", "Test Title Cover"])
