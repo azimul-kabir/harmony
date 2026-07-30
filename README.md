@@ -51,7 +51,7 @@ Harmony v1.6.0 was never published.
 - A rejected or unavailable exact match stays failed and absent from the
   Library and playlist availability count.
 
-## YouTube Music downloads
+## YouTube Music downloads and playlist sources
 
 Harmony accepts public YouTube Music track (`music.youtube.com/watch?v=`) and
 playlist (`music.youtube.com/playlist?list=`) URLs through yt-dlp. Standard
@@ -64,6 +64,16 @@ normalized source metadata; extractor payloads and command output are not expose
 YouTube availability is subject to region, age, removal, and rate-limit policies.
 Enable it under **Settings → Downloads → Download Sources**. Use `YT_DLP_PATH`,
 `YOUTUBE_MUSIC_ENABLED`, and `YOUTUBE_MUSIC_TIMEOUT_SECONDS` to configure it.
+
+Public YouTube Music playlists can also be saved on the **Sources** page. Source
+URLs are canonicalized to their `list` identity, so tracking parameters such as
+`playnext` and `si` do not create duplicate Sources. Synchronization reads the
+playlist without downloading, preserves its order, skips unavailable entries,
+queues missing tracks through the YouTube Music download provider, exports the
+same M3U representation used by Spotify Sources, and schedules the existing
+Navidrome playlist reconciliation workflow. Source synchronization requires a
+public `music.youtube.com/playlist?list=...` URL; watch, album, artist, and
+channel URLs are not accepted as Sources.
 - Multi-worker concurrent downloads
 
 ### Download details
@@ -98,11 +108,12 @@ paths, provider URLs/payloads, credentials, command lines, or raw errors.
 
 ## 🎼 Playlist Management
 
-Harmony maintains Spotify playlists inside its own database.
+Harmony maintains Spotify and public YouTube Music playlists inside its own
+database.
 
 Features include:
 
-- Save Spotify playlists as Sources
+- Save Spotify and public YouTube Music playlists as Sources
 - One-click synchronization
 - Snapshot tracking
 - Preserve playlist order

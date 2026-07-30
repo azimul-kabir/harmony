@@ -74,6 +74,9 @@ def save_database_playlist(
         db.add(playlist)
     
     playlist.name = domain_playlist.name
+    playlist.source_provider = source_provider
+    playlist.source_external_id = source_id
+    playlist.source_url = domain_playlist.url
     playlist.track_count = len(domain_playlist.tracks)
     if synced_at is not None:
         playlist.last_synced_at = synced_at
@@ -129,8 +132,9 @@ def sync_database_playlist(
     """Update a saved playlist as part of an explicit source sync."""
     return save_database_playlist(
         db,
-        source.spotify_id,
+        source.external_id or source.spotify_id,
         domain_playlist,
+        source_provider=source.provider or "spotify",
         synced_at=datetime.now(UTC),
     )
 
@@ -141,15 +145,25 @@ def begin_incremental_playlist(
     name: str,
 ) -> Playlist:
     """Create a clean playlist shell before incremental discovery begins."""
-    playlist = db.scalar(select(Playlist).where(Playlist.spotify_id == source.spotify_id))
+    provider = source.provider or "spotify"
+    external_id = source.external_id or source.spotify_id
+    playlist = db.scalar(select(Playlist).where(
+        Playlist.source_provider == provider,
+        Playlist.source_external_id == external_id,
+    ))
+    if playlist is None and provider == "spotify":
+        playlist = db.scalar(select(Playlist).where(Playlist.spotify_id == external_id))
     if playlist is None:
-        playlist = Playlist(spotify_id=source.spotify_id, name=name)
+        playlist = Playlist(spotify_id=source_identity(provider, external_id), name=name)
         db.add(playlist)
         db.flush()
     else:
         playlist.name = name
         db.query(PlaylistTrack).where(PlaylistTrack.playlist_id == playlist.id).delete()
     playlist.track_count = 0
+    playlist.source_provider = provider
+    playlist.source_external_id = external_id
+    playlist.source_url = source.source_url or source.spotify_url
     playlist.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(playlist)
@@ -171,13 +185,17 @@ def append_incremental_playlist_batch(
         ).all()
     )
     for offset, track in enumerate(tracks):
-        if not track.spotify_track_id or track.spotify_track_id in existing_ids:
+        track_id = track.spotify_track_id or (
+            source_identity(track.source_provider, track.source_item_id)
+            if track.source_item_id else None
+        )
+        if not track_id or track_id in existing_ids:
             continue
-        existing_ids.add(track.spotify_track_id)
+        existing_ids.add(track_id)
         db.add(
             PlaylistTrack(
                 playlist_id=playlist.id,
-                spotify_track_id=track.spotify_track_id,
+                spotify_track_id=track_id,
                 position=starting_position + offset + 1,
                 title=track.title,
                 artist=track.artist,

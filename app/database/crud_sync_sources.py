@@ -8,14 +8,21 @@ def create_sync_source(
     db: Session,
     *,
     type: str,
-    spotify_id: str,
-    spotify_url: str,
+    spotify_id: str | None = None,
+    spotify_url: str | None = None,
+    provider: str = "spotify",
+    external_id: str | None = None,
+    source_url: str | None = None,
     name: str,
 ) -> SyncSource:
     source = SyncSource(
         type=type,
-        spotify_id=spotify_id,
-        spotify_url=spotify_url,
+        provider=provider,
+        external_id=external_id or spotify_id,
+        source_url=source_url or spotify_url,
+        # Keep the legacy columns populated during the compatibility window.
+        spotify_id=spotify_id or external_id,
+        spotify_url=spotify_url or source_url,
         name=name,
     )
 
@@ -45,6 +52,13 @@ def get_sync_source_by_spotify_id(
             SyncSource.spotify_id == spotify_id
         )
     )
+
+
+def get_sync_source_by_identity(db: Session, provider: str, external_id: str) -> SyncSource | None:
+    return db.scalar(select(SyncSource).where(
+        SyncSource.provider == provider,
+        SyncSource.external_id == external_id,
+    )) or (get_sync_source_by_spotify_id(db, external_id) if provider == "spotify" else None)
 
 
 def list_sync_sources(

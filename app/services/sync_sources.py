@@ -1,23 +1,16 @@
 from sqlalchemy.orm import Session
 from app.database.crud_sync_sources import (
     create_sync_source,
-    get_sync_source_by_spotify_id,
+    get_sync_source_by_identity,
 )
-from app.services.spotify.url import spotify_resource
+from app.services.playlist_source import parse_playlist_source
 
 def create_playlist_source(
     db: Session,
     spotify_url: str,
 ):
-    resource, spotify_id = spotify_resource(spotify_url)
-    
-    if resource != "playlist":
-        raise ValueError("Only Spotify playlists are supported.")
-
-    existing = get_sync_source_by_spotify_id(
-        db,
-        spotify_id,
-    )
+    parsed = parse_playlist_source(spotify_url)
+    existing = get_sync_source_by_identity(db, parsed.provider, parsed.external_id)
     if existing:
         return existing
 
@@ -26,7 +19,10 @@ def create_playlist_source(
     return create_sync_source(
         db=db,
         type="playlist",
-        spotify_id=spotify_id,
-        spotify_url=spotify_url,
+        provider=parsed.provider,
+        external_id=parsed.external_id,
+        source_url=parsed.canonical_url,
+        spotify_id=(parsed.external_id if parsed.provider == "spotify" else f"{parsed.provider}:{parsed.external_id}"),
+        spotify_url=parsed.canonical_url,
         name="Fetching Playlist Data...",
     )

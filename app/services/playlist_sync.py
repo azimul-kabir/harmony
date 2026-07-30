@@ -13,6 +13,7 @@ from app.services.playlist_manager import (
     export_m3u,
 )
 from app.services.spotify.playlist_batches import UnofficialSpotifyPlaylistReader
+from app.services.youtube_music_playlist import YouTubeMusicPlaylistReader
 from app.services.task_service import (
     create_task,
     _finish_if_complete,
@@ -33,12 +34,14 @@ def sync_playlist(
     task = create_task(
         db=db,
         name=f"Syncing {source.name}",
-        spotify_url=source.spotify_url,
+        spotify_url=source.source_url or source.spotify_url,
         source_id=source.id,
         task_type=TaskType.PLAYLIST_SYNC,
         total_items=0,
     )
     start_task(db=db, task=task)
+    provider = source.provider or "spotify"
+    provider_name = "YouTube Music" if provider == "youtube_music" else "Spotify"
     timeout_minutes = max(
         1,
         round(get_settings().spotify_playlist_metadata_timeout_seconds / 60),
@@ -46,13 +49,14 @@ def sync_playlist(
     set_current_item(
         db=db,
         task=task,
-        item=f"Fetching Spotify playlist metadata (timeout: {timeout_minutes} minutes)…",
+        item=f"Fetching {provider_name} playlist metadata (timeout: {timeout_minutes} minutes)…",
     )
     
     try:
         # Read the public playlist incrementally through SpotDL's unofficial
         # provider so downloads can begin after the first 50 tracks.
-        reader = UnofficialSpotifyPlaylistReader(source.spotify_url)
+        reader_class = YouTubeMusicPlaylistReader if provider == "youtube_music" else UnofficialSpotifyPlaylistReader
+        reader = reader_class(source.source_url or source.spotify_url)
         metadata = reader.metadata()
 
         if source.name == "Fetching Playlist Data...":
@@ -96,11 +100,7 @@ def sync_playlist(
                 else:
                     skipped_count += 1
                     batch_skipped_count += 1
-            increment_skipped(
-                db=db,
-                task=task,
-                amount=batch_skipped_count,
-            )
+            increment_skipped(db=db, task=task, amount=batch_skipped_count)
 
             if queueable_tracks:
                 enqueue_tracks_bulk(db, queueable_tracks, task.id)
@@ -112,8 +112,14 @@ def sync_playlist(
                       f"{queued_count} downloads queued…"),
             )
 
+        unavailable_count = getattr(reader, "skipped_count", 0)
+        if unavailable_count:
+            skipped_count += unavailable_count
+            increment_skipped(db=db, task=task, amount=unavailable_count)
+
         if not all_tracks:
-            raise RuntimeError("Playlist is empty.")
+            task.error_code = "playlist_empty"
+            raise RuntimeError("Playlist is empty or unavailable.")
 
         source.last_synced_at = datetime.now(UTC)
         db_playlist.last_synced_at = source.last_synced_at
@@ -144,14 +150,14 @@ def sync_playlist(
         if "timed out after" in detail:
             task.error_code = "playlist_metadata_timeout"
             task.error_summary = (
-                "Spotify playlist metadata retrieval timed out. Increase the "
-                "Spotify playlist metadata timeout in Settings → Downloads "
+                f"{provider_name} playlist metadata retrieval timed out. Increase the "
+                "playlist metadata timeout in Settings → Downloads "
                 "and try again."
             )
         elif "SpotDL is unavailable" in detail:
             task.error_code = "spotdl_unavailable"
             task.error_summary = detail
-        else:
+        elif task.error_code != "playlist_empty":
             task.error_code = "playlist_metadata_failed"
             task.error_summary = (
                 "Harmony could not retrieve this playlist's metadata. Check "
