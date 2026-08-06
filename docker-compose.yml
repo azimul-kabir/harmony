@@ -7,15 +7,22 @@ services:
       - "8080:8080"
 
     environment:
-      WEB_AUTH_USERNAME: ${WEB_AUTH_USERNAME:-admin}
-      WEB_AUTH_PASSWORD: ${WEB_AUTH_PASSWORD:?Set WEB_AUTH_PASSWORD in .env}
-      WEB_AUTH_SECURE_COOKIE: ${WEB_AUTH_SECURE_COOKIE:-false}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-admin}
+      AUTH_BOOTSTRAP_PASSWORD_FILE: ${AUTH_BOOTSTRAP_PASSWORD_FILE:-}
+      AUTH_SESSION_SECRET_FILE: ${AUTH_SESSION_SECRET_FILE:-}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_SESSION_ABSOLUTE_HOURS: ${AUTH_SESSION_ABSOLUTE_HOURS:-12}
+      AUTH_SESSION_IDLE_MINUTES: ${AUTH_SESSION_IDLE_MINUTES:-60}
+      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
 
     volumes:
       - ./database:/database
       - ./logs:/logs
       - /volume1/music/library:/music
       - /volume1/music/incoming:/downloads
+      # Mount secret files read-only, for example:
+      # - ./secrets:/run/secrets:ro
 
     restart: unless-stopped
 
@@ -30,3 +37,5 @@ services:
       uvicorn app.main:app
       --host 0.0.0.0
       --port 8080
+      --proxy-headers
+      --forwarded-allow-ips=${AUTH_TRUSTED_PROXIES:-127.0.0.1}

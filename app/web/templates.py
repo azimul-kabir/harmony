@@ -44,6 +44,8 @@ def template_context(**kwargs):
     time_str = "%I:%M %p" if tf == "12h" else "%H:%M"
     datetime_fmt = f"{date_str} {time_str}"
 
+    request = kwargs.get("request")
+    auth_user = getattr(getattr(request, "state", None), "auth_user", None)
     return {
         "app_name": settings.app_name,
         "version": settings.app_version,
@@ -52,5 +54,7 @@ def template_context(**kwargs):
         "general": general,
         "spotify": spotify,
         "datetime_fmt": datetime_fmt, # Passed to the templates!
+        "auth_enabled": settings.auth_enabled,
+        "signed_in_username": auth_user.username if auth_user else None,
         **kwargs,
     }

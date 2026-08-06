@@ -710,3 +710,7 @@ See the **LICENSE** file for details.
 <p align="center">
 Made with ❤️ for self-hosted music enthusiasts.
 </p>
+
+## Secure internet access
+
+Authentication defaults off for upgrade safety. Never publish port 8080; use the database-backed login and HTTPS reverse-proxy procedure in [the configuration guide](docs/configuration.md#internet-safe-local-authentication).

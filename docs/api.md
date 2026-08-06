@@ -261,3 +261,7 @@ remains available for cancelled-only history.
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
 
 Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.
+
+## Authentication
+
+With `AUTH_ENABLED=true`, operational API/SSE endpoints require the host-only session cookie. Missing sessions receive JSON `401`; unsafe cookie-authenticated methods also require `X-CSRF-Token` and return `403` when invalid. Authentication responses use `Cache-Control: no-store`.
