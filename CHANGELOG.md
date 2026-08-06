@@ -507,7 +507,3 @@ This release introduces a major architectural shift, making Harmony the single s
 ### Notes
 
 Harmony v1.0.0 represents the first stable release of the project, establishing the foundation for future development while maintaining a reliable and scalable architecture.
-
-## Unreleased
-
-- Replaced prototype plaintext/stateless login with Argon2id accounts, revocable SQLite sessions, CSRF/origin defenses, throttling, secure bootstrap/recovery, proxy guidance, and PWA cache isolation.

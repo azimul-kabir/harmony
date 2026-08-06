@@ -40,7 +40,7 @@ from app.web.sources import router as sources_page_router
 from app.web.providers import router as providers_page_router
 from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
-from app.web.auth import AuthenticationMiddleware, bootstrap_auth, build_auth_router
+from app.web.auth import AuthenticationMiddleware, build_auth_router
 from app.workers.download_worker import worker_loop
 from app.services.settings_service import initialize_defaults
 from app.services.download_processes import download_processes
@@ -58,7 +58,6 @@ async def lifespan(app: FastAPI):
     Path(settings.music_path).mkdir(parents=True, exist_ok=True)
     Path(settings.artwork_cache_path).mkdir(parents=True, exist_ok=True)
     init_db()
-    bootstrap_auth(settings)
     db = SessionLocal()
     try:
         initialize_defaults(db)

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "harmony-shell-v4";
+const CACHE_VERSION = "harmony-shell-v3";
 const APP_SHELL = [
     "/static/css/app.css",
     "/static/js/app.js",
@@ -36,7 +36,7 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Only explicitly listed, non-sensitive static shell files are cacheable.
+    // API, health, artwork, and event streams must always reflect server state.
     if (
         url.pathname.startsWith("/api/") ||
         url.pathname.startsWith("/artwork/") ||
@@ -52,7 +52,7 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    if (APP_SHELL.includes(url.pathname)) {
+    if (url.pathname.startsWith("/static/")) {
         event.respondWith(
             fetch(request).then((response) => {
                     if (response.ok) {

@@ -56,7 +56,3 @@ Spotify / YouTube Music / MusicBrainz
 - Playlist exports include only available files and are replaced atomically.
 - Direct Navidrome playlist updates are verified and fall back to M3U import.
 - SSE refreshes patch stable UI regions and do not replace active controls.
-
-## Authentication boundary
-
-Enabled-mode default-deny middleware protects every non-health/non-login route, including APIs, SSE, exports, artwork, diagnostics, and OpenAPI. Random bearer tokens are stored only as keyed digests; Argon2id credentials and account-wide `session_version` live in `users`. Unsafe requests also require CSRF and same-origin validation. Only non-sensitive static PWA shell assets are cached.

@@ -1,27 +1,5 @@
 // Shared JavaScript for Harmony
 
-// Cookie-authenticated mutations use one shared CSRF transport. Body formats
-// remain untouched; FastAPI validates this header before route dispatch.
-const harmonyNativeFetch = window.fetch.bind(window);
-const harmonyCsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )harmony_csrf=([^;]*)/) || [])[1] || "");
-window.fetch = async (input, init = {}) => {
-    const request = input instanceof Request ? input : null;
-    const method = String(init.method || (request && request.method) || "GET").toUpperCase();
-    const url = new URL(request ? request.url : input, window.location.href);
-    if (url.origin === window.location.origin && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-        const headers = new Headers(init.headers || (request && request.headers));
-        headers.set("X-CSRF-Token", harmonyCsrf());
-        init.headers = headers;
-    }
-    const response = await harmonyNativeFetch(input, init);
-    if (response.status === 401) window.location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
-    return response;
-};
-
-document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll(".csrf-token-field").forEach((field) => { field.value = harmonyCsrf(); });
-});
-
 document.addEventListener("DOMContentLoaded", () => {
     // --- 1. Global Mini Player Management ---
     const miniPlayer = document.getElementById("global-mini-player");

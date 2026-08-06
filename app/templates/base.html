@@ -45,13 +45,9 @@
             </a>
         </nav>
         <div class="sidebar-footer">
-            {% if auth_enabled %}
-            <div class="signed-in-user">Signed in as {{ signed_in_username }}</div>
             <form action="/logout" method="post" class="logout-form">
-                <input type="hidden" name="csrf_token" class="csrf-token-field">
                 <button type="submit">Sign out</button>
             </form>
-            {% endif %}
             <div class="footer-title">{{ app_name }}</div>
             <div class="footer-author">by AziM</div>
             <div class="footer-version">v{{ version }}</div>
