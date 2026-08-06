@@ -6,11 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 
-ENV_FILE = (
-    ROOT / ".env.local"
-    if (ROOT / ".env.local").exists()
-    else ROOT / ".env.development"
-)
+ENV_FILE = ROOT / ".env"
 
 
 class Settings(BaseSettings):

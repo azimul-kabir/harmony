@@ -6,23 +6,15 @@ services:
     ports:
       - "8080:8080"
 
-    environment:
-      AUTH_ENABLED: ${AUTH_ENABLED:-false}
-      AUTH_BOOTSTRAP_USERNAME: ${AUTH_BOOTSTRAP_USERNAME:-admin}
-      AUTH_BOOTSTRAP_PASSWORD_FILE: ${AUTH_BOOTSTRAP_PASSWORD_FILE:-}
-      AUTH_SESSION_SECRET_FILE: ${AUTH_SESSION_SECRET_FILE:-}
-      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
-      AUTH_SESSION_ABSOLUTE_HOURS: ${AUTH_SESSION_ABSOLUTE_HOURS:-12}
-      AUTH_SESSION_IDLE_MINUTES: ${AUTH_SESSION_IDLE_MINUTES:-60}
-      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
+    env_file:
+      - .env
 
     volumes:
       - ./database:/database
       - ./logs:/logs
-      - /volume1/music/library:/music
-      - /volume1/music/incoming:/downloads
-      # Mount secret files read-only, for example:
-      # - ./secrets:/run/secrets:ro
+      - ${MUSIC_HOST_PATH:-/volume1/music/library}:/music
+      - ${DOWNLOAD_HOST_PATH:-/volume1/music/incoming}:/downloads
+      - ./secrets:/run/secrets:ro
 
     restart: unless-stopped
 

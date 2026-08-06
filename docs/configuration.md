@@ -2,11 +2,13 @@
 
 > v2.0.0 configuration guide
 
-Harmony loads deployment defaults from `.env.local` when present, otherwise
-`.env.development`. The Settings UI persists supported runtime overrides in
-SQLite and applies them without rewriting the environment file. Credentials,
-paths, executable locations, listener settings, and the database URL remain
-deployment environment concerns.
+Harmony and Docker Compose share the repository's tracked `.env` file. This
+private-deployment layout avoids separate example, development, and Compose
+environment blocks. The Settings UI persists supported runtime overrides in
+SQLite and applies them without rewriting `.env`. Credentials, paths,
+executable locations, listener settings, and the database URL remain deployment
+environment concerns. Keep the repository private because committed values
+remain in Git history even after they are changed.
 
 ## Navidrome
 
@@ -109,7 +111,7 @@ SNMPv2c, and configure a read-only community. Set
 `SYNOLOGY_MONITORING_ENABLED=true`, `SYNOLOGY_SNMP_HOST` to an address reachable
 from the Harmony container, and `SYNOLOGY_SNMP_COMMUNITY` to that community.
 Port, timeout, retries, polling interval, stale threshold, and the maximum disk
-index can be adjusted with the corresponding variables in `.env.example`.
+index can be adjusted with the corresponding variables in `.env`.
 
 Harmony uses PySNMP directly; it neither mounts the Docker socket nor invokes
 command-line SNMP programs. Only normalized system and disk health is exposed.

@@ -16,9 +16,10 @@ venv/
 env/
 
 # -----------------------------
-# Environment
+# Environment overrides (the private deployment's canonical .env is tracked)
 # -----------------------------
-.env
+.env.*
+!.env
 
 # -----------------------------
 # macOS
@@ -38,6 +39,8 @@ env/
 /downloads/
 /logs/
 /music/
+/secrets/*
+!/secrets/.gitkeep
 
 # Test media
 /test_music/
@@ -62,11 +65,9 @@ test_music/*
 !test_music/.gitkeep
 
 # Local development
-.env.local
 docker-compose.local.yml
 
 # Codespace development
-.env.development
 docker-compose.override.yml
 
 # VS Code local settings

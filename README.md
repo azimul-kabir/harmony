@@ -344,7 +344,7 @@ Current configurable settings include:
 - System information
 
 Metadata discovery can also be tuned with the documented `MUSICBRAINZ_*` and
-`METADATA_DISCOVERY_*` environment variables in `.env.example`.
+`METADATA_DISCOVERY_*` environment variables in `.env`.
 
 ---
 
@@ -472,11 +472,10 @@ git clone https://github.com/azimul-kabir/harmony.git
 cd harmony
 ```
 
-Create your local environment.
-
-```bash
-cp .env.example .env.local
-```
+Edit the tracked `.env` file for this private deployment. It is the single
+source for both Harmony and Docker Compose; no copy or override file is
+required. Because it may contain credentials, keep the repository private and
+restrict access to its working tree and Git history.
 
 Spotify artist-genre enrichment is optional. It is disabled by default, so
 credentials are not required for downloads, metadata resolution, tagging, or
@@ -506,18 +505,24 @@ do not reuse your Spotify or Navidrome credentials. Set secure cookies to
 `true` when Harmony is behind an HTTPS reverse proxy:
 
 ```env
-WEB_AUTH_USERNAME=admin
-WEB_AUTH_PASSWORD=replace-with-a-long-random-password
-WEB_AUTH_SESSION_HOURS=12
-WEB_AUTH_SECURE_COOKIE=false
+AUTH_ENABLED=true
+AUTH_BOOTSTRAP_USERNAME=admin
+AUTH_BOOTSTRAP_PASSWORD_FILE=/run/secrets/harmony_admin_password
+AUTH_SESSION_SECRET_FILE=/run/secrets/harmony_session_secret
+AUTH_COOKIE_SECURE=false
 ```
+
+Mount `./secrets` at `/run/secrets` as described in the configuration guide
+before enabling authentication. Use secure cookies when accessing Harmony
+through HTTPS.
 
 The health-check endpoints remain unauthenticated so Docker and external
 monitors can verify the service. Static assets are also public; all UI pages,
 API endpoints, and interactive API documentation require a signed-in session.
 
-The sample `docker-compose.yml` contains host volume examples. Replace those
-host paths with directories that exist on your system before deployment.
+Set `MUSIC_HOST_PATH` and `DOWNLOAD_HOST_PATH` in `.env` to directories that
+exist on your system. The Compose file consumes the rest of the same file via
+`env_file`, so configuration only needs to be maintained once.
 
 Start Harmony.
 

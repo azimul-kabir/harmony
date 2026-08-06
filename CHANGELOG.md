@@ -5,6 +5,12 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidated the private deployment onto one tracked `.env` file shared by
+  Harmony and Docker Compose, with configurable host media paths and a
+  ready-to-use read-only secrets mount.
+
 ## [v2.0.1] - 2026-07-26
 
 ### Added
