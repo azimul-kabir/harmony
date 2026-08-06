@@ -501,6 +501,21 @@ FAILED_PATH=/downloads/failed
 ARTWORK_CACHE_PATH=/database/artwork
 ```
 
+Protect the web interface and API with a login. Choose a long, unique password;
+do not reuse your Spotify or Navidrome credentials. Set secure cookies to
+`true` when Harmony is behind an HTTPS reverse proxy:
+
+```env
+WEB_AUTH_USERNAME=admin
+WEB_AUTH_PASSWORD=replace-with-a-long-random-password
+WEB_AUTH_SESSION_HOURS=12
+WEB_AUTH_SECURE_COOKIE=false
+```
+
+The health-check endpoints remain unauthenticated so Docker and external
+monitors can verify the service. Static assets are also public; all UI pages,
+API endpoints, and interactive API documentation require a signed-in session.
+
 The sample `docker-compose.yml` contains host volume examples. Replace those
 host paths with directories that exist on your system before deployment.
 
