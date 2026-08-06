@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#080c1c">
+    <title>Sign in · Harmony</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="login-page">
+    <main class="login-shell">
+        <section class="login-card" aria-labelledby="login-title">
+            <div class="login-mark" aria-hidden="true">H</div>
+            <p class="login-eyebrow">Your private music space</p>
+            <h1 id="login-title">Welcome to Harmony</h1>
+            <p class="login-copy">Sign in to manage downloads, playlists, and your library.</p>
+            {% if error %}<div class="login-error" role="alert">{{ error }}</div>{% endif %}
+            <form method="post" action="/login" class="login-form">
+                <input type="hidden" name="next" value="{{ next }}">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" autocomplete="username" autofocus required>
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+                <button class="btn-primary" type="submit">Sign in</button>
+            </form>
+            <p class="login-footnote">Protected access for your personal Harmony server.</p>
+        </section>
+    </main>
+</body>
+</html>

@@ -1,11 +1,12 @@
+import secrets
 import threading
-from app.web.settings import router as settings_page_router
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.api import downloads, library
 from app.api.artwork import router as artwork_router
@@ -34,10 +35,12 @@ from app.services.library_health import library_maintenance_worker
 from app.services.task_service import cleanup_library_jobs, recover_library_jobs
 from app.services.metadata_intelligence import MetadataServiceError
 from app.web.downloads import router as downloads_page_router
+from app.web.auth import AuthenticationMiddleware, router as auth_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
 from app.web.sources import router as sources_page_router
 from app.web.providers import router as providers_page_router
+from app.web.settings import router as settings_page_router
 from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
@@ -114,6 +117,16 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+app.state.settings = settings
+app.add_middleware(AuthenticationMiddleware, settings=settings)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.auth_session_secret or secrets.token_urlsafe(32),
+    session_cookie="harmony_session",
+    max_age=settings.auth_session_max_age_seconds,
+    same_site="strict",
+    https_only=settings.auth_cookie_secure,
+)
 
 app.mount(
     "/static",
@@ -122,6 +135,7 @@ app.mount(
 )
 
 app.include_router(tasks_router)
+app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)

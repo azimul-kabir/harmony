@@ -506,7 +506,15 @@ cd harmony
 Create your local environment.
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
+```
+
+Before starting, replace `AUTH_PASSWORD` and `AUTH_SESSION_SECRET` in `.env`.
+Authentication is enabled by default and fails closed if those values are
+empty. Generate a strong cookie-signing secret with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Spotify artist-genre enrichment is optional. It is disabled by default, so
@@ -532,8 +540,11 @@ FAILED_PATH=/downloads/failed
 ARTWORK_CACHE_PATH=/database/artwork
 ```
 
-The sample `docker-compose.yml` contains host volume examples. Replace those
-host paths with directories that exist on your system before deployment.
+The Compose file reads this same `.env` file. Set its `HARMONY_DATABASE_DIR`,
+`HARMONY_LOG_DIR`, `HARMONY_MUSIC_DIR`, and `HARMONY_DOWNLOAD_DIR` values to
+directories that exist on your host. There is no second Compose override or
+environment file to maintain. Set `AUTH_COOKIE_SECURE=true` when an HTTPS
+reverse proxy is in front of Harmony.
 
 Start Harmony.
 
@@ -544,7 +555,7 @@ docker compose up -d --build
 Open:
 
 ```
-http://localhost:8080
+http://localhost:8080/login
 ```
 
 Interactive API documentation is available at:

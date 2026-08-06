@@ -3,14 +3,17 @@ services:
     build: .
     container_name: harmony
 
+    env_file:
+      - .env
+
     ports:
       - "8080:8080"
 
     volumes:
-      - ./database:/database
-      - ./logs:/logs
-      - /volume1/music/library:/music
-      - /volume1/music/incoming:/downloads
+      - ${HARMONY_DATABASE_DIR:-./database}:/database
+      - ${HARMONY_LOG_DIR:-./logs}:/logs
+      - ${HARMONY_MUSIC_DIR:-./music}:/music
+      - ${HARMONY_DOWNLOAD_DIR:-./downloads}:/downloads
 
     restart: unless-stopped
 

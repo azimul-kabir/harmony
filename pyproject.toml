@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.20",
+    "itsdangerous>=2.2",
     "loguru>=0.7.3",
     "mutagen>=1.47",
     "pillow>=11.0",

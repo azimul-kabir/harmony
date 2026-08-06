@@ -77,13 +77,13 @@ Harmony runs anywhere Docker is available.
 **Windows / macOS / Linux**
 1. Install Docker & Docker Compose.
 2. Clone the repository.
-3. Configure your `.env.local` file.
+3. Copy `.env.example` to `.env`, set strong `AUTH_PASSWORD` and `AUTH_SESSION_SECRET` values, and configure the host storage directories.
 4. Run: `docker compose up -d`
 
 **Synology NAS**
 1. Install Container Manager.
 2. Clone the repository onto your NAS.
-3. Configure your `.env.local` file.
+3. Copy `.env.example` to `.env`, set strong `AUTH_PASSWORD` and `AUTH_SESSION_SECRET` values, and configure the Synology host storage directories.
 4. Deploy using Docker Compose.
 5. Point Navidrome to Harmony's Music folder.
 

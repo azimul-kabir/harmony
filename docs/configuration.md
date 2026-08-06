@@ -2,11 +2,53 @@
 
 > v2.0.0 configuration guide
 
-Harmony loads deployment defaults from `.env.local` when present, otherwise
-`.env.development`. The Settings UI persists supported runtime overrides in
+Harmony loads deployment defaults from the single `.env` file used by Docker
+Compose. The Settings UI persists supported runtime overrides in
 SQLite and applies them without rewriting the environment file. Credentials,
 paths, executable locations, listener settings, and the database URL remain
 deployment environment concerns.
+
+## Web login
+
+Authentication is enabled by default and protects the Web UI, API, interactive
+API documentation, and event streams with a signed, HTTP-only session cookie.
+Static assets plus liveness and readiness probes remain public so the login
+page and container health checks continue to work.
+
+Copy `.env.example` to `.env`, replace all three credential placeholders, and
+never commit `.env`:
+
+```env
+AUTH_ENABLED=true
+AUTH_USERNAME=harmony
+AUTH_PASSWORD=replace-with-a-long-unique-password
+AUTH_SESSION_SECRET=replace-with-a-long-random-secret
+AUTH_COOKIE_SECURE=false
+AUTH_SESSION_MAX_AGE_SECONDS=2592000
+```
+
+Generate the secret with `python -c "import secrets;
+print(secrets.token_urlsafe(48))"`. An enabled but incomplete configuration
+fails closed: protected routes remain inaccessible and the login page reports
+that authentication is not configured. Set `AUTH_COOKIE_SECURE=true` when the
+browser reaches Harmony through HTTPS. For access outside a trusted private
+network, place Harmony behind an HTTPS reverse proxy; the login portal does not
+provide TLS or brute-force protection by itself. `AUTH_ENABLED=false` is meant
+only for isolated development.
+
+## Docker Compose and paths
+
+`docker-compose.yml` and `.env` are the complete deployment configuration; no
+override or second environment file is required. The four `HARMONY_*_DIR`
+values are host paths, while `MUSIC_PATH`, `DOWNLOAD_PATH`, and related values
+remain container paths:
+
+```env
+HARMONY_DATABASE_DIR=./database
+HARMONY_LOG_DIR=./logs
+HARMONY_MUSIC_DIR=/volume1/music/library
+HARMONY_DOWNLOAD_DIR=/volume1/music/incoming
+```
 
 ## Navidrome
 
