@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +30,41 @@ class Settings(BaseSettings):
     web_auth_password: str = ""
     web_auth_session_hours: int = 12
     web_auth_secure_cookie: bool = False
+
+    # WEB_AUTH_* is retained only so operators receive migration guidance.
+    auth_enabled: bool = False
+    auth_bootstrap_username: str = "admin"
+    auth_bootstrap_password: str = ""
+    auth_bootstrap_password_file: str = ""
+    auth_session_secret: str = ""
+    auth_session_secret_file: str = ""
+    auth_cookie_secure: bool = True
+    auth_cookie_samesite: str = "lax"
+    auth_session_absolute_hours: int = 12
+    auth_session_idle_minutes: int = 60
+    auth_trusted_proxies: str = ""
+
+    @field_validator("auth_cookie_samesite")
+    @classmethod
+    def valid_samesite(cls, value: str) -> str:
+        value = value.lower()
+        if value not in {"lax", "strict"}:
+            raise ValueError("AUTH_COOKIE_SAMESITE must be lax or strict")
+        return value
+
+    @field_validator("auth_session_absolute_hours")
+    @classmethod
+    def valid_absolute(cls, value: int) -> int:
+        if not 1 <= value <= 168:
+            raise ValueError("AUTH_SESSION_ABSOLUTE_HOURS must be between 1 and 168")
+        return value
+
+    @field_validator("auth_session_idle_minutes")
+    @classmethod
+    def valid_idle(cls, value: int) -> int:
+        if not 5 <= value <= 1440:
+            raise ValueError("AUTH_SESSION_IDLE_MINUTES must be between 5 and 1440")
+        return value
 
     database_url: str = "sqlite:////database/harmony.db"
 

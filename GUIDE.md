@@ -101,3 +101,7 @@ I'm continuing to improve it, and suggestions, feedback, or feature requests are
 Downloads can be selected only from the current visible, bounded Downloads feed. The selection toolbar supports retrying failed or cancelled records, cancelling queued or running records, clearing selected terminal history, and clearing all completed or all failed/cancelled history. Eligibility is returned by the server per record and mixed selections safely skip ineligible records.
 
 History clearing removes only terminal download records. It never deletes downloaded music files, Library records, or artwork cache, and it never removes active or queued work. Requests are limited to 100 selected IDs; responses contain only aggregate counts, so repeated terminal-history clearing is safe and reports zero changes when there is nothing left. On mobile the toolbar wraps into full-size touch controls without horizontal scrolling.
+
+## Secure access
+
+Follow [`docs/configuration.md`](docs/configuration.md#internet-safe-local-authentication) for first-admin bootstrap, local HTTP, Docker secrets, Synology HTTPS proxying, safe rollout/rollback, and trusted-host recovery.

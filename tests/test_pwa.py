@@ -28,7 +28,7 @@ def test_service_worker_has_root_scope_and_does_not_cache_api_requests():
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/javascript")
     assert response.headers["cache-control"] == "no-cache"
-    assert 'CACHE_VERSION = "harmony-shell-v3"' in response.text
+    assert 'CACHE_VERSION = "harmony-shell-v4"' in response.text
     assert 'url.pathname.startsWith("/api/")' in response.text
     assert 'request.mode === "navigate"' in response.text
 

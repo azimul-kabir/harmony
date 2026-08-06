@@ -14,11 +14,12 @@
     <h1>Welcome back</h1>
     <p class="login-intro">Sign in to manage your music library.</p>
     {% if error %}<div class="login-error" role="alert">{{ error }}</div>{% endif %}
-    {% if not auth_enabled %}<div class="login-error" role="alert">Web login is not configured. Set <code>WEB_AUTH_PASSWORD</code> and restart Harmony.</div>{% endif %}
+    {% if not auth_enabled %}<div class="login-error" role="alert">Authentication is disabled by the administrator.</div>{% endif %}
     <form method="post" action="/login" class="login-form">
         <input type="hidden" name="next" value="{{ next }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" autofocus required>
+        <input id="username" name="username" type="text" value="{{ username }}" autocomplete="username" autofocus required aria-invalid="{{ 'true' if error else 'false' }}">
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
         <button class="btn-primary" type="submit" {% if not auth_enabled %}disabled{% endif %}>Sign in</button>

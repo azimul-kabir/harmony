@@ -122,3 +122,52 @@ from index `.0` through `SYNOLOGY_DISK_MAX_INDEX` (default `.15`). Some DSM
 versions return no disk rows from an SNMP walk even though indexed GET requests
 work. Missing indexes are ignored, and DSM's returned disk ID—not the SNMP
 index—is the displayed disk label.
+
+# Internet-safe local authentication
+
+Authentication is explicitly controlled by `AUTH_ENABLED` and defaults to `false`. Disabled mode preserves the pre-login LAN behavior. Enabled mode has no localhost, LAN, VPN, header, or query-string bypass and fails startup when its secret or first administrator is missing. Usernames are Unicode case-insensitive (`casefold`) and passwords must contain at least 12 characters; long passphrases and spaces are supported without composition rules.
+
+## Safe upgrade from `codex/add-login`
+
+1. Back up `/database/harmony.db` and the environment file. Retain both for rollback (stop Harmony, restore both, then deploy the old image).
+2. Deploy this version with `AUTH_ENABLED=false`; startup applies Alembic revision `20260806_0027`. Verify LAN behavior and health.
+3. Generate two secrets with `openssl rand -base64 48`, store them in host-readable files, and mount them read-only into `/run/secrets`.
+4. While firewall/LAN restricted, configure the bootstrap username/password file and independent session-secret file, then set `AUTH_ENABLED=true`. Verify login/logout, API 401, CSRF mutations, SSE, PWA, and health.
+5. Remove `AUTH_BOOTSTRAP_PASSWORD[_FILE]` after first startup. Restart never overwrites an account, but lingering bootstrap material is unnecessary. Keep `AUTH_SESSION_SECRET[_FILE]` stable; changing it invalidates all bearer and CSRF tokens.
+6. Configure HTTPS and secure cookies, expose only the HTTPS reverse proxy, and retain trusted-host recovery. **Never expose port 8080 directly to the internet.**
+
+`WEB_AUTH_USERNAME`, `WEB_AUTH_PASSWORD`, `WEB_AUTH_SESSION_HOURS`, and `WEB_AUTH_SECURE_COOKIE` are deprecated and ignored. The prototype plaintext password is deliberately not silently converted. Put it in a new bootstrap secret file only if it meets policy, enable auth once, then remove all legacy and bootstrap password settings.
+
+## Secrets and sessions
+
+File-backed values are preferred. Defining both direct and `_FILE` forms is an error. Secret files are UTF-8 and only trailing CR/LF is removed; spaces remain valid. `AUTH_SESSION_SECRET` requires at least 32 bytes and keys database token/CSRF digests. Browsers receive random bearer tokens while SQLite stores only keyed SHA-256 digests. Sessions expire after `AUTH_SESSION_ABSOLUTE_HOURS` (1–168) or `AUTH_SESSION_IDLE_MINUTES` (5–1440); idle timestamps update at most every five minutes. Logout revokes the record and clears browser/cache state.
+
+HTTPS requires `AUTH_COOKIE_SECURE=true` (default). Trusted direct-HTTP development/LAN access may explicitly use `false`; never use that configuration publicly. `SameSite=lax` is the default, supplemented by synchronized CSRF and Origin validation.
+
+## Docker and Synology
+
+```yaml
+volumes:
+  - ./secrets:/run/secrets:ro
+environment:
+  AUTH_ENABLED: "true"
+  AUTH_BOOTSTRAP_USERNAME: admin
+  AUTH_BOOTSTRAP_PASSWORD_FILE: /run/secrets/harmony_admin_password
+  AUTH_SESSION_SECRET_FILE: /run/secrets/harmony_session_secret
+  AUTH_COOKIE_SECURE: "true"
+  AUTH_TRUSTED_PROXIES: 172.20.0.1
+```
+
+In Synology Container Manager create the read-only mount and variables. In Login Portal / Reverse Proxy forward the original `Host`, set `X-Forwarded-Proto: https`, target internal HTTP, disable response buffering for SSE, and use a long read timeout. Trust only the immediate proxy address with `AUTH_TRUSTED_PROXIES`; Uvicorn must use matching `--forwarded-allow-ips`. Never use `*`. Untrusted forwarded addresses are ignored by login throttling, and relative redirects avoid leaking internal names.
+
+The bounded rolling limiter keys failures by normalized user and trusted address and uses temporary 429 cooldowns. It is process-local; multiple Uvicorn workers require shared limiter state. Supported Compose runs one worker.
+
+## Trusted-host recovery
+
+There is no public reset endpoint. Restrict public access, create a root-readable recovery passphrase file, and run:
+
+```bash
+docker compose exec -e HARMONY_RECOVERY_PASSWORD_FILE=/run/secrets/recovery harmony python -m app.cli.auth reset-password admin
+```
+
+This Argon2id-rehashes the password, increments `session_version`, and revokes all sessions. Delete the file afterward. Back up SQLite before migration; downgrade removes only auth tables and requires disabling auth before rollback.
