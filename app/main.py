@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 import threading
 from contextlib import asynccontextmanager
@@ -52,6 +53,14 @@ from app.services.source_auto_sync import source_auto_sync_scheduler
 from app.services.synology_monitor import synology_monitor
 
 settings = get_settings()
+
+
+def _session_secret() -> str:
+    """Derive a cookie-signing key without adding a second required secret."""
+    if not settings.web_auth_password:
+        return secrets.token_urlsafe(32)
+    material = f"harmony-web-session-v1\0{settings.web_auth_password}".encode()
+    return hashlib.sha256(material).hexdigest()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,11 +130,11 @@ app.state.settings = settings
 app.add_middleware(AuthenticationMiddleware, settings=settings)
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.auth_session_secret or secrets.token_urlsafe(32),
+    secret_key=_session_secret(),
     session_cookie="harmony_session",
-    max_age=settings.auth_session_max_age_seconds,
+    max_age=settings.web_auth_session_hours * 60 * 60,
     same_site="strict",
-    https_only=settings.auth_cookie_secure,
+    https_only=settings.web_auth_secure_cookie,
 )
 
 app.mount(

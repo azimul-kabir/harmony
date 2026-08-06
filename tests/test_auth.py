@@ -13,16 +13,14 @@ def test_safe_next_rejects_external_redirects():
 
 def test_login_and_logout_flow(monkeypatch):
     auth = Settings(
-        auth_enabled=True,
-        auth_username="owner",
-        auth_password="correct horse battery staple",
-        auth_session_secret="test-only-session-secret",
+        web_auth_enabled=True,
+        web_auth_username="owner",
+        web_auth_password="correct horse battery staple",
     )
     runtime_settings = app.state.settings
-    monkeypatch.setattr(runtime_settings, "auth_enabled", True)
-    monkeypatch.setattr(runtime_settings, "auth_username", auth.auth_username)
-    monkeypatch.setattr(runtime_settings, "auth_password", auth.auth_password)
-    monkeypatch.setattr(runtime_settings, "auth_session_secret", auth.auth_session_secret)
+    monkeypatch.setattr(runtime_settings, "web_auth_enabled", True)
+    monkeypatch.setattr(runtime_settings, "web_auth_username", auth.web_auth_username)
+    monkeypatch.setattr(runtime_settings, "web_auth_password", auth.web_auth_password)
 
     client = TestClient(app)
     protected = client.get("/downloads", follow_redirects=False)
@@ -38,7 +36,7 @@ def test_login_and_logout_flow(monkeypatch):
 
     signed_in = client.post(
         "/login",
-        data={"username": "owner", "password": auth.auth_password, "next": "/downloads"},
+        data={"username": "owner", "password": auth.web_auth_password, "next": "/downloads"},
         follow_redirects=False,
     )
     assert signed_in.status_code == 303

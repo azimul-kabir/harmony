@@ -15,39 +15,39 @@ API documentation, and event streams with a signed, HTTP-only session cookie.
 Static assets plus liveness and readiness probes remain public so the login
 page and container health checks continue to work.
 
-Copy `.env.example` to `.env`, replace all three credential placeholders, and
-never commit `.env`:
+Copy `.env.example` to `.env`, set a long, unique password, and never commit
+`.env`:
 
 ```env
-AUTH_ENABLED=true
-AUTH_USERNAME=harmony
-AUTH_PASSWORD=replace-with-a-long-unique-password
-AUTH_SESSION_SECRET=replace-with-a-long-random-secret
-AUTH_COOKIE_SECURE=false
-AUTH_SESSION_MAX_AGE_SECONDS=2592000
+WEB_AUTH_ENABLED=true
+WEB_AUTH_USERNAME=admin
+WEB_AUTH_PASSWORD=replace-with-a-long-unique-password
+WEB_AUTH_SESSION_HOURS=12
+WEB_AUTH_SECURE_COOKIE=false
 ```
 
-Generate the secret with `python -c "import secrets;
-print(secrets.token_urlsafe(48))"`. An enabled but incomplete configuration
-fails closed: protected routes remain inaccessible and the login page reports
-that authentication is not configured. Set `AUTH_COOKIE_SECURE=true` when the
+Harmony derives the session-signing key from the password, so there is no
+second secret to maintain and changing the password invalidates existing
+sessions. An enabled configuration with an empty password fails closed:
+protected routes remain inaccessible and the login page reports that
+authentication is not configured. Set `WEB_AUTH_SECURE_COOKIE=true` when the
 browser reaches Harmony through HTTPS. For access outside a trusted private
 network, place Harmony behind an HTTPS reverse proxy; the login portal does not
-provide TLS or brute-force protection by itself. `AUTH_ENABLED=false` is meant
-only for isolated development.
+provide TLS or brute-force protection by itself. `WEB_AUTH_ENABLED=false` is
+meant only for isolated development.
 
 ## Docker Compose and paths
 
 `docker-compose.yml` and `.env` are the complete deployment configuration; no
-override or second environment file is required. The four `HARMONY_*_DIR`
-values are host paths, while `MUSIC_PATH`, `DOWNLOAD_PATH`, and related values
-remain container paths:
+override or second environment file is required. The `MUSIC_HOST_PATH` and
+`DOWNLOAD_HOST_PATH` values are host paths, while `MUSIC_PATH`,
+`DOWNLOAD_PATH`, and related values remain container paths. Compose retains the
+Synology `1026:100` user mapping and joins the existing external `harmony-net`
+network:
 
 ```env
-HARMONY_DATABASE_DIR=./database
-HARMONY_LOG_DIR=./logs
-HARMONY_MUSIC_DIR=/volume1/music/library
-HARMONY_DOWNLOAD_DIR=/volume1/music/incoming
+MUSIC_HOST_PATH=/volume1/music/library
+DOWNLOAD_HOST_PATH=/volume1/music/incoming
 ```
 
 ## Navidrome

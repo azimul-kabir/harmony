@@ -36,7 +36,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if (
-            not self.settings.auth_enabled
+            not self.settings.web_auth_enabled
             or path in PUBLIC_PATHS
             or path.startswith("/static/")
             or request.session.get("authenticated") is True
@@ -72,16 +72,16 @@ async def login(request: Request):
     password = values.get("password", [""])[0]
     next_path = _safe_next(values.get("next", ["/"])[0])
 
-    configured = bool(settings.auth_username and settings.auth_password and settings.auth_session_secret)
-    valid = configured and secrets.compare_digest(username, settings.auth_username)
-    valid = valid and secrets.compare_digest(password, settings.auth_password)
+    configured = bool(settings.web_auth_username and settings.web_auth_password)
+    valid = configured and secrets.compare_digest(username, settings.web_auth_username)
+    valid = valid and secrets.compare_digest(password, settings.web_auth_password)
     if valid:
         request.session.clear()
         request.session["authenticated"] = True
         return RedirectResponse(next_path, status_code=303)
 
     if not configured:
-        logger.error("Web authentication is enabled but AUTH_USERNAME, AUTH_PASSWORD, or AUTH_SESSION_SECRET is empty")
+        logger.error("Web authentication is enabled but WEB_AUTH_USERNAME or WEB_AUTH_PASSWORD is empty")
     return templates.TemplateResponse(
         "login.html",
         {
