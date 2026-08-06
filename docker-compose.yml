@@ -6,6 +6,11 @@ services:
     ports:
       - "8080:8080"
 
+    environment:
+      WEB_AUTH_USERNAME: ${WEB_AUTH_USERNAME:-admin}
+      WEB_AUTH_PASSWORD: ${WEB_AUTH_PASSWORD:?Set WEB_AUTH_PASSWORD in .env}
+      WEB_AUTH_SECURE_COOKIE: ${WEB_AUTH_SECURE_COOKIE:-false}
+
     volumes:
       - ./database:/database
       - ./logs:/logs

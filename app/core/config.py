@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
 
+    web_auth_username: str = "admin"
+    web_auth_password: str = ""
+    web_auth_session_hours: int = 12
+    web_auth_secure_cookie: bool = False
+
     database_url: str = "sqlite:////database/harmony.db"
 
     music_path: str = "/music"

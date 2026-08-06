@@ -94,6 +94,22 @@ body {
     color: var(--text-main);
 }
 
+.login-page { min-height: 100dvh; display: grid; place-items: center; padding: 20px; box-sizing: border-box; background: radial-gradient(circle at top, #182449, #080c1c 62%); }
+.login-card { width: min(100%, 390px); box-sizing: border-box; padding: 34px; border: 1px solid rgb(255 255 255 / .12); border-radius: 20px; background: var(--bg-surface); box-shadow: 0 24px 70px rgb(0 0 0 / .4); }
+.login-mark { display: grid; place-items: center; width: 52px; aspect-ratio: 1 / 1; border-radius: 14px; color: white; background: var(--primary); font-size: 1.8rem; }
+.login-eyebrow { margin: 20px 0 6px; color: var(--primary); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.login-card h1 { margin: 0; font-size: 2rem; }
+.login-intro { margin: 8px 0 24px; color: var(--text-muted); }
+.login-form { display: grid; gap: 9px; }
+.login-form label { margin-top: 7px; font-weight: 650; }
+.login-form input { box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--border-input); border-radius: 9px; background: var(--bg-surface-alt); color: var(--text-main); font: inherit; }
+.login-form button { min-height: 46px; margin-top: 13px; border: 0; border-radius: 9px; }
+.login-form button:disabled { opacity: .5; cursor: not-allowed; }
+.login-error { margin: 0 0 16px; padding: 12px; border-radius: 9px; color: var(--danger); background: var(--error-bg); }
+.logout-form { margin-bottom: 14px; }
+.logout-form button { width: 100%; padding: 9px; border: 1px solid rgb(255 255 255 / .2); border-radius: 8px; color: var(--text-sidebar); background: transparent; cursor: pointer; }
+.logout-form button:hover { background: rgb(255 255 255 / .08); }
+
 .skip-link {
     position: fixed;
     top: 8px;

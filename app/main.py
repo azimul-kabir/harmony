@@ -40,6 +40,7 @@ from app.web.sources import router as sources_page_router
 from app.web.providers import router as providers_page_router
 from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
+from app.web.auth import AuthenticationMiddleware, build_auth_router
 from app.workers.download_worker import worker_loop
 from app.services.settings_service import initialize_defaults
 from app.services.download_processes import download_processes
@@ -111,6 +112,9 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+
+app.add_middleware(AuthenticationMiddleware, settings=settings)
+app.include_router(build_auth_router(settings))
 
 app.mount(
     "/static",
