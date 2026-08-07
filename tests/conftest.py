@@ -11,6 +11,7 @@ import pytest
 TEST_DIRECTORY = Path(tempfile.mkdtemp(prefix="harmony-pytest-"))
 TEST_DATABASE = TEST_DIRECTORY / "harmony.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DATABASE}"
+os.environ["WEB_AUTH_ENABLED"] = "false"
 
 
 def pytest_sessionstart(session):

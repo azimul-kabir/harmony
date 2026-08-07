@@ -2,11 +2,53 @@
 
 > v2.0.0 configuration guide
 
-Harmony loads deployment defaults from `.env.local` when present, otherwise
-`.env.development`. The Settings UI persists supported runtime overrides in
+Harmony loads deployment defaults from the single `.env` file used by Docker
+Compose. The Settings UI persists supported runtime overrides in
 SQLite and applies them without rewriting the environment file. Credentials,
 paths, executable locations, listener settings, and the database URL remain
 deployment environment concerns.
+
+## Web login
+
+Authentication is enabled by default and protects the Web UI, API, interactive
+API documentation, and event streams with a signed, HTTP-only session cookie.
+Static assets plus liveness and readiness probes remain public so the login
+page and container health checks continue to work.
+
+Copy `.env.example` to `.env`, set a long, unique password, and never commit
+`.env`:
+
+```env
+WEB_AUTH_ENABLED=true
+WEB_AUTH_USERNAME=admin
+WEB_AUTH_PASSWORD=replace-with-a-long-unique-password
+WEB_AUTH_SESSION_HOURS=12
+WEB_AUTH_SECURE_COOKIE=false
+```
+
+Harmony derives the session-signing key from the password, so there is no
+second secret to maintain and changing the password invalidates existing
+sessions. An enabled configuration with an empty password fails closed:
+protected routes remain inaccessible and the login page reports that
+authentication is not configured. Set `WEB_AUTH_SECURE_COOKIE=true` when the
+browser reaches Harmony through HTTPS. For access outside a trusted private
+network, place Harmony behind an HTTPS reverse proxy; the login portal does not
+provide TLS or brute-force protection by itself. `WEB_AUTH_ENABLED=false` is
+meant only for isolated development.
+
+## Docker Compose and paths
+
+`docker-compose.yml` and `.env` are the complete deployment configuration; no
+override or second environment file is required. The `MUSIC_HOST_PATH` and
+`DOWNLOAD_HOST_PATH` values are host paths, while `MUSIC_PATH`,
+`DOWNLOAD_PATH`, and related values remain container paths. Compose retains the
+Synology `1026:100` user mapping and joins the existing external `harmony-net`
+network:
+
+```env
+MUSIC_HOST_PATH=/volume1/music/library
+DOWNLOAD_HOST_PATH=/volume1/music/incoming
+```
 
 ## Navidrome
 
