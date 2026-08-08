@@ -28,8 +28,9 @@ That idea eventually became Harmony.
 
 **Under the Hood**
 *   Multi-threaded background queue for simultaneous downloads.
-*   Exact-match-only Spotify downloads: Harmony uses the original Spotify track
-    URL once and never substitutes a generated artist/title search result.
+*   Exact-match-only Spotify downloads: Harmony tries the original Spotify
+    track URL, then permits SpotDL's artist/title fallback only when its output
+    passes the same strict identity checks.
 *   Artist, title, recording-version markers, and reliable duration are checked
     before import. If the Spotify-linked recording is unavailable, the item
     remains unavailable rather than making the playlist appear complete with a
@@ -91,11 +92,11 @@ That's it. Open your browser, add a Spotify playlist, and Harmony takes care of 
 
 ### Current Status
 
-Harmony has reached **v2.0.0**, the direct successor to v1.5.0. Harmony v1.6.0
-was never published. The current release includes Metadata Intelligence,
-durable download operations, direct Navidrome playlist synchronization,
-playlist file management, automatic playlists, scheduled Sources, editable
-runtime settings, and a redesigned mobile experience.
+Harmony has reached **v2.1.0**. The release adds a secure-by-default web login,
+public YouTube Music playlist Sources, Navidrome-powered automatic playlists,
+playlist Love/Unlove actions, and stronger Navidrome reconciliation and
+download validation. See the [v2.1.0 release notes](docs/releases/v2.1.0.md)
+before upgrading. Harmony v1.6.0 was never published.
 
 I'm continuing to improve it, and suggestions, feedback, or feature requests are always welcome. If you've also been frustrated by duplicate downloads and messy music folders, I'd love to hear your thoughts!
 
