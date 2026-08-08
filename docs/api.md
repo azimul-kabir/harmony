@@ -1,6 +1,6 @@
 # Library Jobs and Activity API
 
-> v2.0.1 API guide. Interactive OpenAPI contracts are available at `/docs`
+> v2.1.0 API guide. Interactive OpenAPI contracts are available at `/docs`
 > while Harmony is running.
 
 Library jobs extend Harmony's existing durable Task API. All timestamps are UTC

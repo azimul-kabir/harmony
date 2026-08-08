@@ -1,6 +1,6 @@
 # Configuration
 
-> v2.0.0 configuration guide
+> v2.1.0 configuration guide
 
 Harmony loads deployment defaults from the single `.env` file used by Docker
 Compose. The Settings UI persists supported runtime overrides in

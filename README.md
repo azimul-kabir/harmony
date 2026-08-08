@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.0.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v2.1.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,10 +25,11 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v2.0.1**
+Current stable version: **v2.1.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v2.0.1 release notes](docs/releases/v2.0.1.md) for stabilization changes.
+[v2.1.0 release notes](docs/releases/v2.1.0.md) for upgrade guidance and a
+summary of the new login portal, playlist Sources, and Navidrome improvements.
 Harmony v1.6.0 was never published.
 
 ---

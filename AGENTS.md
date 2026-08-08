@@ -18,8 +18,8 @@ Harmony is a self-hosted Spotify music downloader, playlist synchronizer, and li
 4.  **Error Handling:** Fail gracefully. If a Spotify URL is invalid or an ISRC lookup fails, catch the error, log it via Loguru, and return a clean JSON response to the frontend.
 
 ## Current State
-Harmony **v2.0.0** is the direct successor to the published v1.5.0 release.
-It includes Metadata Intelligence, the Downloads Operations Center, direct
-Navidrome playlist synchronization, playlist file management, auto-playlists,
-per-source scheduled sync, runtime settings, and a mobile-first UI polish pass.
+Harmony **v2.1.0** is the current release. It adds secure web login, public
+YouTube Music playlist Sources, Navidrome-powered auto-playlists and playlist
+Love/Unlove actions, stronger Navidrome reconciliation, and stricter download
+identity validation to the v2.0 Library and operations foundation.
 Harmony v1.6.0 was never published.
