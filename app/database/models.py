@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import (
@@ -38,6 +39,10 @@ class Song(Base):
     navidrome_id: Mapped[str | None] = mapped_column(
         String, nullable=True, unique=True, index=True
     )
+    navidrome_play_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    navidrome_last_played_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    navidrome_starred_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    navidrome_stats_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     spotify_album_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     track: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -97,6 +102,22 @@ class Song(Base):
         default=utcnow_naive,
         index=True,
     )
+
+
+class SongSourceIdentity(Base):
+    """Provider identities known to refer to one physical library song."""
+
+    __tablename__ = "song_source_identities"
+    provider: Mapped[str] = mapped_column(String(80), primary_key=True)
+    item_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    song_id: Mapped[int] = mapped_column(
+        ForeignKey("songs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)
+    song: Mapped["Song"] = relationship()
+
 
 class MetadataSuggestion(Base):
     """Provider-neutral proposed metadata; never canonical until separately applied."""
@@ -439,6 +460,7 @@ class DownloadJob(Base):
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     isrc: Mapped[str | None] = mapped_column(String, nullable=True)
     genre: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     spotify_artist_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     genre_provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
     
@@ -479,11 +501,15 @@ class DownloadJob(Base):
 
 class SyncSource(Base):
     __tablename__ = "sync_sources"
+    __table_args__ = (UniqueConstraint("provider", "external_id", name="uq_sync_source_provider_external_id"),)
     tasks: Mapped[list["Task"]] = relationship(back_populates="source")
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     type: Mapped[str] = mapped_column(String, nullable=False)
     spotify_id: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
     spotify_url: Mapped[str] = mapped_column(String, nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="spotify", index=True)
+    external_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     auto_sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
@@ -494,8 +520,12 @@ class SyncSource(Base):
 
 class Playlist(Base):
     __tablename__ = "playlists"
+    __table_args__ = (UniqueConstraint("source_provider", "source_external_id", name="uq_playlist_source_identity"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     spotify_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    source_provider: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    source_external_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     spotify_snapshot_id: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -1235,8 +1235,8 @@ const bulkActions = {
         confirm: "Refresh artwork",
     },
     fetch_artwork: {
-        title: "Fetch album art from Cover Art Archive?",
-        message: "Harmony will use each song's canonical MusicBrainz release ID to download and cache the release's front artwork. Release-group IDs cannot be used for this lookup; songs without a release ID will be skipped with an explanation.",
+        title: "Fetch album art?",
+        message: "Harmony will download and cache canonical artwork using a MusicBrainz release ID or a linked YouTube Music track. Songs without a supported source identity will be skipped with an explanation.",
         confirm: "Fetch album art",
     },
     export: {

@@ -14,7 +14,7 @@ from app.services.download_dashboard import serialize_outcome
 def track(url: str) -> Track:
     identifier = url.rsplit("/", 1)[-1]
     return Track(title=f"Track {identifier}", artist="Artist", album="Album",
-                 spotify_track_id=identifier, spotify_url=url)
+                 duration=183.5, spotify_track_id=identifier, spotify_url=url)
 
 
 def call_queue(url: str):
@@ -34,6 +34,7 @@ def test_track_post_creates_queued_job_with_empty_terminal_outcome(monkeypatch):
         job = db.get(DownloadJob, response["job_id"])
         assert response["status"] == "created"
         assert job is not None and job.status == "queued"
+        assert job.duration == 183.5
         assert response["outcome"] == {
             "status": "queued", "reason_code": None, "reason_message": None,
             "failure_stage": None, "provider": None, "retryable": False,

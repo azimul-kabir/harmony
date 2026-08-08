@@ -17,13 +17,13 @@ from app.database.crud_sync_sources import (
     list_sync_sources,
     update_sync_source_enabled,
     create_sync_source,
-    get_sync_source_by_spotify_id,
+    get_sync_source_by_identity,
 )
 from app.database.models import DownloadJob, Playlist, Task
 from app.database.session import get_db, SessionLocal
 from app.services.playlist_sync import sync_playlist
 from app.services.playlist_manager import count_m3u_entries, playlist_file_path
-from app.services.spotify.url import spotify_resource
+from app.services.playlist_source import PlaylistSourceError, parse_playlist_source
 from app.services.source_auto_sync import next_sync_at
 
 router = APIRouter(
@@ -36,7 +36,7 @@ def _task_stage(task: Task) -> str:
     if task.status == "failed":
         return "failed"
     current = task.current_item or ""
-    if current.startswith("Fetching Spotify playlist metadata"):
+    if current.startswith("Fetching ") and " playlist metadata" in current:
         return "metadata"
     if current.startswith("Saving playlist"):
         return "saving"
@@ -59,21 +59,20 @@ def run_background_sync(source_id: int):
     finally:
         db.close()
 
-def create_playlist_source(db: Session, spotify_url: str):
-    resource, spotify_id = spotify_resource(spotify_url)
-    
-    if resource != "playlist":
-        raise ValueError("Only Spotify playlists are supported.")
-
-    existing = get_sync_source_by_spotify_id(db, spotify_id)
+def create_playlist_source(db: Session, source_url: str):
+    parsed = parse_playlist_source(source_url)
+    existing = get_sync_source_by_identity(db, parsed.provider, parsed.external_id)
     if existing:
         return existing
 
     return create_sync_source(
         db=db,
         type="playlist",
-        spotify_id=spotify_id,
-        spotify_url=spotify_url,
+        provider=parsed.provider,
+        external_id=parsed.external_id,
+        source_url=parsed.canonical_url,
+        spotify_id=(parsed.external_id if parsed.provider == "spotify" else f"{parsed.provider}:{parsed.external_id}"),
+        spotify_url=parsed.canonical_url,
         name="Fetching Playlist Data...",
     )
 
@@ -86,6 +85,9 @@ def list_sources(db: Session = Depends(get_db)):
             "type": source.type,
             "name": source.name,
             "spotify_url": source.spotify_url,
+            "provider": source.provider or "spotify",
+            "external_id": source.external_id or source.spotify_id,
+            "source_url": source.source_url or source.spotify_url,
             "enabled": source.enabled,
             "auto_sync_enabled": source.auto_sync_enabled,
             "auto_sync_interval_minutes": source.auto_sync_interval_minutes,
@@ -98,14 +100,18 @@ def list_sources(db: Session = Depends(get_db)):
 
 @router.post("", status_code=201)
 def create_source(request: SyncSourceRequest, db: Session = Depends(get_db)):
-    source = create_playlist_source(
-        db=db,
-        spotify_url=request.spotify_url,
-    )
+    value = request.source_url or request.spotify_url
+    try:
+        source = create_playlist_source(db=db, source_url=value or "")
+    except PlaylistSourceError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)}) from None
     return {
         "id": source.id,
         "name": source.name,
         "type": source.type,
+        "provider": source.provider,
+        "external_id": source.external_id,
+        "source_url": source.source_url,
     }
 
 @router.post("/{source_id}/sync")
@@ -182,7 +188,8 @@ async def stream_sources_data(request: Request):
                 for source in sources:
                     playlist = db.scalar(
                         select(Playlist).where(
-                            Playlist.spotify_id == source.spotify_id
+                            Playlist.source_provider == (source.provider or "spotify"),
+                            Playlist.source_external_id == (source.external_id or source.spotify_id),
                         )
                     )
                     latest_task = db.execute(
@@ -220,6 +227,9 @@ async def stream_sources_data(request: Request):
                         "type": source.type,
                         "name": source.name,
                         "spotify_url": source.spotify_url,
+                        "provider": source.provider or "spotify",
+                        "external_id": source.external_id or source.spotify_id,
+                        "source_url": source.source_url or source.spotify_url,
                         "enabled": source.enabled,
                         "auto_sync_enabled": source.auto_sync_enabled,
                         "auto_sync_interval_minutes": source.auto_sync_interval_minutes,

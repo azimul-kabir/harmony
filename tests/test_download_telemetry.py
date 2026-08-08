@@ -1,4 +1,5 @@
 import time
+from unittest.mock import Mock
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,3 +65,23 @@ def test_heartbeat_ticker_updates_through_an_independent_session(
             time.sleep(0.04)
         db.expire_all()
         assert db.get(DownloadJob, job.id).heartbeat_at is not None
+
+
+def test_update_telemetry_rolls_back_a_failed_commit():
+    db = Mock()
+    db.commit.side_effect = RuntimeError("database is locked")
+    job = DownloadJob(
+        spotify_url="source",
+        title="Song",
+        artist="Artist",
+        status="running",
+    )
+
+    try:
+        update_telemetry(db, job, stage="downloading")
+    except RuntimeError as error:
+        assert str(error) == "database is locked"
+    else:
+        raise AssertionError("The commit failure should be propagated")
+
+    db.rollback.assert_called_once_with()

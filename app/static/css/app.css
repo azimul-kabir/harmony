@@ -94,6 +94,23 @@ body {
     color: var(--text-main);
 }
 
+.login-page { min-height: 100dvh; background: radial-gradient(circle at 50% 0%, #172554 0, #080c1c 48%, #050713 100%); }
+.login-shell { min-height: 100dvh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
+.login-card { width: min(100%, 390px); padding: clamp(24px, 7vw, 38px); border: 1px solid rgb(255 255 255 / .1); border-radius: 20px; background: rgb(17 24 39 / .88); color: #f8fafc; box-shadow: 0 24px 70px rgb(0 0 0 / .4); backdrop-filter: blur(18px); }
+.login-mark { display: grid; place-items: center; width: 52px; aspect-ratio: 1 / 1; margin-bottom: 24px; border-radius: 15px; background: linear-gradient(135deg, #60a5fa, #7c3aed); color: white; font-size: 1.5rem; font-weight: 800; box-shadow: 0 10px 28px rgb(96 165 250 / .3); }
+.login-eyebrow { margin: 0 0 8px; color: #93c5fd; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.login-card h1 { margin: 0; font-size: clamp(1.75rem, 7vw, 2.25rem); letter-spacing: -.035em; }
+.login-copy { margin: 10px 0 24px; color: #aeb9ca; line-height: 1.55; }
+.login-form { display: grid; gap: 9px; }
+.login-form label { margin-top: 7px; color: #dbe5f3; font-size: .86rem; font-weight: 650; }
+.login-form input { min-height: 48px; box-sizing: border-box; padding: 0 14px; border: 1px solid #344258; border-radius: 10px; background: #0c1322; color: #fff; font: inherit; }
+.login-form input:focus { outline: 3px solid rgb(96 165 250 / .25); border-color: #60a5fa; }
+.login-form button { min-height: 48px; margin-top: 14px; border: 0; border-radius: 10px; font-weight: 750; cursor: pointer; }
+.login-error { margin-bottom: 14px; padding: 11px 13px; border: 1px solid #ef4444; border-radius: 9px; background: rgb(127 29 29 / .35); color: #fecaca; font-size: .9rem; }
+.login-footnote { margin: 22px 0 0; color: #718096; font-size: .78rem; text-align: center; }
+.logout-button { width: 100%; margin-bottom: 14px; padding: 8px 10px; border: 1px solid rgb(255 255 255 / .16); border-radius: 8px; background: transparent; color: var(--text-sidebar); cursor: pointer; }
+.logout-button:hover { border-color: var(--text-sidebar-hover); color: var(--text-sidebar-hover); }
+
 .skip-link {
     position: fixed;
     top: 8px;
@@ -351,6 +368,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .navidrome-status.is-offline { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 .navidrome-status.is-checking, .navidrome-status.is-unconfigured { background: var(--bg-surface-alt); color: var(--text-muted); }
 .navidrome-status.is-scanning { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+.playlist-navidrome-scan { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); flex-wrap: wrap; }
+.playlist-scan-status { color: var(--text-muted); font-size: .8rem; max-width: 22rem; text-align: right; }
+.navidrome-panel[data-sync-health="drift"] { border-color: color-mix(in srgb, var(--warning) 65%, var(--border-color)); }
+.navidrome-panel[data-sync-health="unavailable"] { border-color: color-mix(in srgb, var(--danger) 65%, var(--border-color)); }
 .navidrome-controls p { color: var(--text-muted); font-size: .85rem; margin: 0 0 10px; }
 .navidrome-controls > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .dashboard-trends-content { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(150px, .75fr); gap: 16px; align-items: end; }
@@ -600,7 +621,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .source-add-panel { margin-bottom: 24px; }
 .source-add-panel > p { margin: 0 0 16px; color: var(--text-muted); font-size: 1.05rem; line-height: 1.5; }
 .source-add-form { margin: 0; }
-.playlist-toolbar { display: flex; align-items: center; gap: 16px; padding: 16px; }
+.playlist-library-section { display: grid; gap: 14px; }
+.playlist-library-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.playlist-library-heading h2 { margin: 2px 0 5px; }
+.playlist-library-heading p { margin: 0; color: var(--text-muted); line-height: 1.45; }
+.playlist-library-total { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--bg-surface-alt); color: var(--text-muted); font-size: .78rem; font-weight: 700; }
+.playlist-toolbar { display: flex; align-items: end; gap: 16px; padding: 14px 16px; }
+.playlist-search-field { display: grid; flex: 1 1 auto; gap: 6px; color: var(--text-muted); font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.playlist-search-field .search-input { width: 100%; }
 .auto-playlists-panel { padding: 20px; }
 .auto-playlists-heading h2 { margin: 2px 0 6px; }
 .auto-playlists-heading p { margin: 0; color: var(--text-muted); line-height: 1.5; }
@@ -627,10 +655,41 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-card-heading { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 14px; }
 .playlist-card-heading .source-header { min-width: 0; gap: 8px; }
 .playlist-card-heading h3 { overflow-wrap: anywhere; }
+.playlist-classification { display: grid; flex: 0 0 auto; gap: 5px; margin: 0; }
+.playlist-classification > div { display: grid; grid-template-columns: 32px auto; align-items: center; justify-content: end; gap: 6px; }
+.playlist-classification dt { color: var(--text-muted); font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+.playlist-classification dd { margin: 0; }
+.playlist-classification .badge { display: inline-block; min-width: 58px; box-sizing: border-box; text-align: center; }
+.playlist-type-badge { background: color-mix(in srgb, var(--primary) 14%, var(--bg-surface-alt)); color: var(--primary); }
 .playlist-cover-wrap { width: 76px; }
 .playlist-cover { display: block; width: 76px; aspect-ratio: 1 / 1; border-radius: 10px; object-fit: cover; }
 .playlist-cover-placeholder { display: grid; place-items: center; border: 1px solid var(--border-color); background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 14%, var(--bg-surface)), var(--bg-surface-alt)); color: var(--text-muted); font-size: 1.8rem; }
 .playlist-actions { flex-wrap: wrap; }
+.navidrome-love-panel { margin-top: var(--space-lg); margin-bottom: var(--space-lg); display: grid; grid-template-columns: minmax(220px, .7fr) minmax(420px, 1.3fr); gap: 28px; padding: 24px; overflow: hidden; }
+.navidrome-love-intro { display: flex; align-items: flex-start; gap: 14px; }
+.navidrome-love-intro h2 { margin: 3px 0 6px; }
+.navidrome-love-intro p { max-width: 380px; margin: 0; color: var(--text-muted); line-height: 1.5; }
+.navidrome-love-icon { display: grid; flex: 0 0 44px; width: 44px; aspect-ratio: 1 / 1; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--danger) 12%, var(--bg-surface)); color: var(--danger); font-size: 1.15rem; }
+.navidrome-love-workspace { display: grid; align-content: start; gap: 12px; }
+.navidrome-playlist-field { display: grid; gap: 7px; min-width: 0; }
+.navidrome-playlist-field > label { color: var(--text-muted); font-size: .74rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.navidrome-select-row { display: flex; gap: 8px; min-width: 0; }
+.navidrome-select-row select { width: 100%; min-width: 0; min-height: 44px; padding: 0 38px 0 12px; border: 1px solid var(--border-input); border-radius: 9px; background: var(--bg-surface); color: var(--text-main); font: inherit; }
+.navidrome-refresh { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+.navidrome-love-actions { display: flex; gap: 8px; }
+.navidrome-love-actions button { min-height: 44px; white-space: nowrap; }
+.navidrome-unlove { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border-color)); }
+.navidrome-love-status { display: flex; align-items: center; gap: 8px; min-height: 20px; color: var(--text-muted); font-size: .82rem; }
+.navidrome-status-indicator { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--text-muted); }
+.navidrome-love-status.is-ready .navidrome-status-indicator { background: var(--success); }
+.navidrome-love-status.is-error { color: var(--danger); }
+.navidrome-love-status.is-error .navidrome-status-indicator { background: var(--danger); }
+.navidrome-love-status.is-loading .navidrome-status-indicator { border: 2px solid color-mix(in srgb, var(--primary) 25%, transparent); border-top-color: var(--primary); background: transparent; animation: navidrome-spin .7s linear infinite; }
+@keyframes navidrome-spin { to { transform: rotate(360deg); } }
+.navidrome-love-panel progress { width: 100%; }
+@media (max-width: 1000px) { .navidrome-love-panel { grid-template-columns: 1fr; gap: 20px; } }
+@media (max-width: 680px) { .navidrome-love-panel { padding: 18px; } .navidrome-love-actions { display: grid; grid-template-columns: 1fr; } .navidrome-love-actions button { width: 100%; } }
+@media (max-width: 420px) { .navidrome-love-icon { display: none; } .navidrome-select-row { display: grid; } .navidrome-refresh { width: 100%; } }
 .playlist-actions .btn-secondary, .source-open-link { flex: 1 1 110px; padding: 10px; border-radius: 6px; font-size: .85rem; font-weight: 600; text-align: center; text-decoration: none; box-sizing: border-box; }
 .playlist-actions .playlist-download-link { color: var(--primary); border-color: var(--primary); }
 .playlist-actions .playlist-delete-btn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, var(--border-color)); }
@@ -2404,6 +2463,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .source-auto-sync > div { grid-column: 1 / -1; }
     .source-auto-sync select { min-height: 44px; font-size: 16px; }
     .source-auto-sync button { min-height: 44px; }
+    .playlist-library-heading { align-items: start; }
+    .playlist-library-heading p { font-size: .88rem; }
     .playlist-toolbar { align-items: stretch; flex-direction: column; gap: 8px; padding: 12px; }
     .playlist-toolbar .search-input { min-height: 46px; font-size: 16px; }
     .playlist-toolbar span { align-self: flex-end; }

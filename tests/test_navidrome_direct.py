@@ -223,3 +223,69 @@ def test_direct_sync_refuses_readonly_same_name_playlist(tmp_path):
         assert "read-only" in playlist.navidrome_sync_error
     finally:
         db.close()
+
+
+def test_direct_sync_uses_same_release_fallback_as_m3u_export(tmp_path):
+    song_path = tmp_path / "Word Up.mp3"
+    song_path.touch()
+    db = SessionLocal()
+    try:
+        playlist = Playlist(
+            spotify_id="release-variant-playlist",
+            name="Release Variants",
+            track_count=1,
+            tracks=[
+                PlaylistTrack(
+                    spotify_track_id="single-release-id",
+                    position=1,
+                    title="Word Up",
+                    artist="Cameo",
+                    album="Single Release",
+                )
+            ],
+        )
+        db.add_all(
+            [
+                playlist,
+                _song(
+                    song_path,
+                    spotify_track_id="album-release-id",
+                    navidrome_id="nav-song",
+                    title="Word Up",
+                    artist="Cameo",
+                    album="Word Up",
+                ),
+            ]
+        )
+        db.commit()
+        playlist_id = playlist.id
+    finally:
+        db.close()
+
+    class Client:
+        async def get_song(self, song_id):
+            return {
+                "id": song_id,
+                "title": "Word Up",
+                "artist": "Cameo",
+                "album": "Word Up",
+                "duration": 244,
+            }
+
+        async def get_playlists(self):
+            return []
+
+        async def replace_playlist(self, *, name, song_ids, playlist_id=None):
+            assert song_ids == ["nav-song"]
+            return {"id": "nav-playlist"}
+
+        async def get_playlist(self, playlist_id):
+            return {"id": playlist_id, "entry": [{"id": "nav-song"}]}
+
+    result = asyncio.run(
+        NavidromeDirectPlaylistSync(
+            settings=_settings(), client=Client()
+        ).reconcile(playlist_id)
+    )
+
+    assert result.track_count == 1

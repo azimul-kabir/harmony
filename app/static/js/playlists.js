@@ -15,6 +15,84 @@ function filterPlaylists() {
 
 search?.addEventListener("input", filterPlaylists);
 
+const navSelect = document.getElementById("navidrome-playlist-select");
+const navRefresh = document.getElementById("navidrome-playlist-refresh");
+const loveButton = document.getElementById("navidrome-love-all");
+const unloveButton = document.getElementById("navidrome-unlove-all");
+const loveStatus = document.getElementById("navidrome-love-progress");
+const loveProgress = document.getElementById("navidrome-love-progress-bar");
+let navPlaylists = [];
+let navLoadController = null;
+
+function setNavidromeStatus(message, state = "idle") {
+    const copy = loveStatus?.querySelector(".navidrome-status-copy");
+    if (copy) copy.textContent = message;
+    else if (loveStatus) loveStatus.textContent = message;
+    loveStatus?.classList.remove("is-loading", "is-error", "is-ready");
+    if (state !== "idle") loveStatus?.classList.add(`is-${state}`);
+}
+
+async function loadNavidromePlaylists() {
+    navLoadController?.abort();
+    const controller = new AbortController();
+    navLoadController = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 16000);
+    navRefresh.disabled = true;
+    navSelect.disabled = true;
+    loveButton.disabled = true;
+    unloveButton.disabled = true;
+    navSelect.replaceChildren(new Option("Loading playlists…", ""));
+    setNavidromeStatus("Connecting to Navidrome…", "loading");
+    try {
+        const response = await fetch("/api/navidrome/playlists", {signal: controller.signal});
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail?.message || "Navidrome playlists are unavailable.");
+        navPlaylists = Array.isArray(payload.playlists) ? payload.playlists : [];
+        navSelect.replaceChildren(new Option(navPlaylists.length ? "Select a playlist…" : "No playlists found", ""));
+        navPlaylists.forEach(item => navSelect.add(new Option(`${item.name} · ${item.track_count} tracks`, item.id)));
+        navSelect.disabled = navPlaylists.length === 0;
+        setNavidromeStatus(navPlaylists.length ? `${navPlaylists.length} playlist${navPlaylists.length === 1 ? "" : "s"} ready` : "Navidrome returned no playlists.", navPlaylists.length ? "ready" : "idle");
+    } catch (error) {
+        navPlaylists = [];
+        navSelect.replaceChildren(new Option("Unable to load playlists", ""));
+        setNavidromeStatus(error.name === "AbortError" ? "Navidrome took too long to respond. Try again." : error.message, "error");
+    } finally {
+        window.clearTimeout(timeout);
+        navRefresh.disabled = false;
+    }
+}
+navSelect?.addEventListener("change", () => {
+    loveButton.disabled = unloveButton.disabled = !navSelect.value;
+    const item = navPlaylists.find(playlist => playlist.id === navSelect.value);
+    setNavidromeStatus(item ? `${item.track_count} track${item.track_count === 1 ? "" : "s"} selected` : `${navPlaylists.length} playlist${navPlaylists.length === 1 ? "" : "s"} ready`, "ready");
+});
+navRefresh?.addEventListener("click", loadNavidromePlaylists);
+
+function pollLoveJob(id) {
+    window.setTimeout(async () => {
+        const response = await fetch(`/api/navidrome/jobs/${id}`); const job = await response.json();
+        loveProgress.max = Math.max(1, job.total_tracks); loveProgress.value = job.processed_tracks;
+        setNavidromeStatus(`${job.status.replaceAll("_", " ")} · ${job.processed_tracks}/${job.total_tracks} tracks · batch ${job.current_batch}/${job.total_batches}` + (job.safe_error_message ? ` · ${job.safe_error_message}` : ""), "loading");
+        if (["completed", "partially_completed", "failed", "cancelled"].includes(job.status)) { loveButton.disabled = unloveButton.disabled = false; return; }
+        pollLoveJob(id);
+    }, 600);
+}
+async function startLove(operation) {
+    const item = navPlaylists.find(p => p.id === navSelect.value); if (!item) return;
+    const destructive = operation === "unlove";
+    const message = destructive
+        ? `Remove Loved status from every current track in “${item.name}” (${item.track_count} tracks) for the configured Navidrome user?\n\nThis is destructive and does not restore an earlier state.`
+        : `Mark every current track in “${item.name}” (${item.track_count} tracks) as Loved for the configured Navidrome user?`;
+    if (!window.confirm(message)) return;
+    loveButton.disabled = unloveButton.disabled = true; loveProgress.hidden = false; setNavidromeStatus("Queueing operation…", "loading");
+    const response = await fetch(`/api/navidrome/playlists/${encodeURIComponent(item.id)}/${operation}`, {method: "POST"}); const job = await response.json();
+    if (!response.ok) { setNavidromeStatus(job.detail?.message || "Operation could not be queued.", "error"); loveButton.disabled = unloveButton.disabled = false; return; }
+    pollLoveJob(job.job_id);
+}
+loveButton?.addEventListener("click", () => startLove("love"));
+unloveButton?.addEventListener("click", () => startLove("unlove"));
+if (navSelect) loadNavidromePlaylists();
+
 async function generateAutoPlaylist(button) {
     const rule = button.dataset.autoRule;
     const limitInput = document.querySelector(`[data-auto-limit="${CSS.escape(rule)}"]`);
@@ -64,22 +142,64 @@ document.querySelectorAll(".playlist-sync-btn").forEach(button => {
 });
 
 const navidromeScan = document.getElementById("scan-navidrome");
+const navidromeScanStatus = document.getElementById("scan-navidrome-status");
+
+function navidromeErrorMessage(payload, fallback) {
+    if (typeof payload?.detail === "string") return payload.detail;
+    if (typeof payload?.detail?.message === "string") return payload.detail.message;
+    return fallback;
+}
+
+function setNavidromeScanState(label, message, disabled) {
+    navidromeScan.textContent = label;
+    navidromeScan.disabled = disabled;
+    if (navidromeScanStatus) navidromeScanStatus.textContent = message;
+}
+
+async function pollNavidromeScan(initiallyScanning = false) {
+    // Navidrome may acknowledge startScan before its scanner flips to active.
+    // Poll long enough to show a real completion state instead of leaving the
+    // button permanently disabled after the first click.
+    let observedScanning = initiallyScanning;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const response = await fetch("/api/navidrome/status");
+        const status = await response.json().catch(() => ({}));
+        if (!response.ok || !status.reachable) {
+            throw new Error(status.error || "Navidrome scan status is unavailable.");
+        }
+        if (status.scanning) {
+            observedScanning = true;
+            setNavidromeScanState(
+                "Scanning Navidrome…",
+                `${Number(status.scan_count || 0).toLocaleString()} items processed`,
+                true,
+            );
+            continue;
+        }
+        if (observedScanning || attempt >= 2) {
+            setNavidromeScanState("↻ Scan Navidrome", "Navidrome scan completed.", false);
+            return;
+        }
+    }
+    setNavidromeScanState("↻ Scan Navidrome", "Scan is still running; check the dashboard for status.", false);
+}
+
 navidromeScan?.addEventListener("click", async () => {
-    navidromeScan.disabled = true;
-    navidromeScan.textContent = "Requesting scan…";
+    setNavidromeScanState("Requesting scan…", "Sending scan request to Navidrome…", true);
     try {
         const response = await fetch("/api/navidrome/rescan?full_scan=false", {
             method: "POST",
         });
+        const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-            const payload = await response.json().catch(() => ({}));
-            throw new Error(payload.detail || "Navidrome scan could not be started.");
+            throw new Error(navidromeErrorMessage(payload, "Navidrome scan could not be started."));
         }
-        navidromeScan.textContent = "Scan requested";
+        if (payload.accepted !== true) throw new Error("Navidrome did not accept the scan request.");
+        setNavidromeScanState("Scan requested", "Navidrome accepted the library scan.", true);
+        await pollNavidromeScan(Boolean(payload.scanning));
     } catch (error) {
-        alert(error.message);
-        navidromeScan.disabled = false;
-        navidromeScan.textContent = "↻ Scan Navidrome";
+        setNavidromeScanState("↻ Scan Navidrome", error.message, false);
     }
 });
 

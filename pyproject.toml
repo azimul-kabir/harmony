@@ -1,6 +1,6 @@
 [project]
 name = "harmony"
-version = "2.0.1"
+version = "2.1.0"
 description = "Self-hosted music downloader and organizer for Navidrome."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -18,8 +18,10 @@ dependencies = [
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.20",
+    "itsdangerous>=2.2",
     "loguru>=0.7.3",
     "mutagen>=1.47",
+    "pillow>=11.0",
     "watchdog>=6.0",
     "httpx>=0.24,<0.25",
     # Pin the current SpotDL release to avoid resolver backtracking across
@@ -27,6 +29,7 @@ dependencies = [
     "spotdl==4.5.2",
     "spotipy>=2.25.0",
     "yt-dlp>=2025.1.1",
+    "ytmusicapi>=1.10,<2",
     "pysnmp>=7.1,<8",
 ]
 

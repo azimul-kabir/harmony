@@ -88,6 +88,42 @@ function renderNavidromeStatus(status) {
     const enabled = Boolean(status.configured && status.reachable && !status.scanning);
     rescan.disabled = !enabled;
     fullRescan.disabled = !enabled;
+    const healthCheck = document.getElementById("navidrome-health-check");
+    if (healthCheck) healthCheck.disabled = !enabled;
+}
+
+function countComparison(health, key) {
+    if (!health.expected || !health.actual) return "—";
+    return `${Number(health.actual[key] || 0).toLocaleString()} / ${Number(health.expected[key] || 0).toLocaleString()}`;
+}
+
+function renderNavidromeSyncHealth(health) {
+    const panel = document.querySelector(".navidrome-panel");
+    if (panel) panel.dataset.syncHealth = health.state || "pending";
+    ["songs", "albums", "artists", "playlists"].forEach((key) => setText(`navidrome-health-${key}`, countComparison(health, key)));
+    setText("navidrome-health-missing", health.missing_tracks === undefined ? "—" : Number(health.missing_tracks).toLocaleString());
+    setText("navidrome-health-stale", health.stale_tracks === undefined ? "—" : Number(health.stale_tracks).toLocaleString());
+    const reconcile = document.getElementById("navidrome-reconcile");
+    if (reconcile) reconcile.disabled = health.state !== "drift";
+    const messages = {
+        healthy: `Navidrome matches Harmony. Verified ${formatNavidromeDate(health.checked_at)}.`,
+        drift: `Index drift detected${health.reconciliation_requested ? "; a reconciliation scan was requested" : ""}.`,
+        checking: "A sync health check is already running.",
+        unavailable: health.error || "Navidrome could not be checked.",
+        unconfigured: "Configure Navidrome to verify sync health.",
+        pending: "Sync health has not been verified yet.",
+    };
+    setText("navidrome-health-message", messages[health.state] || messages.pending);
+}
+
+async function refreshNavidromeSyncHealth(refresh = false) {
+    try {
+        const response = await fetch(`/api/navidrome/sync-health?refresh=${refresh}`);
+        if (!response.ok) throw new Error("Health request failed");
+        renderNavidromeSyncHealth(await response.json());
+    } catch (_) {
+        renderNavidromeSyncHealth({ state: "unavailable", error: "Harmony could not verify Navidrome sync health." });
+    }
 }
 
 async function refreshNavidromeStatus() {
@@ -116,13 +152,38 @@ async function startNavidromeScan(fullScan, button) {
         if (!response.ok) {
             throw new Error(payload.detail?.message || "Navidrome rejected the scan.");
         }
-        renderNavidromeStatus({ ...payload, scanning: true });
+        renderNavidromeStatus({ ...payload, scanning: Boolean(payload.scanning) });
+        setText("navidrome-message", "Scan request accepted; waiting for Navidrome to start…");
+        const completed = await pollNavidromeScan(payload);
+        if (!completed) throw new Error("Navidrome did not finish the scan within four minutes.");
+        setText("navidrome-message", "Scan completed; refreshing sync health…");
+        await refreshNavidromeSyncHealth(true);
     } catch (error) {
         setText("navidrome-message", error.message || "The Navidrome scan could not be started.");
     } finally {
         button.textContent = originalLabel;
-        window.setTimeout(refreshNavidromeStatus, 1000);
+        button.disabled = false;
+        await refreshNavidromeStatus();
     }
+}
+
+async function pollNavidromeScan(initial = {}, attempts = 120) {
+    let observed = Boolean(initial.scanning);
+    const previousLastScan = initial.last_scan;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        const response = await fetch("/api/navidrome/status");
+        const status = await response.json().catch(() => ({}));
+        if (!response.ok || !status.reachable) throw new Error(status.error || "Navidrome scanner status is unavailable.");
+        observed = observed || Boolean(status.scanning);
+        renderNavidromeStatus(status);
+        setText("navidrome-message", status.scanning
+            ? `Scanning (${Number(status.scan_count || 0).toLocaleString()} items processed)…`
+            : "Waiting for Navidrome to begin scanning…");
+        const changed = status.last_scan && status.last_scan !== previousLastScan;
+        if (!status.scanning && (observed || changed)) return true;
+    }
+    return false;
 }
 
 function setupNavidromeControls() {
@@ -135,8 +196,37 @@ function setupNavidromeControls() {
             startNavidromeScan(true, fullRescan);
         }
     });
+    const healthCheck = document.getElementById("navidrome-health-check");
+    const reconcile = document.getElementById("navidrome-reconcile");
+    if (healthCheck) healthCheck.addEventListener("click", async () => {
+        healthCheck.disabled = true;
+        setText("navidrome-health-message", "Comparing Harmony and Navidrome libraries…");
+        await refreshNavidromeSyncHealth(true);
+        healthCheck.disabled = false;
+    });
+    if (reconcile) reconcile.addEventListener("click", async () => {
+        reconcile.disabled = true;
+        setText("navidrome-health-message", "Requesting a Navidrome reconciliation scan…");
+        try {
+            const response = await fetch("/api/navidrome/sync-health/reconcile", { method: "POST" });
+            const result = await response.json().catch(() => null);
+            if (!response.ok || !result || !result.post_scan_health) throw new Error(result?.detail?.message || "Reconciliation returned an invalid response.");
+            renderNavidromeSyncHealth(result.post_scan_health);
+            const scanResult = result.scan || {};
+            const remaining = Number(result.remaining_drift?.missing_tracks || 0);
+            const repaired = Number(result.repaired_navidrome_ids || 0);
+            const prefix = scanResult.completed ? "Scan completed." : scanResult.timed_out ? "Scan timed out." : "Scan ended without confirmed completion.";
+            setText("navidrome-health-message", `${prefix} Repaired ${repaired.toLocaleString()} Navidrome IDs. ${remaining.toLocaleString()} tracks remain missing.`);
+        } catch (error) {
+            setText("navidrome-health-message", error.message || "Navidrome reconciliation failed.");
+        } finally {
+            reconcile.disabled = false;
+        }
+    });
     refreshNavidromeStatus();
+    refreshNavidromeSyncHealth();
     window.setInterval(refreshNavidromeStatus, 15000);
+    window.setInterval(refreshNavidromeSyncHealth, 60000);
 }
 
 function renderDownloadTrends(trends) {

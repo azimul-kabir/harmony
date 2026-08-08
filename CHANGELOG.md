@@ -5,6 +5,67 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+## [v2.1.0] - 2026-08-08
+
+### Added
+
+- Added a secure-by-default web login portal that protects the UI, API,
+  interactive documentation, and event streams with signed HTTP-only sessions;
+  health probes and login assets remain public for deployment checks.
+- Added public YouTube Music playlists as durable Sources with provider-aware
+  identity, ordered metadata extraction, unavailable-entry accounting,
+  download queue and M3U integration, provider badges, and an in-place Spotify
+  Source migration.
+- Added native Navidrome playlist Love All and Unlove All actions with token
+  authentication, durable bounded-batch progress, safe partial failures,
+  connection testing, and responsive playlist selection.
+- Added Navidrome-powered Most Played, Recently Played, and Forgotten Favorites
+  automatic playlists alongside the existing Library-powered auto-playlists.
+- Added Navidrome synchronization health reporting and scan control to compare
+  Harmony's catalog with Navidrome and safely reconcile indexing drift.
+- Added durable download duration telemetry and detailed SpotDL attempt timing.
+
+### Changed
+
+- Restored SpotDL's generated artist/title fallback when the original Spotify
+  URL attempt fails or produces no audio. Fallback output now passes the same
+  strict identity validation as URL output, preventing loose substitutes from
+  entering the Library.
+- SpotDL output must contain exactly one supported audio file whose embedded
+  primary artist, title, recording-version markers, and reliable duration match
+  the requested track before import. Rejections use the stable, non-retryable
+  `exact_match_unavailable` outcome; transient provider failures remain
+  separately categorized and manually retryable where appropriate.
+- Playlist availability now requires an available canonical Library Song and an
+  existing file. Completed jobs and predicted paths no longer make a source
+  item appear available.
+- Strengthened Navidrome path matching for music-folder prefixes, normalized
+  disc/track filename prefixes with Harmony's import sanitizer, and improved
+  direct-playlist reconciliation checks.
+- Improved YouTube Music tags and artwork while preserving canonical playlist
+  metadata through download and Library artwork-repair workflows.
+- Reduced SQLite worker contention and made task progress updates atomic so
+  concurrent downloads and large playlist synchronization remain responsive.
+
+### Fixed
+
+- Fixed stalled and overlapping playlist synchronization, late duplicate
+  resolution, inaccurate availability counts, and stuck progress indicators.
+- Fixed SpotDL skipped-output handling, equivalent multi-artist tag matching,
+  and duration normalization without weakening exact-match import validation.
+- Fixed Navidrome playlist loading states, music-folder drift detection, health
+  reconciliation, and scan completion behavior.
+
+### Upgrade
+
+- Back up the database and configuration, then review the new required
+  `WEB_AUTH_PASSWORD` Compose setting before starting v2.1.0.
+- Alembic revisions `20260725_0026` through `20260730_0030` add lyrics,
+  provider-aware song/source identity, Navidrome playback statistics, download
+  duration, and playlist Source identity. They run automatically at startup.
+- Existing sessions are invalidated when `WEB_AUTH_PASSWORD` changes. Set
+  `WEB_AUTH_SECURE_COOKIE=true` when Harmony is served through HTTPS.
+
 ## [v2.0.1] - 2026-07-26
 
 ### Added

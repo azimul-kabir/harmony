@@ -1,6 +1,5 @@
-from app.domain.track import Track
 import json
-
+import threading
 from datetime import UTC, datetime
 
 from sqlalchemy import select, text, or_
@@ -9,7 +8,14 @@ from sqlalchemy.orm import Session
 from app.database.models import DownloadJob, Task
 from app.domain.download import JobStatus
 from app.domain.task import TaskStatus
+from app.domain.track import Track
 from app.services.download_telemetry import utcnow_naive
+
+
+# SQLite only permits one writer at a time.  All download workers live in this
+# process, so serialize the very small claim transaction rather than making
+# every worker race for ``BEGIN IMMEDIATE`` (and exhaust SQLite's busy timeout).
+_job_claim_lock = threading.Lock()
 
 
 def create_job(
@@ -39,6 +45,7 @@ def create_job(
         year=track.year,
         isrc=track.isrc,
         genre=track.genre,
+        duration=track.duration,
         spotify_artist_ids=json.dumps(track.spotify_artist_ids),
         genre_provenance=track.genre_provenance,
         status=JobStatus.QUEUED.value,
@@ -94,44 +101,49 @@ def find_active_job_by_spotify_url(
 def claim_next_job(
     db: Session,
 ) -> DownloadJob | None:
-    # Acquire the SQLite write lock immediately.
-    db.execute(text("BEGIN IMMEDIATE"))
+    with _job_claim_lock:
+        try:
+            # Reserve the writer before reading so two workers cannot select
+            # the same queued row.  Keep the reservation inside the protected
+            # block through commit/rollback.
+            db.execute(text("BEGIN IMMEDIATE"))
 
-    try:
-        # Check if the job's parent task is not active (paused or cancelled)
-        # If the job has no parent task (a standalone single track download), allow it.
-        job = db.scalar(
-            select(DownloadJob)
-            .outerjoin(Task, DownloadJob.task_id == Task.id)
-            .where(
-                DownloadJob.status == JobStatus.QUEUED.value,
-                or_(
-                    Task.id == None,
-                    ~Task.status.in_((TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value))
+            # Check if the job's parent task is not active (paused or cancelled)
+            # If the job has no parent task (a standalone single track download), allow it.
+            job = db.scalar(
+                select(DownloadJob)
+                .outerjoin(Task, DownloadJob.task_id == Task.id)
+                .where(
+                    DownloadJob.status == JobStatus.QUEUED.value,
+                    or_(
+                        Task.id.is_(None),
+                        ~Task.status.in_((TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value))
+                    )
                 )
+                .order_by(DownloadJob.created_at, DownloadJob.id)
+                .limit(1)
             )
-            .order_by(DownloadJob.created_at, DownloadJob.id)
-            .limit(1)
-        )
 
-        if job is None:
+            if job is None:
+                db.commit()
+                return None
+
+            job.status = JobStatus.RUNNING.value
+            job.started_at = datetime.now(UTC)
+            job.heartbeat_at = utcnow_naive()
+            job.pipeline_stage = "claimed"
+            job.progress_percent = 0
+
             db.commit()
-            return None
+            db.refresh(job)
 
-        job.status = JobStatus.RUNNING.value
-        job.started_at = datetime.now(UTC)
-        job.heartbeat_at = utcnow_naive()
-        job.pipeline_stage = "claimed"
-        job.progress_percent = 0
+            return job
 
-        db.commit()
-        db.refresh(job)
-
-        return job
-
-    except Exception:
-        db.rollback()
-        raise
+        except Exception:
+            # BEGIN IMMEDIATE can itself fail, so it must be covered by the
+            # rollback path as well as the SELECT/update operations.
+            db.rollback()
+            raise
 
 
 def update_status(

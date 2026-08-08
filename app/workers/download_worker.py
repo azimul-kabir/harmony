@@ -1,7 +1,9 @@
 import time
 import threading
 import json
+from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
@@ -10,7 +12,8 @@ from app.database.crud_downloads import (
     recover_running_jobs,
     update_status,
 )
-from app.database.models import DownloadJob
+from app.database.crud import link_song_source
+from app.database.models import DownloadJob, Song
 from app.database.session import SessionLocal
 from app.domain.download import JobStatus
 from app.domain.download_outcome import DownloadCancelled, DownloadFailed, DownloadOutcome, DownloadSkipped, classify_unexpected
@@ -22,12 +25,14 @@ from app.services.download_telemetry import heartbeat_ticker, update_telemetry
 from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
+from app.services.library_scanner import index_file
 from app.services.playlist_manager import export_m3us_for_source_track
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.task_service import (
     increment_completed,
     increment_failed,
     increment_skipped,
+    reconcile_stalled_playlist_tasks,
     set_current_item,
     start_task,
 )
@@ -40,6 +45,9 @@ def worker_loop() -> None:
     db = SessionLocal()
     try:
         recover_running_jobs(db)
+        repaired_task_ids = reconcile_stalled_playlist_tasks(db)
+        for task_id in repaired_task_ids:
+            navidrome_playlist_reimport.schedule(task_id)
     finally:
         db.close()
         
@@ -53,6 +61,7 @@ def worker_loop() -> None:
                 
             process_job(db, job)
         except Exception:
+            db.rollback()
             logger.exception("Worker crashed while processing job.")
         finally:
             db.close()
@@ -123,6 +132,9 @@ def process_job(
             album=job.album,
             album_artist=job.album_artist,
             track=job.track,
+            disc=job.disc,
+            year=job.year,
+            isrc=job.isrc,
             cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
             spotify_track_id=job.spotify_track_id, 
             spotify_url=job.source_url, 
@@ -130,6 +142,7 @@ def process_job(
             source_item_id=job.source_item_id,
             source_url=job.source_url,
             genre=job.genre,
+            duration=job.duration,
             spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
             genre_provenance=job.genre_provenance,
         )
@@ -170,6 +183,16 @@ def process_job(
         if _cancelled(db, job, None):
             return
         job.output_file = str(library_file)
+        indexed_song = db.scalar(
+            select(Song).where(Song.path == str(Path(library_file).resolve()))
+        )
+        if indexed_song is not None:
+            link_song_source(
+                db,
+                indexed_song,
+                job.source_provider or "spotify",
+                job.source_item_id or job.spotify_track_id,
+            )
         job.error = None
         db.commit()
         
@@ -216,7 +239,35 @@ def process_job(
         )
         if output_file is not None and output_file.exists():
             output_file.unlink()
-            
+
+        # A late collision means the downloaded metadata produced a path that
+        # preflight could not predict. Index that existing file and remember
+        # the provider identity so this and every future playlist can use it.
+        existing_path = getattr(ex, "existing_path", None)
+        if existing_path is not None:
+            try:
+                indexed = index_file(db, existing_path, force=True)
+                song = db.get(Song, indexed.song_id) if indexed.song_id else None
+                if song is not None:
+                    link_song_source(
+                        db,
+                        song,
+                        job.source_provider or "spotify",
+                        job.source_item_id or job.spotify_track_id,
+                    )
+                    db.commit()
+                    export_m3us_for_source_track(
+                        db,
+                        job.source_provider or "spotify",
+                        job.source_item_id,
+                        job.spotify_track_id,
+                    )
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "Failed to reconcile duplicate library file for job #{}",
+                    job.id,
+                )
         _finish_with_outcome(db, job, JobStatus.SKIPPED, DownloadSkipped("duplicate_in_library", "This track is already in your library.", "preflight", technical_detail=type(ex).__name__))
     except DownloadSkipped as outcome:
         _finish_with_outcome(db, job, JobStatus.SKIPPED, outcome)
@@ -258,6 +309,12 @@ def _cancelled(db, job, output_file):
 
 
 def _finish_with_outcome(db, job, status, outcome):
+    # Database errors raised by telemetry/heartbeat updates can leave the
+    # transaction inactive.  Recover it before refreshing and finalizing the
+    # job; otherwise one transient SQLite lock strands the parent task at
+    # 99/100 indefinitely.
+    if not db.is_active:
+        db.rollback()
     db.refresh(job)
     if job.status == JobStatus.CANCELLED.value:
         return

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.0.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v2.1.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,10 +25,11 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v2.0.1**
+Current stable version: **v2.1.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v2.0.1 release notes](docs/releases/v2.0.1.md) for stabilization changes.
+[v2.1.0 release notes](docs/releases/v2.1.0.md) for upgrade guidance and a
+summary of the new login portal, playlist Sources, and Navidrome improvements.
 Harmony v1.6.0 was never published.
 
 ---
@@ -38,8 +39,20 @@ Harmony v1.6.0 was never published.
 ## 🎵 Spotify Downloads
 
 - Download tracks, albums, and playlists
+- Exact-match-only import: Harmony first requests the original Spotify track
+  URL, then lets SpotDL retry by artist/title when the provider returns no
+  usable output. Every result, including the fallback, must pass strict
+  embedded-metadata validation before it can enter the Library.
+- Before import, Harmony requires exactly one audio file and validates its
+  embedded primary artist, title, material version markers, and duration
+  against the stored Spotify request. Instrumental, karaoke, live, remix,
+  sped-up, slowed, acoustic, demo, radio-edit, remaster, cover, and tribute
+  substitutions are rejected unless the requested title identifies the same
+  version.
+- A rejected or unavailable exact match stays failed and absent from the
+  Library and playlist availability count.
 
-## YouTube Music downloads
+## YouTube Music downloads and playlist sources
 
 Harmony accepts public YouTube Music track (`music.youtube.com/watch?v=`) and
 playlist (`music.youtube.com/playlist?list=`) URLs through yt-dlp. Standard
@@ -52,6 +65,16 @@ normalized source metadata; extractor payloads and command output are not expose
 YouTube availability is subject to region, age, removal, and rate-limit policies.
 Enable it under **Settings → Downloads → Download Sources**. Use `YT_DLP_PATH`,
 `YOUTUBE_MUSIC_ENABLED`, and `YOUTUBE_MUSIC_TIMEOUT_SECONDS` to configure it.
+
+Public YouTube Music playlists can also be saved on the **Sources** page. Source
+URLs are canonicalized to their `list` identity, so tracking parameters such as
+`playnext` and `si` do not create duplicate Sources. Synchronization reads the
+playlist without downloading, preserves its order, skips unavailable entries,
+queues missing tracks through the YouTube Music download provider, exports the
+same M3U representation used by Spotify Sources, and schedules the existing
+Navidrome playlist reconciliation workflow. Source synchronization requires a
+public `music.youtube.com/playlist?list=...` URL; watch, album, artist, and
+channel URLs are not accepted as Sources.
 - Multi-worker concurrent downloads
 
 ### Download details
@@ -86,11 +109,12 @@ paths, provider URLs/payloads, credentials, command lines, or raw errors.
 
 ## 🎼 Playlist Management
 
-Harmony maintains Spotify playlists inside its own database.
+Harmony maintains Spotify and public YouTube Music playlists inside its own
+database.
 
 Features include:
 
-- Save Spotify playlists as Sources
+- Save Spotify and public YouTube Music playlists as Sources
 - One-click synchronization
 - Snapshot tracking
 - Preserve playlist order
@@ -100,6 +124,8 @@ Features include:
 - Direct `.m3u` downloads from the web interface
 - Direct, order-preserving Navidrome playlist synchronization with safe M3U
   fallback
+- Bulk Love/Unlove for playlists discovered directly through Navidrome, using
+  stable Navidrome playlist and song IDs in bounded batches
 - Playlist availability counts, filtering, and one-click source resync
 - Ordered playlist Library-file management and safe saved-playlist deletion
 - Per-source scheduled auto-sync (hourly, every 6 or 12 hours, daily, or weekly)
@@ -400,7 +426,13 @@ Generate M3U Playlists
 Queue Missing Songs
     │
     ▼
-Multi-worker Downloads
+Multi-worker Exact Spotify-URL Download
+    │
+    ▼
+Isolated Temporary Output
+    │
+    ▼
+Identity Validation
     │
     ▼
 Staging Folder
@@ -475,8 +507,13 @@ cd harmony
 Create your local environment.
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
+
+Before starting, set a long, unique `WEB_AUTH_PASSWORD` in `.env`.
+`WEB_AUTH_USERNAME` defaults to `admin`; authentication is enabled by default
+and fails closed when the password is empty. Login sessions last 12 hours by
+default and are invalidated whenever the password changes.
 
 Spotify artist-genre enrichment is optional. It is disabled by default, so
 credentials are not required for downloads, metadata resolution, tagging, or
@@ -501,8 +538,12 @@ FAILED_PATH=/downloads/failed
 ARTWORK_CACHE_PATH=/database/artwork
 ```
 
-The sample `docker-compose.yml` contains host volume examples. Replace those
-host paths with directories that exist on your system before deployment.
+The Compose file reads this same `.env` file. Set `MUSIC_HOST_PATH` and
+`DOWNLOAD_HOST_PATH` to directories that exist on your host. Database and log
+data remain in `./database` and `./logs`. The Compose deployment retains its
+Synology user mapping and external `harmony-net` network. Set
+`WEB_AUTH_SECURE_COOKIE=true` when an HTTPS reverse proxy is in front of
+Harmony.
 
 Start Harmony.
 
@@ -513,7 +554,7 @@ docker compose up -d --build
 Open:
 
 ```
-http://localhost:8080
+http://localhost:8080/login
 ```
 
 Interactive API documentation is available at:

@@ -3,6 +3,7 @@ import shutil
 
 from app.core.config import get_settings
 from app.domain.track import Track
+from app.services.library_paths import sanitize_path_component
 
 settings = get_settings()
 
@@ -10,13 +11,7 @@ settings = get_settings()
 def _safe(name: str | None) -> str:
     if not name:
         return "Unknown"
-
-    invalid = '<>:"/\\|?*'
-
-    for c in invalid:
-        name = name.replace(c, "_")
-
-    return name.strip()
+    return sanitize_path_component(name)
 
 
 def destination(track: Track, extension: str) -> Path:

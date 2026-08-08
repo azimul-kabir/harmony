@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from app.database.crud import link_song_source
 from app.database.models import Playlist, PlaylistTrack, Song
 from app.database.session import SessionLocal
 from app.services import playlist_manager
@@ -31,7 +32,7 @@ def _playlist(db, *, spotify_id: str, name: str, track_id: str) -> Playlist:
     return playlist
 
 
-def test_export_uses_persisted_metadata_and_only_writes_existing_files(
+def test_export_does_not_count_predicted_path_without_canonical_association(
     monkeypatch, tmp_path
 ):
     monkeypatch.setattr(
@@ -52,17 +53,40 @@ def test_export_uses_persisted_metadata_and_only_writes_existing_files(
             track_id="track-1",
         )
 
-        assert playlist_manager.export_m3u(db, playlist) == 1
-
-        content = (tmp_path / "Playlists" / "Reliable.m3u").read_text()
-        assert "#EXTINF:123,Stored artist - Stored title" in content
-        assert "../Stored artist/Stored album/03 - Stored title.mp3" in content
+        assert playlist_manager.export_m3u(db, playlist) == 0
+        assert (tmp_path / "Playlists" / "Reliable.m3u").read_text() == "#EXTM3U\n"
 
         expected.unlink()
         assert playlist_manager.export_m3u(db, playlist) == 0
         assert (
             tmp_path / "Playlists" / "Reliable.m3u"
         ).read_text() == "#EXTM3U\n"
+    finally:
+        db.close()
+
+
+def test_future_cut_copy_file_does_not_make_spotify_item_available(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        playlist_manager, "get_settings",
+        lambda: SimpleNamespace(music_path=str(tmp_path)),
+    )
+    wrong = tmp_path / "Cut Copy" / "Future" / "04 - Future - Instrumental.mp3"
+    wrong.parent.mkdir(parents=True)
+    wrong.write_bytes(b"audio")
+    db = SessionLocal()
+    try:
+        playlist = _playlist(
+            db, spotify_id="future-playlist", name="99 of 100",
+            track_id="future-fukk-a-interview",
+        )
+        playlist.tracks[0].title = "Fukk A Interview"
+        playlist.tracks[0].artist = "Future"
+        db.commit()
+
+        assert playlist_manager.export_m3u(db, playlist) == 0
+        assert "Instrumental" not in (
+            tmp_path / "Playlists" / "99 of 100.m3u"
+        ).read_text()
     finally:
         db.close()
 
@@ -156,5 +180,84 @@ def test_export_prefers_indexed_song_path(monkeypatch, tmp_path):
         content = (tmp_path / "Playlists" / "Indexed.m3u").read_text()
         assert "#EXTINF:222,Indexed artist - Indexed title" in content
         assert "../Different Artist/Different Album/song.mp3" in content
+    finally:
+        db.close()
+
+
+def test_export_resolves_owned_song_with_different_spotify_identity(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        playlist_manager,
+        "get_settings",
+        lambda: SimpleNamespace(music_path=str(tmp_path)),
+    )
+    actual = tmp_path / "Artist" / "Album" / "song.mp3"
+    actual.parent.mkdir(parents=True)
+    actual.write_bytes(b"audio")
+
+    db = SessionLocal()
+    try:
+        playlist = _playlist(
+            db,
+            spotify_id="new-playlist",
+            name="Overlapping",
+            track_id="new-playlist-track-id",
+        )
+        db.add(
+            Song(
+                path=str(actual),
+                filename=actual.name,
+                artist="Stored artist",
+                title="Stored title",
+                album="Stored album",
+                spotify_track_id="original-playlist-track-id",
+            )
+        )
+        db.commit()
+
+        assert playlist_manager.export_m3u(db, playlist) == 1
+        content = (tmp_path / "Playlists" / "Overlapping.m3u").read_text()
+        assert "../Artist/Album/song.mp3" in content
+    finally:
+        db.close()
+
+
+def test_export_resolves_provider_alias_when_titles_differ(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        playlist_manager,
+        "get_settings",
+        lambda: SimpleNamespace(music_path=str(tmp_path)),
+    )
+    actual = tmp_path / "Cameo" / "Word Up" / "01 - Word Up.mp3"
+    actual.parent.mkdir(parents=True)
+    actual.write_bytes(b"audio")
+
+    db = SessionLocal()
+    try:
+        playlist = _playlist(
+            db,
+            spotify_id="funky",
+            name="Funky Groove Mix",
+            track_id="single-version-id",
+        )
+        playlist.tracks[0].title = "Word Up! - Single Version"
+        playlist.tracks[0].artist = "Cameo"
+        song = Song(
+            path=str(actual),
+            filename=actual.name,
+            artist="Cameo",
+            title="Word Up",
+            album="Word Up",
+        )
+        db.add(song)
+        db.flush()
+        link_song_source(db, song, "spotify", "single-version-id")
+        db.commit()
+
+        assert playlist_manager.export_m3u(db, playlist) == 1
+        assert "../Cameo/Word Up/01 - Word Up.mp3" in (
+            tmp_path / "Playlists" / "Funky Groove Mix.m3u"
+        ).read_text()
     finally:
         db.close()

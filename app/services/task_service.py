@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database.models import (MetadataApplicationBatch, MetadataApplicationLock,
-    MetadataDiscovery, MetadataDiscoveryLock, Task, TaskItemFailure, SyncSource)
+    MetadataDiscovery, MetadataDiscoveryLock, DownloadJob, Task, TaskItemFailure,
+    SyncSource)
+from app.domain.download import JobStatus
 from sqlalchemy import and_, or_, select, delete, update
 from app.domain.task import (
     TaskStatus,
@@ -107,8 +109,15 @@ def set_current_item(
 def increment_completed(
     db: Session,
     task: Task,
+    amount: int = 1,
 ) -> None:
-    task.completed_items += 1
+    if amount <= 0:
+        return
+    db.execute(
+        update(Task)
+        .where(Task.id == task.id)
+        .values(completed_items=Task.completed_items + amount)
+    )
     db.commit()
     db.refresh(task)
     _finish_if_complete(
@@ -119,8 +128,15 @@ def increment_completed(
 def increment_failed(
     db: Session,
     task: Task,
+    amount: int = 1,
 ) -> None:
-    task.failed_items += 1
+    if amount <= 0:
+        return
+    db.execute(
+        update(Task)
+        .where(Task.id == task.id)
+        .values(failed_items=Task.failed_items + amount)
+    )
     db.commit()
     db.refresh(task)
     _finish_if_complete(
@@ -131,8 +147,15 @@ def increment_failed(
 def increment_skipped(
     db: Session,
     task: Task,
+    amount: int = 1,
 ) -> None:
-    task.skipped_items += 1
+    if amount <= 0:
+        return
+    db.execute(
+        update(Task)
+        .where(Task.id == task.id)
+        .values(skipped_items=Task.skipped_items + amount)
+    )
     db.commit()
     db.refresh(task)
     _finish_if_complete(
@@ -171,6 +194,58 @@ def _finish_if_complete(
 
     db.commit()
     db.refresh(task)
+
+
+def reconcile_stalled_playlist_tasks(db: Session) -> list[int]:
+    """Repair active playlist tasks after every child download is terminal."""
+    tasks = db.scalars(
+        select(Task).where(
+            Task.task_type == TaskType.PLAYLIST_SYNC.value,
+            Task.status.in_(
+                (TaskStatus.QUEUED.value, TaskStatus.RUNNING.value)
+            ),
+        )
+    ).all()
+    repaired_ids: list[int] = []
+    terminal = {
+        JobStatus.COMPLETED.value,
+        JobStatus.SKIPPED.value,
+        JobStatus.FAILED.value,
+        JobStatus.CANCELLED.value,
+    }
+    for task in tasks:
+        jobs = db.scalars(
+            select(DownloadJob).where(DownloadJob.task_id == task.id)
+        ).all()
+        if not jobs or any(job.status not in terminal for job in jobs):
+            continue
+
+        task.completed_items = sum(
+            job.status == JobStatus.COMPLETED.value for job in jobs
+        )
+        task.failed_items = sum(
+            job.status == JobStatus.FAILED.value for job in jobs
+        )
+        task.skipped_items = (
+            max(task.total_items - len(jobs), 0)
+            + sum(
+                job.status
+                in {JobStatus.SKIPPED.value, JobStatus.CANCELLED.value}
+                for job in jobs
+            )
+        )
+        task.current_item = None
+        task.completed_at = utcnow_naive()
+        task.status = (
+            TaskStatus.FAILED.value
+            if task.failed_items
+            else TaskStatus.COMPLETED.value
+        )
+        repaired_ids.append(task.id)
+    if repaired_ids:
+        db.commit()
+    return repaired_ids
+
 
 def pause_task(
     db: Session,

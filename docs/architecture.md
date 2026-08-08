@@ -28,7 +28,9 @@ Spotify / YouTube Music / MusicBrainz
 - **Web/API:** FastAPI routes serve HTML, JSON, OpenAPI, and SSE snapshots.
 - **Persistence:** SQLAlchemy 2.0 and Alembic manage the SQLite domain state.
 - **Downloads:** provider adapters feed durable queue records and the managed
-  music directory.
+  music directory. Spotify track acquisition is a single original-URL SpotDL
+  attempt whose sole audio output must pass embedded identity validation before
+  import; no text-search substitute path exists.
 - **Library:** the persistent Song index is the query boundary for browsing,
   search, collections, analytics, health, metadata, artwork, and bulk work.
 - **Playlists:** Harmony stores source order, exports atomic M3Us, and can
@@ -53,6 +55,8 @@ Spotify / YouTube Music / MusicBrainz
 - Metadata discovery never silently changes canonical data or file tags.
 - Canonical metadata application and audio-file tag writing are separate,
   explicitly confirmed operations.
-- Playlist exports include only available files and are replaced atomically.
+- Playlist exports include only existing files linked through available
+  canonical Song associations and are replaced atomically; job completion and
+  predicted paths never count as availability.
 - Direct Navidrome playlist updates are verified and fall back to M3U import.
 - SSE refreshes patch stable UI regions and do not replace active controls.

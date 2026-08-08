@@ -28,7 +28,13 @@ That idea eventually became Harmony.
 
 **Under the Hood**
 *   Multi-threaded background queue for simultaneous downloads.
-*   Smart fallback search to grab hard-to-find regional or extended tracks.
+*   Exact-match-only Spotify downloads: Harmony tries the original Spotify
+    track URL, then permits SpotDL's artist/title fallback only when its output
+    passes the same strict identity checks.
+*   Artist, title, recording-version markers, and reliable duration are checked
+    before import. If the Spotify-linked recording is unavailable, the item
+    remains unavailable rather than making the playlist appear complete with a
+    remix, instrumental, karaoke, live, cover, or unrelated recording.
 *   Runs completely locally on your own computer or NAS via Docker.
 
 ### Harmony + Navidrome
@@ -72,13 +78,13 @@ Harmony runs anywhere Docker is available.
 **Windows / macOS / Linux**
 1. Install Docker & Docker Compose.
 2. Clone the repository.
-3. Configure your `.env.local` file.
+3. Copy `.env.example` to `.env`, set a strong `WEB_AUTH_PASSWORD`, and configure `MUSIC_HOST_PATH` and `DOWNLOAD_HOST_PATH`.
 4. Run: `docker compose up -d`
 
 **Synology NAS**
 1. Install Container Manager.
 2. Clone the repository onto your NAS.
-3. Configure your `.env.local` file.
+3. Copy `.env.example` to `.env`, set a strong `WEB_AUTH_PASSWORD`, and configure `MUSIC_HOST_PATH` and `DOWNLOAD_HOST_PATH`.
 4. Deploy using Docker Compose.
 5. Point Navidrome to Harmony's Music folder.
 
@@ -86,11 +92,11 @@ That's it. Open your browser, add a Spotify playlist, and Harmony takes care of 
 
 ### Current Status
 
-Harmony has reached **v2.0.0**, the direct successor to v1.5.0. Harmony v1.6.0
-was never published. The current release includes Metadata Intelligence,
-durable download operations, direct Navidrome playlist synchronization,
-playlist file management, automatic playlists, scheduled Sources, editable
-runtime settings, and a redesigned mobile experience.
+Harmony has reached **v2.1.0**. The release adds a secure-by-default web login,
+public YouTube Music playlist Sources, Navidrome-powered automatic playlists,
+playlist Love/Unlove actions, and stronger Navidrome reconciliation and
+download validation. See the [v2.1.0 release notes](docs/releases/v2.1.0.md)
+before upgrading. Harmony v1.6.0 was never published.
 
 I'm continuing to improve it, and suggestions, feedback, or feature requests are always welcome. If you've also been frustrated by duplicate downloads and messy music folders, I'd love to hear your thoughts!
 
@@ -101,3 +107,7 @@ I'm continuing to improve it, and suggestions, feedback, or feature requests are
 Downloads can be selected only from the current visible, bounded Downloads feed. The selection toolbar supports retrying failed or cancelled records, cancelling queued or running records, clearing selected terminal history, and clearing all completed or all failed/cancelled history. Eligibility is returned by the server per record and mixed selections safely skip ineligible records.
 
 History clearing removes only terminal download records. It never deletes downloaded music files, Library records, or artwork cache, and it never removes active or queued work. Requests are limited to 100 selected IDs; responses contain only aggregate counts, so repeated terminal-history clearing is safe and reports zero changes when there is nothing left. On mobile the toolbar wraps into full-size touch controls without horizontal scrolling.
+
+## Love or unlove a Navidrome playlist
+
+Configure `NAVIDROME_URL`, `NAVIDROME_USERNAME`, and `NAVIDROME_PASSWORD`, then use **Settings → Navidrome → Test Connection**. On **Playlists**, choose a playlist fetched from Navidrome and confirm Love or Unlove. Loved status belongs to the configured Navidrome user. Harmony uses stable Navidrome playlist/song IDs—not names or metadata matching—and never modifies Navidrome's database. Repeated IDs are sent in batches of 100 by default. Progress is retained after each batch; an idempotent rerun processes the complete current playlist. Unlove removes current Loved status and does not restore an earlier state. Environment secrets follow Harmony's existing plaintext environment convention and should be protected with deployment-level secret controls.

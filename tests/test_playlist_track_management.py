@@ -97,6 +97,45 @@ def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
         db.close()
 
 
+def test_playlist_tracks_marks_existing_song_with_different_spotify_id_available():
+    db = SessionLocal()
+    try:
+        playlist = Playlist(
+            spotify_id="overlap-playlist",
+            name="Overlap",
+            track_count=1,
+            tracks=[
+                PlaylistTrack(
+                    spotify_track_id="new-playlist-track-id",
+                    position=0,
+                    title="Common song",
+                    artist="Shared artist",
+                    album="Shared album",
+                )
+            ],
+        )
+        song = Song(
+            path="/music/common.mp3",
+            filename="common.mp3",
+            spotify_track_id="original-playlist-track-id",
+            title="Common song",
+            artist="Shared artist",
+            album="Shared album",
+            availability_status="available",
+        )
+        db.add_all([playlist, song])
+        db.commit()
+
+        payload = playlist_tracks(playlist.id, db)
+
+        assert payload["tracks"][0]["song_id"] == song.id
+        assert payload["tracks"][0]["availability"] == "available"
+        assert payload["tracks"][0]["selectable"] is True
+        assert payload["deletable_count"] == 1
+    finally:
+        db.close()
+
+
 def test_playlists_page_exposes_guarded_track_manager():
     response = TestClient(app).get("/playlists")
 

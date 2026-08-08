@@ -5,11 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 
-ENV_FILE = (
-    ROOT / ".env.local"
-    if (ROOT / ".env.local").exists()
-    else ROOT / ".env.development"
-)
+ENV_FILE = ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -20,10 +16,16 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "2.0.1"
+    app_version: str = "2.1.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
+
+    web_auth_enabled: bool = True
+    web_auth_username: str = "admin"
+    web_auth_password: str = ""
+    web_auth_session_hours: int = 12
+    web_auth_secure_cookie: bool = False
 
     database_url: str = "sqlite:////database/harmony.db"
 
@@ -70,6 +72,9 @@ class Settings(BaseSettings):
     navidrome_username: str = ""
     navidrome_password: str = ""
     navidrome_timeout_seconds: float = 5.0
+    navidrome_love_enabled: bool = True
+    navidrome_love_batch_size: int = 100
+    navidrome_max_retries: int = 2
     navidrome_direct_playlist_sync_enabled: bool = True
     navidrome_direct_search_limit: int = 25
     navidrome_direct_duration_tolerance_seconds: float = 5.0
@@ -77,9 +82,15 @@ class Settings(BaseSettings):
     navidrome_playlist_reimport_debounce_seconds: float = 10.0
     navidrome_playlist_reimport_poll_seconds: float = 2.0
     navidrome_playlist_reimport_scan_timeout_seconds: float = 900.0
+    navidrome_sync_health_enabled: bool = True
+    navidrome_sync_health_interval_minutes: int = 15
+    navidrome_sync_health_auto_reconcile: bool = False
+    navidrome_sync_health_scan_timeout_seconds: float = 240.0
+    navidrome_sync_health_full_scan_timeout_seconds: float = 600.0
+    navidrome_sync_health_poll_seconds: float = 1.0
 
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
-    musicbrainz_user_agent: str = "Harmony/2.0.1 (https://github.com/azimul-kabir/harmony)"
+    musicbrainz_user_agent: str = "Harmony/2.1.0 (https://github.com/azimul-kabir/harmony)"
     musicbrainz_timeout_seconds: float = 10.0
     musicbrainz_max_retries: int = 3
     musicbrainz_backoff_seconds: float = 0.5

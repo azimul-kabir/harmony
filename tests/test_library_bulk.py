@@ -374,3 +374,40 @@ def test_bulk_fetch_artwork_uses_musicbrainz_release_id(tmp_path, monkeypatch):
         assert song.artwork_id == artwork.id
         assert song.artwork_status == "remote"
         assert song.cover_url == f"/api/artwork/{artwork.id}/file"
+
+
+def test_bulk_fetch_artwork_falls_back_to_linked_youtube_music_track(tmp_path, monkeypatch):
+    from app.database.crud import link_song_source
+
+    with SessionLocal() as db:
+        song = _songs(db, tmp_path, 1)[0]
+        link_song_source(db, song, "youtube_music", "video123")
+        artwork = Artwork(
+            checksum="b" * 64,
+            cache_path=str(tmp_path / "youtube-cover.jpg"),
+            source="remote",
+            mime_type="image/jpeg",
+            file_size=1,
+            provider="youtube_music",
+            provider_id="video123",
+        )
+        (tmp_path / "youtube-cover.jpg").write_bytes(b"x")
+        db.add(artwork)
+        db.commit()
+        item = BulkOperationItem(song_id=song.id, original_path=song.path, status="queued")
+        worker = LibraryBulkWorker()
+        worker.settings = SimpleNamespace(music_path=str(tmp_path), download_path=str(tmp_path))
+        monkeypatch.setattr(
+            worker.artwork,
+            "fetch_youtube_music_artwork",
+            lambda database, item_id, force_remote=False: artwork,
+        )
+
+        result = worker._apply(db, item, "fetch_artwork", {}, None)
+        db.commit()
+        db.refresh(song)
+
+        assert result == song.path
+        assert song.artwork_id == artwork.id
+        assert song.artwork_status == "remote"
+        assert song.cover_url == f"/api/artwork/{artwork.id}/file"

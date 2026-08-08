@@ -1166,7 +1166,33 @@ membership, metadata, or tags into the keeper.
 
 # Multi-Source Downloads
 
-Harmony separates metadata from audio.
+Harmony keeps source selection explicit and preserves the requested source
+identity through download and import. For Spotify jobs, SpotDL receives the
+original Spotify track URL exactly once. Harmony does not generate artist/title
+queries, request unfiltered search results, or fall back automatically to the
+YouTube Music source.
+
+The Spotify attempt is accepted only after it exits successfully, produces one
+supported audio file, and the file's embedded identity matches the stored
+request. Primary artist and title are mandatory; reliable duration and material
+version markers provide additional hard checks. A rejected candidate is cleaned
+from staging and becomes a non-retryable `exact_match_unavailable` attempt, so
+the worker cannot tag, import, link, or export it.
+
+YouTube Music remains a separate opt-in source selected by the user. Its
+existence does not weaken the Spotify exact-match boundary.
+
+Playlist synchronization uses the same explicit provider boundary. A durable
+Source is identified by `(provider, external_id)` and retains a canonical
+`source_url`. Existing Spotify identifiers remain compatibility mirrors rather
+than a second identity system. Spotify Sources retain their incremental public
+playlist reader; public YouTube Music Sources use flat yt-dlp playlist
+extraction, retain playable Music watch URLs and `youtube_music` item IDs, and
+enter the provider-neutral download queue without fabricating Spotify IDs.
+
+Both readers feed the ordered playlist persistence, M3U export, per-Source
+manual/automatic scheduling, and Navidrome reimport pipeline. Local and smart
+playlists have no required external provider identity.
 
 Metadata
 
@@ -1174,9 +1200,9 @@ Spotify
 
 ↓
 
-Audio Source
+Explicit Audio Source
 
-YouTube Music
+Spotify URL or opt-in YouTube Music URL
 
 ↓
 

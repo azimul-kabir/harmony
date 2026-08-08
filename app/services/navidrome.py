@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+import asyncio
 
 from app.core.config import get_settings
 
@@ -81,28 +82,82 @@ class NavidromeClient:
             )
         params = self._auth_params()
         params.update(extra_params or {})
-        try:
-            async with httpx.AsyncClient(
-                timeout=self.settings.navidrome_timeout_seconds,
-                follow_redirects=False,
-                transport=self.transport,
-            ) as client:
-                response = await client.get(self._endpoint(action), params=params)
-                response.raise_for_status()
-                payload = response.json()
-        except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as error:
-            raise NavidromeError(
-                "Harmony could not reach Navidrome.",
-                code="navidrome_unavailable",
-            ) from error
+        attempts = max(1, int(getattr(self.settings, "navidrome_max_retries", 2)) + 1)
+        for attempt in range(attempts):
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(
+                        self.settings.navidrome_timeout_seconds,
+                        connect=self.settings.navidrome_timeout_seconds,
+                    ),
+                    follow_redirects=False,
+                    transport=self.transport,
+                ) as client:
+                    response = await client.get(self._endpoint(action), params=params)
+                    if response.status_code in {401, 403}:
+                        raise NavidromeError(
+                            "Navidrome authentication failed.",
+                            code="authentication_failed",
+                        )
+                    if response.status_code >= 500 and attempt + 1 < attempts:
+                        await asyncio.sleep(0.1 * (2**attempt))
+                        params.update(self._auth_params())
+                        continue
+                    response.raise_for_status()
+                    payload = response.json()
+                    break
+            except NavidromeError:
+                raise
+            except httpx.TimeoutException as error:
+                if attempt + 1 < attempts:
+                    await asyncio.sleep(0.1 * (2**attempt))
+                    params.update(self._auth_params())
+                    continue
+                raise NavidromeError(
+                    "Navidrome request timed out.", code="timeout"
+                ) from error
+            except httpx.RequestError as error:
+                if attempt + 1 < attempts:
+                    await asyncio.sleep(0.1 * (2**attempt))
+                    params.update(self._auth_params())
+                    continue
+                raise NavidromeError(
+                    "Harmony could not connect to Navidrome.", code="connection_failed"
+                ) from error
+            except httpx.HTTPStatusError as error:
+                raise NavidromeError(
+                    "Navidrome returned a server error.", code="navidrome_api_error"
+                ) from error
+            except ValueError as error:
+                raise NavidromeError(
+                    "Navidrome returned malformed JSON.",
+                    code="invalid_playlist_response",
+                ) from error
 
-        envelope = payload.get("subsonic-response", {})
+        envelope = (
+            payload.get("subsonic-response") if isinstance(payload, dict) else None
+        )
+        if not isinstance(envelope, dict):
+            raise NavidromeError(
+                "Navidrome returned an invalid response.",
+                code="invalid_playlist_response",
+            )
         if envelope.get("status") != "ok":
             error = envelope.get("error") or {}
+            api_code = error.get("code")
+            code = (
+                "authentication_failed"
+                if api_code in {40, 41, 42, 44}
+                else "permission_denied"
+                if api_code == 50
+                else "navidrome_api_error"
+            )
             raise NavidromeError(
-                error.get("message") or "Navidrome rejected the request.",
-                code="navidrome_api_error",
-                api_code=error.get("code"),
+                "Navidrome authentication failed."
+                if code == "authentication_failed"
+                else "Navidrome rejected the request.",
+                code=code,
+                api_code=api_code,
             )
         return envelope
 
@@ -180,10 +235,30 @@ class NavidromeClient:
         result = envelope.get("searchResult3") or {}
         return self._as_list(result.get("song"))
 
+    async def library_songs(self, *, page_size: int = 500) -> list[dict[str, Any]]:
+        """Return the user's Navidrome songs, including playback/star metadata."""
+        size = max(1, min(int(page_size), 500))
+        songs: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            envelope = await self._request(
+                "search3",
+                extra_params={
+                    "query": "",
+                    "songCount": str(size),
+                    "songOffset": str(offset),
+                    "albumCount": "0",
+                    "artistCount": "0",
+                },
+            )
+            page = self._as_list((envelope.get("searchResult3") or {}).get("song"))
+            songs.extend(page)
+            if len(page) < size:
+                return songs
+            offset += size
+
     async def get_song(self, song_id: str) -> dict[str, Any]:
-        envelope = await self._request(
-            "getSong", extra_params={"id": song_id}
-        )
+        envelope = await self._request("getSong", extra_params={"id": song_id})
         song = envelope.get("song")
         if not isinstance(song, dict):
             raise NavidromeError(
@@ -197,10 +272,40 @@ class NavidromeClient:
         playlists = envelope.get("playlists") or {}
         return self._as_list(playlists.get("playlist"))
 
+    async def get_albums(self, *, size: int = 500) -> list[dict[str, Any]]:
+        """Return every album visible to the configured Navidrome user."""
+        albums: list[dict[str, Any]] = []
+        offset = 0
+        page_size = max(1, min(int(size), 500))
+        while True:
+            envelope = await self._request(
+                "getAlbumList2",
+                extra_params={
+                    "type": "alphabeticalByName",
+                    "size": str(page_size),
+                    "offset": str(offset),
+                },
+            )
+            page = self._as_list((envelope.get("albumList2") or {}).get("album"))
+            albums.extend(page)
+            if len(page) < page_size:
+                return albums
+            offset += page_size
+
+    async def get_artists(self) -> list[dict[str, Any]]:
+        """Return every artist visible to the configured Navidrome user."""
+        envelope = await self._request("getArtists")
+        indexes = self._as_list((envelope.get("artists") or {}).get("index"))
+        return [
+            artist
+            for index in indexes
+            for artist in self._as_list(index.get("artist"))
+        ]
+
     async def get_playlist(self, playlist_id: str) -> dict[str, Any]:
-        envelope = await self._request(
-            "getPlaylist", extra_params={"id": playlist_id}
-        )
+        if not isinstance(playlist_id, str) or not playlist_id.strip():
+            raise ValueError("A valid playlist ID is required.")
+        envelope = await self._request("getPlaylist", extra_params={"id": playlist_id})
         playlist = envelope.get("playlist")
         if not isinstance(playlist, dict):
             raise NavidromeError(
@@ -208,6 +313,69 @@ class NavidromeClient:
                 code="navidrome_invalid_response",
             )
         return playlist
+
+    async def ping(self) -> dict[str, Any]:
+        envelope = await self._request("ping")
+        return {"ok": True, "server_version": envelope.get("serverVersion")}
+
+    @staticmethod
+    def normalize_song_ids(song_ids: Sequence[str]) -> list[str]:
+        if isinstance(song_ids, (str, bytes)):
+            raise ValueError("Song IDs must be a sequence.")
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in song_ids:
+            if not isinstance(value, str) or not value.strip() or len(value) > 255:
+                raise ValueError("Song IDs must be non-empty strings.")
+            value = value.strip()
+            if value not in seen:
+                seen.add(value)
+                result.append(value)
+        return result
+
+    async def _change_starred(
+        self,
+        action: str,
+        song_ids: Sequence[str],
+        *,
+        batch_size: int | None = None,
+        progress=None,
+    ) -> dict[str, int]:
+        ids = self.normalize_song_ids(song_ids)
+        size = batch_size or int(
+            getattr(self.settings, "navidrome_love_batch_size", 100)
+        )
+        if not 1 <= size <= 500:
+            raise ValueError("Batch size must be between 1 and 500.")
+        total_batches = (len(ids) + size - 1) // size
+        processed = 0
+        for number, offset in enumerate(range(0, len(ids), size), 1):
+            batch = ids[offset : offset + size]
+            await self._request(action, extra_params={"id": batch})
+            processed += len(batch)
+            if progress:
+                result = progress(number, total_batches, processed, len(ids))
+                if hasattr(result, "__await__"):
+                    await result
+        return {
+            "total_tracks": len(ids),
+            "processed_tracks": processed,
+            "total_batches": total_batches,
+        }
+
+    async def star_song_ids(
+        self, song_ids: Sequence[str], *, batch_size: int | None = None, progress=None
+    ):
+        return await self._change_starred(
+            "star", song_ids, batch_size=batch_size, progress=progress
+        )
+
+    async def unstar_song_ids(
+        self, song_ids: Sequence[str], *, batch_size: int | None = None, progress=None
+    ):
+        return await self._change_starred(
+            "unstar", song_ids, batch_size=batch_size, progress=progress
+        )
 
     async def replace_playlist(
         self,

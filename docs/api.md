@@ -1,6 +1,6 @@
 # Library Jobs and Activity API
 
-> v2.0.1 API guide. Interactive OpenAPI contracts are available at `/docs`
+> v2.1.0 API guide. Interactive OpenAPI contracts are available at `/docs`
 > while Harmony is running.
 
 Library jobs extend Harmony's existing durable Task API. All timestamps are UTC
@@ -120,7 +120,14 @@ compatible with conservative SQLite parameter limits.
 ## Sources and automation
 
 - `GET /api/sources` lists source state and schedule fields.
-- `POST /api/sources` saves a Spotify source.
+- `POST /api/sources` saves a Spotify or public YouTube Music playlist Source.
+  The preferred request is `{ "source_url": "..." }`; the legacy
+  `{ "spotify_url": "..." }` field remains accepted for compatibility.
+  Harmony canonicalizes provider URLs and deduplicates on
+  `(provider, external_id)`. Successful responses include `provider`,
+  `external_id`, and `source_url`. Invalid, non-playlist, and unsupported URLs
+  return HTTP 422 with `detail.code` and `detail.message` instead of an
+  unhandled server error.
 - `POST /api/sources/{source_id}/sync` starts an immediate background sync.
 - `PATCH /api/sources/{source_id}` enables or disables a source.
 - `PATCH /api/sources/{source_id}/auto-sync` saves
@@ -128,6 +135,8 @@ compatible with conservative SQLite parameter limits.
   15–10,080 minutes; the v2.0.0 UI offers hourly, 6-hour, 12-hour, daily, and
   weekly schedules.
 - `GET /api/sources/stream` streams source, playlist, task, and schedule state.
+  Source objects expose both the provider-neutral identity fields and the
+  legacy `spotify_url` compatibility mirror.
 
 - `GET /api/playlists/auto/definitions` lists built-in auto-playlist rules.
 - `POST /api/playlists/auto/{rule_id}/generate` accepts
@@ -256,8 +265,28 @@ byte progress or ETA. Failed history filtering includes cancelled
 jobs, matching the Dashboard attention link; `/downloads?status=cancelled`
 remains available for cancelled-only history.
 
+Spotify failures may expose the stable reason code
+`exact_match_unavailable` with the user-facing meaning **Exact match
+unavailable**: Harmony could not obtain or validate the Spotify-linked track,
+and loose substitute searches are disabled. This outcome preserves the original
+job identity for manual retry but is not automatically requeued indefinitely.
+Other bounded provider categories include `provider_no_match`,
+`provider_rate_limited`, `provider_unavailable`, and `provider_error`; an
+unexpected multi-file response uses `unexpected_output_count`. API read models
+must not expose provider stack traces, command arguments, credentials, cookies,
+or local paths with these outcomes.
+
 ### `POST /api/downloads/bulk`
 
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
 
 Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.
+
+## Navidrome Loved-status operations
+
+- `POST /api/navidrome/test` calls authenticated Subsonic `ping`.
+- `GET /api/navidrome/playlists` returns safe playlist IDs, names, counts, and owners.
+- `POST /api/navidrome/playlists/{playlist_id}/{love|unlove}` queues a durable operation.
+- `GET /api/navidrome/jobs/{job_id}` returns batch/track progress and safe categorized errors.
+
+Credentials come only from server configuration. Harmony calls `getPlaylist`, then `star` or `unstar` with repeated song IDs in bounded batches. Passwords, tokens, salts, authenticated URLs, and provider details are excluded from responses. Partial completion is explicit and reruns process the full current playlist.
