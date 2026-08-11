@@ -537,21 +537,32 @@ class SpotDLClient:
             )
         )
         config_path.mkdir(parents=True, exist_ok=True)
-        environment = os.environ.copy()
-        environment["HOME"] = "/tmp"
-        environment["XDG_CONFIG_HOME"] = str(config_path)
-        environment["HARMONY_SPOTDL_CONFIG_DIR"] = str(config_path)
-        
-        try:
-            return subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=environment,
-            )
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError(f"SpotDL execution timed out after {timeout} seconds.") from e
+        # SpotDL 4.5 derives its runtime directories from Path.home() and uses
+        # check-then-mkdir for its temp folder. Sharing one HOME between worker
+        # processes therefore races with concurrent downloads. Give every
+        # invocation an isolated home while keeping all temporary state under
+        # Harmony's configured writable root.
+        with tempfile.TemporaryDirectory(prefix="run-", dir=config_path) as runtime_dir:
+            runtime_home = Path(runtime_dir)
+            invocation_config = runtime_home / ".config" / "spotdl"
+            invocation_config.mkdir(parents=True)
+            environment = os.environ.copy()
+            environment["HOME"] = str(runtime_home)
+            environment["XDG_CONFIG_HOME"] = str(runtime_home / ".config")
+            environment["HARMONY_SPOTDL_CONFIG_DIR"] = str(invocation_config)
+
+            try:
+                return subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    env=environment,
+                )
+            except subprocess.TimeoutExpired as e:
+                raise RuntimeError(
+                    f"SpotDL execution timed out after {timeout} seconds."
+                ) from e
 
     @staticmethod
     def _extract_json(

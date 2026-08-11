@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -59,9 +60,13 @@ def test_spotdl_run_uses_writable_xdg_config_directory(monkeypatch, tmp_path):
     client._run(["--version"])
 
     assert config_dir.is_dir()
-    assert observed["env"]["HOME"] == "/tmp"
-    assert observed["env"]["XDG_CONFIG_HOME"] == str(config_dir)
-    assert observed["env"]["HARMONY_SPOTDL_CONFIG_DIR"] == str(config_dir)
+    runtime_home = Path(observed["env"]["HOME"])
+    assert runtime_home.parent == config_dir
+    assert runtime_home.name.startswith("run-")
+    assert observed["env"]["XDG_CONFIG_HOME"] == str(runtime_home / ".config")
+    assert observed["env"]["HARMONY_SPOTDL_CONFIG_DIR"] == str(
+        runtime_home / ".config" / "spotdl"
+    )
 
 
 def test_playlist_sync_persists_actionable_metadata_timeout(monkeypatch):
