@@ -19,6 +19,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed generated auto-playlists and Navidrome playback-stat ingestion from
   the active product. Legacy playlist and Song columns remain available for
   database upgrade compatibility.
+- Removed Navidrome Love/Unlove jobs, APIs, client mutations, configuration,
+  and Playlists UI. Harmony no longer changes user playback preferences.
 
 ## [v2.1.0] - 2026-08-08
 

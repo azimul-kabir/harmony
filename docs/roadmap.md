@@ -43,6 +43,6 @@ consolidates database engine/session ownership, and separates lightweight
 liveness from database-and-storage readiness probes.
 
 The v2.1.0 release adds the signed-session web login, public YouTube Music
-playlist Sources, Navidrome Love/Unlove batches, playback-statistics
+playlist Sources, playback-statistics
 synchronization health and scan controls, and stricter
 provider-output validation.

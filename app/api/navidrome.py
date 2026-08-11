@@ -1,10 +1,6 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from app.core.config import get_settings
-from app.database.models import Task
-from app.database.session import SessionLocal
 from app.services.navidrome import NavidromeClient, NavidromeError
-from app.services.navidrome_love import create_job, public_job, run_job
 from app.services.navidrome_sync_health import navidrome_sync_health
 
 router = APIRouter(prefix="/api/navidrome", tags=["navidrome"])
@@ -67,81 +63,3 @@ async def test_navidrome_connection():
         return {"success": True, **result}
     except NavidromeError as error:
         raise _http_error(error) from error
-
-
-@router.get("/playlists")
-async def list_navidrome_playlists():
-    try:
-        items = await NavidromeClient().get_playlists()
-        return {
-            "playlists": [
-                {
-                    "id": str(item.get("id", "")),
-                    "name": str(item.get("name") or "Untitled"),
-                    "track_count": int(item.get("songCount") or 0),
-                    "owner": item.get("owner"),
-                }
-                for item in items
-                if item.get("id")
-            ]
-        }
-    except NavidromeError as error:
-        raise _http_error(error) from error
-
-
-async def _start(playlist_id: str, operation: str, background: BackgroundTasks):
-    if not get_settings().navidrome_love_enabled:
-        raise HTTPException(
-            403,
-            detail={
-                "code": "not_configured",
-                "message": "Navidrome Love All is disabled.",
-            },
-        )
-    try:
-        playlists = await NavidromeClient().get_playlists()
-        selected = next((p for p in playlists if str(p.get("id")) == playlist_id), None)
-        if not selected:
-            raise HTTPException(
-                404,
-                detail={
-                    "code": "playlist_not_found",
-                    "message": "The Navidrome playlist no longer exists.",
-                },
-            )
-        task = create_job(
-            playlist_id, str(selected.get("name") or "Untitled"), operation
-        )
-        background.add_task(run_job, task.id)
-        return public_job(task)
-    except ValueError as error:
-        raise HTTPException(
-            409, detail={"code": "duplicate_submission", "message": str(error)}
-        ) from error
-    except NavidromeError as error:
-        raise _http_error(error) from error
-
-
-@router.post("/playlists/{playlist_id}/love", status_code=202)
-async def love_playlist(playlist_id: str, background: BackgroundTasks):
-    return await _start(playlist_id, "love", background)
-
-
-@router.post("/playlists/{playlist_id}/unlove", status_code=202)
-async def unlove_playlist(playlist_id: str, background: BackgroundTasks):
-    return await _start(playlist_id, "unlove", background)
-
-
-@router.get("/jobs/{job_id}")
-def get_love_job(job_id: int):
-    db = SessionLocal()
-    try:
-        task = db.get(Task, job_id)
-        if not task or task.task_type != "navidrome_love":
-            raise HTTPException(
-                404,
-                detail={"code": "job_not_found", "message": "Navidrome job not found."},
-            )
-        return public_job(task)
-    finally:
-        db.close()

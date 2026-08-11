@@ -72,8 +72,6 @@ class Settings(BaseSettings):
     navidrome_username: str = ""
     navidrome_password: str = ""
     navidrome_timeout_seconds: float = 5.0
-    navidrome_love_enabled: bool = True
-    navidrome_love_batch_size: int = 100
     navidrome_max_retries: int = 2
     navidrome_direct_playlist_sync_enabled: bool = True
     navidrome_direct_search_limit: int = 25

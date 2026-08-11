@@ -268,11 +268,7 @@ Safely updates a bounded set of Downloads records. The JSON request is `{ "actio
 
 Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.
 
-## Navidrome Loved-status operations
+## Navidrome connection
 
 - `POST /api/navidrome/test` calls authenticated Subsonic `ping`.
-- `GET /api/navidrome/playlists` returns safe playlist IDs, names, counts, and owners.
-- `POST /api/navidrome/playlists/{playlist_id}/{love|unlove}` queues a durable operation.
-- `GET /api/navidrome/jobs/{job_id}` returns batch/track progress and safe categorized errors.
-
-Credentials come only from server configuration. Harmony calls `getPlaylist`, then `star` or `unstar` with repeated song IDs in bounded batches. Passwords, tokens, salts, authenticated URLs, and provider details are excluded from responses. Partial completion is explicit and reruns process the full current playlist.
+- `POST /api/navidrome/rescan` requests a bounded Navidrome library scan.

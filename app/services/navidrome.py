@@ -318,65 +318,6 @@ class NavidromeClient:
         envelope = await self._request("ping")
         return {"ok": True, "server_version": envelope.get("serverVersion")}
 
-    @staticmethod
-    def normalize_song_ids(song_ids: Sequence[str]) -> list[str]:
-        if isinstance(song_ids, (str, bytes)):
-            raise ValueError("Song IDs must be a sequence.")
-        result: list[str] = []
-        seen: set[str] = set()
-        for value in song_ids:
-            if not isinstance(value, str) or not value.strip() or len(value) > 255:
-                raise ValueError("Song IDs must be non-empty strings.")
-            value = value.strip()
-            if value not in seen:
-                seen.add(value)
-                result.append(value)
-        return result
-
-    async def _change_starred(
-        self,
-        action: str,
-        song_ids: Sequence[str],
-        *,
-        batch_size: int | None = None,
-        progress=None,
-    ) -> dict[str, int]:
-        ids = self.normalize_song_ids(song_ids)
-        size = batch_size or int(
-            getattr(self.settings, "navidrome_love_batch_size", 100)
-        )
-        if not 1 <= size <= 500:
-            raise ValueError("Batch size must be between 1 and 500.")
-        total_batches = (len(ids) + size - 1) // size
-        processed = 0
-        for number, offset in enumerate(range(0, len(ids), size), 1):
-            batch = ids[offset : offset + size]
-            await self._request(action, extra_params={"id": batch})
-            processed += len(batch)
-            if progress:
-                result = progress(number, total_batches, processed, len(ids))
-                if hasattr(result, "__await__"):
-                    await result
-        return {
-            "total_tracks": len(ids),
-            "processed_tracks": processed,
-            "total_batches": total_batches,
-        }
-
-    async def star_song_ids(
-        self, song_ids: Sequence[str], *, batch_size: int | None = None, progress=None
-    ):
-        return await self._change_starred(
-            "star", song_ids, batch_size=batch_size, progress=progress
-        )
-
-    async def unstar_song_ids(
-        self, song_ids: Sequence[str], *, batch_size: int | None = None, progress=None
-    ):
-        return await self._change_starred(
-            "unstar", song_ids, batch_size=batch_size, progress=progress
-        )
-
     async def replace_playlist(
         self,
         *,
