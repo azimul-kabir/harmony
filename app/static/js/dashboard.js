@@ -211,22 +211,6 @@ function renderQueueHealth(health) {
     }
 }
 
-function renderAlbumInsight(id, album, detail) {
-    const element = document.getElementById(id);
-    if (!element) return;
-    const title = element.querySelector("strong");
-    const subtitle = element.querySelector("small");
-    if (!album) {
-        element.href = "/library";
-        title.textContent = "No album data";
-        subtitle.textContent = "—";
-        return;
-    }
-    element.href = `/library?album=${encodeURIComponent(album.name)}`;
-    title.textContent = album.name;
-    subtitle.textContent = detail(album);
-}
-
 function renderDashboard(snapshot) {
     if (!snapshot) return;
     const kpis = snapshot.kpis || {};
@@ -256,14 +240,6 @@ function renderDashboard(snapshot) {
     setText("health-suggestions", Number(health.pending_suggestions || 0).toLocaleString());
     const artworkLink = document.getElementById("health-artwork-link");
     if (artworkLink) artworkLink.href = "/library?missing_artwork=true";
-    const analytics = snapshot.analytics || {};
-    setText("insight-recently-added", Number(analytics.recently_added || 0).toLocaleString());
-    setText("insight-genres", Number(analytics.genres || 0).toLocaleString());
-    setText("insight-bitrate", analytics.average_bitrate ? `${Math.round(analytics.average_bitrate / 1000)} kbps` : "—");
-    setText("insight-duration", analytics.average_duration ? formatDuration(analytics.average_duration) : "—");
-    renderAlbumInsight("insight-largest-album", analytics.largest_album, (album) => `${Number(album.song_count || 0).toLocaleString()} songs`);
-    renderAlbumInsight("insight-newest-album", analytics.newest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
-    renderAlbumInsight("insight-oldest-album", analytics.oldest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
     renderMaintenance(snapshot.maintenance || []);
     renderCollections(snapshot.collections || []);
 }

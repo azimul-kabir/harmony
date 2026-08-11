@@ -302,18 +302,6 @@ def get_dashboard_snapshot(db) -> dict:
             "pending_suggestions": int(suggestions_pending),
         },
         "attention": attention,
-        # Keep richer dashboard insights owned by LibraryAnalyticsService.  The
-        # dashboard must not introduce its own filesystem access or grouping
-        # queries for facts that other Library consumers need.
-        "analytics": {
-            "genres": int(analytics["genres"] or 0),
-            "average_bitrate": int(analytics["average_bitrate"] or 0),
-            "average_duration": float(analytics["average_duration"] or 0),
-            "recently_added": int(analytics["recently_added"] or 0),
-            "largest_album": analytics["largest_album"],
-            "newest_album": analytics["newest_album"],
-            "oldest_album": analytics["oldest_album"],
-        },
         "maintenance": [
             {
                 "id": task.id,

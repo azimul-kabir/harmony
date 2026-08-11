@@ -18,7 +18,6 @@ from app.services.library_filters import (
     apply_song_sort,
 )
 from app.services.collections import collection_engine
-from app.services.library_analytics import library_analytics
 from app.services.duplicate_detector import TIERS, duplicate_detector
 from app.services.library_bulk import create_bulk_task
 from app.services.library_catalog import (
@@ -53,11 +52,6 @@ class DuplicateResolutionRequest(BaseModel):
     confirmation_token: str = Field(min_length=64, max_length=64)
     confirm_delete: bool = False
     initiated_by: str | None = Field(default=None, max_length=120)
-
-
-@router.get("/analytics", summary="Get Library analytics")
-def get_library_analytics(db: Session = Depends(get_db)):
-    return library_analytics.calculate(db)
 
 
 @router.get("/duplicates", summary="List explainable duplicate candidate groups")

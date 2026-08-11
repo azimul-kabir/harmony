@@ -315,33 +315,7 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
             assert attention[f"{severity}_count"] == sum(
                 item["count"] for item in attention["items"] if item["severity"] == severity
             )
-        assert snapshot["analytics"] == {
-            "genres": 1,
-            "average_bitrate": 320000,
-            "average_duration": 245.0,
-            "recently_added": 1,
-            "largest_album": {
-                "name": "Album",
-                "artist": "Artist",
-                "song_count": 1,
-                "storage_bytes": 0,
-                "year": None,
-            },
-            "newest_album": {
-                "name": "Album",
-                "artist": "Artist",
-                "song_count": 1,
-                "storage_bytes": 0,
-                "year": None,
-            },
-            "oldest_album": {
-                "name": "Album",
-                "artist": "Artist",
-                "song_count": 1,
-                "storage_bytes": 0,
-                "year": None,
-            },
-        }
+        assert "analytics" not in snapshot
         assert snapshot["maintenance"] == [
             {
                 "id": 1,

@@ -1077,32 +1077,10 @@ Custom Rules
 Library Analytics use available records in the Library Index exclusively.
 They never inspect files, parse tags, or walk the filesystem.
 
-`LibraryAnalyticsService` returns one reusable structured snapshot. A single
-aggregate query calculates Songs, Artists, Genres, Storage Used, Average
-Bitrate, Average Duration, and Recently Added. Album count and the three album
-insights use grouped SQL subqueries with indexed ordering and `LIMIT 1`; Song
-rows are never materialized in application memory.
-
-Definitions:
-
-- Albums count distinct non-empty album/album-artist groups.
-- Storage Used is the sum of indexed file sizes.
-- Average Bitrate and Average Duration ignore unknown values.
-- Largest Album is the album with the most available Songs, using storage and
-  name as stable tie-breakers.
-- Newest Album and Oldest Album use indexed release year and ignore albums with
-  no year.
-- Recently Added is the rolling seven-day count shared with Smart Collections.
-
-`GET /api/library/analytics` exposes the analytics snapshot for dashboards and
-future integrations. The Library page loads it independently from song/filter
-queries and refreshes it after rescans and Library watcher events. Analytics
-therefore remain global when a user narrows the current Library view.
-
-The Dashboard's compact snapshot reuses these analytics under its `analytics`
-member for recently-added, genre, bitrate, duration, and album-insight cards.
-It does not duplicate aggregate queries or access the filesystem; the SSE
-stream only adds transient queue, worker, task, and activity state.
+`LibraryAnalyticsService` is limited to the operational summary shared by
+Library Health and the Dashboard: available songs, albums, artists, and indexed
+storage. The public analytics endpoint and album/quality insight cards are not
+part of the v3 surface.
 
 The same Dashboard snapshot includes at most three recent terminal Library
 Maintenance or Library Bulk jobs. These are durable task summaries without

@@ -26,6 +26,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   playlist synchronization remain available.
 - Removed direct Navidrome playlist mutation and catalog-matching logic.
   Playlist delivery now uses the existing M3U export and scan workflow only.
+- Removed the dedicated Library analytics API and album/quality insight cards.
+  Operational song, album, artist, and storage totals remain for health views.
 
 ## [v2.1.0] - 2026-08-08
 

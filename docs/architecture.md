@@ -32,7 +32,7 @@ Spotify / YouTube Music / MusicBrainz
   attempt whose sole audio output must pass embedded identity validation before
   import; no text-search substitute path exists.
 - **Library:** the persistent Song index is the query boundary for browsing,
-  search, collections, analytics, health, metadata, artwork, and bulk work.
+  search, collections, health, metadata, artwork, and bulk work.
 - **Playlists:** Harmony stores source order, exports atomic M3Us, and can
   reconcile stable Navidrome song/playlist IDs directly.
 - **Automation:** per-source schedules use the same durable services as

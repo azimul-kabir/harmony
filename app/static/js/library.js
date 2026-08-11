@@ -25,7 +25,6 @@ const libraryState = {
     artists: [],
     collections: [],
     filterOptions: null,
-    analytics: null,
     filteredSongs: [],
     filteredAlbums: [],
     filteredArtists: [],
@@ -175,52 +174,12 @@ async function submitDuplicateResolution(preview, target) {
     target.textContent = task.status === "completed"
         ? "Duplicate resolution completed. Removed files remain as missing Library records."
         : `Duplicate resolution ${task.status.replaceAll("_", " ")}. Review the Library task for details.`;
-    await Promise.all([loadDuplicateCandidates(), loadLibraryData({preserveState: true}), loadAnalytics()]);
+    await Promise.all([loadDuplicateCandidates(), loadLibraryData({preserveState: true})]);
 }
 
 function openDuplicateReview() {
     document.getElementById("duplicate-review-dialog").showModal();
     loadDuplicateCandidates();
-}
-
-async function loadAnalytics() {
-    try {
-        libraryState.analytics = await fetchJson("/api/library/analytics");
-        renderAnalytics(libraryState.analytics);
-    } catch (error) {
-        console.error("Library analytics error:", error);
-        document.getElementById("analytics-updated").textContent = "Analytics unavailable";
-    }
-}
-
-function renderAnalytics(analytics) {
-    const values = {
-        songs: Number(analytics.songs || 0).toLocaleString(),
-        albums: Number(analytics.albums || 0).toLocaleString(),
-        artists: Number(analytics.artists || 0).toLocaleString(),
-        genres: Number(analytics.genres || 0).toLocaleString(),
-        storage: formatBytes(analytics.storage_bytes),
-        bitrate: formatBitrate(analytics.average_bitrate),
-        duration: formatDuration(analytics.average_duration),
-        recent: Number(analytics.recently_added || 0).toLocaleString(),
-    };
-    Object.entries(values).forEach(([key, value]) => {
-        document.getElementById(`analytics-${key}`).textContent = value;
-    });
-    renderAlbumInsight("largest", analytics.largest_album, (album) =>
-        `${album.artist} · ${pluralize(album.song_count, "song")} · ${formatBytes(album.storage_bytes)}`);
-    renderAlbumInsight("newest", analytics.newest_album, (album) =>
-        `${album.artist} · ${album.year || "Year unknown"}`);
-    renderAlbumInsight("oldest", analytics.oldest_album, (album) =>
-        `${album.artist} · ${album.year || "Year unknown"}`);
-    document.getElementById("analytics-updated").textContent = "Live from the Library Index";
-}
-
-function renderAlbumInsight(key, album, detail) {
-    document.getElementById(`analytics-${key}-name`).textContent = album?.name || "—";
-    document.getElementById(`analytics-${key}-detail`).textContent = album
-        ? detail(album)
-        : "No album data";
 }
 
 function formatBytes(bytes) {
@@ -1301,7 +1260,6 @@ async function pollBulkTask() {
         if (["completed", "failed", "cancelled"].includes(task.status)) {
             libraryState.selectedSongs.clear();
             await loadLibraryData({ preserveState: true });
-            await loadAnalytics();
             return;
         }
         libraryState.bulkPollTimer = setTimeout(pollBulkTask, 700);
@@ -1466,7 +1424,6 @@ document.getElementById("btn-rescan").addEventListener("click", async (event) =>
         const response = await fetch("/api/library/rescan", { method: "POST" });
         if (!response.ok) throw new Error("Rescan failed");
         await loadLibraryData({ preserveState: true });
-        await loadAnalytics();
     } catch (error) {
         document.getElementById("library-error").textContent = "The library rescan failed. Check Harmony logs for details.";
         document.getElementById("library-error").hidden = false;
@@ -1483,7 +1440,6 @@ function connectLibraryEvents() {
         events.addEventListener(type, () => {
             clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => loadLibraryData({ preserveState: true }), 500);
-            setTimeout(loadAnalytics, 550);
         });
     });
 }
@@ -1514,6 +1470,5 @@ document.addEventListener("DOMContentLoaded", () => {
     updateFilterControls();
     switchView(libraryState.view);
     loadLibraryData();
-    loadAnalytics();
     connectLibraryEvents();
 });
