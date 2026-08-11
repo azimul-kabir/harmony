@@ -146,6 +146,44 @@ def test_loose_fallback_still_rejects_unrelated_title_from_same_artist(track):
     assert error.value.reason_code == "fallback_match_unavailable"
 
 
+def test_multiple_fallback_searches_select_highest_scoring_candidate(
+    client, track, tmp_path, monkeypatch
+):
+    track.album = "Test Album"
+    track.isrc = "USABC1234567"
+    calls = []
+
+    def run(args, timeout):
+        calls.append(args)
+        directory = output_dir(args)
+        query_type = directory.name
+        if query_type != "spotify_url":
+            (directory / f"{query_type}.mp3").write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    identities = {
+        "isrc_search": AudioIdentity("Test Title Live", "Test Artist", 188),
+        "album_search": AudioIdentity("Test Title Acoustic", "Test Artist", 184),
+        "metadata_search": AudioIdentity("Test Title", "Test Artist", 180),
+    }
+    monkeypatch.setattr(client, "_run", run)
+    monkeypatch.setattr(
+        client,
+        "_read_audio_identity",
+        lambda path: identities[path.parent.name],
+    )
+
+    selected = client.download(track, tmp_path)
+
+    assert selected.name == "metadata_search.mp3"
+    assert [call[0] for call in calls] == [
+        track.spotify_url,
+        track.isrc,
+        "Test Artist - Test Title Test Album audio",
+        "Test Artist - Test Title audio",
+    ]
+
+
 def test_unreadable_audio_is_a_typed_identity_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "app.downloaders.spotdl.MutagenFile",

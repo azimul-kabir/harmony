@@ -30,6 +30,13 @@ class AudioIdentity:
     duration: float | None
 
 
+@dataclass(frozen=True, slots=True)
+class FallbackCandidate:
+    path: Path
+    score: float
+    query_type: str
+
+
 _VERSION_MARKERS = (
     "instrumental", "karaoke", "live", "remix", "sped up", "slowed",
     "acoustic", "demo", "radio edit", "remaster", "cover", "tribute",
@@ -146,6 +153,17 @@ def validate_track_identity(
                 technical_detail="duration_mismatch",
             )
 
+
+def fallback_candidate_score(requested: Track, candidate: AudioIdentity) -> float:
+    """Rank only candidates that already passed controlled fallback validation."""
+    title_score = _title_similarity(requested.title, candidate.title)
+    marker_score = 1.0 if _markers(requested.title) == _markers(candidate.title) else 0.7
+    duration_score = 0.5
+    if requested.duration and candidate.duration:
+        requested_duration = requested.duration / 1000 if requested.duration > candidate.duration * 100 else requested.duration
+        duration_score = max(0.0, 1.0 - abs(requested_duration - candidate.duration) / max(requested_duration, 1.0))
+    return round(title_score * 0.65 + duration_score * 0.25 + marker_score * 0.10, 4)
+
 class SpotDLClient:
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -230,9 +248,26 @@ class SpotDLClient:
             # lookup cannot resolve an audio provider result.  A text lookup is
             # safe as long as the produced file is subjected to the same strict
             # metadata validation as the URL result.
-            attempts.append(
-                ("metadata_search", f"{track.artist} - {track.title} audio", True)
+            fallback_queries = []
+            if track.isrc:
+                fallback_queries.append(("isrc_search", track.isrc))
+            if track.album:
+                fallback_queries.append(
+                    (
+                        "album_search",
+                        f"{track.artist} - {track.title} {track.album} audio",
+                    )
+                )
+            fallback_queries.append(
+                ("metadata_search", f"{track.artist} - {track.title} audio")
             )
+            seen_queries = set()
+            for query_type, query in fallback_queries:
+                normalized_query = query.casefold().strip()
+                if normalized_query in seen_queries:
+                    continue
+                seen_queries.add(normalized_query)
+                attempts.append((query_type, query, True))
         if not attempts:
             raise DownloadFailed(
                 "exact_match_unavailable", "Exact match unavailable", "download",
@@ -242,6 +277,7 @@ class SpotDLClient:
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
             failures: list[DownloadFailed] = []
+            fallback_candidates: list[FallbackCandidate] = []
             for query_type, query, loose_match in attempts:
                 attempt_started = time.monotonic()
                 attempt_path = temp_path / query_type
@@ -303,16 +339,25 @@ class SpotDLClient:
                         )
 
                     downloaded_file = files[0]
+                    identity = self._read_audio_identity(downloaded_file)
                     validate_track_identity(
                         track,
-                        self._read_audio_identity(downloaded_file),
+                        identity,
                         strict=not loose_match,
                     )
                     reason_category = "success"
-                    final_path = output_dir / downloaded_file.name
-                    final_path.unlink(missing_ok=True)
-                    shutil.move(str(downloaded_file), str(final_path))
-                    return final_path
+                    if not loose_match:
+                        final_path = output_dir / downloaded_file.name
+                        final_path.unlink(missing_ok=True)
+                        shutil.move(str(downloaded_file), str(final_path))
+                        return final_path
+                    fallback_candidates.append(
+                        FallbackCandidate(
+                            path=downloaded_file,
+                            score=fallback_candidate_score(track, identity),
+                            query_type=query_type,
+                        )
+                    )
                 except DownloadFailed as exc:
                     reason_category = exc.reason_code
                     diagnostic = self._bounded_diagnostic(
@@ -335,6 +380,21 @@ class SpotDLClient:
                                       reason_category, diagnostic,
                                       time.monotonic() - attempt_started)
 
+            if fallback_candidates:
+                selected = max(
+                    fallback_candidates,
+                    key=lambda candidate: (candidate.score, candidate.query_type),
+                )
+                final_path = output_dir / selected.path.name
+                final_path.unlink(missing_ok=True)
+                shutil.move(str(selected.path), str(final_path))
+                logger.info(
+                    "Selected fallback candidate job={} query_type={} score={}",
+                    job_id,
+                    selected.query_type,
+                    selected.score,
+                )
+                return final_path
             raise failures[-1] from None
 
     _AUDIO_EXTENSIONS = frozenset(

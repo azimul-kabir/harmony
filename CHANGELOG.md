@@ -70,6 +70,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Changed
 
+- Automatic fallback now evaluates targeted ISRC, album-aware, and metadata
+  searches and selects the strongest safe candidate instead of the first one.
 - Spotify-linked downloads now try the exact recording first, then a controlled
   fallback version with the same primary artist, a strongly related title, and
   a bounded duration difference.
