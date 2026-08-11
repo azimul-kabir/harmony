@@ -75,6 +75,22 @@ def test_song_response_marks_recently_added_tracks():
     assert _serialize_song(song)["recently_added"] is True
 
 
+def test_song_response_does_not_expose_legacy_lyrics_columns():
+    song = Song(
+        path="/music/legacy-lyrics.mp3",
+        filename="legacy-lyrics.mp3",
+        lyrics="Legacy text",
+        lyrics_source="embedded",
+        lyrics_synced=False,
+    )
+
+    response = _serialize_song(song)
+
+    assert "has_lyrics" not in response
+    assert "lyrics_source" not in response
+    assert "lyrics_synced" not in response
+
+
 def test_song_response_falls_back_when_a_legacy_song_has_no_created_at():
     indexed_at = datetime.now(UTC).replace(tzinfo=None)
     song = Song(

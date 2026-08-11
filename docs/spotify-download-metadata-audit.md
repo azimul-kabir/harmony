@@ -101,7 +101,7 @@ guarantee the value. Optional values are omitted when unavailable upstream.
 | Popularity | `POPM` when nonzero | not written | not written | Not imported |
 | Explicit flag | not written | `rtng` | not written | Not imported |
 | Cover artwork | `APIC` | `covr` | FLAC picture / OGG picture block | Status is indexed; bytes are not compared with queued cover |
-| Lyrics | `USLT`/`SYLT` | `©lyr` | `lyrics` | Extracted and indexed when readable |
+| Lyrics | `USLT`/`SYLT` | `©lyr` | `lyrics` | Not imported into Harmony |
 | Spotify track ID | **not embedded** | **not embedded** | **not embedded** | Preserved through the job/source-link database relation |
 | Spotify album ID | **not embedded** | **not embedded** | **not embedded** | Job has a field, but playlist mapping drops it |
 
@@ -126,7 +126,7 @@ become the values used for the destination path and library row.
 
 **Recommendation:** after identity validation and before import, write canonical
 job metadata with an atomic backup/restore strategy, then re-read and verify it.
-Keep provider-only extras such as lyrics unless a canonical replacement exists.
+Preserve unrelated embedded tags when writing canonical download metadata.
 Fail with a typed `tagging_failed` outcome when required identity/path fields
 cannot be verified.
 
@@ -207,7 +207,7 @@ the final front cover hash.
 3. **Model completeness:** add release date and totals; retain album/artist IDs
    in album and playlist resolution; add migrations where persistence changes.
 4. **Canonical download tagger:** write queued metadata atomically, preserve
-   lyrics/provider extras, validate artwork, and verify required fields.
+   unrelated provider tags, validate artwork, and verify required fields.
 5. **Pipeline integration:** run the tagger after audio identity validation and
    genre enrichment but before destination calculation/import; expose typed,
    non-sensitive failures in download history.

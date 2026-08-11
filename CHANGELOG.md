@@ -13,6 +13,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed the developer-facing metadata provider console and its raw test
   search and lookup endpoints. Read-only provider capability and status APIs
   remain available to supported Library workflows.
+- Removed lyrics extraction, indexing, sidecar watching, Library UI, and API
+  exposure. Historical database columns and migrations remain in place so
+  existing installations can upgrade safely.
 
 ## [v2.1.0] - 2026-08-08
 

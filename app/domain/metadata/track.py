@@ -25,6 +25,4 @@ class TrackMetadata:
 
     genre: str | None = None
 
-    lyrics: str | None = None
-
     cover_url: str | None = None
