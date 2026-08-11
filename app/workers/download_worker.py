@@ -24,6 +24,7 @@ from app.domain.track import Track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
 from app.services import settings_service
+from app.providers.download_sources import get_source
 from app.services.download_telemetry import heartbeat_ticker, update_telemetry, utcnow_naive
 from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
@@ -132,6 +133,23 @@ def process_job(
     ticker = heartbeat_ticker(job.id)
     ticker.__enter__()
     try:
+        acquisition_provider = job.source_provider or "spotify"
+        acquisition_item_id = job.source_item_id
+        acquisition_url = job.source_url
+        if job.manual_fallback_url:
+            fallback_source = get_source("youtube_music")
+            detected = fallback_source.detect_url(job.manual_fallback_url)
+            if detected is None or detected[0] != "track":
+                raise DownloadFailed(
+                    "manual_fallback_invalid",
+                    "The approved fallback track is no longer valid.",
+                    "preflight",
+                    retryable=False,
+                )
+            acquisition_provider = "youtube_music"
+            acquisition_item_id = detected[1]
+            acquisition_url = job.manual_fallback_url
+
         # Build the Track domain object, carrying the cover_url and extended metadata forward
         track = Track(
             title=job.title,
@@ -145,9 +163,9 @@ def process_job(
             cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
             spotify_track_id=job.spotify_track_id, 
             spotify_url=job.source_url, 
-            source_provider=job.source_provider or "spotify",
-            source_item_id=job.source_item_id,
-            source_url=job.source_url,
+            source_provider=acquisition_provider,
+            source_item_id=acquisition_item_id,
+            source_url=acquisition_url,
             genre=job.genre,
             duration=job.duration,
             spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
@@ -205,9 +223,16 @@ def process_job(
             link_song_source(
                 db,
                 indexed_song,
-                job.source_provider or "spotify",
-                job.source_item_id or job.spotify_track_id,
+                acquisition_provider,
+                acquisition_item_id,
             )
+            if job.manual_fallback_url:
+                link_song_source(
+                    db,
+                    indexed_song,
+                    job.source_provider or "spotify",
+                    job.source_item_id or job.spotify_track_id,
+                )
         job.error = None
         db.commit()
         

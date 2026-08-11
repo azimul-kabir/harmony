@@ -44,6 +44,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Added
 
+- Added an explicit manual fallback control for failed matches. A user-approved
+  YouTube track is queued separately while original Spotify history and playlist
+  identity remain intact.
 - Added retry countdown and attempt information to waiting Downloads, plus
   conservative seven-day cleanup for unprotected staging files.
 - Added aggregate failure-reason counts to the Downloads screen so provider

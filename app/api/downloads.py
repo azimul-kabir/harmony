@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.api.schemas.download import DownloadBulkRequest, DownloadRequest
+from app.api.schemas.download import DownloadBulkRequest, DownloadRequest, ManualFallbackRequest
 from app.database.models import DownloadJob
 from app.database.session import get_db, SessionLocal
 from app.exceptions.download import TrackAlreadyExistsError
@@ -31,6 +31,7 @@ from app.core.logging import logger
 from app.services.download_processes import download_processes
 from dataclasses import asdict
 from app.services import settings_service
+from app.services.manual_download_fallback import queue_manual_fallback
 
 router = APIRouter(
     prefix="/api/downloads",
@@ -178,6 +179,27 @@ def bulk_downloads(request: DownloadBulkRequest, db: Session = Depends(get_db)):
         return run_bulk_action(db, request.action, request.download_ids)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.post("/{job_id}/manual-fallback", status_code=201)
+def manual_download_fallback(
+    job_id: int,
+    request: ManualFallbackRequest,
+    db: Session = Depends(get_db),
+):
+    """Queue one explicitly approved YouTube track for a failed match."""
+    if not _youtube_music_enabled(db):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "provider_disabled", "message": "YouTube Music downloads are disabled in Settings."},
+        )
+    try:
+        job = queue_manual_fallback(db, job_id=job_id, url=request.url)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    return {"status": "queued", "job_id": job.id}
 
 
 @router.get("/snapshot")

@@ -259,6 +259,14 @@ days unless they belong to active work or a recently failed resumable job.
 The Downloads snapshot also includes aggregate-only `failure_reasons` entries
 with a structured code, display label, and count for current failed jobs.
 
+### `POST /api/downloads/{job_id}/manual-fallback`
+
+Accepts `{ "url": "https://music.youtube.com/watch?v=..." }` only for a failed
+matching or availability outcome. The URL must identify one track. Harmony
+creates a separate queued job, preserving the failed history row and the
+original Spotify metadata and playlist identity; the approved URL controls
+audio acquisition only.
+
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
 
 Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.

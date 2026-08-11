@@ -490,6 +490,7 @@ class DownloadJob(Base):
     )
     technical_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    manual_fallback_url: Mapped[str | None] = mapped_column(String, nullable=True)
     # Live telemetry is intentionally provider-neutral.  Providers may leave
     # byte-oriented values null when they cannot report them reliably.
     pipeline_stage: Mapped[str | None] = mapped_column(String(40), nullable=True)
