@@ -14,12 +14,11 @@ from app.database.models import Playlist, SyncSource, Task
 from app.database.session import SessionLocal
 from app.domain.task import TaskType
 from app.services.navidrome import NavidromeClient, NavidromeError
-from app.services.navidrome_direct import NavidromeDirectPlaylistSync
 from app.services.playlist_manager import export_m3u
 
 
 class NavidromePlaylistReimportCoordinator:
-    """Reconcile completed playlist syncs through the API or M3U fallback."""
+    """Import completed playlist syncs through Harmony's M3U files."""
 
     def __init__(
         self,
@@ -137,40 +136,6 @@ class NavidromePlaylistReimportCoordinator:
         finally:
             db.close()
 
-    async def _direct_reconcile(
-        self,
-        client: NavidromeClient,
-        playlist_ids: Iterable[int],
-    ) -> bool:
-        if not getattr(
-            self.settings, "navidrome_direct_playlist_sync_enabled", True
-        ):
-            return False
-        direct = NavidromeDirectPlaylistSync(
-            settings=self.settings,
-            client=client,
-            session_factory=self.session_factory,
-        )
-        all_succeeded = True
-        for playlist_id in playlist_ids:
-            try:
-                result = await direct.reconcile(playlist_id)
-                logger.info(
-                    "Directly synchronized Navidrome playlist #{} with {} "
-                    "ordered track(s).",
-                    result.playlist_id,
-                    result.track_count,
-                )
-            except Exception as error:
-                all_succeeded = False
-                logger.warning(
-                    "Direct Navidrome sync failed for playlist #{}; "
-                    "using M3U import fallback: {}",
-                    playlist_id,
-                    error,
-                )
-        return all_succeeded
-
     async def _wait_until_idle(self, client: NavidromeClient) -> dict:
         deadline = time.monotonic() + max(
             1.0,
@@ -243,16 +208,9 @@ class NavidromePlaylistReimportCoordinator:
             )
             await self._incremental_scan(client)
             rewritten = self._rewrite_playlists(playlist_ids)
-            if await self._direct_reconcile(client, playlist_ids):
-                logger.info(
-                    "Direct Navidrome playlist reconciliation completed for "
-                    "{} playlist(s); no playlist import scan was needed.",
-                    rewritten,
-                )
-                return True
             logger.info(
                 "Re-exported {} M3U playlist(s) after media indexing; "
-                "starting fallback playlist import scan.",
+                "starting playlist import scan.",
                 rewritten,
             )
             await self._incremental_scan(client)

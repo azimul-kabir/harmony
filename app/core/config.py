@@ -73,9 +73,6 @@ class Settings(BaseSettings):
     navidrome_password: str = ""
     navidrome_timeout_seconds: float = 5.0
     navidrome_max_retries: int = 2
-    navidrome_direct_playlist_sync_enabled: bool = True
-    navidrome_direct_search_limit: int = 25
-    navidrome_direct_duration_tolerance_seconds: float = 5.0
     navidrome_playlist_reimport_enabled: bool = True
     navidrome_playlist_reimport_debounce_seconds: float = 10.0
     navidrome_playlist_reimport_poll_seconds: float = 2.0

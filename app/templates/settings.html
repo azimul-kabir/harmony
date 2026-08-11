@@ -222,13 +222,10 @@
             <span id="navidrome-test-result" role="status" aria-live="polite"></span>
             <form class="settings-form" data-category="navidrome">
                 <div class="settings-toggle-list">
-                    <label><input type="checkbox" name="navidrome_direct_playlist_sync_enabled" {% if navidrome.navidrome_direct_playlist_sync_enabled %}checked{% endif %}> Direct playlist sync</label>
                     <label><input type="checkbox" name="navidrome_playlist_reimport_enabled" {% if navidrome.navidrome_playlist_reimport_enabled %}checked{% endif %}> Scan and reconcile playlists after downloads</label>
                 </div>
                 <div class="settings-field-grid">
                     <label>Request timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="navidrome_timeout_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_timeout_seconds }}"></label>
-                    <label>Direct search limit<input type="number" min="1" max="500" name="navidrome_direct_search_limit" class="form-control responsive-input-small" value="{{ navidrome.navidrome_direct_search_limit }}"></label>
-                    <label>Duration tolerance (seconds)<input type="number" min="0" max="60" step="0.5" name="navidrome_direct_duration_tolerance_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_direct_duration_tolerance_seconds }}"></label>
                     <label>Reimport debounce (seconds)<input type="number" min="0" max="300" step="0.5" name="navidrome_playlist_reimport_debounce_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_debounce_seconds }}"></label>
                     <label>Scan poll interval (seconds)<input type="number" min="0.25" max="60" step="0.25" name="navidrome_playlist_reimport_poll_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_poll_seconds }}"></label>
                     <label>Scan timeout (seconds)<input type="number" min="10" max="3600" step="1" name="navidrome_playlist_reimport_scan_timeout_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_scan_timeout_seconds }}"></label>

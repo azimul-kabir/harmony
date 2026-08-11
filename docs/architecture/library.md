@@ -1235,24 +1235,9 @@ container (for example `http://navidrome:4533` on a shared Compose network).
 Credentials stay server-side.
 
 Completed playlist syncs are batched for a configurable debounce window.
-Harmony waits for any active scan, requests one incremental scan to index newly
-downloaded audio, and rewrites the affected M3Us as portable backups. It then
-resolves each available local track, replaces the corresponding Navidrome
-playlist in source order, and reads it back to verify the exact ID sequence.
-Stable song and playlist IDs are cached in Harmony's database.
-
-Direct replacement is all-or-nothing. Harmony refuses ambiguous song matches,
-ambiguous same-name playlists, and read-only targets. Any direct API or
-verification failure is recorded on the playlist and triggers the previous
-incremental M3U-import scan automatically. A successful direct update therefore
-needs one media scan; fallback needs the second playlist-import scan. Neither
-path changes a successful download into a failure.
-
-Direct reconciliation is controlled by
-`NAVIDROME_DIRECT_PLAYLIST_SYNC_ENABLED`,
-`NAVIDROME_DIRECT_SEARCH_LIMIT`, and
-`NAVIDROME_DIRECT_DURATION_TOLERANCE_SECONDS`. The coordinator and fallback are
-controlled by
+Harmony waits for any active scan, requests an incremental scan to index newly
+downloaded audio, rewrites the affected M3Us, and requests a second scan so
+Navidrome imports those playlists. This background integration is controlled by
 `NAVIDROME_PLAYLIST_REIMPORT_ENABLED`,
 `NAVIDROME_PLAYLIST_REIMPORT_DEBOUNCE_SECONDS`,
 `NAVIDROME_PLAYLIST_REIMPORT_POLL_SECONDS`, and

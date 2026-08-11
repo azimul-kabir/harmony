@@ -56,15 +56,12 @@ DOWNLOAD_HOST_PATH=/volume1/music/incoming
 NAVIDROME_URL=http://navidrome:4533
 NAVIDROME_USERNAME=
 NAVIDROME_PASSWORD=
-NAVIDROME_DIRECT_PLAYLIST_SYNC_ENABLED=true
 ```
 
 The URL must be reachable from the Harmony container. Credentials stay
-server-side and use the Subsonic token flow. Direct sync resolves stable song
-IDs, replaces playlists in source order, verifies the result, and falls back to
-M3U import when direct reconciliation is unsafe. Search limits, duration
-tolerance, reimport debounce/poll intervals, and scan timeout can be adjusted
-under **Settings → Navidrome**.
+server-side and use the Subsonic token flow. Harmony exports M3U playlists and
+asks Navidrome to scan after completed playlist downloads. Reimport debounce,
+poll interval, and scan timeout can be adjusted under **Settings → Navidrome**.
 
 ## YouTube Music
 

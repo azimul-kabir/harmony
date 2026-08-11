@@ -11,7 +11,7 @@ def test_settings_page_exposes_editable_operational_settings_not_env_dump():
     assert 'data-category="metadata"' in response.text
     assert 'name="musicbrainz_timeout_seconds"' in response.text
     assert 'data-category="navidrome"' in response.text
-    assert 'name="navidrome_direct_playlist_sync_enabled"' in response.text
+    assert 'name="navidrome_playlist_reimport_enabled"' in response.text
     assert 'name="library_watcher_debounce_seconds"' in response.text
     assert 'id="settings-section-picker"' in response.text
     assert "min-height: 56px" in response.text
@@ -22,19 +22,19 @@ def test_settings_page_exposes_editable_operational_settings_not_env_dump():
 
 def test_runtime_setting_update_is_applied_and_persisted(monkeypatch):
     runtime = get_settings()
-    monkeypatch.setattr(runtime, "navidrome_direct_search_limit", 25)
+    monkeypatch.setattr(runtime, "navidrome_playlist_reimport_debounce_seconds", 10)
     client = TestClient(app)
     client.get("/settings")
 
     response = client.put(
         "/api/settings/navidrome",
-        json={"navidrome_direct_search_limit": 40},
+        json={"navidrome_playlist_reimport_debounce_seconds": 40},
     )
 
     assert response.status_code == 200
-    assert runtime.navidrome_direct_search_limit == 40
+    assert runtime.navidrome_playlist_reimport_debounce_seconds == 40
     assert client.get("/api/settings/navidrome").json()[
-        "navidrome_direct_search_limit"
+        "navidrome_playlist_reimport_debounce_seconds"
     ] == 40
 
 
@@ -44,8 +44,8 @@ def test_runtime_setting_update_rejects_out_of_range_value():
 
     response = client.put(
         "/api/settings/navidrome",
-        json={"navidrome_direct_search_limit": 0},
+        json={"navidrome_playlist_reimport_poll_seconds": 0},
     )
 
     assert response.status_code == 422
-    assert "must be at least 1" in response.json()["detail"]
+    assert "must be at least 0.25" in response.json()["detail"]

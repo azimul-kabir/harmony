@@ -24,6 +24,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed periodic Navidrome catalog comparison and automatic drift
   reconciliation. Explicit connection status, incremental/full scans, and
   playlist synchronization remain available.
+- Removed direct Navidrome playlist mutation and catalog-matching logic.
+  Playlist delivery now uses the existing M3U export and scan workflow only.
 
 ## [v2.1.0] - 2026-08-08
 
