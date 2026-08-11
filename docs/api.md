@@ -162,13 +162,6 @@ Metadata Intelligence uses the same durable Task lifecycle for discovery and
 application work. The public discovery and application scope in v2.0.0 is
 Songs; requests never silently apply provider values.
 
-### Provider status
-
-- `GET /api/providers/capabilities` lists MusicBrainz and Spotify metadata
-  provider capabilities.
-- `GET /api/providers/status` reports provider availability and cache-aware
-  operational status.
-
 ### Health and suggestions
 
 - `GET /api/library/health/metadata/issues?status=open&included_only=true`

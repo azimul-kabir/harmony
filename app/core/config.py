@@ -77,14 +77,6 @@ class Settings(BaseSettings):
     navidrome_playlist_reimport_debounce_seconds: float = 10.0
     navidrome_playlist_reimport_poll_seconds: float = 2.0
     navidrome_playlist_reimport_scan_timeout_seconds: float = 900.0
-    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
-    musicbrainz_user_agent: str = "Harmony/2.1.0 (https://github.com/azimul-kabir/harmony)"
-    musicbrainz_timeout_seconds: float = 10.0
-    musicbrainz_max_retries: int = 3
-    musicbrainz_backoff_seconds: float = 0.5
-    musicbrainz_requests_per_second: float = 1.0
-    musicbrainz_cache_ttl_seconds: int = 86400
-    musicbrainz_max_concurrent_requests: int = 2
     cover_art_archive_base_url: str = "https://coverartarchive.org"
     cover_art_archive_timeout_seconds: float = 20.0
     cover_art_archive_max_bytes: int = 15 * 1024 * 1024

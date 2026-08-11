@@ -30,6 +30,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   Operational song, album, artist, and storage totals remain for health views.
 - Removed metadata discovery jobs, ranked provider candidates, selection APIs,
   and repair-discovery UI. Historical database tables remain upgradeable.
+- Removed the discovery-only provider registry, async provider clients, cache,
+  candidate models, confidence matcher, and provider diagnostics API.
 
 ## [v2.1.0] - 2026-08-08
 

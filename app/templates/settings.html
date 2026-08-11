@@ -197,12 +197,7 @@
         <div class="settings-section" id="tab-metadata" style="display: none;">
             <h2 style="margin-top: 0;">Metadata</h2>
             <form class="settings-form" data-category="metadata">
-                <h3>MusicBrainz</h3>
                 <div class="settings-field-grid">
-                    <label>Request timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="musicbrainz_timeout_seconds" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_timeout_seconds }}"></label>
-                    <label>Maximum retries<input type="number" min="0" max="10" name="musicbrainz_max_retries" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_max_retries }}"></label>
-                    <label>Cache TTL (seconds)<input type="number" min="0" max="2592000" name="musicbrainz_cache_ttl_seconds" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_cache_ttl_seconds }}"></label>
-                    <label>Concurrent requests<input type="number" min="1" max="10" name="musicbrainz_max_concurrent_requests" class="form-control responsive-input-small" value="{{ metadata.musicbrainz_max_concurrent_requests }}"></label>
                     <label>Cover art timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="cover_art_archive_timeout_seconds" class="form-control responsive-input-small" value="{{ metadata.cover_art_archive_timeout_seconds }}"></label>
                 </div>
                 <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>

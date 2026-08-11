@@ -9,7 +9,7 @@ def test_settings_page_exposes_editable_operational_settings_not_env_dump():
 
     assert response.status_code == 200
     assert 'data-category="metadata"' in response.text
-    assert 'name="musicbrainz_timeout_seconds"' in response.text
+    assert 'name="cover_art_archive_timeout_seconds"' in response.text
     assert 'data-category="navidrome"' in response.text
     assert 'name="navidrome_playlist_reimport_enabled"' in response.text
     assert 'name="library_watcher_debounce_seconds"' in response.text
@@ -18,6 +18,13 @@ def test_settings_page_exposes_editable_operational_settings_not_env_dump():
     assert "MUSICBRAINZ_BASE_URL" not in response.text
     assert "DATABASE_URL" not in response.text
     assert "NAVIDROME_PASSWORD" not in response.text
+
+
+def test_provider_diagnostics_api_is_not_part_of_v3_surface():
+    client = TestClient(app)
+
+    assert client.get("/api/providers/capabilities").status_code == 404
+    assert client.get("/api/providers/status").status_code == 404
 
 
 def test_runtime_setting_update_is_applied_and_persisted(monkeypatch):

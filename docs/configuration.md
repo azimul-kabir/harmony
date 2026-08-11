@@ -125,16 +125,13 @@ Rejected temporary output is removed. Harmony does not automatically delete
 previously imported Library files; incorrect historic files and associations
 must be reviewed and removed manually.
 
-## MusicBrainz and artwork
+## Artwork
 
-Set `MUSICBRAINZ_*` values to tune timeout, retry, request rate, cache TTL, and
-concurrency. Keep a descriptive `MUSICBRAINZ_USER_AGENT`. `COVER_ART_ARCHIVE_*`
-values control remote
-artwork fetch timeout and response size.
+`COVER_ART_ARCHIVE_*` values control remote artwork fetch timeout and response
+size for files that already contain a canonical MusicBrainz release ID.
 
-The defaults are conservative for public provider infrastructure. Changing
-provider settings never authorizes
-automatic canonical changes or file-tag writes.
+The defaults are conservative for public infrastructure. Fetching artwork
+never authorizes canonical metadata changes or file-tag writes.
 
 ## Optional Spotify genre enrichment
 

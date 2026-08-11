@@ -365,8 +365,8 @@ Current configurable settings include:
 - Appearance, date/time, and runtime behavior
 - System information
 
-MusicBrainz access can be tuned with the documented `MUSICBRAINZ_*` environment
-variables in `.env.example`.
+Cover Art Archive access can be tuned with the documented
+`COVER_ART_ARCHIVE_*` environment variables in `.env.example`.
 
 ---
 
