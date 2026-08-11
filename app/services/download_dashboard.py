@@ -40,6 +40,7 @@ def _job_columns():
                      DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at,
                      DownloadJob.reason_code, DownloadJob.reason_message, DownloadJob.failure_stage,
                      DownloadJob.provider, DownloadJob.retryable, DownloadJob.technical_detail,
+                     DownloadJob.attempt_count, DownloadJob.next_attempt_at,
                      DownloadJob.error, DownloadJob.error_message, DownloadJob.source_provider,
                      DownloadJob.pipeline_stage, DownloadJob.progress_percent,
                      DownloadJob.heartbeat_at, DownloadJob.worker_name,
@@ -180,7 +181,8 @@ def download_details(job: DownloadJob) -> dict:
             "progress": 100 if status == "completed" else job.progress_percent, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "finished_at": _timestamp(job.completed_at),
             "queue_wait_seconds": _duration_seconds(job.created_at, job.started_at),
-            "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at), "retry_count": 0,
+            "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at),
+            "retry_count": max(0, (job.attempt_count or 0) - 1),
             "can_cancel": status in ("queued", "running"), "can_retry": status == "failed" and bool(job.retryable),
             **outcome,
             "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]]}

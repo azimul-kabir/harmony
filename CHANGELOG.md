@@ -44,6 +44,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Added
 
+- Added bounded automatic recovery for transient download failures. Harmony now
+  persists provider attempts, delays retries without blocking workers, and
+  honors the existing Retry Failed Downloads setting.
+
 - Added a secure-by-default web login portal that protects the UI, API,
   interactive documentation, and event streams with signed HTTP-only sessions;
   health probes and login assets remain public for deployment checks.

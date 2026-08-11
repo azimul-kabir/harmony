@@ -482,6 +482,12 @@ class DownloadJob(Base):
     retryable: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("0")
     )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
     technical_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     # Live telemetry is intentionally provider-neutral.  Providers may leave

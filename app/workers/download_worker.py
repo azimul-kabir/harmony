@@ -1,6 +1,7 @@
 import time
 import threading
 import json
+from datetime import timedelta
 from pathlib import Path
 
 from sqlalchemy import select
@@ -21,7 +22,8 @@ from app.domain.task import TaskStatus, TaskType
 from app.domain.track import Track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
-from app.services.download_telemetry import heartbeat_ticker, update_telemetry
+from app.services import settings_service
+from app.services.download_telemetry import heartbeat_ticker, update_telemetry, utcnow_naive
 from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
@@ -36,6 +38,9 @@ from app.services.task_service import (
     set_current_item,
     start_task,
 )
+
+MAX_DOWNLOAD_ATTEMPTS = 3
+RETRY_DELAYS_SECONDS = (15, 60)
 
 def worker_loop() -> None:
     logger.info(
@@ -318,12 +323,56 @@ def _finish_with_outcome(db, job, status, outcome):
     db.refresh(job)
     if job.status == JobStatus.CANCELLED.value:
         return
+    if status == JobStatus.FAILED and _schedule_retry(db, job, outcome):
+        return
     _record_outcome(db, job, status, outcome.reason_code, outcome.message, outcome.stage, outcome.provider, outcome.retryable, outcome.technical_detail)
     update_status(db=db, job=job, status=status)
     if job.task is not None:
         set_current_item(db=db, task=job.task, item=None)
         {JobStatus.SKIPPED: increment_skipped, JobStatus.FAILED: increment_failed}.get(status, lambda **_: None)(db=db, task=job.task)
         _schedule_navidrome_reimport(job)
+
+
+def _schedule_retry(db, job, outcome) -> bool:
+    """Delay transient failures without blocking a download worker thread."""
+    downloads = settings_service.get_settings_by_category(db, "downloads")
+    enabled = bool(downloads.get("retry_failed", True))
+    if not enabled or not outcome.retryable or job.attempt_count >= MAX_DOWNLOAD_ATTEMPTS:
+        return False
+
+    attempt = max(1, job.attempt_count)
+    delay = RETRY_DELAYS_SECONDS[min(attempt - 1, len(RETRY_DELAYS_SECONDS) - 1)]
+    job.reason_code = outcome.reason_code
+    job.reason_message = outcome.message
+    job.failure_stage = outcome.stage
+    job.provider = outcome.provider
+    job.retryable = True
+    job.technical_detail = outcome.technical_detail
+    job.status = JobStatus.QUEUED.value
+    job.started_at = None
+    job.completed_at = None
+    job.next_attempt_at = utcnow_naive() + timedelta(seconds=delay)
+    job.pipeline_stage = "retry_wait"
+    job.progress_percent = None
+    job.heartbeat_at = utcnow_naive()
+    job.worker_name = None
+    job.bytes_downloaded = None
+    job.bytes_total = None
+    job.transfer_rate_bps = None
+    job.eta_seconds = None
+    if job.task is not None:
+        set_current_item(db=db, task=job.task, item=None)
+    db.commit()
+    logger.info(
+        "download_retry_scheduled download_id={} attempt={} max_attempts={} "
+        "delay_seconds={} reason_code={}",
+        job.id,
+        attempt,
+        MAX_DOWNLOAD_ATTEMPTS,
+        delay,
+        outcome.reason_code,
+    )
+    return True
 
 
 def _schedule_navidrome_reimport(job: DownloadJob) -> None:

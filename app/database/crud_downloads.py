@@ -116,6 +116,10 @@ def claim_next_job(
                 .where(
                     DownloadJob.status == JobStatus.QUEUED.value,
                     or_(
+                        DownloadJob.next_attempt_at.is_(None),
+                        DownloadJob.next_attempt_at <= utcnow_naive(),
+                    ),
+                    or_(
                         Task.id.is_(None),
                         ~Task.status.in_((TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value))
                     )
@@ -129,6 +133,8 @@ def claim_next_job(
                 return None
 
             job.status = JobStatus.RUNNING.value
+            job.attempt_count += 1
+            job.next_attempt_at = None
             job.started_at = datetime.now(UTC)
             job.heartbeat_at = utcnow_naive()
             job.pipeline_stage = "claimed"
@@ -192,6 +198,7 @@ def recover_running_jobs(
 
     for job in running_jobs:
         job.status = JobStatus.QUEUED.value
+        job.next_attempt_at = None
         job.started_at = None
         job.heartbeat_at = None
         job.pipeline_stage = None
