@@ -169,29 +169,13 @@ Songs; requests never silently apply provider values.
 - `GET /api/providers/status` reports provider availability and cache-aware
   operational status.
 
-### Health, discovery, and suggestions
+### Health and suggestions
 
 - `GET /api/library/health/metadata/issues?status=open&included_only=true`
   returns only current included open metadata issue records. This is the
   Library Health Open-view scope and matches metadata score and summary totals.
   Omitting `included_only` preserves the broader audit-history list.
 
-- `POST /api/metadata/discoveries/songs/{song_id}` starts discovery for one
-  Song; `POST /api/metadata/discoveries/songs` accepts an explicit Song scope.
-- `POST /api/metadata/discoveries/health-rules` and
-  `POST /api/metadata/discoveries/health-issues` submit discovery from metadata
-  health findings. Issue repair accepts 1–500 explicit issue IDs and a
-  provider; Library Health supports individual or selected-issue batches
-  through MusicBrainz or configured Spotify.
-- `GET /api/metadata/discoveries` lists durable discovery records;
-  `GET /api/metadata/discoveries/{discovery_id}` returns the selected candidate
-  and explainable matching evidence.
-- `POST /api/metadata/discoveries/{discovery_id}/select` explicitly selects a
-  result. Ambiguous or low-confidence results require the corresponding
-  confirmation flag. `DELETE /api/metadata/discoveries/{discovery_id}/selection`
-  clears a selection.
-- `POST /api/metadata/discoveries/{discovery_id}/suggestions` creates
-  reviewable per-field suggestions from the selected candidate.
 - `GET /api/metadata/suggestions/pending` lists suggestions; individual
   suggestion details, acceptance, and rejection are available at
   `/api/metadata/suggestions/{suggestion_id}` and its `/accept` and `/reject`
@@ -220,8 +204,7 @@ Songs; requests never silently apply provider values.
   be previewed or rolled back at `/api/metadata/history/{history_id}` and its
   `/rollback-preview` and `/rollback` actions.
 
-Use `GET /api/metadata/discoveries/capabilities` and
-`GET /api/metadata/application/capabilities` to obtain the supported entity
+Use `GET /api/metadata/application/capabilities` to obtain the supported entity
 types, fields, thresholds, and request limits before integrating a client.
 
 Canonical metadata and file tags remain separate:

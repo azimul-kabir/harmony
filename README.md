@@ -361,12 +361,12 @@ Current configurable settings include:
 - Optional Spotify genre enrichment
 - Optional YouTube Music download source
 - Navidrome connection and playlist synchronization
-- MusicBrainz provider and discovery limits
+- MusicBrainz provider settings
 - Appearance, date/time, and runtime behavior
 - System information
 
-Metadata discovery can also be tuned with the documented `MUSICBRAINZ_*` and
-`METADATA_DISCOVERY_*` environment variables in `.env.example`.
+MusicBrainz access can be tuned with the documented `MUSICBRAINZ_*` environment
+variables in `.env.example`.
 
 ---
 

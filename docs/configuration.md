@@ -128,12 +128,12 @@ must be reviewed and removed manually.
 ## MusicBrainz and artwork
 
 Set `MUSICBRAINZ_*` values to tune timeout, retry, request rate, cache TTL, and
-concurrency. Keep a descriptive `MUSICBRAINZ_USER_AGENT`. `METADATA_DISCOVERY_*`
-values bound chunk and batch sizes. `COVER_ART_ARCHIVE_*` values control remote
+concurrency. Keep a descriptive `MUSICBRAINZ_USER_AGENT`. `COVER_ART_ARCHIVE_*`
+values control remote
 artwork fetch timeout and response size.
 
-The defaults are conservative for public provider infrastructure. Metadata
-discovery is review-first; changing provider settings never authorizes
+The defaults are conservative for public provider infrastructure. Changing
+provider settings never authorizes
 automatic canonical changes or file-tag writes.
 
 ## Optional Spotify genre enrichment

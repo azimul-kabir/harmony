@@ -13,14 +13,14 @@ def test_library_health_exposes_job_diagnostics_dialog():
     assert 'id="library-job-dialog"' in response.text
     assert 'id="library-job-summary"' in response.text
     assert 'id="library-job-failures"' in response.text
-    assert 'id="metadata-repair-provider"' in response.text
-    assert 'id="metadata-repair-selected"' in response.text
-    assert 'id="metadata-repair-count"' in response.text
+    assert 'id="metadata-repair-provider"' not in response.text
+    assert 'id="metadata-repair-selected"' not in response.text
+    assert 'id="metadata-repair-count"' not in response.text
 
 
-def test_metadata_repair_batch_requires_a_bounded_issue_selection():
+def test_metadata_discovery_api_is_not_part_of_v3_surface():
     response = TestClient(app).post(
         "/api/metadata/discoveries/health-issues",
         json={"issue_ids": [], "provider": "musicbrainz"},
     )
-    assert response.status_code == 422
+    assert response.status_code == 404

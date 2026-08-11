@@ -314,6 +314,10 @@ retained. These keys are projection identities, not future normalized IDs.
 
 ## Metadata Matching and Confidence Engine
 
+> Historical v2 design: the discovery, ranking, selection, and suggestion
+> generation workflow documented in this section is removed from Harmony v3.
+> The tables remain only for database upgrade compatibility.
+
 Metadata matching is a provider-neutral read pipeline:
 
 ```

@@ -28,6 +28,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   Playlist delivery now uses the existing M3U export and scan workflow only.
 - Removed the dedicated Library analytics API and album/quality insight cards.
   Operational song, album, artist, and storage totals remain for health views.
+- Removed metadata discovery jobs, ranked provider candidates, selection APIs,
+  and repair-discovery UI. Historical database tables remain upgradeable.
 
 ## [v2.1.0] - 2026-08-08
 

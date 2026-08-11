@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import utcnow_naive
 from app.database.models import (MetadataApplicationBatch, MetadataApplicationLock,
-    MetadataDiscoveryLock, MetadataHistory, MetadataSuggestion, Song, Task)
+    MetadataHistory, MetadataSuggestion, Song, Task)
 from app.domain.task import TaskStatus, TaskType
 from app.services.task_service import create_task, record_item_failure
 from app.services.library_search import library_search
@@ -387,10 +387,6 @@ class MetadataApplicationService:
         return {"target_entity_type":"song", "target_entity_id":song_id, "selected_suggestion_ids":[s.id for s in suggestions], "canonical_snapshot":canonical, "operations":operations, "created_at":utcnow_naive(), "initiated_by":initiated_by}
 
     def _reserve(self, db: Session, song_ids: list[int], task: Task) -> None:
-        # Discovery and application are mutually exclusive per Song, never globally.
-        conflict = db.scalar(select(MetadataDiscoveryLock.task_id).where(MetadataDiscoveryLock.song_id.in_(song_ids)))
-        if conflict:
-            raise MetadataServiceError("application_conflict", f"Song is reserved by metadata discovery job {conflict}.", 409)
         for song_id in song_ids:
             db.add(MetadataApplicationLock(song_id=song_id, task_id=task.id))
         try:
