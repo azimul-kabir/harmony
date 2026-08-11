@@ -4,7 +4,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
@@ -42,6 +42,7 @@ from app.services.task_service import (
 
 MAX_DOWNLOAD_ATTEMPTS = 3
 RETRY_DELAYS_SECONDS = (15, 60)
+RATE_LIMIT_DELAYS_SECONDS = (60, 180)
 
 def worker_loop() -> None:
     logger.info(
@@ -364,7 +365,12 @@ def _schedule_retry(db, job, outcome) -> bool:
         return False
 
     attempt = max(1, job.attempt_count)
-    delay = RETRY_DELAYS_SECONDS[min(attempt - 1, len(RETRY_DELAYS_SECONDS) - 1)]
+    delays = (
+        RATE_LIMIT_DELAYS_SECONDS
+        if outcome.reason_code == "provider_rate_limited"
+        else RETRY_DELAYS_SECONDS
+    )
+    delay = delays[min(attempt - 1, len(delays) - 1)]
     job.reason_code = outcome.reason_code
     job.reason_message = outcome.message
     job.failure_stage = outcome.stage
@@ -385,6 +391,13 @@ def _schedule_retry(db, job, outcome) -> bool:
     job.eta_seconds = None
     if job.task is not None:
         set_current_item(db=db, task=job.task, item=None)
+    if outcome.reason_code == "provider_rate_limited":
+        _cool_down_queued_provider_jobs(
+            db,
+            source_provider=job.source_provider or "spotify",
+            until=job.next_attempt_at,
+            exclude_job_id=job.id,
+        )
     db.commit()
     logger.info(
         "download_retry_scheduled download_id={} attempt={} max_attempts={} "
@@ -396,6 +409,29 @@ def _schedule_retry(db, job, outcome) -> bool:
         outcome.reason_code,
     )
     return True
+
+
+def _cool_down_queued_provider_jobs(
+    db: Session,
+    *,
+    source_provider: str,
+    until,
+    exclude_job_id: int,
+) -> None:
+    """Persist a provider-wide pause while allowing other sources to proceed."""
+    db.execute(
+        update(DownloadJob)
+        .where(
+            DownloadJob.id != exclude_job_id,
+            DownloadJob.status == JobStatus.QUEUED.value,
+            DownloadJob.source_provider == source_provider,
+            or_(
+                DownloadJob.next_attempt_at.is_(None),
+                DownloadJob.next_attempt_at < until,
+            ),
+        )
+        .values(next_attempt_at=until, pipeline_stage="provider_cooldown")
+    )
 
 
 def _schedule_navidrome_reimport(job: DownloadJob) -> None:

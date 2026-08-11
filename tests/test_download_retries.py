@@ -107,3 +107,46 @@ def test_claim_skips_delayed_retry_and_counts_provider_attempts():
         assert claimed.id == ready.id
         assert claimed.attempt_count == 1
         assert delayed.status == "queued"
+
+
+def test_rate_limit_cools_down_only_jobs_from_same_provider():
+    with SessionLocal() as db:
+        failed = _job(
+            spotify_url="spotify:track:limited",
+            source_provider="spotify",
+            attempt_count=1,
+        )
+        same_provider = DownloadJob(
+            spotify_url="spotify:track:waiting",
+            source_provider="spotify",
+            title="Waiting",
+            artist="Artist",
+            status="queued",
+        )
+        other_provider = DownloadJob(
+            spotify_url="https://youtube.test/watch?v=ready",
+            source_provider="youtube_music",
+            title="Other provider",
+            artist="Artist",
+            status="queued",
+        )
+        db.add_all((failed, same_provider, other_provider))
+        db.commit()
+
+        assert download_worker._schedule_retry(
+            db,
+            failed,
+            DownloadFailed(
+                "provider_rate_limited",
+                "The provider is rate limited.",
+                "download",
+                retryable=True,
+            ),
+        ) is True
+        db.refresh(same_provider)
+        db.refresh(other_provider)
+
+        assert failed.next_attempt_at > utcnow_naive() + timedelta(seconds=50)
+        assert same_provider.next_attempt_at == failed.next_attempt_at
+        assert same_provider.pipeline_stage == "provider_cooldown"
+        assert other_provider.next_attempt_at is None

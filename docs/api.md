@@ -249,6 +249,8 @@ Transient provider failures are retried up to three total attempts when
 workers remain available for other queued tracks while a retry is waiting. If
 audio acquisition already succeeded, a post-processing retry reuses that file
 only when it still exists beneath Harmony's configured staging directory.
+Rate-limit failures use longer 60-second and 180-second delays and temporarily
+postpone other queued jobs for the same source without blocking other sources.
 The Downloads snapshot also includes aggregate-only `failure_reasons` entries
 with a structured code, display label, and count for current failed jobs.
 

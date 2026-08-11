@@ -94,6 +94,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- Provider rate limits now trigger a persisted source-wide queue cooldown, so
+  other providers continue while Harmony stops compounding a 429 response.
 - Download retries now reuse safely persisted staging audio after tagging or
   Library import failures instead of fetching the same provider audio again.
 
