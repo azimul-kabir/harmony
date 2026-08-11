@@ -6,6 +6,7 @@ import shutil
 import re
 import time
 import unicodedata
+from difflib import SequenceMatcher
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,8 +79,28 @@ def _same_artist_credit(requested: str | None, candidate: str | None) -> bool:
     )
 
 
-def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
-    """Reject output whose embedded identity is not the requested recording."""
+def _title_similarity(requested: str | None, candidate: str | None) -> float:
+    left = _normalized(requested)
+    right = _normalized(candidate)
+    if not left or not right:
+        return 0.0
+    left_tokens = set(left.split())
+    right_tokens = set(right.split())
+    if left_tokens.issubset(right_tokens) and _markers(candidate):
+        return 0.9
+    token_score = len(left_tokens & right_tokens) / max(
+        len(left_tokens), len(right_tokens)
+    )
+    return max(token_score, SequenceMatcher(None, left, right).ratio())
+
+
+def validate_track_identity(
+    requested: Track,
+    candidate: AudioIdentity,
+    *,
+    strict: bool = True,
+) -> None:
+    """Reject unrelated output while allowing a controlled fallback version."""
     if not candidate.title or not candidate.artist:
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
@@ -90,15 +111,20 @@ def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="artist_mismatch",
         )
-    if _normalized(requested.title) != _normalized(candidate.title):
+    if strict and _normalized(requested.title) != _normalized(candidate.title):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="title_mismatch",
         )
-    if _markers(requested.title) != _markers(candidate.title):
+    if strict and _markers(requested.title) != _markers(candidate.title):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="version_mismatch",
+        )
+    if not strict and _title_similarity(requested.title, candidate.title) < 0.72:
+        raise DownloadFailed(
+            "fallback_match_unavailable", "No safe fallback match was found", "validation",
+            retryable=False, technical_detail="fallback_title_mismatch",
         )
     if requested.duration and candidate.duration:
         requested_duration = requested.duration
@@ -107,11 +133,17 @@ def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
         # existing queued jobs valid while all newly resolved tracks use seconds.
         if requested_duration > candidate.duration * 100:
             requested_duration /= 1000
-        tolerance = max(5.0, min(10.0, requested_duration * 0.04))
+        tolerance = (
+            max(12.0, min(25.0, requested_duration * 0.10))
+            if not strict
+            else max(5.0, min(10.0, requested_duration * 0.04))
+        )
         if abs(requested_duration - candidate.duration) > tolerance:
             raise DownloadFailed(
-                "exact_match_unavailable", "Exact match unavailable", "validation",
-                retryable=False, technical_detail="duration_mismatch",
+                "exact_match_unavailable" if strict else "fallback_match_unavailable",
+                "Exact match unavailable" if strict else "No safe fallback match was found",
+                "validation", retryable=False,
+                technical_detail="duration_mismatch",
             )
 
 class SpotDLClient:
@@ -272,7 +304,9 @@ class SpotDLClient:
 
                     downloaded_file = files[0]
                     validate_track_identity(
-                        track, self._read_audio_identity(downloaded_file)
+                        track,
+                        self._read_audio_identity(downloaded_file),
+                        strict=not loose_match,
                     )
                     reason_category = "success"
                     final_path = output_dir / downloaded_file.name

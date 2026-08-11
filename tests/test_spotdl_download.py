@@ -111,6 +111,41 @@ def test_fallback_output_is_identity_validated(client, track, tmp_path, monkeypa
     assert not list(tmp_path.iterdir())
 
 
+def test_fallback_accepts_a_less_exact_version_after_exact_attempt_fails(
+    client, track, tmp_path, monkeypatch
+):
+    calls = []
+
+    def run(args, timeout):
+        calls.append(args)
+        if len(calls) == 2:
+            (output_dir(args) / "live.mp3").write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(client, "_run", run)
+    monkeypatch.setattr(
+        client,
+        "_read_audio_identity",
+        lambda _: AudioIdentity("Test Title Live", "Test Artist", 187),
+    )
+
+    assert client.download(track, tmp_path).name == "live.mp3"
+    assert len(calls) == 2
+    assert calls[0][0] == track.spotify_url
+    assert "--dont-filter-results" in calls[1]
+
+
+def test_loose_fallback_still_rejects_unrelated_title_from_same_artist(track):
+    with pytest.raises(DownloadFailed) as error:
+        validate_track_identity(
+            track,
+            AudioIdentity("Completely Different Song", "Test Artist", 180),
+            strict=False,
+        )
+
+    assert error.value.reason_code == "fallback_match_unavailable"
+
+
 def test_unreadable_audio_is_a_typed_identity_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "app.downloaders.spotdl.MutagenFile",

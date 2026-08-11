@@ -232,8 +232,9 @@ remains available for cancelled-only history.
 
 Spotify failures may expose the stable reason code
 `exact_match_unavailable` with the user-facing meaning **Exact match
-unavailable**: Harmony could not obtain or validate the Spotify-linked track,
-and loose substitute searches are disabled. This outcome preserves the original
+unavailable**: Harmony could not obtain or validate the Spotify-linked track.
+Harmony then tries one controlled fallback search, requiring the same primary
+artist, a strongly related title, and a bounded duration difference. This outcome preserves the original
 job identity for manual retry but is not automatically requeued indefinitely.
 Other bounded provider categories include `provider_no_match`,
 `provider_rate_limited`, `provider_unavailable`, and `provider_error`; an

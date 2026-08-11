@@ -66,6 +66,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Changed
 
+- Spotify-linked downloads now try the exact recording first, then a controlled
+  fallback version with the same primary artist, a strongly related title, and
+  a bounded duration difference.
+
 - Restored SpotDL's generated artist/title fallback when the original Spotify
   URL attempt fails or produces no audio. Fallback output now passes the same
   strict identity validation as URL output, preventing loose substitutes from
