@@ -10,6 +10,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed Synology SNMP health monitoring, its dashboard card and API, and the
   PySNMP dependency. Harmony remains deployable on Synology NAS devices, while
   host monitoring is left to NAS and infrastructure monitoring tools.
+- Removed the developer-facing metadata provider console and its raw test
+  search and lookup endpoints. Read-only provider capability and status APIs
+  remain available to supported Library workflows.
 
 ## [v2.1.0] - 2026-08-08
 

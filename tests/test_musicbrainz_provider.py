@@ -166,7 +166,7 @@ def test_concurrent_requests_are_bounded():
     run(provider.close())
 
 
-def test_diagnostics_endpoints_and_page():
+def test_provider_status_endpoints_remain_without_developer_console():
     client = TestClient(app)
     capabilities = client.get("/api/providers/capabilities")
     assert capabilities.status_code == 200
@@ -174,7 +174,6 @@ def test_diagnostics_endpoints_and_page():
     status = client.get("/api/providers/status")
     assert status.status_code == 200
     assert all("cache" in item for item in status.json()["providers"])
-    page = client.get("/developers/providers")
-    assert page.status_code == 200 and "Provider Diagnostics" in page.text
-    assert 'id="provider-name"' in page.text and "Spotify" in page.text
-    assert client.post("/api/providers/lookup", json={"provider": "unknown", "entity_type": "artist", "entity_id": "x"}).status_code == 404
+    assert client.get("/developers/providers").status_code == 404
+    assert client.post("/api/providers/test-search", json={}).status_code == 404
+    assert client.post("/api/providers/lookup", json={}).status_code == 404

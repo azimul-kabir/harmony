@@ -167,17 +167,12 @@ Metadata Intelligence uses the same durable Task lifecycle for discovery and
 application work. The public discovery and application scope in v2.0.0 is
 Songs; requests never silently apply provider values.
 
-### Provider diagnostics
+### Provider status
 
 - `GET /api/providers/capabilities` lists MusicBrainz and Spotify metadata
   provider capabilities.
 - `GET /api/providers/status` reports provider availability and cache-aware
   operational status.
-- `POST /api/providers/test-search` and `POST /api/providers/lookup` provide
-  bounded provider diagnostics. Spotify currently supports recording search
-  and lookup only and returns `not_configured` when optional credentials are
-  absent. Provider failures return a clean structured error response with a
-  retryability flag.
 
 ### Health, discovery, and suggestions
 

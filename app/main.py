@@ -39,7 +39,6 @@ from app.web.auth import AuthenticationMiddleware, router as auth_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
 from app.web.sources import router as sources_page_router
-from app.web.providers import router as providers_page_router
 from app.web.settings import router as settings_page_router
 from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
@@ -160,7 +159,6 @@ app.include_router(playlists_page_router)  # <-- Added the new Playlists route
 app.include_router(playlist_router)
 app.include_router(sync_sources_router)
 app.include_router(providers_router)
-app.include_router(providers_page_router)
 
 PWA_ASSET_DIR = Path("app/static/pwa")
 
