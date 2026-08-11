@@ -516,9 +516,9 @@ ARTWORK_CACHE_PATH=/database/artwork
 ```
 
 The Compose file reads this same `.env` file. Set `MUSIC_HOST_PATH` and
-`DOWNLOAD_HOST_PATH` to directories that exist on your host. Database and log
-data remain in `./database` and `./logs`. The Compose deployment retains its
-Synology user mapping and external `harmony-net` network. Set
+`DOWNLOAD_HOST_PATH` when you want to use NAS shared folders. Without those
+overrides, Harmony stores music and downloads in local project folders;
+database and log data remain in `./database` and `./logs`. Set
 `WEB_AUTH_SECURE_COOKIE=true` when an HTTPS reverse proxy is in front of
 Harmony.
 

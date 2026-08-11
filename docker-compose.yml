@@ -22,8 +22,8 @@ services:
     volumes:
       - ./database:/database
       - ./logs:/app/logs
-      - ${MUSIC_HOST_PATH:-/volume1/music/library}:/music
-      - ${DOWNLOAD_HOST_PATH:-/volume1/music/incoming}:/downloads
+      - ${MUSIC_HOST_PATH:-./music}:/music
+      - ${DOWNLOAD_HOST_PATH:-./downloads}:/downloads
 
     restart: unless-stopped
 
@@ -41,5 +41,4 @@ services:
 
 networks:
   harmony-net:
-    external: true
     name: harmony-net
