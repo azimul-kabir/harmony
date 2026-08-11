@@ -32,6 +32,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   and repair-discovery UI. Historical database tables remain upgradeable.
 - Removed the discovery-only provider registry, async provider clients, cache,
   candidate models, confidence matcher, and provider diagnostics API.
+- Removed metadata suggestions, review/application jobs, manual canonical edits,
+  history/rollback APIs, and explicit audio tag writing. Index extraction and
+  metadata-health visibility remain.
 
 ## [v2.1.0] - 2026-08-08
 

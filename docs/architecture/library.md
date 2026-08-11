@@ -972,6 +972,10 @@ Last Updated
 
 ## Metadata Intelligence foundation
 
+> Historical v2 design: suggestions, application batches, manual canonical
+> edits, history, rollback, and explicit tag writing are removed from Harmony
+> v3. Their schema remains only for upgrade compatibility.
+
 Canonical metadata remains on the existing `songs` Library Index. The
 `metadata_suggestions` table is a provider-neutral review queue and never
 overwrites a Song merely because a suggestion is created or accepted. The

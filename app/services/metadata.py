@@ -63,7 +63,7 @@ def _tag_value(tags: Any, *names: str):
         value = tags.get(name) if hasattr(tags, "get") else None
         if value is not None:
             return _first(value)
-    # ID3 stores the user-visible names written by file_tag_writer as TXXX
+    # ID3 stores these user-visible names in TXXX frames.
     # frames.  This is indexing/repair logic, not artwork-fetch lookup.
     if getattr(tags, "getall", None):
         requested = {name.casefold() for name in names}

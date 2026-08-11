@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 
 from app.database.models import (
     DownloadJob,
-    MetadataSuggestion,
     MetadataIssue,
     Playlist,
     Song,
@@ -185,14 +184,6 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     spotify_id="source",
                     spotify_url="https://example.test/source",
                     name="Source",
-                ),
-                MetadataSuggestion(
-                    entity_type="song",
-                    entity_id=1,
-                    field_name="genre",
-                    provider="musicbrainz",
-                    confidence_level="high",
-                    status="pending",
                 ),
                 MetadataIssue(
                     identity_key="dashboard-open-metadata", rule_id="missing_genre", rule_version="1",

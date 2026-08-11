@@ -16,7 +16,6 @@ from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
 from app.api.library_bulk import router as library_bulk_router
 from app.api.library_health import router as library_health_router
-from app.api.metadata import router as metadata_router
 from app.api.navidrome import router as navidrome_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
@@ -31,7 +30,6 @@ from app.services.library_watcher import LibraryWatcher
 from app.services.library_bulk import library_bulk_worker
 from app.services.library_health import library_maintenance_worker
 from app.services.task_service import cleanup_library_jobs, recover_library_jobs
-from app.services.metadata_intelligence import MetadataServiceError
 from app.web.downloads import router as downloads_page_router
 from app.web.auth import AuthenticationMiddleware, router as auth_router
 from app.web.library import router as library_page_router
@@ -141,7 +139,6 @@ app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(library_bulk_router)
 app.include_router(library_health_router)
-app.include_router(metadata_router)
 app.include_router(navidrome_router)
 app.include_router(artwork_router)
 app.include_router(library_page_router)
@@ -183,10 +180,6 @@ async def unhandled_api_error_handler(request: Request, exc: Exception):
         )
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
-
-@app.exception_handler(MetadataServiceError)
-async def metadata_error_handler(request: Request, exc: MetadataServiceError):
-    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": exc.message}})
 
 @app.get("/")
 def home(request: Request):

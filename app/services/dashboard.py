@@ -5,7 +5,6 @@ from sqlalchemy import case, func, select
 from app.core.config import get_settings
 from app.database.models import (
     DownloadJob,
-    MetadataSuggestion,
     Playlist,
     Song,
     SyncSource,
@@ -230,10 +229,6 @@ def get_dashboard_snapshot(db) -> dict:
         )
     ).one()
     included_metadata_issues = metadata_health.included_open_issue_count(db)
-    suggestions_pending = (
-        db.scalar(select(func.count(MetadataSuggestion.id)).where(MetadataSuggestion.status == "pending"))
-        or 0
-    )
     attention = _get_attention_summary(
         failed_downloads=stats["failed"],
         missing_files=int(missing_files),
@@ -299,7 +294,7 @@ def get_dashboard_snapshot(db) -> dict:
             "missing_artwork": int(health_row[0]),
             "missing_metadata": int(health_row[1]),
             "missing_files": int(missing_files),
-            "pending_suggestions": int(suggestions_pending),
+            "pending_suggestions": int(included_metadata_issues),
         },
         "attention": attention,
         "maintenance": [

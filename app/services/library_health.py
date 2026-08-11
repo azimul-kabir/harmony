@@ -232,9 +232,6 @@ class LibraryMaintenanceWorker:
                 self._clear_artwork(db, task)
             elif action == "metadata_analysis":
                 self._metadata_analysis(db, task)
-            elif action in {"metadata_application", "metadata_rollback"}:
-                from app.services.metadata_intelligence import metadata_application_service
-                metadata_application_service.process_task(db, task)
             else:
                 raise ValueError(f"Unknown maintenance action: {action}")
         except Exception:
@@ -243,16 +240,6 @@ class LibraryMaintenanceWorker:
             task = db.get(Task, task.id)
             task.failed_items = max(1, task.total_items - task.completed_items)
             task.status = TaskStatus.FAILED.value
-            if action in {"metadata_application", "metadata_rollback"}:
-                from app.database.models import MetadataApplicationBatch, MetadataApplicationLock
-                payload = json.loads(task.operation_payload or "{}")
-                batch_id = payload.get("batch_id")
-                if isinstance(batch_id, int):
-                    batch = db.get(MetadataApplicationBatch, batch_id)
-                    if batch is not None:
-                        batch.status = "failed"
-                        batch.completed_at = utcnow_naive()
-                db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
         else:
             if task.status == TaskStatus.RUNNING.value:
                 task.status = TaskStatus.COMPLETED_WITH_ERRORS.value if task.failed_items else TaskStatus.COMPLETED.value

@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.database.models import (MetadataApplicationBatch, MetadataApplicationLock,
-    DownloadJob, Task, TaskItemFailure,
+from app.database.models import (DownloadJob, Task, TaskItemFailure,
     SyncSource)
 from app.domain.download import JobStatus
 from sqlalchemy import and_, or_, select, delete, update
@@ -277,11 +276,6 @@ def cancel_task(
         if task.status == TaskStatus.CANCELLED.value:
             task.completed_at = utcnow_naive()
             task.current_item = None
-            db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
-            db.execute(update(MetadataApplicationBatch).where(
-                MetadataApplicationBatch.job_id == task.id,
-                MetadataApplicationBatch.status == "queued",
-            ).values(status="cancelled", completed_at=utcnow_naive()))
         db.commit()
         db.refresh(task)
 
@@ -379,11 +373,5 @@ def recover_library_jobs(db: Session) -> int:
         task.current_item = None
         task.completed_at = None if task.resumable else utcnow_naive()
         task.recovery_metadata = '{"reason":"process_restart"}'
-        if not task.resumable:
-            db.execute(delete(MetadataApplicationLock).where(MetadataApplicationLock.task_id == task.id))
-            db.execute(update(MetadataApplicationBatch).where(
-                MetadataApplicationBatch.job_id == task.id,
-                MetadataApplicationBatch.status.in_(("queued", "running")),
-            ).values(status="interrupted", completed_at=utcnow_naive()))
     db.commit()
     return len(jobs)

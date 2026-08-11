@@ -174,7 +174,10 @@ Songs; requests never silently apply provider values.
   `/api/metadata/suggestions/{suggestion_id}` and its `/accept` and `/reject`
   actions.
 
-### Application, history, and rollback
+### Historical application, history, and rollback APIs
+
+The APIs documented in this subsection belonged to Harmony v2 and are removed
+from the v3 surface. The database records remain readable during upgrades.
 
 - `GET /api/library/songs/{song_id}/metadata` returns canonical values and
   review state. Song-scoped suggestion and history lists are available through

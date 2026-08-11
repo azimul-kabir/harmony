@@ -46,7 +46,6 @@ const libraryState = {
     query: "",
     requestedAlbumKey: null,
     requestedSongId: null,
-    requestedMetadataReviewSongId: null,
     requestedAvailability: null,
     collectionId: null,
     searchTotal: 0,
@@ -420,11 +419,6 @@ async function loadLibraryData({ preserveState = false } = {}) {
             applyFilters();
             renderActiveView();
         }
-        if (libraryState.requestedMetadataReviewSongId) {
-            const songId = libraryState.requestedMetadataReviewSongId;
-            libraryState.requestedMetadataReviewSongId = null;
-            await openMetadataReview(songId);
-        }
     } catch (error) {
         console.error("Library load error:", error);
         errorBox.textContent = "Harmony could not load the Library Index. Try again in a moment.";
@@ -542,7 +536,6 @@ function renderSongs() {
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
                 <td data-label="Actions"><div class="library-row-actions">
-                    <button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button>
                 </div></td>
             </tr>
         `).join("");
@@ -556,293 +549,9 @@ function renderSongs() {
             updateBulkSelection(page.items);
         });
     });
-    body.querySelectorAll("[data-review-song]").forEach((button) => {
-        button.addEventListener("click", () => openMetadataReview(Number(button.dataset.reviewSong)));
-    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
-}
-
-function metadataValue(value) {
-    if (value === null || value === undefined || value === "") return "—";
-    return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function evidenceText(value) {
-    if (value === null || value === undefined) return "None recorded";
-    if (Array.isArray(value)) return value.map(metadataValue).join(" · ") || "None recorded";
-    if (typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${metadataValue(item)}`).join(" · ");
-    return String(value);
-}
-
-const manualMetadataFields = [
-    ["title", "Title", "text"], ["artist", "Artist", "text"],
-    ["album", "Album", "text"], ["album_artist", "Album artist", "text"],
-    ["genre", "Genre", "text"], ["year", "Year", "number"],
-    ["track_number", "Track number", "number"], ["total_tracks", "Total tracks", "number"],
-    ["disc_number", "Disc number", "number"], ["total_discs", "Total discs", "number"],
-    ["isrc", "ISRC", "text"], ["musicbrainz_recording_id", "MusicBrainz recording ID", "text"],
-    ["musicbrainz_release_id", "MusicBrainz release ID", "text"],
-    ["musicbrainz_release_group_id", "MusicBrainz release-group ID", "text"],
-    ["musicbrainz_artist_id", "MusicBrainz artist ID", "text"],
-    ["musicbrainz_release_artist_id", "MusicBrainz release artist ID", "text"],
-];
-
-function renderManualMetadataForm(review) {
-    const current = Object.fromEntries(review.fields.map((item) => [item.field_name, item.current_value]));
-    const form = document.getElementById("metadata-manual-form");
-    form.innerHTML = manualMetadataFields.map(([field, label, type]) => {
-        const value = current[field] ?? "";
-        const numeric = type === "number" ? ' min="1" step="1"' : "";
-        return `<label>${escapeHtml(label)}<input type="${type}" data-manual-field="${field}" value="${escapeAttribute(String(value))}"${numeric}></label>`;
-    }).join("");
-    form.querySelectorAll("[data-manual-field]").forEach((input) => input.addEventListener("input", () => {
-        document.getElementById("metadata-apply-manual").disabled = true;
-        document.getElementById("metadata-manual-preview").textContent = "";
-    }));
-}
-
-function renderManualArtwork(songId) {
-    const song = libraryState.songs.find((item) => item.id === songId);
-    const target = document.getElementById("metadata-manual-artwork");
-    const remove = document.getElementById("metadata-artwork-remove");
-    remove.disabled = !song?.cover_url;
-    target.innerHTML = song?.cover_url
-        ? `<img src="${escapeAttribute(song.cover_url)}" alt=""><div><strong>Current canonical artwork</strong><small>Rendered as a square in Harmony. Uploading a replacement does not alter the audio file.</small></div>`
-        : '<div class="metadata-artwork-placeholder">No art</div><div><strong>No canonical artwork</strong><small>Choose an image to create a content-addressed cache resource.</small></div>';
-}
-
-async function uploadManualArtwork(songId, file) {
-    const status = document.getElementById("metadata-review-status");
-    if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    status.textContent = "Validating and caching artwork…";
-    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "POST", body});
-    const result = await response.json();
-    if (!response.ok) {
-        status.textContent = result.detail || "Artwork could not be uploaded.";
-        return;
-    }
-    const song = libraryState.songs.find((item) => item.id === songId);
-    if (song) {
-        song.cover_url = result.artwork.url;
-        song.artwork_id = result.artwork.id;
-        song.artwork_status = "manual";
-    }
-    renderManualArtwork(songId);
-    await previewFileTags(songId);
-    status.textContent = result.message;
-}
-
-async function removeManualArtwork(songId) {
-    if (!window.confirm("Remove Harmony's canonical artwork association? Cached and audio-file artwork will remain unchanged.")) return;
-    const status = document.getElementById("metadata-review-status");
-    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "DELETE"});
-    const result = await response.json();
-    if (!response.ok) {
-        status.textContent = result.detail || "Artwork association could not be removed.";
-        return;
-    }
-    const song = libraryState.songs.find((item) => item.id === songId);
-    if (song) {
-        song.cover_url = null;
-        song.artwork_id = null;
-        song.artwork_status = "missing";
-    }
-    renderManualArtwork(songId);
-    await previewFileTags(songId);
-    status.textContent = result.message;
-}
-
-function manualMetadataChanges() {
-    return Object.fromEntries([...document.querySelectorAll("[data-manual-field]")].map((input) => {
-        const value = input.value.trim();
-        return [input.dataset.manualField, input.type === "number" && value ? Number(value) : value || null];
-    }));
-}
-
-async function previewManualMetadata(songId) {
-    const target = document.getElementById("metadata-manual-preview");
-    const apply = document.getElementById("metadata-apply-manual");
-    apply.disabled = true;
-    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-preview`, {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
-    });
-    const result = await response.json();
-    if (!response.ok) { target.textContent = result.error?.message || "Manual edit preview is unavailable."; return; }
-    const invalid = result.operations.some((item) => item.status === "invalid");
-    const applicable = result.operations.some((item) => item.status === "applicable");
-    apply.disabled = invalid || !applicable;
-    target.innerHTML = result.operations.filter((item) => item.status !== "unchanged").map((item) =>
-        `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small></article>`
-    ).join("") || '<p class="library-search-status">No manual changes to apply.</p>';
-}
-
-async function applyManualMetadata(songId) {
-    const status = document.getElementById("metadata-review-status");
-    const button = document.getElementById("metadata-apply-manual");
-    button.disabled = true;
-    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-apply`, {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-        status.textContent = result.error?.message || "Manual metadata edits could not be queued.";
-        return;
-    }
-    status.textContent = `Manual edit queued (job ${result.job_id}).`;
-    await pollMetadataApplication(result.job_id, songId);
-}
-
-async function openMetadataReview(songId) {
-    const dialog = document.getElementById("metadata-review-dialog");
-    dialog.dataset.songId = String(songId);
-    dialog.showModal();
-    document.getElementById("metadata-select-eligible").onclick = () => document.querySelectorAll("[data-accepted-field]:not(:disabled)").forEach((item) => { item.checked = true; });
-    document.getElementById("metadata-clear-selection").onclick = () => document.querySelectorAll("[data-accepted-field]").forEach((item) => { item.checked = false; });
-    document.getElementById("metadata-preview-accepted").onclick = () => previewMetadataApplication(songId);
-    document.getElementById("metadata-apply-selected").onclick = () => submitMetadataApplication(songId, false);
-    document.getElementById("metadata-apply-accepted").onclick = () => submitMetadataApplication(songId, true);
-    document.getElementById("metadata-preview-manual").onclick = () => previewManualMetadata(songId);
-    document.getElementById("metadata-apply-manual").onclick = () => applyManualMetadata(songId);
-    document.getElementById("metadata-artwork-file").onchange = (event) => {
-        const file = event.target.files?.[0];
-        uploadManualArtwork(songId, file).finally(() => { event.target.value = ""; });
-    };
-    document.getElementById("metadata-artwork-remove").onclick = () => removeManualArtwork(songId);
-    await loadMetadataReview(songId);
-}
-
-function selectedAcceptedSuggestions(allEligible) {
-    const fields = [...document.querySelectorAll("[data-accepted-field]:not(:disabled)")];
-    return (allEligible ? fields : fields.filter((item) => item.checked)).map((item) => Number(item.dataset.acceptedField));
-}
-
-async function previewMetadataApplication(songId) {
-    const ids = selectedAcceptedSuggestions(false);
-    const target = document.getElementById("metadata-application-preview");
-    if (!ids.length) { target.textContent = "Select one or more eligible accepted fields first."; return; }
-    const response = await fetch(`/api/library/songs/${songId}/metadata/application-preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: ids, initiated_by: "library-ui" }) });
-    const preview = await response.json();
-    if (!response.ok) { target.textContent = preview.error?.message || "Preview unavailable."; return; }
-    const stale = preview.operations.some((item) => item.status === "stale");
-    document.getElementById("metadata-force-control").hidden = !stale;
-    preview.operations.filter((item) => ["invalid", "unsupported"].includes(item.status)).forEach((item) => {
-        const input = document.querySelector(`[data-accepted-field="${item.suggestion_id}"]`);
-        if (input) { input.checked = false; input.disabled = true; }
-    });
-    target.innerHTML = preview.operations.map((item) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small>${item.status === "stale" ? `<small>Expected ${escapeHtml(metadataValue(item.expected_current_value))}; current canonical value differs.</small>` : ""}</article>`).join("");
-}
-
-async function submitMetadataApplication(songId, allEligible) {
-    const ids = selectedAcceptedSuggestions(allEligible);
-    const status = document.getElementById("metadata-review-status");
-    if (!ids.length) { status.textContent = "No eligible accepted fields are selected."; return; }
-    const force = document.getElementById("metadata-force").checked;
-    const response = await fetch(`/api/library/songs/${songId}/metadata/apply-selected`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: ids, force, force_confirmation: force, initiated_by: "library-ui" }) });
-    const result = await response.json();
-    if (!response.ok) { status.textContent = result.error?.message || "Metadata application could not be queued."; return; }
-    status.textContent = `Application queued (job ${result.job_id}).`;
-    await pollMetadataApplication(result.job_id, songId);
-}
-
-async function pollMetadataApplication(jobId, songId) {
-    const status = document.getElementById("metadata-review-status");
-    let task = await fetchJson(`/api/tasks/jobs/${jobId}`);
-    while (["queued", "running", "cancelling"].includes(task.status)) {
-        status.textContent = `${task.status.replaceAll("_", " ")} · ${task.processed_items}/${task.total_items}.`;
-        await new Promise((resolve) => setTimeout(resolve, 750));
-        task = await fetchJson(`/api/tasks/jobs/${jobId}`);
-    }
-    status.textContent = task.status === "completed" ? "Library metadata updated. Audio-file tags were not modified." : `Metadata application ${task.status.replaceAll("_", " ")}; see task ${jobId} for details.`;
-    await loadMetadataReview(songId);
-}
-
-async function loadMetadataReview(songId) {
-    const status = document.getElementById("metadata-review-status");
-    status.textContent = "Loading metadata review…";
-    try {
-        const [review, history] = await Promise.all([
-            fetchJson(`/api/library/songs/${songId}/metadata`),
-            fetchJson(`/api/library/songs/${songId}/metadata/history`),
-        ]);
-        const song = libraryState.songs.find((item) => item.id === songId);
-        document.getElementById("metadata-review-title").textContent = song?.title || song?.filename || `Song ${songId}`;
-        document.getElementById("metadata-current").innerHTML = review.fields
-            .filter((field) => field.current_value !== null && field.current_value !== "")
-            .map((field) => `<div><dt>${escapeHtml(field.field_name.replaceAll("_", " "))}</dt><dd>${escapeHtml(metadataValue(field.current_value))}</dd></div>`).join("") || "<p>No canonical metadata is indexed.</p>";
-        renderManualMetadataForm(review);
-        renderManualArtwork(songId);
-        const pending = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "pending");
-        document.getElementById("metadata-suggestions").innerHTML = pending.map((item) => `
-            <article class="metadata-suggestion-card">
-                <header><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(item.provider)} · ${escapeHtml(item.confidence_level)}${item.confidence === null ? "" : ` (${Math.round(item.confidence * 100)}%)`}</span></header>
-                <p class="metadata-proposed">${escapeHtml(metadataValue(item.current_value))} <span aria-hidden="true">→</span> <strong>${escapeHtml(metadataValue(item.suggested_value))}</strong></p>
-                <p>${escapeHtml(item.match_explanation || "No match explanation supplied.")}</p>
-                <small><b>Positive evidence:</b> ${escapeHtml(evidenceText(item.positive_evidence))}</small>
-                <small><b>Conflicting evidence:</b> ${escapeHtml(evidenceText(item.conflicting_evidence))}</small>
-                <div><button class="btn-primary" data-metadata-action="accept" data-suggestion-id="${item.id}">Accept</button><button class="btn-secondary" data-metadata-action="reject" data-suggestion-id="${item.id}">Reject</button></div>
-            </article>`).join("") || '<p class="library-search-status">No pending suggestions.</p>';
-        const accepted = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "accepted");
-        const acceptedTarget = document.getElementById("metadata-accepted");
-        acceptedTarget.innerHTML = accepted.map((item) => `
-            <article class="metadata-suggestion-card">
-                <header><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(item.provider)} · ${escapeHtml(item.confidence_level)}${item.confidence === null ? "" : ` (${Math.round(item.confidence * 100)}%)`}</span></header>
-                <p class="metadata-proposed">${escapeHtml(metadataValue(item.current_value))} <span aria-hidden="true">→</span> <strong>${escapeHtml(metadataValue(item.suggested_value))}</strong></p>
-                <label><input type="checkbox" data-accepted-field="${item.id}"> Select this field for preview or application</label><small>Validation and stale state are verified by Preview before application.</small>
-            </article>`).join("") || '<p class="library-search-status">No accepted suggestions are available.</p>';
-        document.getElementById("metadata-history").innerHTML = history.items.map((item) => `
-            <article><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(metadataValue(item.previous_value))} → ${escapeHtml(metadataValue(item.new_value))}</span><small>${escapeHtml(item.change_source)} · ${new Date(item.changed_at).toLocaleString()}</small></article>`).join("") || '<p class="library-search-status">No applied-change history.</p>';
-        document.querySelectorAll("[data-metadata-action]").forEach((button) => button.addEventListener("click", () => reviewMetadataSuggestion(button)));
-        document.getElementById("metadata-preview-tags").onclick = () => previewFileTags(songId);
-        document.getElementById("metadata-write-tags").onclick = () => writeFileTags(songId);
-        await previewFileTags(songId);
-        status.textContent = "Accepting records a decision only; it does not change tags or canonical metadata.";
-    } catch (error) {
-        status.textContent = "Harmony could not load this metadata review.";
-    }
-}
-
-async function previewFileTags(songId) {
-    const target = document.getElementById("metadata-tag-preview");
-    const button = document.getElementById("metadata-write-tags");
-    try {
-        const preview = await fetchJson(`/api/library/songs/${songId}/metadata/tag-preview`);
-        button.disabled = !preview.available;
-        target.innerHTML = preview.available
-            ? preview.fields.map((field) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(field.field.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(field.current))} → ${escapeHtml(metadataValue(field.canonical))}</p><small>${field.will_change ? "Will change" : "Already matches"}</small></article>`).join("") + `<article class="metadata-suggestion-card"><strong>Cached canonical artwork</strong><p>${escapeHtml(preview.artwork.status)}</p><label><input id="metadata-embed-artwork" type="checkbox" ${preview.artwork.canonical_available ? "checked" : "disabled"}> Embed canonical artwork in this audio file</label><small>Harmony's private cached artwork is distinct from artwork embedded in the file.</small></article>`
-            : "<p class=\"library-search-status\">Tags cannot be written: the file is missing, unsafe, unsupported, or canonical metadata is unavailable.</p>";
-    } catch (_) { button.disabled = true; target.textContent = "Tag preview is unavailable."; }
-}
-
-async function writeFileTags(songId) {
-    const embedArtwork = document.getElementById("metadata-embed-artwork")?.checked ?? false;
-    if (!window.confirm(`This will modify the audio file's embedded tags${embedArtwork ? " and artwork" : ""}. Continue?`)) return;
-    const status = document.getElementById("metadata-review-status");
-    const button = document.getElementById("metadata-write-tags"); button.disabled = true;
-    try {
-        const response = await fetch(`/api/library/songs/${songId}/metadata/write-tags`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ embed_artwork: embedArtwork }) });
-        const result = await response.json();
-        status.textContent = result.status === "succeeded" ? (result.artwork === "embedded" ? "Tags and artwork written." : "Canonical tags were written to the audio file.") : "Tags were not written; the file was left unchanged.";
-        await previewFileTags(songId);
-    } catch (_) { status.textContent = "Harmony could not write tags to this audio file."; button.disabled = false; }
-}
-
-async function reviewMetadataSuggestion(button) {
-    button.disabled = true;
-    const response = await fetch(`/api/metadata/suggestions/${button.dataset.suggestionId}/${button.dataset.metadataAction}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewed_by: "library-ui" }),
-    });
-    if (!response.ok) {
-        document.getElementById("metadata-review-status").textContent = "The review decision could not be saved.";
-        button.disabled = false;
-        return;
-    }
-    await loadMetadataReview(Number(document.getElementById("metadata-review-dialog").dataset.songId));
 }
 
 function renderAlbums() {
@@ -1072,11 +781,6 @@ const bulkActions = {
         message: "Harmony will re-read tags and technical audio properties from every selected file.",
         confirm: "Refresh metadata",
     },
-    write_tags: {
-        title: "Write canonical tags?",
-        message: "Harmony will modify each selected audio file's embedded tags. This is required before Navidrome can read the canonical values.",
-        confirm: "Write tags",
-    },
     refresh_artwork: {
         title: "Refresh artwork cache?",
         message: "Harmony will re-read embedded and folder artwork and repair local cache associations.",
@@ -1143,16 +847,6 @@ function showBulkDialog(operation) {
 }
 
 async function startBulkOperation(operation, optionValue) {
-    if (operation === "write_tags") {
-        const response = await fetch("/api/library/metadata/write-tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song_ids: [...libraryState.selectedSongs], embed_artwork: true }) });
-        if (!response.ok) throw new Error("Unable to write canonical tags.");
-        const result = await response.json();
-        document.getElementById("library-bulk-progress").hidden = false;
-        document.getElementById("library-bulk-progress-title").textContent = "Canonical tag writing finished";
-        document.getElementById("library-bulk-progress-detail").textContent = `Tag writing finished: ${result.totals.succeeded} succeeded, ${result.totals.skipped} skipped, ${result.totals.unsupported} unsupported, ${result.totals.missing} missing, ${result.totals.failed} failed. Artwork: ${result.totals.artwork_embedded} embedded, ${result.totals.artwork_unchanged} unchanged, ${result.totals.artwork_unavailable} unavailable, ${result.totals.artwork_unsupported} unsupported, ${result.totals.artwork_failed} failed.`;
-        await loadLibrary();
-        return;
-    }
     const options = {};
     if (operation === "move") options.destination = optionValue;
     if (operation === "rename") options.pattern = optionValue;
@@ -1218,7 +912,6 @@ document.getElementById("library-select-page").addEventListener("change", (event
     });
     renderSongs();
 });
-document.getElementById("metadata-review-close").addEventListener("click", () => document.getElementById("metadata-review-dialog").close());
 document.getElementById("library-duplicates-open").addEventListener("click", openDuplicateReview);
 document.getElementById("duplicate-review-close").addEventListener("click", () => document.getElementById("duplicate-review-dialog").close());
 document.getElementById("duplicate-tier").addEventListener("change", loadDuplicateCandidates);
@@ -1378,7 +1071,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (Number.isInteger(requestedSongId) && requestedSongId > 0) {
         libraryState.requestedSongId = requestedSongId;
         libraryState.view = "songs";
-        if (params.get("metadata") === "review") libraryState.requestedMetadataReviewSongId = requestedSongId;
     }
     if (requestedAvailability === "missing") {
         libraryState.requestedAvailability = requestedAvailability;
