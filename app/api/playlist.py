@@ -24,8 +24,6 @@ from app.services.playlist_manager import (
     remove_playlist_artwork,
     resolve_playlist_songs,
 )
-from app.services import auto_playlists
-from app.services.navidrome import NavidromeClient, NavidromeError
 
 router = APIRouter(
     prefix="/api/playlists",
@@ -35,11 +33,6 @@ router = APIRouter(
 
 class PlaylistDownloadRequest(BaseModel):
     url: str
-
-
-class AutoPlaylistRequest(BaseModel):
-    limit: int = 50
-    enabled: bool = True
 
 
 PLAYLIST_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
@@ -66,38 +59,6 @@ def _playlist_artwork_type(content_type: str | None, content: bytes) -> tuple[st
     if not valid:
         raise HTTPException(status_code=415, detail="The uploaded image is invalid.")
     return normalized_type, suffix
-
-
-@router.get("/auto/definitions")
-def auto_playlist_definitions(db: Session = Depends(get_db)):
-    return auto_playlists.definitions(db)
-
-
-@router.post("/auto/{rule_id}/generate")
-async def generate_auto_playlist(
-    rule_id: str,
-    request: AutoPlaylistRequest,
-    db: Session = Depends(get_db),
-):
-    try:
-        if rule_id in {"new-and-unplayed", "favorites", "rediscovery", "most-played"}:
-            auto_playlists.update_navidrome_stats(
-                db, await NavidromeClient().library_songs()
-            )
-        return auto_playlists.generate(
-            db,
-            rule_id,
-            limit=request.limit,
-            enabled=request.enabled,
-        )
-    except KeyError as error:
-        raise HTTPException(
-            status_code=404, detail="Auto-playlist definition not found."
-        ) from error
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except NavidromeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @router.get("/{playlist_id}/tracks")

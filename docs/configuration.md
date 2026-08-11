@@ -163,15 +163,11 @@ Spotify permits bounded recording search and lookup. Merely configuring
 credentials never makes scanning, indexing, or ordinary downloads contact
 Spotify, and Spotify candidates never populate MusicBrainz identifier fields.
 
-## Source schedules and auto-playlists
+## Source schedules
 
 Source auto-sync is configured per Source in the Sources UI, not through an
 environment variable. v2.0.0 offers hourly, 6-hour, 12-hour, daily, and weekly
 intervals. Enabling auto-sync also enables the Source.
-
-Recently Added and Recently Downloaded auto-playlists are configured from the
-Playlists page. Each stores its enabled state and a 1–500-song limit; 50 is the
-default.
 
 ## Runtime settings
 

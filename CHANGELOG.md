@@ -16,6 +16,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed lyrics extraction, indexing, sidecar watching, Library UI, and API
   exposure. Historical database columns and migrations remain in place so
   existing installations can upgrade safely.
+- Removed generated auto-playlists and Navidrome playback-stat ingestion from
+  the active product. Legacy playlist and Song columns remain available for
+  database upgrade compatibility.
 
 ## [v2.1.0] - 2026-08-08
 

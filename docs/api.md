@@ -138,11 +138,6 @@ compatible with conservative SQLite parameter limits.
   Source objects expose both the provider-neutral identity fields and the
   legacy `spotify_url` compatibility mirror.
 
-- `GET /api/playlists/auto/definitions` lists built-in auto-playlist rules.
-- `POST /api/playlists/auto/{rule_id}/generate` accepts
-  `{ "limit": 50, "enabled": true }`. Supported v2.0.0 rules are
-  `recently_added` and `recently_downloaded`; limits are bounded to 1–500.
-
 ## Playlist management
 
 - `GET /api/playlists/{playlist_id}/tracks` returns source-ordered tracks,

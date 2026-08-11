@@ -429,12 +429,9 @@ def export_m3us_for_tracks(
     ).unique().all()
     for playlist in playlists:
         export_m3u(db, playlist)
-    from app.services.auto_playlists import refresh_enabled
-    return len(playlists) + refresh_enabled(db)
+    return len(playlists)
 
 def export_all_m3us(db: Session) -> None:
     """Utility to regenerate all playlists"""
     for p in db.query(Playlist).where(Playlist.playlist_kind != "smart").all():
         export_m3u(db, p)
-    from app.services.auto_playlists import refresh_enabled
-    refresh_enabled(db)

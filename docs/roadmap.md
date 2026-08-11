@@ -33,7 +33,7 @@ editable runtime settings, and the mobile-first interface.
 
 The following items are no longer roadmap promises: YouTube Music downloads,
 Cover Art Archive fetches, editable runtime settings, scheduled source sync,
-Recently Added/Downloaded auto-playlists, canonical tag writing, and direct
+canonical tag writing and direct
 Navidrome playlist synchronization. Explainable duplicate resolution, manual
 artwork replacement and installable/offline-shell PWA
 support are also shipped.
@@ -44,5 +44,5 @@ liveness from database-and-storage readiness probes.
 
 The v2.1.0 release adds the signed-session web login, public YouTube Music
 playlist Sources, Navidrome Love/Unlove batches, playback-statistics
-auto-playlists, synchronization health and scan controls, and stricter
+synchronization health and scan controls, and stricter
 provider-output validation.

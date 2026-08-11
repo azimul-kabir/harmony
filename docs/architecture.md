@@ -35,8 +35,8 @@ Spotify / YouTube Music / MusicBrainz
   search, collections, analytics, health, metadata, artwork, and bulk work.
 - **Playlists:** Harmony stores source order, exports atomic M3Us, and can
   reconcile stable Navidrome song/playlist IDs directly.
-- **Automation:** auto-playlists and per-source schedules use the same durable
-  services as user-triggered operations.
+- **Automation:** per-source schedules use the same durable services as
+  user-triggered synchronization.
 - **UI:** HTML, CSS, and vanilla JavaScript use responsive layouts and surgical
   DOM updates during SSE refreshes.
 

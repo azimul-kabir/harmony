@@ -8,7 +8,6 @@ from app.services.playlist_manager import (
     playlist_artwork_path,
     playlist_file_path,
 )
-from app.services.auto_playlists import definitions as auto_playlist_definitions
 from app.web.templates import templates, template_context
 
 router = APIRouter(tags=["web"])
@@ -27,7 +26,12 @@ def _playlist_sync_status(playlist: Playlist, exported_count: int) -> str:
 
 @router.get("/playlists")
 def playlists_page(request: Request, db: Session = Depends(get_db)):
-    playlists = db.query(Playlist).order_by(Playlist.name).all()
+    playlists = (
+        db.query(Playlist)
+        .where(Playlist.playlist_kind != "smart")
+        .order_by(Playlist.name)
+        .all()
+    )
     sources = {
         (source.provider or "spotify", source.external_id or source.spotify_id): source
         for source in db.query(SyncSource).all()
@@ -43,7 +47,7 @@ def playlists_page(request: Request, db: Session = Depends(get_db)):
                 "exported_count": exported_count,
                 "m3u_exists": file_path.is_file(),
                 "artwork_exists": playlist_artwork_path(playlist.name) is not None,
-                "type_label": "Auto" if playlist.playlist_kind == "smart" else "Imported",
+                "type_label": "Imported",
                 "sync_status": _playlist_sync_status(playlist, exported_count),
             }
         )
@@ -54,6 +58,5 @@ def playlists_page(request: Request, db: Session = Depends(get_db)):
             request=request, 
             page="playlists",
             playlists=playlist_cards,
-            auto_playlists=auto_playlist_definitions(db),
         ),
     )

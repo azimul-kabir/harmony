@@ -129,8 +129,6 @@ Features include:
 - Playlist availability counts, filtering, and one-click source resync
 - Ordered playlist Library-file management and safe saved-playlist deletion
 - Per-source scheduled auto-sync (hourly, every 6 or 12 hours, daily, or weekly)
-- Auto-generated Recently Added and Recently Downloaded playlists with a
-  configurable 1–500-song limit
 
 ---
 
@@ -651,8 +649,6 @@ Just a synchronized self-hosted music library.
 - Ratings
 - Tags
 - User-defined collection rules
-- More built-in auto-playlists based on playback signals when those signals are
-  available
 
 ---
 
