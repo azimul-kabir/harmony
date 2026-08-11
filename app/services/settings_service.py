@@ -27,7 +27,7 @@ DEFAULT_SETTINGS = [
     {"key": "date_format", "value": "DD/MM/YYYY", "type": "string", "category": "general"},
     {"key": "time_format", "value": "12h", "type": "string", "category": "general"},
     {"key": "audio_quality", "value": "128k", "type": "string", "category": "downloads"},
-    {"key": "download_workers", "value": "4", "type": "int", "category": "downloads"},
+    {"key": "download_workers", "value": "2", "type": "int", "category": "downloads"},
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "youtube_music_enabled", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "default_download_source", "value": "spotify", "type": "string", "category": "downloads"},
@@ -72,10 +72,30 @@ def update_settings(db: Session, category: str, updates: dict):
     for key, value in updates.items():
         setting = db.query(AppSetting).filter(AppSetting.key == key, AppSetting.category == category).first()
         if setting:
-            cast_value = _validate_runtime_value(key, value) if key in RUNTIME_SETTING_DEFINITIONS else value
+            if key == "download_workers":
+                try:
+                    cast_value = int(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("download_workers must be a number from 1 to 8.") from exc
+                if not 1 <= cast_value <= 8:
+                    raise ValueError("download_workers must be between 1 and 8.")
+            else:
+                cast_value = _validate_runtime_value(key, value) if key in RUNTIME_SETTING_DEFINITIONS else value
             setting.value = str(cast_value).lower() if isinstance(cast_value, bool) else str(cast_value)
     db.commit()
     apply_runtime_overrides(db)
+
+
+def configured_download_workers(db: Session) -> int:
+    """Apply the persisted startup worker count to the authoritative runtime."""
+    downloads = get_settings_by_category(db, "downloads")
+    try:
+        count = int(downloads.get("download_workers", 2))
+    except (TypeError, ValueError):
+        count = 2
+    count = max(1, min(8, count))
+    get_settings().max_parallel_downloads = count
+    return count
 
 
 def apply_runtime_overrides(db: Session):

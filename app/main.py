@@ -38,7 +38,8 @@ from app.web.sources import router as sources_page_router
 from app.web.settings import router as settings_page_router
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
-from app.services.settings_service import initialize_defaults
+from app.services.settings_service import configured_download_workers, initialize_defaults
+from app.services.staging_cleanup import cleanup_staging_downloads
 from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.source_auto_sync import source_auto_sync_scheduler
@@ -64,6 +65,8 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         initialize_defaults(db)
+        configured_download_workers(db)
+        cleanup_staging_downloads(db, Path(settings.staging_path))
         recover_library_jobs(db)
         cleanup_library_jobs(db)
     finally:

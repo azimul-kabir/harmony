@@ -251,6 +251,9 @@ audio acquisition already succeeded, a post-processing retry reuses that file
 only when it still exists beneath Harmony's configured staging directory.
 Rate-limit failures use longer 60-second and 180-second delays and temporarily
 postpone other queued jobs for the same source without blocking other sources.
+Queued snapshot items expose `next_attempt_at`, `attempt`, and `max_attempts` for
+retry countdowns. On startup, Harmony removes staging files older than seven
+days unless they belong to active work or a recently failed resumable job.
 The Downloads snapshot also includes aggregate-only `failure_reasons` entries
 with a structured code, display label, and count for current failed jobs.
 

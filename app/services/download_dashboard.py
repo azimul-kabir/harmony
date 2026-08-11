@@ -234,7 +234,7 @@ def get_download_snapshot(db: Session, *, queue_limit: int = QUEUE_LIMIT,
     return {"event_type": "snapshot", "counts": download_counts(db),
             "failure_reasons": download_failure_reasons(db),
             "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "queue_position": j.queue_position, "status": normalized_status(j.status), **serialize_telemetry(j), "worker_slot": j.worker_name, "started_at": _timestamp(j.started_at)} for j in active],
-            "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(queued, 1)],
+            "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at), "stage": j.pipeline_stage, "next_attempt_at": _timestamp(j.next_attempt_at), "attempt": j.attempt_count, "max_attempts": 3} for i, j in enumerate(queued, 1)],
             "paused": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(paused, 1)],
             "jobs": history["items"], "history": history}
 

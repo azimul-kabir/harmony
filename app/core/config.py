@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
     audio_providers: str = "youtube-music,youtube"
 
-    max_parallel_downloads: int = 4
+    max_parallel_downloads: int = 2
 
     library_watcher_enabled: bool = True
     library_watcher_debounce_seconds: float = 0.75

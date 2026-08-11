@@ -44,6 +44,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Added
 
+- Added retry countdown and attempt information to waiting Downloads, plus
+  conservative seven-day cleanup for unprotected staging files.
 - Added aggregate failure-reason counts to the Downloads screen so provider
   throttling, matching, timeout, and local system failures are distinguishable.
 - Added bounded automatic recovery for transient download failures. Harmony now
@@ -94,6 +96,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- The saved Maximum Workers value now controls the startup worker pool; fresh
+  installations default to two workers to reduce provider throttling.
 - Provider rate limits now trigger a persisted source-wide queue cooldown, so
   other providers continue while Harmony stops compounding a 429 response.
 - Download retries now reuse safely persisted staging audio after tagging or
