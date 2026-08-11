@@ -385,10 +385,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-health-content > strong { color: var(--success); font-size: 2.3rem; }
 .dashboard-health-content p { margin: 5px 0; color: var(--text-muted); font-size: .85rem; display: flex; justify-content: space-between; gap: 12px; }
 .dashboard-health-content a { color: var(--primary); text-decoration: none; }
-.dashboard-collections { display: flex; flex-direction: column; }
-.dashboard-collections a { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; color: var(--text-main); text-decoration: none; border-bottom: 1px solid var(--border-color); font-size: .9rem; }
-.dashboard-collections a:last-child { border-bottom: 0; }
-.dashboard-collections a:hover { color: var(--primary); }
 .dashboard-actions { padding: 18px; }
 .dashboard-actions .quick-action-btn,
 .dashboard-actions .btn-secondary {
@@ -1776,8 +1772,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .library-album-card,
-.library-artist-card,
-.library-collection-card {
+.library-artist-card {
     color: inherit;
     font: inherit;
     text-align: left;
@@ -1859,72 +1854,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .library-artist-copy b { color: var(--text-main); }
 .library-card-arrow { margin-left: auto; color: var(--text-muted); font-size: 1.6rem; }
 
-.library-section-intro {
-    display: flex;
-    justify-content: space-between;
-    padding: 24px 24px 0;
-}
-
-.library-section-intro h2 { margin: 0 0 5px; font-size: 1.2rem; }
-.library-section-intro p { margin: 0; color: var(--text-muted); }
-
-.library-collections-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    padding: 24px;
-}
-
-.library-collection-card {
-    --collection-color: var(--primary);
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 18px;
-    min-width: 0;
-    padding: 22px;
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
-    background: linear-gradient(135deg, color-mix(in srgb, var(--collection-color) 10%, var(--bg-surface)), var(--bg-surface));
-    transition: transform 0.18s ease, border-color 0.18s ease;
-}
-
-.library-collection-card:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--collection-color) 45%, var(--border-color));
-}
-
-.library-collection-card:disabled {
-    cursor: default;
-    opacity: 0.72;
-}
-
-.library-collection-card:disabled:hover {
-    transform: none;
-}
-
-.library-collection-card.tone-violet { --collection-color: #7950f2; }
-.library-collection-card.tone-amber { --collection-color: #e67700; }
-.library-collection-card.tone-rose { --collection-color: #d6336c; }
-
-.library-collection-icon {
-    display: grid;
-    place-items: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 13px;
-    background: color-mix(in srgb, var(--collection-color) 15%, var(--bg-surface));
-    color: var(--collection-color);
-}
-
-.library-collection-icon svg { width: 25px; height: 25px; }
-.library-collection-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.library-collection-copy small { color: var(--collection-color); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-.library-collection-copy strong { color: var(--text-main); font-size: 1rem; }
-.library-collection-copy span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; }
-.library-collection-count { display: flex; flex-direction: column; align-items: flex-end; color: var(--text-muted); }
-.library-collection-count b { color: var(--collection-color); font-size: 1.6rem; line-height: 1; }
-.library-collection-count small { margin-top: 4px; }
 
 .library-pagination {
     display: flex;
@@ -1958,7 +1887,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (max-width: 900px) {
     .library-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .library-collections-grid { grid-template-columns: 1fr; }
     .library-songs-table th:nth-child(2) { width: auto; }
     .health-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .health-workspace { grid-template-columns: 1fr; }
@@ -2130,11 +2058,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .library-album-artwork { border-radius: 9px; }
     .library-artists-grid { grid-template-columns: 1fr; padding: 16px; }
     .library-section-intro { padding: 18px 16px 0; }
-    .library-collections-grid { padding: 16px; }
-    .library-collection-card { grid-template-columns: auto 1fr; gap: 14px; padding: 16px; }
-    .library-collection-count { grid-column: 2; align-items: flex-start; flex-direction: row; gap: 5px; }
-    .library-collection-count b { font-size: 1rem; }
-    .library-collection-count small { margin: 0; }
     .library-pagination { padding: 12px; }
     .library-pagination .btn-secondary { padding: 7px 10px; }
 

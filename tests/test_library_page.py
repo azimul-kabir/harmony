@@ -39,6 +39,8 @@ def test_normal_library_exposes_file_delete_not_forget():
     assert 'data-search-example="is:duplicate"' in response.text
     assert 'id="metadata-provider"' not in response.text
     assert 'id="metadata-discover"' not in response.text
+    assert 'data-view="collections"' not in response.text
+    assert 'id="collections-grid"' not in response.text
 
 
 def test_metadata_application_api_is_not_part_of_v3_surface():
@@ -47,3 +49,10 @@ def test_metadata_application_api_is_not_part_of_v3_surface():
     assert client.get("/api/metadata/suggestions/pending").status_code == 404
     assert client.get("/api/metadata/history").status_code == 404
     assert client.post("/api/library/songs/1/metadata/manual-preview", json={"changes": {}}).status_code == 404
+
+
+def test_smart_collection_api_is_not_part_of_v3_surface():
+    client = TestClient(app)
+
+    assert client.get("/api/library/collections").status_code == 404
+    assert client.get("/api/library/collections/recently-added").status_code == 404

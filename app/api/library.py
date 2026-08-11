@@ -17,7 +17,6 @@ from app.services.library_filters import (
     apply_song_filters,
     apply_song_sort,
 )
-from app.services.collections import collection_engine
 from app.services.duplicate_detector import TIERS, duplicate_detector
 from app.services.library_bulk import create_bulk_task
 from app.services.library_catalog import (
@@ -427,74 +426,6 @@ def list_artists(
         }
         for art in artists_query
     ]
-
-
-@router.get("/collections", summary="List Smart Collection definitions and counts")
-def list_collections(db: Session = Depends(get_db)):
-    return collection_engine.summaries(db)
-
-
-@router.get("/collections/{collection_id}", summary="Get a Smart Collection definition")
-def get_collection(collection_id: str, db: Session = Depends(get_db)):
-    definition = collection_engine.get(collection_id)
-    if definition is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    return definition.to_dict(song_count=collection_engine.count(db, collection_id))
-
-
-@router.get("/collections/{collection_id}/songs", summary="List Songs in a Smart Collection")
-def get_collection_songs(
-    collection_id: str,
-    db: Session = Depends(get_db),
-    sort_by: str = "artist",
-    artist: str | None = None,
-    album: str | None = None,
-    genre: str | None = None,
-    codec: str | None = None,
-    min_bitrate: int | None = Query(default=None, ge=0),
-    max_bitrate: int | None = Query(default=None, ge=0),
-    downloaded_today: bool = False,
-    recently_added: bool = False,
-    missing_artwork: bool = False,
-    missing_metadata: bool = False,
-    limit: int | None = Query(default=None, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-):
-    definition = collection_engine.get(collection_id)
-    if definition is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    filters = LibraryFilters(
-        artist=artist,
-        album=album,
-        genre=genre,
-        codec=codec,
-        min_bitrate=min_bitrate,
-        max_bitrate=max_bitrate,
-        downloaded_today=downloaded_today,
-        recently_added=recently_added,
-        missing_artwork=missing_artwork,
-        missing_metadata=missing_metadata,
-    )
-    statement = collection_engine.statement(
-        collection_id,
-        filters=filters,
-        sort_by=sort_by,
-    )
-    total = db.scalar(
-        select(func.count()).select_from(statement.order_by(None).subquery())
-    ) or 0
-    if offset:
-        statement = statement.offset(offset)
-    if limit is not None:
-        statement = statement.limit(limit)
-    songs = db.scalars(with_song_artwork(statement)).all()
-    return {
-        "collection": definition.to_dict(song_count=total),
-        "items": serialize_song_page(db, songs),
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
 
 
 @router.get("/genres", summary="List indexed genres")

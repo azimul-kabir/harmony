@@ -8,7 +8,7 @@
         <div>
             <span class="library-eyebrow">Library Index</span>
             <h1 id="library-title">Your music, organized</h1>
-            <p>Browse every track Harmony has indexed across albums, artists, and collections.</p>
+            <p>Browse every track Harmony has indexed across songs, albums, and artists.</p>
         </div>
         <div class="library-hero-actions">
         <a class="btn-secondary library-health-link" href="/library/health">Library Health</a>
@@ -39,11 +39,6 @@
             <span>Artists</span>
             <span class="library-tab-count" id="artists-count">—</span>
         </button>
-        <button class="library-tab" type="button" role="tab" aria-selected="false" data-view="collections">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
-            <span>Collections</span>
-            <span class="library-tab-count" id="collections-count">—</span>
-        </button>
     </nav>
 
     <div class="library-panel">
@@ -54,10 +49,6 @@
             </label>
             <span id="library-search-status" class="library-search-status" aria-live="polite"></span>
             <div class="library-toolbar-actions">
-                <button id="clear-collection" class="library-filter-chip" type="button" hidden>
-                    <span id="collection-filter-name"></span>
-                    <span aria-hidden="true">×</span>
-                </button>
                 <button id="library-filter-toggle" class="btn-secondary library-filter-toggle" type="button" aria-expanded="false" aria-controls="library-filter-panel">
                     Filters <span id="library-filter-count" class="library-filter-count" hidden>0</span>
                 </button>
@@ -167,15 +158,6 @@
             <div id="pagination-artists" class="library-pagination"></div>
         </section>
 
-        <section id="view-collections" class="library-view" role="tabpanel" hidden>
-            <div class="library-section-intro">
-                <div>
-                    <h2>Smart collections</h2>
-                    <p>Automatic views generated from the Library Index.</p>
-                </div>
-            </div>
-            <div id="collections-grid" class="library-collections-grid"></div>
-        </section>
     </div>
 </section>
 

@@ -17,8 +17,6 @@ editable runtime settings, and the mobile-first interface.
 - Settings import/export and clearer restart-required state.
 - Schedule history, missed-run visibility, and explicit run-now diagnostics.
 - Additional metadata providers.
-- User-defined smart-playlist and collection rules.
-- Favorites, ratings, and tags that can drive automatic collections.
 - API tokens for external automation clients beyond browser-session
   authentication.
 

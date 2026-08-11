@@ -241,7 +241,6 @@ function renderDashboard(snapshot) {
     const artworkLink = document.getElementById("health-artwork-link");
     if (artworkLink) artworkLink.href = "/library?missing_artwork=true";
     renderMaintenance(snapshot.maintenance || []);
-    renderCollections(snapshot.collections || []);
 }
 
 function renderAttention(attention) {
@@ -360,22 +359,6 @@ function renderMaintenance(jobs) {
         detail.textContent = `${String(job.status || "unknown").replaceAll("_", " ")} · ${processed}/${Number(job.total || 0)}${job.error_code ? ` · ${job.error_code}` : ""}`;
         item.append(name, detail);
         container.appendChild(item);
-    });
-}
-
-function renderCollections(collections) {
-    const container = document.getElementById("dashboard-collections");
-    if (!container) return;
-    container.replaceChildren();
-    collections.forEach((collection) => {
-        const link = document.createElement("a");
-        link.href = `/library?collection=${encodeURIComponent(collection.id)}`;
-        const name = document.createElement("span");
-        name.textContent = collection.name;
-        const count = document.createElement("strong");
-        count.textContent = Number(collection.song_count || 0).toLocaleString();
-        link.append(name, count);
-        container.appendChild(link);
     });
 }
 

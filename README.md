@@ -139,7 +139,7 @@ timestamps.
 
 The index updates incrementally through a supervised filesystem watcher. New,
 modified, deleted, moved, and renamed files are reconciled without periodic
-full-library scans. Library search, collections, health, and bulk
+full-library scans. Library search, health, and bulk
 operations read this index instead of walking the music filesystem.
 
 ### Songs View
@@ -169,14 +169,10 @@ operations read this index instead of walking the music filesystem.
 - Album counts
 - Click to browse artist collection
 
-### Smart Collections and Health
+### Library Filters and Health
 
-- Recently Added and Recently Downloaded
-- Highest Bitrate
+- Recently Added
 - Missing Artwork and Missing Metadata
-- Recently Modified
-- Large Albums
-- Favorites placeholder for a future favorites signal
 - Direct library completeness and indexing checks with maintenance actions
 
 ---

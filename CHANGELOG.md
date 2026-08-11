@@ -7,6 +7,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Removed
 
+- Removed Smart Collections as a separate rule engine, API, dashboard card,
+  and Library tab. Direct filters retain the useful maintenance views.
 - Removed Synology SNMP health monitoring, its dashboard card and API, and the
   PySNMP dependency. Harmony remains deployable on Synology NAS devices, while
   host monitoring is left to NAS and infrastructure monitoring tools.

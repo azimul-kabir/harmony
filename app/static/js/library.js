@@ -5,30 +5,16 @@ const DEFAULT_BITRATE_RANGES = {
     standard: { min: 192000, max: 319999 },
     compact: { min: null, max: 191999 },
 };
-const DEFAULT_COLLECTIONS = [
-    ["recently-added", "Recently Added", "Music added to the Library Index during the last seven days.", "blue", "recent"],
-    ["recently-downloaded", "Recently Downloaded", "Downloads added during the last seven days.", "cyan", "download"],
-    ["highest-bitrate", "Highest Bitrate", "Tracks at the highest bitrate currently in the Library.", "violet", "quality"],
-    ["missing-artwork", "Missing Artwork", "Tracks that still need a local artwork resource.", "amber", "artwork"],
-    ["missing-metadata", "Missing Metadata", "Tracks missing a title, artist, or album.", "rose", "metadata"],
-    ["recently-modified", "Recently Modified", "Files modified during the last seven days.", "green", "modified"],
-    ["large-albums", "Large Albums", "Tracks from albums containing at least ten indexed songs.", "indigo", "album"],
-    ["favorites", "Favorites", "Ready for a future favorites signal.", "pink", "favorite", true],
-].map(([id, name, description, tone, icon, placeholder = false]) => ({
-    id, name, description, tone, icon, placeholder, song_count: 0,
-}));
 const savedPreferences = readLibraryPreferences();
 
 const libraryState = {
     songs: [],
     albums: [],
     artists: [],
-    collections: [],
     filterOptions: null,
     filteredSongs: [],
     filteredAlbums: [],
     filteredArtists: [],
-    filteredCollections: [],
     view: "songs",
     sort: savedPreferences.sort || "artist",
     filters: {
@@ -47,7 +33,6 @@ const libraryState = {
     requestedAlbumKey: null,
     requestedSongId: null,
     requestedAvailability: null,
-    collectionId: null,
     searchTotal: 0,
     searchRequest: 0,
     pages: { songs: 1, albums: 1, artists: 1 },
@@ -381,15 +366,11 @@ async function loadLibraryData({ preserveState = false } = {}) {
     errorBox.hidden = true;
 
     try {
-        const songEndpoint = libraryState.collectionId
-            ? `/api/library/collections/${encodeURIComponent(libraryState.collectionId)}/songs`
-            : "/api/library/songs";
+        const songEndpoint = "/api/library/songs";
         // Songs are the source for the Songs, Albums, and Artists views. Do
-        // not let auxiliary collections or filter-options requests hide all
-        // three views when one of those optional endpoints is unavailable.
+        // not let the optional filter-options request hide all three views.
         const songResult = await fetchJson(`${songEndpoint}?${libraryRequestParams()}`);
-        const [collectionsResult, filterOptionsResult] = await Promise.allSettled([
-            fetchJson("/api/library/collections"),
+        const filterOptionsResult = await Promise.allSettled([
             libraryState.filterOptions
                 ? Promise.resolve(libraryState.filterOptions)
                 : fetchJson("/api/library/filter-options"),
@@ -397,18 +378,12 @@ async function loadLibraryData({ preserveState = false } = {}) {
 
         const songs = Array.isArray(songResult) ? songResult : songResult.items;
         const { albums, artists } = projectSongs(songs);
-        const collections = collectionsResult.status === "fulfilled"
-            ? collectionsResult.value
-            : DEFAULT_COLLECTIONS;
-        const filterOptions = filterOptionsResult.status === "fulfilled"
-            ? filterOptionsResult.value
+        const filterOptions = filterOptionsResult[0].status === "fulfilled"
+            ? filterOptionsResult[0].value
             : libraryState.filterOptions;
-        Object.assign(libraryState, { songs, albums, artists, collections, filterOptions });
-        if (collectionsResult.status === "rejected") {
-            console.error("Library collections error:", collectionsResult.reason);
-        }
-        if (filterOptionsResult.status === "rejected") {
-            console.error("Library filter options error:", filterOptionsResult.reason);
+        Object.assign(libraryState, { songs, albums, artists, filterOptions });
+        if (filterOptionsResult[0].status === "rejected") {
+            console.error("Library filter options error:", filterOptionsResult[0].reason);
         }
         populateFilterOptions();
         updateFilterControls();
@@ -430,7 +405,7 @@ async function loadLibraryData({ preserveState = false } = {}) {
 
 function applyFilters() {
     const query = libraryState.query.toLocaleLowerCase().trim();
-    let songs = libraryState.songs.filter(songMatchesCollection);
+    let songs = libraryState.songs;
 
     if (query) {
         songs = songs.filter((song) => [song.title, song.artist, song.album, song.filename]
@@ -445,8 +420,6 @@ function applyFilters() {
         (!libraryState.requestedAlbumKey || album.metadata_key === libraryState.requestedAlbumKey));
     libraryState.filteredArtists = libraryState.artists.filter((artist) => !query ||
         String(artist.artist || "").toLocaleLowerCase().includes(query));
-    libraryState.filteredCollections = libraryState.collections.filter((collection) => !query ||
-        [collection.name, collection.description].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
 }
 
 async function performSearch() {
@@ -467,13 +440,10 @@ async function performSearch() {
         if (request !== libraryState.searchRequest) return;
 
         libraryState.searchTotal = result.total;
-        libraryState.filteredSongs = result.items.filter(songMatchesCollection);
+        libraryState.filteredSongs = result.items;
         const projections = projectSongs(result.items);
         libraryState.filteredAlbums = projections.albums;
         libraryState.filteredArtists = projections.artists;
-        libraryState.filteredCollections = libraryState.collections.filter((collection) =>
-            [collection.name, collection.description].some((value) =>
-                String(value || "").toLocaleLowerCase().includes(query.toLocaleLowerCase())));
 
         const shown = result.items.length;
         status.textContent = result.total > shown
@@ -490,15 +460,10 @@ async function performSearch() {
     }
 }
 
-function songMatchesCollection(song) {
-    return true;
-}
-
 function updateCounts() {
     document.getElementById("songs-count").textContent = libraryState.songs.length.toLocaleString();
     document.getElementById("albums-count").textContent = libraryState.albums.length.toLocaleString();
     document.getElementById("artists-count").textContent = libraryState.artists.length.toLocaleString();
-    document.getElementById("collections-count").textContent = libraryState.collections.length.toLocaleString();
 }
 
 function renderActiveView() {
@@ -509,7 +474,6 @@ function renderActiveView() {
     if (libraryState.view === "songs") renderSongs();
     if (libraryState.view === "albums") renderAlbums();
     if (libraryState.view === "artists") renderArtists();
-    if (libraryState.view === "collections") renderCollections();
 }
 
 function renderSongs() {
@@ -597,41 +561,6 @@ function renderArtists() {
     renderPagination("pagination-artists", page, "artists", renderArtists);
 }
 
-function renderCollections() {
-    const grid = document.getElementById("collections-grid");
-    const collectionIcons = {
-        recent: icons.recent,
-        download: icons.download,
-        quality: icons.quality,
-        artwork: icons.artwork,
-        metadata: icons.metadata,
-        modified: icons.modified,
-        album: icons.album,
-        favorite: icons.favorite,
-    };
-
-    grid.innerHTML = libraryState.filteredCollections.length
-        ? libraryState.filteredCollections.map((collection) => `
-            <button class="library-collection-card tone-${escapeAttribute(collection.tone)}" type="button" data-collection="${escapeAttribute(collection.id)}" data-name="${escapeAttribute(collection.name)}" ${collection.placeholder ? "disabled" : ""}>
-                <span class="library-collection-icon">${collectionIcons[collection.icon] || icons.music}</span>
-                <span class="library-collection-copy">
-                    <small>Smart collection</small>
-                    <strong>${escapeHtml(collection.name)}</strong>
-                    <span>${escapeHtml(collection.description)}</span>
-                </span>
-                <span class="library-collection-count">
-                    <b>${Number(collection.song_count || 0).toLocaleString()}</b>
-                    <small>${collection.placeholder ? "Coming soon" : pluralizeLabel(collection.song_count, "song")}</small>
-                </span>
-            </button>
-        `).join("")
-        : emptyGrid("No collections match your search.");
-
-    grid.querySelectorAll("[data-collection]").forEach((card) => {
-        card.addEventListener("click", () => applyCollection(card.dataset.collection, card.dataset.name));
-    });
-}
-
 function pageItems(items, key) {
     const totalPages = Math.max(1, Math.ceil(items.length / libraryState.pageSize));
     libraryState.pages[key] = Math.min(libraryState.pages[key], totalPages);
@@ -668,7 +597,7 @@ function switchView(view) {
         tab.classList.toggle("active", active);
         tab.setAttribute("aria-selected", String(active));
     });
-    document.getElementById("library-sort").disabled = view === "collections";
+    document.getElementById("library-sort").disabled = false;
     renderActiveView();
 }
 
@@ -684,25 +613,6 @@ function showSongsFor(field, value, albumKey = null) {
     }
     libraryState.pages.songs = 1;
     switchView("songs");
-}
-
-async function applyCollection(collectionId, name) {
-    libraryState.collectionId = collectionId;
-    libraryState.query = "";
-    document.getElementById("library-search").value = "";
-    const chip = document.getElementById("clear-collection");
-    document.getElementById("collection-filter-name").textContent = name;
-    chip.hidden = false;
-    libraryState.pages.songs = 1;
-    switchView("songs");
-    await loadLibraryData({ preserveState: true });
-}
-
-async function clearCollection() {
-    libraryState.collectionId = null;
-    document.getElementById("clear-collection").hidden = true;
-    libraryState.pages.songs = 1;
-    await loadLibraryData({ preserveState: true });
 }
 
 function artwork(url, className) {
@@ -957,13 +867,7 @@ document.getElementById("library-search").addEventListener("input", (event) => {
     searchTimer = setTimeout(async () => {
         libraryState.query = event.target.value;
         Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
-        if (libraryState.collectionId !== null) {
-            libraryState.collectionId = null;
-            document.getElementById("clear-collection").hidden = true;
-            await loadLibraryData({ preserveState: true });
-        } else {
-            performSearch();
-        }
+        performSearch();
     }, 180);
 });
 document.querySelectorAll("[data-search-example]").forEach((button) => {
@@ -1026,7 +930,6 @@ document.getElementById("clear-library-filters").addEventListener("click", () =>
     loadLibraryData({ preserveState: true });
 });
 
-document.getElementById("clear-collection").addEventListener("click", clearCollection);
 
 document.getElementById("btn-rescan").addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -1067,7 +970,7 @@ document.addEventListener("DOMContentLoaded", () => {
         libraryState.requestedAlbumKey = requestedAlbumKey;
         Object.assign(libraryState.filters, { artist: "", album: "", genre: "", codec: "", bitrate: "", downloaded_today: false, recently_added: false, missing_artwork: false, missing_metadata: false });
     }
-    if (["songs", "albums", "artists", "collections"].includes(requestedView)) libraryState.view = requestedView;
+    if (["songs", "albums", "artists"].includes(requestedView)) libraryState.view = requestedView;
     if (Number.isInteger(requestedSongId) && requestedSongId > 0) {
         libraryState.requestedSongId = requestedSongId;
         libraryState.view = "songs";

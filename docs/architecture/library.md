@@ -578,7 +578,7 @@ Current canonical boundaries:
 - `library_search`: transactional FTS projection maintenance and bounded search.
 - `library_filters`: composable query filters and stable sorting.
 - `library_predicates`: shared semantic SQL definitions such as missing metadata.
-- `collections`, `library_analytics`, and `library_health`: index-only projections.
+- `library_analytics` and `library_health`: index-only projections.
 - `artwork`: content-addressed local artwork detection and storage.
 - `library_bulk` and `library_health`: task-backed filesystem orchestration.
 - `task_progress`: the shared durable-task API contract.
@@ -1026,7 +1026,12 @@ unchanged.
 
 ---
 
-# Smart Collections
+# Smart Collections (v2 historical design)
+
+Harmony v3 removes this separate rule engine, API family, dashboard summary, and
+Library tab. The useful maintenance views remain as ordinary Library filters,
+including recently added, missing artwork, and missing metadata. The following
+section documents the previous v2 design for migration context.
 
 Smart Collections are generated live from the Library Index. Users never
 manually edit their membership, and no collection-item rows duplicate Song

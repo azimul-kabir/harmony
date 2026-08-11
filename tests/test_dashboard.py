@@ -313,13 +313,7 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                 "error_code": "INDEX_ERROR",
             }
         ]
-        assert [item["id"] for item in snapshot["collections"]] == [
-            "recently-added",
-            "missing-artwork",
-            "missing-metadata",
-            "highest-bitrate",
-            "large-albums",
-        ]
+        assert "collections" not in snapshot
 
 
 def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failures():

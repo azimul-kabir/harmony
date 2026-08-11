@@ -12,7 +12,6 @@ from app.database.models import (
 )
 from app.domain.download import JobStatus
 from app.domain.task import TaskStatus, TaskType
-from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
 from app.services.download_telemetry import STALE_HEARTBEAT_SECONDS
@@ -236,18 +235,6 @@ def get_dashboard_snapshot(db) -> dict:
         task_counts=_attention_task_counts(db),
     )
     playlist_count = db.scalar(select(func.count(Playlist.id))) or 0
-    collection_ids = (
-        "recently-added",
-        "missing-artwork",
-        "missing-metadata",
-        "highest-bitrate",
-        "large-albums",
-    )
-    collections = [
-        definition.to_dict(song_count=collection_engine.count(db, definition.id))
-        for collection_id in collection_ids
-        if (definition := collection_engine.get(collection_id)) is not None
-    ]
     maintenance = db.scalars(
         select(Task)
         .where(
@@ -309,7 +296,6 @@ def get_dashboard_snapshot(db) -> dict:
             }
             for task in maintenance
         ],
-        "collections": collections,
     }
 
 
