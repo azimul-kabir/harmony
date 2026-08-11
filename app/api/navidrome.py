@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services.navidrome import NavidromeClient, NavidromeError
-from app.services.navidrome_sync_health import navidrome_sync_health
 
 router = APIRouter(prefix="/api/navidrome", tags=["navidrome"])
 
@@ -22,18 +21,6 @@ def _http_error(error: NavidromeError):
 @router.get("/status")
 async def navidrome_status():
     return await NavidromeClient().status()
-
-
-@router.get("/sync-health")
-async def navidrome_health_status(refresh: bool = Query(default=False)):
-    if refresh:
-        return await navidrome_sync_health.check()
-    return navidrome_sync_health.snapshot()
-
-
-@router.post("/sync-health/reconcile")
-async def reconcile_navidrome_health(full_scan: bool = Query(default=False)):
-    return await navidrome_sync_health.reconcile(full_scan=full_scan)
 
 
 @router.post("/rescan")

@@ -66,10 +66,6 @@ M3U import when direct reconciliation is unsafe. Search limits, duration
 tolerance, reimport debounce/poll intervals, and scan timeout can be adjusted
 under **Settings → Navidrome**.
 
-Health reconciliation keeps separate bounds for incremental and full scans:
-`NAVIDROME_SYNC_HEALTH_SCAN_TIMEOUT_SECONDS` defaults to 240 seconds, while
-`NAVIDROME_SYNC_HEALTH_FULL_SCAN_TIMEOUT_SECONDS` defaults to 600 seconds.
-
 ## YouTube Music
 
 ```env

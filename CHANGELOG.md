@@ -21,6 +21,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   database upgrade compatibility.
 - Removed Navidrome Love/Unlove jobs, APIs, client mutations, configuration,
   and Playlists UI. Harmony no longer changes user playback preferences.
+- Removed periodic Navidrome catalog comparison and automatic drift
+  reconciliation. Explicit connection status, incremental/full scans, and
+  playlist synchronization remain available.
 
 ## [v2.1.0] - 2026-08-08
 

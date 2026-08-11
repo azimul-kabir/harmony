@@ -48,6 +48,13 @@ def test_navidrome_love_api_is_not_part_of_v3_surface():
     assert client.get("/api/navidrome/jobs/1").status_code == 404
 
 
+def test_navidrome_sync_health_api_is_not_part_of_v3_surface():
+    client = TestClient(app)
+
+    assert client.get("/api/navidrome/sync-health").status_code == 404
+    assert client.post("/api/navidrome/sync-health/reconcile").status_code == 404
+
+
 def test_playlist_navidrome_scan_has_endpoint_wiring_and_live_feedback():
     template = Path("app/templates/playlists.html").read_text()
     script = Path("app/static/js/playlists.js").read_text()
