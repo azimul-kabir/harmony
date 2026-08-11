@@ -528,6 +528,19 @@ Start Harmony.
 docker compose up -d --build
 ```
 
+### Pull the preview image on Synology
+
+The completed Harmony v3 branch publishes an Intel/AMD and ARM image to GitHub
+Container Registry. Pull it from Container Manager or over SSH:
+
+```bash
+docker pull ghcr.io/azimul-kabir/harmony:v3-preview
+```
+
+Use `ghcr.io/azimul-kabir/harmony:v3-preview` as the image name in a Synology
+Container Manager project. If the package is private, sign in to `ghcr.io`
+with the GitHub username and a personal access token that has `read:packages`.
+
 Open:
 
 ```
