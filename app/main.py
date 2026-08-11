@@ -21,7 +21,6 @@ from app.api.metadata_discovery import router as metadata_discovery_router
 from app.api.navidrome import router as navidrome_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
-from app.api.system_health import router as system_health_router
 from app.api.sync_sources import router as sync_sources_router
 from app.api.tasks import router as tasks_router
 from app.api.providers import router as providers_router
@@ -50,7 +49,6 @@ from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.navidrome_sync_health import navidrome_sync_health_scheduler
 from app.services.source_auto_sync import source_auto_sync_scheduler
-from app.services.synology_monitor import synology_monitor
 
 settings = get_settings()
 
@@ -82,7 +80,6 @@ async def lifespan(app: FastAPI):
     navidrome_playlist_reimport.start()
     navidrome_sync_health_scheduler.start()
     source_auto_sync_scheduler.start()
-    synology_monitor.start()
     
     logger.info("Starting Harmony...")
     logger.info(
@@ -115,7 +112,6 @@ async def lifespan(app: FastAPI):
         navidrome_playlist_reimport.stop()
         navidrome_sync_health_scheduler.stop()
         source_auto_sync_scheduler.stop()
-        await synology_monitor.stop()
         await close_providers()
         if library_watcher is not None:
             library_watcher.stop()
@@ -148,7 +144,6 @@ app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
-app.include_router(system_health_router)
 app.include_router(settings_page_router)  # The /settings HTML Web page (app/web/settings.py)
 app.include_router(downloads_page_router)
 app.include_router(library_router)

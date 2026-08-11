@@ -180,23 +180,3 @@ MusicBrainz/Cover Art Archive, Navidrome reconciliation, and the Library
 watcher. Invalid updates return HTTP 422 and leave the previous value in place.
 General date/time, theme, audio quality, worker, retry, playlist, and export
 preferences are also persisted.
-# Synology NAS health monitoring
-
-Enable SNMP in DSM under **Control Panel → Terminal & SNMP → SNMP**, enable
-SNMPv2c, and configure a read-only community. Set
-`SYNOLOGY_MONITORING_ENABLED=true`, `SYNOLOGY_SNMP_HOST` to an address reachable
-from the Harmony container, and `SYNOLOGY_SNMP_COMMUNITY` to that community.
-Port, timeout, retries, polling interval, stale threshold, and the maximum disk
-index can be adjusted with the corresponding variables in `.env.example`.
-
-Harmony uses PySNMP directly; it neither mounts the Docker socket nor invokes
-command-line SNMP programs. Only normalized system and disk health is exposed.
-The community, raw OIDs, SNMP responses, and internal exception details remain
-server-private. If DSM is unreachable, the last successful sample remains
-visible and is marked unavailable or stale.
-
-Disk discovery deliberately probes indexed columns with bounded GET requests
-from index `.0` through `SYNOLOGY_DISK_MAX_INDEX` (default `.15`). Some DSM
-versions return no disk rows from an SNMP walk even though indexed GET requests
-work. Missing indexes are ignored, and DSM's returned disk ID—not the SNMP
-index—is the displayed disk label.

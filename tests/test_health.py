@@ -19,6 +19,12 @@ def test_liveness_is_lightweight_and_versioned():
     assert client.get("/health").json() == response.json()
 
 
+def test_host_monitoring_is_outside_harmony_api():
+    response = client.get("/api/system-health/synology")
+
+    assert response.status_code == 404
+
+
 def test_readiness_reports_database_and_storage_components(tmp_path, monkeypatch):
     settings = health.get_settings()
     for attribute in (
