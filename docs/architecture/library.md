@@ -82,7 +82,7 @@ then informational items; their order within a severity is a fixed operational p
 not a count-based ranking.
 
 The panel links to existing review screens and exposes only explicitly allowlisted,
-non-destructive recovery actions: verify indexed files, queue metadata analysis, and
+non-destructive recovery actions: verify indexed files and
 refresh the library index. The browser maps these stable action keys to existing APIs;
 bulk retry, deletion, cache clearing, and metadata application remain unavailable here.
 Its contract contains only typed counts, labels, and navigation URLs: filesystem paths,
@@ -294,7 +294,12 @@ Favorites
 
 The Library Engine is composed of independent services.
 
-## Metadata Health Engine
+## Metadata Health Engine (v2 historical design)
+
+Harmony v3 removes this persisted rule/issue engine from the active product. Missing
+title, artist, and album counts are now derived directly from the song index and link
+to the corresponding Library filter. The details below remain as migration history
+for existing v2 databases.
 
 `MetadataHealthService` evaluates registered, provider-neutral rules against
 canonical `Song` rows and grouped projections; it never opens audio files or

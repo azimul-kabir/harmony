@@ -15,7 +15,6 @@ from app.domain.task import TaskStatus, TaskType
 from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
-from app.services.metadata_health import metadata_health
 from app.services.download_telemetry import STALE_HEARTBEAT_SECONDS
 
 
@@ -228,7 +227,7 @@ def get_dashboard_snapshot(db) -> dict:
             ),
         )
     ).one()
-    included_metadata_issues = metadata_health.included_open_issue_count(db)
+    included_metadata_issues = int(health_row[1])
     attention = _get_attention_summary(
         failed_downloads=stats["failed"],
         missing_files=int(missing_files),
@@ -355,11 +354,11 @@ _ATTENTION_DEFINITIONS = (
     (
         "pending_metadata",
         "warning",
-        "Open metadata issues",
-        "/library/health?metadata_status=open#metadata-issues-title",
+        "Missing metadata",
+        "/library?missing_metadata=true",
         "Review",
-        "analyze_metadata",
-        "Analyze metadata",
+        "refresh_library",
+        "Refresh library",
     ),
     (
         "missing_artwork",

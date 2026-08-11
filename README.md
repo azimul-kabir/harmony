@@ -177,7 +177,7 @@ operations read this index instead of walking the music filesystem.
 - Recently Modified
 - Large Albums
 - Favorites placeholder for a future favorites signal
-- Library health score, indexing checks, and maintenance actions
+- Direct library completeness and indexing checks with maintenance actions
 
 ---
 
@@ -253,7 +253,7 @@ average bitrate and duration, recently added music, and album insights.
 The dedicated **Library Health** page adds:
 
 - Missing artwork and missing metadata checks
-- Weighted health score
+- Direct completeness and availability counts
 - Library last-updated time
 - Refresh Library and Rebuild Index
 - Indexed-file verification

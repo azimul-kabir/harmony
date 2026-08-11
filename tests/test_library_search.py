@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.library import search_library
 from app.database.base import Base
-from app.database.models import MetadataIssue, Playlist, PlaylistTrack, Song
+from app.database.models import Playlist, PlaylistTrack, Song
 from app.services.library_search import SearchFilters, SearchQueryError, library_search
 
 
@@ -114,17 +114,7 @@ def test_advanced_intelligence_filters_cover_issues_missing_and_duplicates():
         )
         db.add(duplicate)
         db.flush()
-        db.add(MetadataIssue(
-            identity_key="search-issue",
-            rule_id="test_rule",
-            entity_type="song",
-            entity_id=str(first.id),
-            song_id=first.id,
-            severity="warning",
-            status="open",
-            title="Test issue",
-            explanation="Search filter coverage",
-        ))
+        first.album = None
         library_search.index_song(db, duplicate.id)
         db.commit()
 

@@ -315,7 +315,6 @@ function renderAttention(attention) {
 
 const ATTENTION_RECOVERY_ENDPOINTS = {
     verify_files: "/api/library/health/actions/verify",
-    analyze_metadata: "/api/library/health/metadata/analyze",
     refresh_library: "/api/library/health/actions/refresh",
 };
 

@@ -35,6 +35,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed metadata suggestions, review/application jobs, manual canonical edits,
   history/rollback APIs, and explicit audio tag writing. Index extraction and
   metadata-health visibility remain.
+- Removed persisted metadata-health rules, issue scoring, analysis jobs, and
+  issue-management UI. Missing metadata is now derived directly from the index.
 
 ## [v2.1.0] - 2026-08-08
 

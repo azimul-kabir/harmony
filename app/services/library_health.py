@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.core.time import utcnow_naive
-from app.database.models import Artwork, MetadataIssue, Song, Task
+from app.database.models import Artwork, Song, Task
 from app.database.session import SessionLocal
 from app.database.pagination import iter_primary_keys
 from app.domain.task import TaskStatus, TaskType
@@ -20,7 +20,6 @@ from app.services.library_scanner import index_file, scan_library
 from app.services.library_search import library_search
 from app.services.library_predicates import missing_metadata_expression
 from app.services.task_service import create_task, record_item_failure
-from app.services.metadata_health import metadata_health
 from app.services.duplicate_detector import duplicate_detector
 
 
@@ -127,12 +126,6 @@ class LibraryHealthService:
         )
         return task
 
-    def create_metadata_analysis(self, db: Session) -> Task:
-        # Missing rows are counted as skipped so total = successful + failed + skipped.
-        total = db.scalar(select(func.count(Song.id))) or 0
-        return create_task(db, name="Metadata Health Analysis", spotify_url="library://metadata-health/analyze",
-            task_type=TaskType.LIBRARY_MAINTENANCE, total_items=max(int(total), 1),
-            operation_payload=json.dumps({"action":"metadata_analysis"}), resource_key="library-metadata-health")
 
 
 class LibraryMaintenanceWorker:
@@ -230,8 +223,6 @@ class LibraryMaintenanceWorker:
                 self._verify(db, task)
             elif action == "clear_artwork":
                 self._clear_artwork(db, task)
-            elif action == "metadata_analysis":
-                self._metadata_analysis(db, task)
             else:
                 raise ValueError(f"Unknown maintenance action: {action}")
         except Exception:
@@ -313,59 +304,6 @@ class LibraryMaintenanceWorker:
             db.commit()
         if not processed_any:
             task.completed_items = task.total_items
-
-    def _metadata_analysis(self, db: Session, task: Task) -> None:
-        song_ids = list(iter_primary_keys(db, Song))
-        if not song_ids:
-            task.skipped_items = task.total_items
-        for start in range(0, len(song_ids), 500):
-            db.refresh(task)
-            if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
-                task.status = TaskStatus.CANCELLED.value
-                task.skipped_items = max(0, task.total_items - task.completed_items - task.failed_items)
-                db.commit(); return
-            batch_ids = song_ids[start:start + 500]
-            batch = list(db.scalars(select(Song).where(Song.id.in_(batch_ids))).all())
-            findings = []
-            analyzed_ids = []
-            for song in batch:
-                if song.availability_status != "available":
-                    task.skipped_items += 1
-                    continue
-                try:
-                    task.current_item = song.filename
-                    findings.extend(metadata_health.detect_song(song))
-                    analyzed_ids.append(song.id)
-                    task.completed_items += 1
-                except Exception:
-                    logger.exception("Metadata analysis failed for song {}", song.id)
-                    task.failed_items += 1
-                    record_item_failure(db, task, str(song.id), "METADATA_ANALYSIS_FAILED", "Indexed metadata could not be analyzed")
-            metadata_health.reconcile(db, findings, scope=("song", analyzed_ids), job_id=task.id)
-            db.commit()
-        # Projection rules run from one batched indexed query after song rules.
-        db.refresh(task)
-        if task.status in (TaskStatus.CANCELLED.value, TaskStatus.CANCELLING.value) or self._stop.is_set():
-            task.status = TaskStatus.CANCELLED.value
-            task.skipped_items = max(0, task.total_items - task.completed_items - task.failed_items)
-            db.commit()
-            return
-        available_songs = list(db.scalars(select(Song).where(Song.availability_status == "available")).all())
-        metadata_health._analyze_projections(db, available_songs, task.id)
-        # A successful complete pass reconciles findings that disappeared at
-        # every scope. During a partial pass, preserve stale issues because the
-        # failed entity may still trigger them.
-        if not task.failed_items:
-            now = utcnow_naive()
-            db.execute(
-                update(MetadataIssue)
-                .where(
-                    MetadataIssue.status == "open",
-                    (MetadataIssue.detection_job_id.is_(None) | (MetadataIssue.detection_job_id != task.id)),
-                )
-                .values(status="resolved", resolved_at=now)
-            )
-        db.commit()
 
 
 library_health = LibraryHealthService()

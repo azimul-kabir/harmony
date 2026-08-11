@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 
 from app.database.models import (
     DownloadJob,
-    MetadataIssue,
     Playlist,
     Song,
     SyncSource,
@@ -185,11 +184,6 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     spotify_url="https://example.test/source",
                     name="Source",
                 ),
-                MetadataIssue(
-                    identity_key="dashboard-open-metadata", rule_id="missing_genre", rule_version="1",
-                    entity_type="song", entity_id="1", song_id=1, severity="warning", status="open",
-                    title="Missing genre", explanation="Missing genre",
-                ),
                 Task(
                     name="Refresh Library",
                     spotify_url="library://maintenance/refresh",
@@ -279,12 +273,12 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     "key": "pending_metadata",
                     "severity": "warning",
                     "count": 1,
-                    "title": "Open metadata issues",
+                    "title": "Missing metadata",
                     "description": "1 item requires attention",
-                    "href": "/library/health?metadata_status=open#metadata-issues-title",
+                    "href": "/library?missing_metadata=true",
                     "action_label": "Review",
-                    "recovery_action": "analyze_metadata",
-                    "recovery_label": "Analyze metadata",
+                    "recovery_action": "refresh_library",
+                    "recovery_label": "Refresh library",
                 },
                 {
                     "key": "missing_artwork",
