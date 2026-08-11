@@ -92,6 +92,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- Download retries now reuse safely persisted staging audio after tagging or
+  Library import failures instead of fetching the same provider audio again.
+
 - Fixed stalled and overlapping playlist synchronization, late duplicate
   resolution, inaccurate availability counts, and stuck progress indicators.
 - Fixed SpotDL skipped-output handling, equivalent multi-artist tag matching,

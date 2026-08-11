@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
+from app.core.config import get_settings
 from app.database.crud_downloads import (
     claim_next_job,
     recover_running_jobs,
@@ -164,8 +165,16 @@ def process_job(
                 job.genre = track.genre
                 job.genre_provenance = track.genre_provenance
                 db.commit()
-        update_telemetry(db, job, stage="downloading", progress_percent=None)
-        output_file = download_track(track, job.id)
+        output_file = _resumable_staging_file(job)
+        if output_file is None:
+            update_telemetry(db, job, stage="downloading", progress_percent=None)
+            output_file = download_track(track, job.id)
+            # Persist acquisition before any post-processing. If tagging or
+            # import fails, a bounded retry can resume from this exact file.
+            job.output_file = str(output_file.resolve())
+            db.commit()
+        else:
+            logger.info("Resuming job #{} from staged audio", job.id)
         if _cancelled(db, job, output_file):
             return
         update_telemetry(db, job, stage="tagging", progress_percent=80)
@@ -311,6 +320,20 @@ def _cancelled(db, job, output_file):
         except OSError:
             logger.warning("Cancelled job #{} output cleanup failed", job.id)
     return True
+
+
+def _resumable_staging_file(job: DownloadJob) -> Path | None:
+    """Return a safe acquired file from a prior attempt, never a library path."""
+    if not job.output_file:
+        return None
+    candidate = Path(job.output_file)
+    try:
+        resolved = candidate.resolve(strict=True)
+        staging = Path(get_settings().staging_path).resolve(strict=True)
+        resolved.relative_to(staging)
+    except (OSError, ValueError):
+        return None
+    return resolved if resolved.is_file() else None
 
 
 def _finish_with_outcome(db, job, status, outcome):
