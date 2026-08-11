@@ -20,6 +20,19 @@ QUEUE_LIMIT = 25
 HISTORY_LIMIT = 250
 DETAIL_EVENT_LIMIT = 3
 COUNT_KEYS = ("running", "queued", "paused", "completed", "failed", "cancelled", "skipped")
+FAILURE_REASON_LABELS = {
+    "provider_rate_limited": "Provider rate limiting",
+    "provider_unavailable": "Provider unavailable",
+    "provider_error": "Provider errors",
+    "provider_no_match": "No provider match",
+    "exact_match_unavailable": "Exact match unavailable",
+    "fallback_match_unavailable": "No safe fallback",
+    "download_timeout": "Download timeouts",
+    "filesystem_permission_denied": "Library permissions",
+    "disk_full": "Disk full",
+    "unexpected_error": "Unexpected errors",
+    "legacy_failure": "Older unclassified failures",
+}
 
 
 def normalized_status(status: str | None) -> str:
@@ -118,6 +131,27 @@ def download_counts(db: Session) -> dict[str, int]:
     return counts
 
 
+def download_failure_reasons(db: Session) -> list[dict[str, int | str]]:
+    """Return aggregate-only failure categories for operational diagnosis."""
+    code = func.coalesce(DownloadJob.reason_code, "legacy_failure")
+    rows = db.execute(
+        select(code, func.count(DownloadJob.id))
+        .where(DownloadJob.status == JobStatus.FAILED.value)
+        .group_by(code)
+        .order_by(func.count(DownloadJob.id).desc(), code.asc())
+    ).all()
+    return [
+        {
+            "code": reason_code,
+            "label": FAILURE_REASON_LABELS.get(
+                reason_code, reason_code.replace("_", " ").capitalize()
+            ),
+            "count": int(count),
+        }
+        for reason_code, count in rows
+    ]
+
+
 def download_history(db: Session, *, page: int = 1, page_size: int = HISTORY_LIMIT,
                      status: str | None = None, search: str | None = None) -> dict:
     """Fetch persisted track history without requiring a parent task or worker."""
@@ -198,6 +232,7 @@ def get_download_snapshot(db: Session, *, queue_limit: int = QUEUE_LIMIT,
                           .order_by(DownloadJob.created_at.asc(), DownloadJob.id.asc()).limit(queue_limit)).all()
     active, queued, paused = queue("running"), queue("queued"), queue("paused")
     return {"event_type": "snapshot", "counts": download_counts(db),
+            "failure_reasons": download_failure_reasons(db),
             "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "queue_position": j.queue_position, "status": normalized_status(j.status), **serialize_telemetry(j), "worker_slot": j.worker_name, "started_at": _timestamp(j.started_at)} for j in active],
             "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(queued, 1)],
             "paused": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(paused, 1)],

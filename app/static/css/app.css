@@ -433,6 +433,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .downloads-summary-card strong { display: block; margin-top: 5px; color: var(--primary); font-size: 1.45rem; line-height: 1; }
 .downloads-summary-attention strong { color: var(--danger); }
 .download-ingest-panel { padding: 12px; margin-bottom: var(--space-md); }
+.download-failure-breakdown { padding: 16px; margin-bottom: var(--space-md); }
+.download-failure-breakdown[hidden] { display: none; }
+.download-failure-reasons { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 10px; }
+.download-failure-reason { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-surface-alt); }
+.download-failure-reason span { color: var(--text-muted); font-size: .8rem; }
+.download-failure-reason strong { color: var(--danger); font-size: 1rem; }
 .download-ingest-form { display: flex; gap: 8px; margin: 0; }
 .download-ingest-form input {
     flex: 1;

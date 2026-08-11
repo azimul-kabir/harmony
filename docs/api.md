@@ -249,6 +249,8 @@ Transient provider failures are retried up to three total attempts when
 workers remain available for other queued tracks while a retry is waiting. If
 audio acquisition already succeeded, a post-processing retry reuses that file
 only when it still exists beneath Harmony's configured staging directory.
+The Downloads snapshot also includes aggregate-only `failure_reasons` entries
+with a structured code, display label, and count for current failed jobs.
 
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
 

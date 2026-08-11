@@ -44,6 +44,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Added
 
+- Added aggregate failure-reason counts to the Downloads screen so provider
+  throttling, matching, timeout, and local system failures are distinguishable.
 - Added bounded automatic recovery for transient download failures. Harmony now
   persists provider attempts, delays retries without blocking workers, and
   honors the existing Retry Failed Downloads setting.
