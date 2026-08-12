@@ -52,6 +52,30 @@ def test_cache_deduplicates_artwork_by_content(tmp_path):
         assert (first.width, first.height) == (2, 3)
 
 
+def test_cache_conflict_reuses_committed_artwork_without_rolling_back(tmp_path):
+    database = tmp_path / "artwork.db"
+    engine = create_engine(f"sqlite:///{database}")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    service = ArtworkService(tmp_path / "cache")
+
+    with session_factory() as first_db:
+        first = service.cache(
+            first_db, ArtworkCandidate(PNG, "image/png", "embedded")
+        )
+        first_db.commit()
+
+    with session_factory() as second_db:
+        reused = service.cache(
+            second_db, ArtworkCandidate(PNG, "image/png", "folder")
+        )
+        second_db.commit()
+
+        assert reused.id == first.id
+        assert second_db.is_active is True
+        assert second_db.query(Artwork).count() == 1
+
+
 def test_folder_artwork_is_detected_and_cached(tmp_path, monkeypatch):
     session_factory = _database()
     service = ArtworkService(tmp_path / "cache")

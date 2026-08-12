@@ -31,6 +31,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- Made artwork-cache insertion and file publication conflict-safe when the
+  download importer and Library watcher index the same new song concurrently.
 - Reconciled provider no-match outcomes with the indexed Library. When the
   requested recording is already available, Harmony now records the download
   as skipped, preserves its provider identity, and does not offer an
