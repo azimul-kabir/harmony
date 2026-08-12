@@ -22,6 +22,14 @@ RUNTIME_SETTING_DEFINITIONS = {
     "library_watcher_debounce_seconds": ("library", "float", 0.1, 60),
 }
 
+# v2 rows may remain in upgraded databases. Keep them readable at the schema
+# level, but do not expose or mutate settings that no longer control behavior.
+RETIRED_SETTING_KEYS = {
+    "default_download_source",
+    "playlist_sync_enabled",
+    "m3u_export_folder",
+}
+
 DEFAULT_SETTINGS = [
     {"key": "timezone", "value": "Asia/Dhaka", "type": "string", "category": "general"},
     {"key": "date_format", "value": "DD/MM/YYYY", "type": "string", "category": "general"},
@@ -30,9 +38,6 @@ DEFAULT_SETTINGS = [
     {"key": "download_workers", "value": "2", "type": "int", "category": "downloads"},
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "youtube_music_enabled", "value": "true", "type": "boolean", "category": "downloads"},
-    {"key": "default_download_source", "value": "spotify", "type": "string", "category": "downloads"},
-    {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
-    {"key": "m3u_export_folder", "value": "/music/Playlists", "type": "string", "category": "playlists"},
     {"key": "theme", "value": "auto", "type": "string", "category": "appearance"},
     {"key": "spotify_genre_enrichment_enabled", "value": "false", "type": "boolean", "category": "spotify"},
 ]
@@ -65,11 +70,16 @@ def initialize_defaults(db: Session):
     apply_runtime_overrides(db)
 
 def get_settings_by_category(db: Session, category: str):
-    settings = db.query(AppSetting).filter(AppSetting.category == category).all()
+    settings = db.query(AppSetting).filter(
+        AppSetting.category == category,
+        AppSetting.key.not_in(RETIRED_SETTING_KEYS),
+    ).all()
     return {s.key: _cast_value(s.value, s.type) for s in settings}
 
 def update_settings(db: Session, category: str, updates: dict):
     for key, value in updates.items():
+        if key in RETIRED_SETTING_KEYS:
+            continue
         setting = db.query(AppSetting).filter(AppSetting.key == key, AppSetting.category == category).first()
         if setting:
             if key == "download_workers":

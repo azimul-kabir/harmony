@@ -38,6 +38,11 @@ single destructive deletion:
 1. **Remove unreachable application code.** Delete obsolete routers, services,
    templates, JavaScript, and CSS only after confirming there are no active
    imports, routes, scheduled jobs, or settings references.
+   - Initial cleanup removed the unmounted legacy “sync all Sources” endpoint,
+     superseded Library/Source compatibility helpers, unused response schemas,
+     and placeholder downloader, provider, and metadata-domain abstractions.
+     Active Source scheduling, provider-neutral download Sources, the canonical
+     Library indexer/import engine, and the file-metadata reader are unchanged.
 2. **Contract the active models.** Stop reading and writing dormant feature
    fields in runtime code. Keep schema columns needed to open and upgrade an
    existing v2 database; physical database cleanup can wait for a separately
@@ -45,6 +50,9 @@ single destructive deletion:
 3. **Retire obsolete settings safely.** Remove unused controls and defaults
    from the UI and runtime settings service while tolerating old rows and
    environment variables during upgrade.
+   - Removed the no-op playlist-sync, M3U export-folder, and default download
+     source settings. Existing database rows are ignored rather than deleted,
+     and retired environment variables remain accepted as extra input.
 4. **Prune tests and documentation by behavior.** Replace tests for removed
    product surfaces with upgrade-compatibility tests. Keep coverage for login,
    Sources, download matching/recovery, Library import, M3U export, Navidrome

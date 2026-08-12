@@ -42,14 +42,11 @@ class Settings(BaseSettings):
     spotify_playlist_metadata_timeout_seconds: int = 3600
     yt_dlp_path: str = "yt-dlp"
     youtube_music_enabled: bool = True
-    default_download_source: str = "spotify"
     youtube_music_timeout_seconds: int = 300
     youtube_music_audio_quality: str = "0"
     youtube_music_max_playlist_items: int = 500
     youtube_music_max_search_results: int = 25
     youtube_music_max_queue_items: int = 500
-    use_official_spotify_api: bool = False
-    spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
     # Artist genres are supplementary metadata only.  Keep the provider opt-in
