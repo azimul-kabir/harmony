@@ -1,6 +1,7 @@
 """Public YouTube Music source using yt-dlp only (no login or cookies)."""
 import json
 import re
+import shutil
 import subprocess
 import tempfile
 from io import BytesIO
@@ -25,6 +26,19 @@ _SUFFIX = re.compile(r"\s*[\[(](?:official (?:audio|video)|lyrics?|lyric video|v
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
 _ARTWORK_MAX_BYTES = 15 * 1024 * 1024
 _ARTWORK_SIZE = 1200
+
+
+def _yt_dlp_command(executable: str) -> list[str]:
+    """Build a yt-dlp command with Harmony's bundled JS runtime enabled."""
+    command = [executable]
+    deno = shutil.which("deno")
+    if deno:
+        command.extend(["--js-runtimes", f"deno:{deno}"])
+    else:
+        logger.warning(
+            "Deno was not found on PATH; YouTube extraction may be incomplete"
+        )
+    return command
 
 
 def clean_title(value: str | None) -> str:
@@ -234,7 +248,8 @@ class YouTubeMusicSource:
         return None
 
     def _run_json(self, target: str, *, flat: bool = False) -> dict:
-        command = [self.settings.yt_dlp_path, "--dump-single-json", "--no-warnings", "--no-playlist"]
+        command = _yt_dlp_command(self.settings.yt_dlp_path)
+        command.extend(["--dump-single-json", "--no-warnings", "--no-playlist"])
         if flat:
             command.remove("--no-playlist")
             # Request one additional entry so oversized playlists can be rejected
@@ -293,7 +308,10 @@ class YouTubeMusicSource:
         if not detected:
             raise ValueError("Unsupported YouTube Music URL.")
         item_type, item_id = detected
-        if item_type == "track":
+        # Keep an explicitly supplied standard YouTube URL on that endpoint.
+        # Rewriting it to music.youtube.com can apply different Workspace or
+        # network restrictions even though the video is public on YouTube.
+        if item_type == "track" and urlparse(target).hostname == "music.youtube.com":
             target = watch_url(item_id)
         data = self._run_json(target, flat=item_type != "track")
         entries = data.get("entries") if item_type != "track" else [data]
@@ -314,7 +332,8 @@ class YouTubeMusicSource:
             if not result.item_id or result.item_id in seen:
                 continue
             seen.add(result.item_id)
-            tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or "Singles", album_artist=result.album_artist, track=result.track_number, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=result.source_url))
+            source_url = target if item_type == "track" else result.source_url
+            tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or "Singles", album_artist=result.album_artist, track=result.track_number, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=source_url))
         if not tracks:
             raise ValueError("YouTube Music collection is empty or unavailable.")
         return clean_title(data.get("title")) or "YouTube Music Playlist", tracks
@@ -331,7 +350,11 @@ class YouTubeMusicSource:
         if not target:
             raise ValueError("YouTube Music track is missing its source URL.")
         detected = self.detect_url(target)
-        if detected and detected[0] == "track":
+        if (
+            detected
+            and detected[0] == "track"
+            and urlparse(target).hostname == "music.youtube.com"
+        ):
             target = watch_url(detected[1])
         else:
             target = normalize_url(target)
@@ -350,8 +373,7 @@ class YouTubeMusicSource:
             finally:
                 db.close()
 
-            command = [
-                self.settings.yt_dlp_path,
+            command = _yt_dlp_command(self.settings.yt_dlp_path) + [
                 "--no-playlist",
                 "-f",
                 "bestaudio/best",
