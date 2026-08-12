@@ -13,9 +13,11 @@ from app.database.session import SessionLocal
 from app.main import app
 
 
-def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
+def test_playlist_tracks_preserve_order_and_mark_delete_candidates(tmp_path):
     db = SessionLocal()
     try:
+        local_path = tmp_path / "local.mp3"
+        local_path.write_bytes(b"audio")
         playlist = Playlist(
             spotify_id="playlist-manage",
             name="Manage Me",
@@ -45,7 +47,7 @@ def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
             [
                 playlist,
                 Song(
-                    path="/music/local.mp3",
+                    path=str(local_path),
                     filename="local.mp3",
                     spotify_track_id="spotify-local",
                     title="Indexed title",
@@ -97,9 +99,11 @@ def test_playlist_tracks_preserve_order_and_mark_delete_candidates():
         db.close()
 
 
-def test_playlist_tracks_marks_existing_song_with_different_spotify_id_available():
+def test_playlist_tracks_marks_existing_song_with_different_spotify_id_available(tmp_path):
     db = SessionLocal()
     try:
+        song_path = tmp_path / "common.mp3"
+        song_path.write_bytes(b"audio")
         playlist = Playlist(
             spotify_id="overlap-playlist",
             name="Overlap",
@@ -115,7 +119,7 @@ def test_playlist_tracks_marks_existing_song_with_different_spotify_id_available
             ],
         )
         song = Song(
-            path="/music/common.mp3",
+            path=str(song_path),
             filename="common.mp3",
             spotify_track_id="original-playlist-track-id",
             title="Common song",
@@ -209,6 +213,8 @@ def test_playlist_card_exposes_delete_action():
                 spotify_id="visible-delete",
                 name="Visible Delete",
                 track_count=0,
+                source_provider="spotify",
+                source_external_id="visible-delete",
             )
         )
         db.commit()

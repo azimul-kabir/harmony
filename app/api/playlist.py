@@ -12,7 +12,7 @@ from app.api.schemas.comparison import PlaylistComparisonResponse
 from app.api.schemas.playlist import PlaylistImportRequest
 from app.api.schemas.playlist_response import PlaylistResponse
 from app.database.session import get_db
-from app.database.models import DownloadJob, Playlist
+from app.database.models import DownloadJob, Playlist, Song
 from app.services.artwork import artwork_url
 from app.services.comparison import compare_with_library
 from app.services.playlist import import_playlist
@@ -73,6 +73,11 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
 
     spotify_ids = [track.spotify_track_id for track in playlist.tracks]
     songs_by_spotify_id = resolve_playlist_songs(db, playlist.tracks)
+    exact_songs = db.scalars(
+        select(Song).where(Song.spotify_track_id.in_(spotify_ids))
+    ).all()
+    for song in exact_songs:
+        songs_by_spotify_id.setdefault(song.spotify_track_id, song)
     jobs = db.scalars(
         select(DownloadJob)
         .where(DownloadJob.spotify_track_id.in_(spotify_ids))
