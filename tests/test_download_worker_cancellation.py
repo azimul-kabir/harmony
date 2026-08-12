@@ -235,3 +235,54 @@ def test_late_duplicate_is_indexed_linked_and_exported(tmp_path, monkeypatch):
         assert exported == [("single-version-id", "single-version-id")]
     finally:
         db.close()
+
+
+def test_no_match_for_available_library_song_is_skipped(monkeypatch, tmp_path):
+    db = SessionLocal()
+    try:
+        library_file = tmp_path / "already-owned.mp3"
+        library_file.write_bytes(b"audio")
+        song = Song(
+            path=str(library_file),
+            filename=library_file.name,
+            title="Already Owned",
+            artist="Artist",
+            isrc="OWNED123",
+            availability_status="available",
+        )
+        job = DownloadJob(
+            spotify_url="spotify:track:owned",
+            source_url="spotify:track:owned",
+            source_provider="spotify",
+            source_item_id="owned",
+            spotify_track_id="owned",
+            title="Already Owned",
+            artist="Artist",
+            isrc="OWNED123",
+            status="running",
+        )
+        db.add_all([song, job])
+        db.commit()
+        db.refresh(job)
+        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            download_worker,
+            "download_track",
+            lambda *args: (_ for _ in ()).throw(
+                download_worker.DownloadFailed(
+                    "exact_match_unavailable",
+                    "Harmony could not obtain the requested track.",
+                    "download",
+                    retryable=False,
+                )
+            ),
+        )
+
+        download_worker.process_job(db, job)
+
+        db.refresh(job)
+        assert job.status == "skipped"
+        assert job.reason_code == "duplicate_in_library"
+        assert find_song_by_source(db, "spotify", "owned").id == song.id
+    finally:
+        db.close()

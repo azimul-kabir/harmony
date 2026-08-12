@@ -14,7 +14,7 @@ from app.database.crud_downloads import (
     recover_running_jobs,
     update_status,
 )
-from app.database.crud import link_song_source
+from app.database.crud import find_song, link_song_source
 from app.database.models import DownloadJob, Song
 from app.database.session import SessionLocal
 from app.domain.download import JobStatus
@@ -372,6 +372,32 @@ def _finish_with_outcome(db, job, status, outcome):
     db.refresh(job)
     if job.status == JobStatus.CANCELLED.value:
         return
+    if status == JobStatus.FAILED and outcome.reason_code in {
+        "exact_match_unavailable", "fallback_match_unavailable", "provider_no_match"
+    }:
+        owned_song = find_song(
+            db,
+            title=job.title,
+            artist=job.artist,
+            album=job.album,
+            spotify_track_id=job.spotify_track_id,
+            isrc=job.isrc,
+        )
+        if owned_song is not None and owned_song.availability_status != "missing":
+            link_song_source(
+                db,
+                owned_song,
+                job.source_provider or "spotify",
+                job.source_item_id or job.spotify_track_id,
+            )
+            db.commit()
+            status = JobStatus.SKIPPED
+            outcome = DownloadSkipped(
+                "duplicate_in_library",
+                "This track is already in your library.",
+                "preflight",
+                technical_detail="library_identity_reconciled",
+            )
     if status == JobStatus.FAILED and _schedule_retry(db, job, outcome):
         return
     _record_outcome(db, job, status, outcome.reason_code, outcome.message, outcome.stage, outcome.provider, outcome.retryable, outcome.technical_detail)

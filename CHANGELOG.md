@@ -5,6 +5,18 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Reconciled provider no-match outcomes with the indexed Library. When the
+  requested recording is already available, Harmony now records the download
+  as skipped, preserves its provider identity, and does not offer an
+  unnecessary manual fallback.
+- Stopped live Downloads snapshots from rebuilding an unchanged details drawer.
+  The drawer now remains scrollable and preserves its position when a real job
+  state change requires refreshed details.
+- Made the two dashboard summary cards fill the available desktop row instead
+  of reserving an empty third column.
+
 ### Removed
 
 - Removed Smart Collections as a separate rule engine, API, dashboard card,
