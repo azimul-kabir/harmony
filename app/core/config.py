@@ -49,8 +49,7 @@ class Settings(BaseSettings):
     youtube_music_max_queue_items: int = 500
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
-    # Artist genres are supplementary metadata only.  Keep the provider opt-in
-    # so normal downloads never need Spotify credentials or a Spotify request.
+    # Ordered providers passed to SpotDL for audio candidate discovery.
     audio_providers: str = "youtube-music,youtube"
 
     max_parallel_downloads: int = 2

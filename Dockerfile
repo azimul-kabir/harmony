@@ -19,7 +19,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ffmpeg \
-        sqlite3 \
         unzip \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
