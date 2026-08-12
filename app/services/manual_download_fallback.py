@@ -14,6 +14,7 @@ ELIGIBLE_REASONS = frozenset(
         "provider_no_match",
         "provider_unavailable",
         "manual_fallback_unavailable",
+        "manual_fallback_mismatch",
     }
 )
 

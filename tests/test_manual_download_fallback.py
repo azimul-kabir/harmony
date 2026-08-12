@@ -4,6 +4,7 @@ import pytest
 
 from app.database.models import DownloadJob
 from app.database.session import SessionLocal
+from app.domain.track import Track
 from app.services.download_dashboard import download_details
 from app.services.manual_download_fallback import queue_manual_fallback
 from app.workers import download_worker
@@ -86,6 +87,17 @@ def test_worker_uses_approved_url_but_keeps_original_source_identity(
         seen = {}
 
         monkeypatch.setattr(download_worker, "write_genres", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            download_worker.get_source("youtube_music"),
+            "resolve",
+            lambda _url: [
+                Track(
+                    title="Original title",
+                    artist="Uploader",
+                    duration=job.duration,
+                )
+            ],
+        )
 
         def download(track, _job_id):
             seen["provider"] = track.source_provider
@@ -129,6 +141,11 @@ def test_unavailable_manual_link_fails_once_and_accepts_another_link(monkeypatch
             "download_track",
             lambda *_: (_ for _ in ()).throw(ValueError("restricted video")),
         )
+        monkeypatch.setattr(
+            download_worker.get_source("youtube_music"),
+            "resolve",
+            lambda _url: [Track(title="Original title", artist="Uploader")],
+        )
 
         download_worker.process_job(db, job)
         db.refresh(job)
@@ -145,3 +162,37 @@ def test_unavailable_manual_link_fails_once_and_accepts_another_link(monkeypatch
             url="https://www.youtube.com/watch?v=replacement1",
         )
         assert replacement.status == "queued"
+
+
+def test_manual_link_with_different_title_never_downloads(monkeypatch):
+    with SessionLocal() as db:
+        job = _failed_job()
+        job.status = "running"
+        job.reason_code = None
+        job.manual_fallback_url = VIDEO_URL
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        monkeypatch.setattr(
+            download_worker.get_source("youtube_music"),
+            "resolve",
+            lambda _url: [
+                Track(title="Where Is My Mind", artist="Pixies", duration=220)
+            ],
+        )
+        downloaded = []
+        monkeypatch.setattr(
+            download_worker,
+            "download_track",
+            lambda *_: downloaded.append(True),
+        )
+
+        download_worker.process_job(db, job)
+        db.refresh(job)
+
+        assert downloaded == []
+        assert job.status == "failed"
+        assert job.reason_code == "manual_fallback_mismatch"
+        assert job.failure_stage == "validation"
+        assert download_details(job)["can_manual_fallback"] is True

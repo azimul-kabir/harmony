@@ -28,6 +28,7 @@ FAILURE_REASON_LABELS = {
     "exact_match_unavailable": "Exact match unavailable",
     "fallback_match_unavailable": "No safe fallback",
     "manual_fallback_unavailable": "Approved link unavailable",
+    "manual_fallback_mismatch": "Approved link does not match",
     "download_timeout": "Download timeouts",
     "filesystem_permission_denied": "Library permissions",
     "disk_full": "Disk full",
@@ -225,6 +226,7 @@ def download_details(job: DownloadJob) -> dict:
                 "provider_no_match",
                 "provider_unavailable",
                 "manual_fallback_unavailable",
+                "manual_fallback_mismatch",
             },
             **outcome,
             "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]]}

@@ -21,6 +21,7 @@ from app.domain.download import JobStatus
 from app.domain.download_outcome import DownloadCancelled, DownloadFailed, DownloadOutcome, DownloadSkipped, classify_unexpected
 from app.domain.task import TaskStatus, TaskType
 from app.domain.track import Track
+from app.downloaders.spotdl import AudioIdentity, validate_track_identity
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
 from app.services import settings_service
@@ -170,6 +171,42 @@ def process_job(
             spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
             genre_provenance=job.genre_provenance,
         )
+        if job.manual_fallback_url:
+            try:
+                resolved = fallback_source.resolve(job.manual_fallback_url)
+                candidate = resolved[0] if len(resolved) == 1 else None
+                if candidate is None:
+                    raise ValueError("The approved URL did not resolve to one track")
+                # Manual fallback is user-directed, so channel/uploader artist
+                # credits are not authoritative. Still require the supplied
+                # video title and duration to fit the requested recording.
+                validate_track_identity(
+                    track,
+                    AudioIdentity(
+                        candidate.title,
+                        track.artist,
+                        candidate.duration,
+                    ),
+                    strict=False,
+                )
+            except DownloadFailed as error:
+                raise DownloadFailed(
+                    "manual_fallback_mismatch",
+                    "The approved YouTube link does not match the requested track.",
+                    "validation",
+                    provider="youtube_music",
+                    retryable=False,
+                    technical_detail=error.technical_detail,
+                ) from error
+            except ValueError as error:
+                raise DownloadFailed(
+                    "manual_fallback_unavailable",
+                    "The approved YouTube link is unavailable. Choose a different video.",
+                    "download",
+                    provider="youtube_music",
+                    retryable=False,
+                    technical_detail=type(error).__name__,
+                ) from error
         output_file = _resumable_staging_file(job)
         if output_file is None:
             update_telemetry(db, job, stage="downloading", progress_percent=None)

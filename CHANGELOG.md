@@ -31,6 +31,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- Validate a manually supplied YouTube video's title and duration before
+  downloading so unrelated audio cannot be relabeled as the requested song.
 - Report restricted or unavailable user-supplied YouTube links as a terminal
   manual-fallback outcome without pointless retries, while allowing another
   explicit link to be submitted.
