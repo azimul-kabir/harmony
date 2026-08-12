@@ -153,8 +153,8 @@ compatible with conservative SQLite parameter limits.
 - `POST /api/tasks/jobs/clear` removes completed and cancelled Library activity.
   With `include_reviewed_attention=true`, it also removes reviewed terminal
   warnings; active and unreviewed attention jobs are always retained.
-- `POST /api/playlists/import`, `/compare`, and `/download` retain the existing
-  import, availability comparison, and direct-download contracts.
+- Playlist acquisition goes through Sources or `POST /api/downloads`; v3 no
+  longer exposes separate playlist import, comparison, and download endpoints.
 
 ## Metadata Intelligence API
 

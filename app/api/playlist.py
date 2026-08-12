@@ -6,17 +6,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
-from pydantic import BaseModel
 
-from app.api.schemas.comparison import PlaylistComparisonResponse
-from app.api.schemas.playlist import PlaylistImportRequest
-from app.api.schemas.playlist_response import PlaylistResponse
 from app.database.session import get_db
 from app.database.models import DownloadJob, Playlist, Song
 from app.services.artwork import artwork_url
-from app.services.comparison import compare_with_library
-from app.services.playlist import import_playlist
-from app.services.playlist_download import download_playlist
 from app.services.playlist_manager import (
     PLAYLIST_ARTWORK_SUFFIXES,
     playlist_artwork_path,
@@ -29,10 +22,6 @@ router = APIRouter(
     prefix="/api/playlists",
     tags=["Playlists"],
 )
-
-
-class PlaylistDownloadRequest(BaseModel):
-    url: str
 
 
 PLAYLIST_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
@@ -247,33 +236,6 @@ def delete_playlist(playlist_id: int, db: Session = Depends(get_db)):
         "name": name,
         "message": "Playlist deleted. Library songs were not removed.",
     }
-
-
-@router.post("/import", response_model=PlaylistResponse)
-def import_spotify_playlist(request: PlaylistImportRequest):
-    playlist = import_playlist(request.url)
-    return PlaylistResponse.model_validate(playlist)
-
-
-@router.post("/compare", response_model=PlaylistComparisonResponse)
-def compare_spotify_playlist(
-    request: PlaylistImportRequest,
-    db: Session = Depends(get_db),
-):
-    playlist = import_playlist(request.url)
-    comparison = compare_with_library(db, playlist)
-    return PlaylistComparisonResponse.model_validate(comparison)
-
-
-@router.post("/download")
-def download(
-    request: PlaylistDownloadRequest,
-    db: Session = Depends(get_db),
-):
-    return download_playlist(
-        db=db,
-        url=request.url,
-    )
 
 
 @router.get("/{playlist_id}/download")

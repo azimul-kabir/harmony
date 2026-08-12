@@ -39,6 +39,15 @@ def test_auto_playlist_api_is_not_part_of_v3_surface():
     assert client.post("/api/playlists/auto/recently-added/generate", json={}).status_code == 404
 
 
+def test_legacy_playlist_acquisition_api_is_not_part_of_v3_surface():
+    paths = TestClient(app).get("/openapi.json").json()["paths"]
+
+    assert "/api/playlists/import" not in paths
+    assert "/api/playlists/compare" not in paths
+    assert "/api/playlists/download" not in paths
+    assert "/api/downloads" in paths
+
+
 def test_navidrome_love_api_is_not_part_of_v3_surface():
     client = TestClient(app)
 
