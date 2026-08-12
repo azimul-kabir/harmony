@@ -423,7 +423,7 @@ def export_m3us_for_tracks(
         .join(PlaylistTrack)
         .where(
             PlaylistTrack.spotify_track_id.in_(spotify_track_ids),
-            Playlist.playlist_kind != "smart",
+            Playlist.source_provider.is_not(None),
         )
         .order_by(Playlist.id)
     ).unique().all()
@@ -433,5 +433,5 @@ def export_m3us_for_tracks(
 
 def export_all_m3us(db: Session) -> None:
     """Utility to regenerate all playlists"""
-    for p in db.query(Playlist).where(Playlist.playlist_kind != "smart").all():
+    for p in db.query(Playlist).where(Playlist.source_provider.is_not(None)).all():
         export_m3u(db, p)

@@ -14,6 +14,13 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Removed settings controls and defaults that did not affect playlist sync, M3U
   export, or download-source selection. Existing v2 rows and environment values
   remain harmless during upgrades.
+- Removed retired lyrics, Navidrome playback-stat, and Smart Collection fields
+  from active ORM models. Historical migrations still preserve existing data.
+- Removed the stale Dashboard “Suggestions pending” value left behind by the
+  retired metadata-suggestion workflow.
+- Removed retired metadata workflow tables from the active ORM schema so fresh
+  installations do not create unused suggestion, discovery, cache, audit, and
+  persisted-issue storage. Upgrade migrations and existing data are preserved.
 
 ### Fixed
 

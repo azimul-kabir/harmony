@@ -222,7 +222,6 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
             "missing_artwork": 1,
             "missing_metadata": 1,
             "missing_files": 1,
-            "pending_suggestions": 1,
         }
         assert snapshot["attention"] == {
             "healthy": False,

@@ -1,14 +1,23 @@
 from types import SimpleNamespace
 
+from sqlalchemy import inspect
+
 from app.database.crud import link_song_source
 from app.database.models import Playlist, PlaylistTrack, Song
 from app.database.session import SessionLocal
 from app.services import playlist_manager
 
 
+def test_retired_smart_collection_fields_are_not_in_active_playlist_model():
+    assert set(inspect(Playlist).columns.keys()).isdisjoint(
+        {"playlist_kind", "smart_rule", "smart_enabled", "smart_limit"}
+    )
+
+
 def _playlist(db, *, spotify_id: str, name: str, track_id: str) -> Playlist:
     playlist = Playlist(
         spotify_id=spotify_id,
+        source_provider=("youtube_music" if spotify_id.startswith("youtube_music:") else "spotify"),
         name=name,
         track_count=1,
     )

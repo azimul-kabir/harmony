@@ -47,6 +47,14 @@ single destructive deletion:
    fields in runtime code. Keep schema columns needed to open and upgrade an
    existing v2 database; physical database cleanup can wait for a separately
    tested migration in a later release.
+   - Removed retired lyrics, Navidrome playback-stat, and Smart Collection
+     fields from active ORM models. Historical migrations keep those columns
+     intact in upgraded v2 databases, while current queries use source identity
+     rather than the removed playlist-kind flag.
+   - Removed the retired metadata suggestion, discovery, provider-cache,
+     application-audit, and persisted-issue tables from the active ORM schema.
+     Existing installations retain their historical tables and data; fresh v3
+     databases no longer create unused feature storage.
 3. **Retire obsolete settings safely.** Remove unused controls and defaults
    from the UI and runtime settings service while tolerating old rows and
    environment variables during upgrade.

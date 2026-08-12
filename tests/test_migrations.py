@@ -137,6 +137,9 @@ def test_download_telemetry_migrates_existing_download_jobs(tmp_path):
     engine = create_engine(f"sqlite:///{database}")
     with engine.begin() as connection:
         connection.exec_driver_sql(
+            "CREATE TABLE songs (id INTEGER PRIMARY KEY, path VARCHAR)"
+        )
+        connection.exec_driver_sql(
             "CREATE TABLE download_jobs ("
             "id INTEGER PRIMARY KEY, status VARCHAR NOT NULL, "
             "title VARCHAR NOT NULL, artist VARCHAR NOT NULL)"
@@ -175,6 +178,9 @@ def test_playlist_metadata_migrates_existing_playlist_tracks(tmp_path):
     database = tmp_path / "pre-playlist-metadata.db"
     engine = create_engine(f"sqlite:///{database}")
     with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE songs (id INTEGER PRIMARY KEY, path VARCHAR)"
+        )
         connection.exec_driver_sql(
             "CREATE TABLE playlist_tracks ("
             "playlist_id INTEGER NOT NULL, "
