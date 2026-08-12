@@ -31,6 +31,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- Report restricted or unavailable user-supplied YouTube links as a terminal
+  manual-fallback outcome without pointless retries, while allowing another
+  explicit link to be submitted.
 - Installed Deno in the container's system executable path so yt-dlp can use
   its JavaScript runtime when Synology runs Harmony as an unprivileged UID/GID.
 - Made artwork-cache insertion and file publication conflict-safe when the

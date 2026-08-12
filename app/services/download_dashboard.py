@@ -27,6 +27,7 @@ FAILURE_REASON_LABELS = {
     "provider_no_match": "No provider match",
     "exact_match_unavailable": "Exact match unavailable",
     "fallback_match_unavailable": "No safe fallback",
+    "manual_fallback_unavailable": "Approved link unavailable",
     "download_timeout": "Download timeouts",
     "filesystem_permission_denied": "Library permissions",
     "disk_full": "Disk full",
@@ -218,7 +219,13 @@ def download_details(job: DownloadJob) -> dict:
             "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at),
             "retry_count": max(0, (job.attempt_count or 0) - 1),
             "can_cancel": status in ("queued", "running"), "can_retry": status == "failed" and bool(job.retryable),
-            "can_manual_fallback": status == "failed" and job.reason_code in {"exact_match_unavailable", "fallback_match_unavailable", "provider_no_match", "provider_unavailable"},
+            "can_manual_fallback": status == "failed" and job.reason_code in {
+                "exact_match_unavailable",
+                "fallback_match_unavailable",
+                "provider_no_match",
+                "provider_unavailable",
+                "manual_fallback_unavailable",
+            },
             **outcome,
             "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]]}
 

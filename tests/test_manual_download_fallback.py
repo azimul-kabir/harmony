@@ -111,3 +111,37 @@ def test_worker_uses_approved_url_but_keeps_original_source_identity(
             "item_id": "manual12345",
             "url": VIDEO_URL,
         }
+
+
+def test_unavailable_manual_link_fails_once_and_accepts_another_link(monkeypatch):
+    with SessionLocal() as db:
+        job = _failed_job()
+        job.status = "running"
+        job.reason_code = None
+        job.manual_fallback_url = VIDEO_URL
+        job.attempt_count = 1
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        monkeypatch.setattr(
+            download_worker,
+            "download_track",
+            lambda *_: (_ for _ in ()).throw(ValueError("restricted video")),
+        )
+
+        download_worker.process_job(db, job)
+        db.refresh(job)
+
+        assert job.status == "failed"
+        assert job.reason_code == "manual_fallback_unavailable"
+        assert job.retryable is False
+        assert job.attempt_count == 1
+        assert download_details(job)["can_manual_fallback"] is True
+
+        replacement = queue_manual_fallback(
+            db,
+            job_id=job.id,
+            url="https://www.youtube.com/watch?v=replacement1",
+        )
+        assert replacement.status == "queued"

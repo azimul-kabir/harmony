@@ -173,7 +173,19 @@ def process_job(
         output_file = _resumable_staging_file(job)
         if output_file is None:
             update_telemetry(db, job, stage="downloading", progress_percent=None)
-            output_file = download_track(track, job.id)
+            try:
+                output_file = download_track(track, job.id)
+            except ValueError as error:
+                if not job.manual_fallback_url:
+                    raise
+                raise DownloadFailed(
+                    "manual_fallback_unavailable",
+                    "The approved YouTube link is unavailable. Choose a different video.",
+                    "download",
+                    provider="youtube_music",
+                    retryable=False,
+                    technical_detail=type(error).__name__,
+                ) from error
             # Persist acquisition before any post-processing. If tagging or
             # import fails, a bounded retry can resume from this exact file.
             job.output_file = str(output_file.resolve())
