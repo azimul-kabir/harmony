@@ -30,6 +30,9 @@ Current stable version: **v2.1.0**
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
 [v2.1.0 release notes](docs/releases/v2.1.0.md) for upgrade guidance and a
 summary of the new login portal, playlist Sources, and Navidrome improvements.
+Development toward the narrower v3 release is documented in the
+[v3 preview notes](docs/releases/v3.0.0-preview.md) and the
+[roadmap](docs/roadmap.md).
 Harmony v1.6.0 was never published.
 
 ---
@@ -50,7 +53,9 @@ Harmony v1.6.0 was never published.
   substitutions are rejected unless the requested title identifies the same
   version.
 - A rejected or unavailable exact match stays failed and absent from the
-  Library and playlist availability count.
+  Library and playlist availability count, unless Harmony confirms that the
+  requested recording is already available in the indexed Library. In that
+  case the job is skipped and linked to the existing Library song.
 
 ## YouTube Music downloads and playlist sources
 
@@ -541,6 +546,14 @@ docker pull ghcr.io/azimul-kabir/harmony:v3-preview
 Use `ghcr.io/azimul-kabir/harmony:v3-preview` as the image name in a Synology
 Container Manager project. If the package is private, sign in to `ghcr.io`
 with the GitHub username and a personal access token that has `read:packages`.
+
+Opening a pull request runs CI, including a production-image build that is
+discarded after validation. It does **not** publish a registry image. The
+`v3-preview` image is built and pushed only from the
+`codex/harmony-v3-completed` branch; `main` publishes `latest`, version tags
+publish their matching tag, and maintainers can also start the publish workflow
+manually. All published images currently target `linux/amd64` for Synology
+models such as the DS220+.
 
 Open:
 

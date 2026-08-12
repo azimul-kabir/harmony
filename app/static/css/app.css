@@ -341,7 +341,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .dashboard-attention-item.severity-warning .dashboard-attention-severity { color: var(--warning, #c48716); }
 .dashboard-attention-item.severity-info { border-left-color: var(--primary); }
 .dashboard-attention-item.severity-info .dashboard-attention-severity { color: var(--primary); }
-.dashboard-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-md); }
+.dashboard-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 .dashboard-summary-card { padding: 18px; }
 .dashboard-operations-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 .dashboard-operations-card { padding: 18px; min-width: 0; }
