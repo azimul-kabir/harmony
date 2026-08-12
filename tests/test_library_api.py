@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
 from app.api.library import _serialize_song, list_songs
@@ -29,9 +29,6 @@ def test_song_response_does_not_expose_legacy_lyrics_columns():
     song = Song(
         path="/music/legacy-lyrics.mp3",
         filename="legacy-lyrics.mp3",
-        lyrics="Legacy text",
-        lyrics_source="embedded",
-        lyrics_synced=False,
     )
 
     response = _serialize_song(song)
@@ -39,6 +36,20 @@ def test_song_response_does_not_expose_legacy_lyrics_columns():
     assert "has_lyrics" not in response
     assert "lyrics_source" not in response
     assert "lyrics_synced" not in response
+
+
+def test_retired_v2_columns_are_not_part_of_the_active_song_model():
+    mapped_columns = set(inspect(Song).columns.keys())
+
+    assert mapped_columns.isdisjoint({
+        "lyrics",
+        "lyrics_source",
+        "lyrics_synced",
+        "navidrome_play_count",
+        "navidrome_last_played_at",
+        "navidrome_starred_at",
+        "navidrome_stats_synced_at",
+    })
 
 
 def test_song_response_falls_back_when_a_legacy_song_has_no_created_at():

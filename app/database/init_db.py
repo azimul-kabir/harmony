@@ -142,10 +142,9 @@ def init_db() -> None:
             command.stamp(config, "head")
         else:
             # Do not call create_all before upgrading an existing database.
-            # It would create tables from a later ORM schema (for example,
-            # metadata_suggestions) before Alembic reaches the revision that
-            # owns them, causing the upgrade to fail with "table already
-            # exists" and the container to restart continuously.
+            # It would create tables from a later ORM schema before Alembic
+            # reaches the revision that owns them, causing the upgrade to fail
+            # with "table already exists" and the container to restart.
             _translate_legacy_revision(connection)
             command.upgrade(config, "head")
 

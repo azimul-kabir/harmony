@@ -237,7 +237,6 @@ function renderDashboard(snapshot) {
     setText("health-artwork", Number(health.missing_artwork || 0).toLocaleString());
     setText("health-metadata", Number(health.missing_metadata || 0).toLocaleString());
     setText("health-files", Number(health.missing_files || 0).toLocaleString());
-    setText("health-suggestions", Number(health.pending_suggestions || 0).toLocaleString());
     const artworkLink = document.getElementById("health-artwork-link");
     if (artworkLink) artworkLink.href = "/library?missing_artwork=true";
     renderMaintenance(snapshot.maintenance || []);

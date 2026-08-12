@@ -28,7 +28,7 @@ def _playlist_sync_status(playlist: Playlist, exported_count: int) -> str:
 def playlists_page(request: Request, db: Session = Depends(get_db)):
     playlists = (
         db.query(Playlist)
-        .where(Playlist.playlist_kind != "smart")
+        .where(Playlist.source_provider.is_not(None))
         .order_by(Playlist.name)
         .all()
     )

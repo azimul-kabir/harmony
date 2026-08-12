@@ -226,12 +226,12 @@ def get_dashboard_snapshot(db) -> dict:
             ),
         )
     ).one()
-    included_metadata_issues = int(health_row[1])
+    missing_metadata = int(health_row[1])
     attention = _get_attention_summary(
         failed_downloads=stats["failed"],
         missing_files=int(missing_files),
         missing_artwork=int(health_row[0]),
-        pending_suggestions=included_metadata_issues,
+        missing_metadata=missing_metadata,
         task_counts=_attention_task_counts(db),
     )
     playlist_count = db.scalar(select(func.count(Playlist.id))) or 0
@@ -278,9 +278,8 @@ def get_dashboard_snapshot(db) -> dict:
         "health": {
             "score": health_score,
             "missing_artwork": int(health_row[0]),
-            "missing_metadata": int(health_row[1]),
+            "missing_metadata": missing_metadata,
             "missing_files": int(missing_files),
-            "pending_suggestions": int(included_metadata_issues),
         },
         "attention": attention,
         "maintenance": [
@@ -398,7 +397,7 @@ def _get_attention_summary(
     failed_downloads: int,
     missing_files: int,
     missing_artwork: int,
-    pending_suggestions: int,
+    missing_metadata: int,
     task_counts: dict[str, int],
 ) -> dict:
     """Create a privacy-safe, navigation-only Dashboard attention contract."""
@@ -407,7 +406,7 @@ def _get_attention_summary(
         "missing_files": missing_files,
         "maintenance_jobs": task_counts["maintenance_jobs"],
         "bulk_jobs": task_counts["bulk_jobs"],
-        "pending_metadata": pending_suggestions,
+        "pending_metadata": missing_metadata,
         "missing_artwork": missing_artwork,
     }
     items = []
