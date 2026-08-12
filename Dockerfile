@@ -25,7 +25,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Deno.
-RUN curl -fsSL https://deno.land/install.sh | sh
+RUN curl -fsSL https://deno.land/install.sh | sh \
+    && deno --version
 
 # Copy dependency metadata first so dependency installation remains cached
 # when only application source files change.

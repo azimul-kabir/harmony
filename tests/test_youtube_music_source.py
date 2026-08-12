@@ -15,11 +15,26 @@ from app.providers.youtube_music import (
     _download_artwork_url,
     _fetch_artwork,
     _square_jpeg,
+    _yt_dlp_command,
     _youtube_music_artwork,
     _youtube_music_track,
     _write_download_tags,
     clean_title,
 )
+
+
+def test_yt_dlp_command_enables_discovered_deno(monkeypatch):
+    monkeypatch.setattr(
+        youtube_music.shutil,
+        "which",
+        lambda name: "/opt/deno/bin/deno" if name == "deno" else None,
+    )
+
+    assert _yt_dlp_command("yt-dlp") == [
+        "yt-dlp",
+        "--js-runtimes",
+        "deno:/opt/deno/bin/deno",
+    ]
 
 
 def test_detects_public_youtube_music_and_standard_fallback_urls():
@@ -45,6 +60,22 @@ def test_resolve_keeps_youtube_music_watch_url(monkeypatch):
 
     assert targets == ["https://music.youtube.com/watch?v=abc1234"]
     assert tracks[0].source_url == "https://music.youtube.com/watch?v=abc1234"
+
+
+def test_resolve_preserves_standard_youtube_fallback_url(monkeypatch):
+    source = YouTubeMusicSource()
+    targets: list[str] = []
+
+    def run_json(target, *, flat=False):
+        targets.append(target)
+        return {"id": "abc1234", "title": "Song", "uploader": "Artist"}
+
+    monkeypatch.setattr(source, "_run_json", run_json)
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
+    tracks = source.resolve("https://www.youtube.com/watch?v=abc1234")
+
+    assert targets == ["https://www.youtube.com/watch?v=abc1234"]
+    assert tracks[0].source_url == "https://www.youtube.com/watch?v=abc1234"
 
 
 def test_metadata_cleanup_only_removes_known_presentation_suffixes():
@@ -283,3 +314,31 @@ def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path,
     assert "--embed-thumbnail" not in commands[0]
     assert "--convert-thumbnails" not in commands[0]
     assert commands[0][-1] == "https://music.youtube.com/watch?v=abc1234"
+
+
+def test_download_preserves_standard_youtube_fallback_endpoint(tmp_path, monkeypatch):
+    commands: list[list[str]] = []
+
+    class FailedProcess:
+        pid = 123
+        returncode = 1
+
+        def communicate(self, timeout):
+            return "", "video unavailable"
+
+    monkeypatch.setattr(
+        youtube_music.subprocess,
+        "Popen",
+        lambda command, **kwargs: commands.append(command) or FailedProcess(),
+    )
+    monkeypatch.setattr(youtube_music.download_processes, "register", lambda *_args: True)
+    monkeypatch.setattr(youtube_music.download_processes, "unregister", lambda *_args: None)
+    track = Track(
+        source_provider="youtube_music",
+        source_url="https://www.youtube.com/watch?v=abc1234",
+    )
+
+    with pytest.raises(ValueError, match="could not download"):
+        YouTubeMusicSource().download(track, str(tmp_path), job_id=9)
+
+    assert commands[0][-1] == "https://www.youtube.com/watch?v=abc1234"
