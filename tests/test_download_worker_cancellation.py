@@ -20,7 +20,6 @@ def test_cancelled_during_download_removes_output_without_import(tmp_path, monke
             active.status = "cancelled"; db.commit()
             return output
         monkeypatch.setattr(download_worker, "download_track", download)
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *a, **k: None)
         monkeypatch.setattr(download_worker, "write_genres", lambda *a, **k: imported.append("tags"))
         monkeypatch.setattr(download_worker, "import_downloaded_track", lambda **k: imported.append("import"))
         download_worker.process_job(db, job)
@@ -71,7 +70,6 @@ def test_cancelled_after_import_does_not_complete(tmp_path, monkeypatch):
         db.add(job); db.commit(); db.refresh(job)
         output = tmp_path / "audio.mp3"; output.write_bytes(b"audio")
         monkeypatch.setattr(download_worker, "download_track", lambda *args: output)
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
         def imported(**kwargs):
             db.get(DownloadJob, job.id).status = "cancelled"; db.commit()
             return tmp_path / "library.mp3"
@@ -89,7 +87,6 @@ def test_late_exception_after_cancellation_does_not_fail_job(tmp_path, monkeypat
         db.add(job); db.commit(); db.refresh(job)
         output = tmp_path / "audio.mp3"; output.write_bytes(b"audio")
         monkeypatch.setattr(download_worker, "download_track", lambda *args: output)
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
         def explode(**kwargs):
             db.get(DownloadJob, job.id).status = "cancelled"; db.commit()
             raise RuntimeError("late worker failure sentinel")
@@ -124,7 +121,6 @@ def test_import_retry_reuses_successfully_acquired_staging_file(tmp_path, monkey
         db.refresh(job)
 
         monkeypatch.setattr(download_worker.get_settings(), "staging_path", str(staging))
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
         monkeypatch.setattr(download_worker, "write_genres", lambda *args, **kwargs: None)
 
         def download(*_args):
@@ -203,7 +199,6 @@ def test_late_duplicate_is_indexed_linked_and_exported(tmp_path, monkeypatch):
         db.refresh(job)
 
         monkeypatch.setattr(download_worker, "download_track", lambda *args: output)
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
         monkeypatch.setattr(
             download_worker,
             "import_downloaded_track",
@@ -264,7 +259,6 @@ def test_no_match_for_available_library_song_is_skipped(monkeypatch, tmp_path):
         db.add_all([song, job])
         db.commit()
         db.refresh(job)
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
         monkeypatch.setattr(
             download_worker,
             "download_track",

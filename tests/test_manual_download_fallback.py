@@ -85,7 +85,6 @@ def test_worker_uses_approved_url_but_keeps_original_source_identity(
         library_file = tmp_path / "music" / "manual.mp3"
         seen = {}
 
-        monkeypatch.setattr(download_worker, "enrich_tracks", lambda *args, **kwargs: None)
         monkeypatch.setattr(download_worker, "write_genres", lambda *args, **kwargs: None)
 
         def download(track, _job_id):

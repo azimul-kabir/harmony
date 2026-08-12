@@ -14,7 +14,6 @@
                 <option value="general">General</option>
                 <option value="downloads">Downloads</option>
                 <option value="appearance">Appearance</option>
-                <option value="spotify">Spotify</option>
                 <option value="metadata">Metadata</option>
                 <option value="navidrome">Navidrome</option>
                 <option value="library-settings">Library</option>
@@ -24,7 +23,6 @@
             <button class="settings-tab active" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-target="general">General</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-downloads" data-target="downloads">Downloads</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-appearance" data-target="appearance">Appearance</button>
-            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-spotify" data-target="spotify">Spotify</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-metadata" data-target="metadata">Metadata</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-navidrome" data-target="navidrome">Navidrome</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-library-settings" data-target="library-settings">Library</button>
@@ -133,32 +131,6 @@
                     <button type="submit" class="btn-primary">Save Changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
-            </form>
-        </div>
-
-        <!-- Spotify genre enrichment -->
-        <div class="settings-section" id="tab-spotify" style="display: none;">
-            <h2 style="margin-top: 0; margin-bottom: 8px;">Spotify</h2>
-            <form class="settings-form" data-category="spotify">
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
-                        <input type="checkbox" name="spotify_genre_enrichment_enabled" style="width: 18px; height: 18px;" {% if spotify.spotify_genre_enrichment_enabled %}checked{% endif %}>
-                        Spotify genre enrichment
-                    </label>
-                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Use Spotify artist metadata as an optional genre source.</p>
-                </div>
-                <div id="spotify-credential-status" style="display: {% if spotify.spotify_genre_enrichment_enabled %}block{% else %}none{% endif %}; color: var(--text-muted); font-size: 0.85rem;">
-                    Credentials configured: <strong>{{ 'yes' if spotify_credentials_configured else 'no' }}</strong>. Set <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> in the environment; secrets are never displayed here.
-                </div>
-                <div class="settings-field-grid" style="margin-top: 20px;">
-                    <label>Maximum genres<input type="number" min="1" max="20" name="spotify_genre_max_values" class="form-control responsive-input-small" value="{{ spotify.spotify_genre_max_values }}"></label>
-                </div>
-                <div class="settings-toggle-list">
-                    <label><input type="checkbox" name="spotify_genre_include_featured_fallback" {% if spotify.spotify_genre_include_featured_fallback %}checked{% endif %}> Use featured artists as fallback</label>
-                    <label><input type="checkbox" name="spotify_genre_merge_featured" {% if spotify.spotify_genre_merge_featured %}checked{% endif %}> Merge featured-artist genres</label>
-                    <label><input type="checkbox" name="spotify_genre_replace_existing" {% if spotify.spotify_genre_replace_existing %}checked{% endif %}> Replace existing genre tags</label>
-                </div>
-                <div style="margin-top: 32px;"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span></div>
             </form>
         </div>
 
@@ -513,10 +485,6 @@
                 status.style.display = 'inline';
             }
         });
-    });
-    const spotifyToggle = document.querySelector('[name="spotify_genre_enrichment_enabled"]');
-    if (spotifyToggle) spotifyToggle.addEventListener('change', () => {
-        document.getElementById('spotify-credential-status').style.display = spotifyToggle.checked ? 'block' : 'none';
     });
     document.getElementById('navidrome-test-connection')?.addEventListener('click', async (event) => {
         const button = event.currentTarget; const result = document.getElementById('navidrome-test-result');

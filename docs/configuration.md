@@ -133,25 +133,12 @@ size for files that already contain a canonical MusicBrainz release ID.
 The defaults are conservative for public infrastructure. Fetching artwork
 never authorizes canonical metadata changes or file-tag writes.
 
-## Optional Spotify genre enrichment
+## Spotify metadata credentials
 
-`SPOTIFY_GENRE_ENRICHMENT_ENABLED` is `false` by default. Harmony therefore does not create a Spotify client, authenticate, request a token, or call a Spotify API endpoint merely to download, tag, resolve metadata, or index the library. MusicBrainz enrichment and genres embedded in audio files continue to work without Spotify.
-
-To use Spotify artist metadata as an additional, best-effort genre source, set the flag to `true` and configure both credentials:
-
-```env
-SPOTIFY_GENRE_ENRICHMENT_ENABLED=false
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-```
-
-Spotify genres can be empty or unavailable. A missing credential or provider failure is non-fatal and never blocks a download. Existing genres and their provenance are retained when the feature is disabled. The precedence is: user-provided genre, MusicBrainz genre, enabled Spotify genre, embedded genre, then empty.
-
-The same optional credentials enable Spotify as an explicit, review-first
-Metadata Intelligence provider independently of genre enrichment. Selecting
-Spotify permits bounded recording search and lookup. Merely configuring
-credentials never makes scanning, indexing, or ordinary downloads contact
-Spotify, and Spotify candidates never populate MusicBrainz identifier fields.
+Harmony no longer calls Spotify solely to enrich artist genres. Existing
+embedded or indexed genres remain preserved during download and import. The
+optional `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` values are used only
+when the official Spotify metadata API is explicitly enabled.
 
 ## Source schedules
 
@@ -161,8 +148,8 @@ intervals. Enabling auto-sync also enables the Source.
 
 ## Runtime settings
 
-The UI validates bounded settings for Downloads, Spotify enrichment,
-MusicBrainz/Cover Art Archive, Navidrome reconciliation, and the Library
+The UI validates bounded settings for Downloads, Cover Art Archive, Navidrome
+reconciliation, and the Library
 watcher. Invalid updates return HTTP 422 and leave the previous value in place.
 General date/time, theme, audio quality, worker, retry, playlist, and export
 preferences are also persisted.

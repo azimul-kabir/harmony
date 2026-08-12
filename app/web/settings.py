@@ -35,9 +35,5 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
             navidrome=navidrome,
             library_settings=library,
             settings=runtime_settings,
-            spotify_credentials_configured=bool(
-                runtime_settings.spotify_client_id
-                and runtime_settings.spotify_client_secret
-            ),
         ),
     )

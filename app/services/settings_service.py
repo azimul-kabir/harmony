@@ -8,10 +8,6 @@ RUNTIME_SETTING_DEFINITIONS = {
     "youtube_music_max_playlist_items": ("downloads", "int", 1, 5000),
     "youtube_music_max_search_results": ("downloads", "int", 1, 100),
     "youtube_music_max_queue_items": ("downloads", "int", 1, 5000),
-    "spotify_genre_max_values": ("spotify", "int", 1, 20),
-    "spotify_genre_include_featured_fallback": ("spotify", "boolean", None, None),
-    "spotify_genre_merge_featured": ("spotify", "boolean", None, None),
-    "spotify_genre_replace_existing": ("spotify", "boolean", None, None),
     "cover_art_archive_timeout_seconds": ("metadata", "float", 1, 120),
     "navidrome_timeout_seconds": ("navidrome", "float", 1, 120),
     "navidrome_playlist_reimport_enabled": ("navidrome", "boolean", None, None),
@@ -28,6 +24,11 @@ RETIRED_SETTING_KEYS = {
     "default_download_source",
     "playlist_sync_enabled",
     "m3u_export_folder",
+    "spotify_genre_enrichment_enabled",
+    "spotify_genre_max_values",
+    "spotify_genre_include_featured_fallback",
+    "spotify_genre_merge_featured",
+    "spotify_genre_replace_existing",
 }
 
 DEFAULT_SETTINGS = [
@@ -39,7 +40,6 @@ DEFAULT_SETTINGS = [
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "youtube_music_enabled", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "theme", "value": "auto", "type": "string", "category": "appearance"},
-    {"key": "spotify_genre_enrichment_enabled", "value": "false", "type": "boolean", "category": "spotify"},
 ]
 
 
@@ -62,10 +62,7 @@ def initialize_defaults(db: Session):
     for setting in DEFAULT_SETTINGS + _runtime_defaults():
         exists = db.query(AppSetting).filter(AppSetting.key == setting["key"]).first()
         if not exists:
-            value = setting["value"]
-            if setting["key"] == "spotify_genre_enrichment_enabled":
-                value = str(get_settings().spotify_genre_enrichment_enabled).lower()
-            db.add(AppSetting(**(setting | {"value": value})))
+            db.add(AppSetting(**setting))
     db.commit()
     apply_runtime_overrides(db)
 

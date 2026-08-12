@@ -51,13 +51,6 @@ class Settings(BaseSettings):
     spotify_client_secret: str | None = None
     # Artist genres are supplementary metadata only.  Keep the provider opt-in
     # so normal downloads never need Spotify credentials or a Spotify request.
-    spotify_genre_enrichment_enabled: bool = False
-    spotify_genre_max_values: int = 3
-    spotify_genre_max_concurrent_requests: int = 4
-    spotify_genre_include_featured_fallback: bool = True
-    spotify_genre_merge_featured: bool = False
-    spotify_genre_replace_existing: bool = False
-
     audio_providers: str = "youtube-music,youtube"
 
     max_parallel_downloads: int = 2

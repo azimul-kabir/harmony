@@ -24,6 +24,8 @@ def test_settings_page_exposes_editable_operational_settings_not_env_dump():
     assert 'name="default_download_source"' not in response.text
     assert 'name="playlist_sync_enabled"' not in response.text
     assert 'name="m3u_export_folder"' not in response.text
+    assert 'data-category="spotify"' not in response.text
+    assert 'name="spotify_genre_enrichment_enabled"' not in response.text
 
 
 def test_retired_v2_settings_are_tolerated_but_not_exposed_or_updated():
@@ -38,6 +40,34 @@ def test_retired_v2_settings_are_tolerated_but_not_exposed_or_updated():
 
         db.expire_all()
         assert db.get(AppSetting, "playlist_sync_enabled").value == "true"
+    finally:
+        db.close()
+
+
+def test_retired_spotify_genre_settings_are_ignored():
+    db = SessionLocal()
+    try:
+        db.add(
+            AppSetting(
+                key="spotify_genre_enrichment_enabled",
+                value="true",
+                type="boolean",
+                category="spotify",
+            )
+        )
+        db.commit()
+
+        client = TestClient(app)
+        assert "spotify_genre_enrichment_enabled" not in client.get(
+            "/api/settings/spotify"
+        ).json()
+        client.put(
+            "/api/settings/spotify",
+            json={"spotify_genre_enrichment_enabled": False},
+        )
+
+        db.expire_all()
+        assert db.get(AppSetting, "spotify_genre_enrichment_enabled").value == "true"
     finally:
         db.close()
 

@@ -43,9 +43,5 @@ def test_album_metadata_converts_spotify_milliseconds_to_seconds(monkeypatch):
             return album
 
     monkeypatch.setattr("app.services.spotify.metadata.get_client", Spotify)
-    monkeypatch.setattr(
-        "app.services.spotify.metadata.enrich_tracks", lambda _tracks: None
-    )
-
     tracks = resolve_album("https://open.spotify.com/album/album-id")
     assert tracks[0].duration == 230.453

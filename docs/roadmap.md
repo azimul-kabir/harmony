@@ -19,7 +19,8 @@ even when the feature that originally used them is no longer active.
 - Removed Synology monitoring, Smart Collections, lyrics, detailed Library
   analytics, metadata discovery/application consoles, metadata-health rule
   persistence, generated auto-playlists, Navidrome Love/Unlove operations, and
-  automatic Navidrome reconciliation.
+  automatic Navidrome reconciliation. Optional Spotify artist-genre enrichment
+  and its runtime surface are also removed; embedded genres remain intact.
 - Reduced Navidrome integration to connection/scan controls and M3U-driven
   playlist delivery.
 - Retained authenticated Spotify and public YouTube Music Sources, exact-match

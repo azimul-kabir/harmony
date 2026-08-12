@@ -26,7 +26,6 @@ from app.services.download import download_track
 from app.services import settings_service
 from app.providers.download_sources import get_source
 from app.services.download_telemetry import heartbeat_ticker, update_telemetry, utcnow_naive
-from app.services.spotify.genres import enrich_tracks
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
 from app.services.library_scanner import index_file
@@ -171,19 +170,6 @@ def process_job(
             spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
             genre_provenance=job.genre_provenance,
         )
-        # A queued job may predate genre support; resolve safely at execution.
-        if not track.genre:
-            update_telemetry(db, job, stage="metadata", progress_percent=10)
-            # Enrichment is optional; a provider outage must not fail audio.
-            try:
-                enrich_tracks([track], job_id=job.id)
-            except Exception:
-                logger.warning("Optional genre enrichment failed for job #{}", job.id)
-            # Persist successful pre-flight enrichment for retries and future jobs.
-            if track.genre:
-                job.genre = track.genre
-                job.genre_provenance = track.genre_provenance
-                db.commit()
         output_file = _resumable_staging_file(job)
         if output_file is None:
             update_telemetry(db, job, stage="downloading", progress_percent=None)

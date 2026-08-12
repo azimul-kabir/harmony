@@ -103,12 +103,8 @@ paths, provider URLs/payloads, credentials, command lines, or raw errors.
 - SpotDL integration
 - Background download queue
 - Automatic library import
-- Spotify artist-genre enrichment is optional and disabled by default. When
-  enabled, Harmony uses Spotify **artist** metadata (track and album objects do
-  not provide genres). MusicBrainz and embedded file metadata remain available
-  without Spotify. Spotify genre data can be empty or unavailable, and Spotify
-  failures never block a download. Manual metadata and approved MusicBrainz
-  metadata remain higher-priority sources.
+- Existing embedded or indexed genres are preserved during download and import.
+  Harmony no longer contacts Spotify solely to enrich genre tags.
 
 ---
 
@@ -359,7 +355,6 @@ Current configurable settings include:
 - Storage paths
 - Download engine
 - Spotify configuration
-- Optional Spotify genre enrichment
 - Optional YouTube Music download source
 - Navidrome connection and playlist synchronization
 - MusicBrainz provider settings
@@ -497,16 +492,9 @@ Before starting, set a long, unique `WEB_AUTH_PASSWORD` in `.env`.
 and fails closed when the password is empty. Login sessions last 12 hours by
 default and are invalidated whenever the password changes.
 
-Spotify artist-genre enrichment is optional. It is disabled by default, so
-credentials are not required for downloads, metadata resolution, tagging, or
-library indexing. Enable it only when you want Spotify artist metadata to be
-an additional genre source:
-
-```env
-SPOTIFY_GENRE_ENRICHMENT_ENABLED=false
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-```
+Spotify credentials remain optional and are needed only when the official
+Spotify metadata API is explicitly enabled. Harmony does not contact Spotify
+solely to enrich genres.
 
 Review the storage paths before starting, especially when using Docker or a
 Synology NAS:

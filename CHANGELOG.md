@@ -7,6 +7,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Removed
 
+- Removed optional Spotify artist-genre enrichment, its credentials/status UI,
+  runtime controls, provider requests, diagnostic command, and download-worker
+  preflight. Existing embedded and indexed genres remain preserved.
 - Started the v3 unreachable-code cleanup by removing the unmounted legacy
   sync-all endpoint, superseded Library/Source compatibility helpers, unused
   response schemas, and placeholder downloader, provider, and metadata domain
