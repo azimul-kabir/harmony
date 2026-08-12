@@ -23,7 +23,8 @@ RUN apt-get update \
 
 # Install Deno into a path accessible to the unprivileged Synology UID/GID
 # selected by Compose. Installing under /root makes it invisible at runtime.
-RUN DENO_INSTALL=/tmp/deno-install curl -fsSL https://deno.land/install.sh | sh \
+RUN export DENO_INSTALL=/tmp/deno-install \
+    && curl -fsSL https://deno.land/install.sh | sh \
     && install -m 0755 /tmp/deno-install/bin/deno /usr/local/bin/deno \
     && rm -rf /tmp/deno-install \
     && deno --version
