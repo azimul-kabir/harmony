@@ -56,6 +56,38 @@ def _markers(value: str | None) -> frozenset[str]:
     return frozenset(marker for marker in _VERSION_MARKERS if marker in normalized)
 
 
+def _title_without_non_version_qualifiers(value: str | None) -> str:
+    """Remove parenthetical context that does not identify a recording version.
+
+    Spotify sometimes includes soundtrack context in the canonical title (for
+    example ``Earned It (Fifty Shades Of Grey)``), while the audio provider's
+    embedded title contains only ``Earned It``.  Such context is safe to ignore
+    only when it is bracketed and contains none of our material version markers.
+    """
+    value = value or ""
+
+    def preserve_version(match: re.Match[str]) -> str:
+        qualifier = match.group(1)
+        return match.group(0) if _markers(qualifier) else " "
+
+    without_qualifiers = re.sub(
+        r"[\[(]([^\]\)]+)[\])]", preserve_version, value
+    )
+    return _normalized(without_qualifiers)
+
+
+def _same_strict_title(requested: str | None, candidate: str | None) -> bool:
+    if _normalized(requested) == _normalized(candidate):
+        return True
+    requested_base = _title_without_non_version_qualifiers(requested)
+    candidate_base = _title_without_non_version_qualifiers(candidate)
+    return bool(
+        requested_base
+        and requested_base == candidate_base
+        and _markers(requested) == _markers(candidate)
+    )
+
+
 def _primary_artist(value: str | None) -> str:
     """Return the first credited performer from a display-style artist value.
 
@@ -118,7 +150,7 @@ def validate_track_identity(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="artist_mismatch",
         )
-    if strict and _normalized(requested.title) != _normalized(candidate.title):
+    if strict and not _same_strict_title(requested.title, candidate.title):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="title_mismatch",
