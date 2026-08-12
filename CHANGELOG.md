@@ -5,6 +5,16 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+### Removed
+
+- Started the v3 unreachable-code cleanup by removing the unmounted legacy
+  sync-all endpoint, superseded Library/Source compatibility helpers, unused
+  response schemas, and placeholder downloader, provider, and metadata domain
+  abstractions.
+- Removed settings controls and defaults that did not affect playlist sync, M3U
+  export, or download-source selection. Existing v2 rows and environment values
+  remain harmless during upgrades.
+
 ### Fixed
 
 - Reconciled provider no-match outcomes with the indexed Library. When the

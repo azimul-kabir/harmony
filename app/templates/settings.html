@@ -13,7 +13,6 @@
             <select id="settings-section-picker">
                 <option value="general">General</option>
                 <option value="downloads">Downloads</option>
-                <option value="playlists">Playlists</option>
                 <option value="appearance">Appearance</option>
                 <option value="spotify">Spotify</option>
                 <option value="metadata">Metadata</option>
@@ -24,7 +23,6 @@
         <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings categories">
             <button class="settings-tab active" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-target="general">General</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-downloads" data-target="downloads">Downloads</button>
-            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-playlists" data-target="playlists">Playlists</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-appearance" data-target="appearance">Appearance</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-spotify" data-target="spotify">Spotify</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-metadata" data-target="metadata">Metadata</button>
@@ -104,13 +102,6 @@
                     </label>
                     <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Uses public URLs through yt-dlp; availability depends on YouTube.</p>
                 </div>
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Default search source</label>
-                    <select name="default_download_source" class="form-control responsive-input">
-                        <option value="spotify" {% if downloads.default_download_source == 'spotify' %}selected{% endif %}>Spotify</option>
-                        <option value="youtube_music" {% if downloads.default_download_source == 'youtube_music' %}selected{% endif %}>YouTube Music</option>
-                    </select>
-                </div>
                 <h3>Provider limits</h3>
                 <div class="settings-field-grid">
                     <label>Spotify playlist metadata timeout (seconds)<input type="number" min="300" max="14400" name="spotify_playlist_metadata_timeout_seconds" class="form-control responsive-input-small" value="{{ downloads.spotify_playlist_metadata_timeout_seconds }}"></label>
@@ -118,29 +109,6 @@
                     <label>Maximum playlist items<input type="number" min="1" max="5000" name="youtube_music_max_playlist_items" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_playlist_items }}"></label>
                     <label>Maximum search results<input type="number" min="1" max="100" name="youtube_music_max_search_results" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_search_results }}"></label>
                     <label>Maximum queued items<input type="number" min="1" max="5000" name="youtube_music_max_queue_items" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_queue_items }}"></label>
-                </div>
-                <div style="margin-top: 32px;">
-                    <button type="submit" class="btn-primary">Save Changes</button>
-                    <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
-                </div>
-            </form>
-        </div>
-
-        <!-- Playlists Tab -->
-        <div class="settings-section" id="tab-playlists" style="display: none;">
-            <h2 style="margin-top: 0; margin-bottom: 24px;">Playlists</h2>
-            <form class="settings-form" data-category="playlists">
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
-                        <input type="checkbox" name="playlist_sync_enabled" style="width: 18px; height: 18px;" {% if playlists.playlist_sync_enabled %}checked{% endif %}> 
-                        Enable Playlist Sync
-                    </label>
-                </div>
-                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">M3U Export Folder</label>
-                    <input type="text" name="m3u_export_folder" class="form-control responsive-input" value="{{ playlists.m3u_export_folder }}">
-                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">The directory inside your library where .m3u files are saved.</p>
                 </div>
                 <div style="margin-top: 32px;">
                     <button type="submit" class="btn-primary">Save Changes</button>
