@@ -40,6 +40,9 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: harmony:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Verify Synology runtime tools as mapped user
+        run: docker run --rm --user 1026:100 harmony:ci deno --version

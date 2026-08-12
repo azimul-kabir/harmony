@@ -31,6 +31,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Fixed
 
+- Installed Deno in the container's system executable path so yt-dlp can use
+  its JavaScript runtime when Synology runs Harmony as an unprivileged UID/GID.
 - Made artwork-cache insertion and file publication conflict-safe when the
   download importer and Library watcher index the same new song concurrently.
 - Reconciled provider no-match outcomes with the indexed Library. When the
