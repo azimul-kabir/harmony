@@ -228,6 +228,31 @@ def test_safe_identity_variations_pass(track, candidate):
     validate_track_identity(track, candidate)
 
 
+@pytest.mark.parametrize(
+    "candidate_title",
+    ["Earned It", "Earned It [Fifty Shades Of Grey]"],
+)
+def test_soundtrack_qualifier_may_be_absent_or_reformatted(candidate_title):
+    requested = Track(
+        title="Earned It (Fifty Shades Of Grey)",
+        artist="The Weeknd",
+        duration=252,
+    )
+
+    validate_track_identity(
+        requested, AudioIdentity(candidate_title, "The Weeknd", 252)
+    )
+
+
+def test_parenthetical_version_cannot_be_discarded():
+    requested = Track(title="Song (Live)", artist="Artist", duration=200)
+
+    with pytest.raises(DownloadFailed) as error:
+        validate_track_identity(requested, AudioIdentity("Song", "Artist", 200))
+
+    assert error.value.technical_detail == "title_mismatch"
+
+
 @pytest.mark.parametrize("candidate_artist", [
     "The Weeknd",
     "The Weeknd; Daft Punk",
