@@ -7,6 +7,8 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Removed
 
+- Removed the duplicate legacy settings-page handler and inert download-source
+  and Spotify metadata-provider environment variables.
 - Removed optional Spotify artist-genre enrichment, its credentials/status UI,
   runtime controls, provider requests, diagnostic command, and download-worker
   preflight. Existing embedded and indexed genres remain preserved.

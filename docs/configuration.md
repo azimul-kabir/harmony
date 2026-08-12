@@ -68,7 +68,6 @@ poll interval, and scan timeout can be adjusted under **Settings → Navidrome**
 ```env
 YOUTUBE_MUSIC_ENABLED=true
 YT_DLP_PATH=yt-dlp
-DEFAULT_DOWNLOAD_SOURCE=spotify
 YOUTUBE_MUSIC_TIMEOUT_SECONDS=300
 ```
 
