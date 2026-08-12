@@ -230,15 +230,13 @@ To fetch online artwork, select songs in **Library → Songs** and choose
 **Fetch album art**. Harmony uses the canonical `musicbrainz_release_id`
 (MusicBrainz **Album Id**) for Cover Art Archive's `/release/{id}/front`
 lookup. A `musicbrainz_release_group_id` is a different identifier and is
-never sent to that endpoint. First apply the MusicBrainz release-ID suggestion
-to canonical metadata for songs that do not yet have one. A valid cached
-artwork result satisfies a normal fetch without another network request.
+never sent to that endpoint. Songs without a release ID are skipped with a
+clear explanation. A valid cached artwork result satisfies a normal fetch
+without another network request.
 
 **Refresh artwork** only re-indexes embedded/folder artwork and repairs
-Harmony's cache association. **Write canonical tags** (with artwork embedding
-enabled) modifies the audio file. Navidrome sees cover art only after that
-embed step, or when artwork has been exported into the music library; the
-Harmony cache itself is not a Navidrome media file.
+Harmony's cache association. The Harmony cache itself is not a Navidrome media
+file; Navidrome continues to read artwork from the music library.
 
 ---
 
@@ -257,8 +255,9 @@ The dedicated **Library Health** page adds:
 - Artwork-cache clearing
 - Durable progress and cancellation
 
-Duplicate Detection is currently displayed as a placeholder; Harmony does not
-yet claim to calculate duplicate groups.
+Duplicate detection groups conservative exact, strong, probable, and possible
+matches. Resolution requires a fresh preview and explicit confirmation before
+non-keeper files are queued for deletion.
 
 ---
 
@@ -279,41 +278,13 @@ errors, cancellation, and recovery through Harmony's task system.
 
 ---
 
-## ✨ Metadata Intelligence
-
-Harmony can evaluate library metadata, discover authoritative candidates, and
-apply only the changes you review and accept.
-
-- Provider-neutral metadata-health rules identify missing, inconsistent, and
-  malformed Song metadata with durable issue records.
-- MusicBrainz discovery uses deterministic, explainable candidate matching and
-  confidence levels rather than silently overwriting tags.
-- Suggestions retain evidence, provider provenance, review status, and a
-  canonical-value snapshot so stale changes are detected before application.
-- Accepted changes can be previewed, applied in durable background batches,
-  audited in history, and rolled back when the recorded change is reversible.
-- MusicBrainz requests are rate-limited, retried, and cached locally to make
-  repeated discovery safe for public provider infrastructure.
-
-Metadata discovery, canonical application, explicit tag writing, and rollback
-currently support Songs. Album and Artist matching remains an internal
-foundation for future releases.
-
-### Repair missing genres
+## 🏷 Embedded Metadata
 
 Harmony indexes the genre tag already present in an audio file; it deliberately
 does not guess or silently overwrite genres while scanning. A **Refresh
 metadata** or **Rebuild Index** therefore fills `genre` only when the file
 itself contains a genre tag (for example ID3 `TCON`, Vorbis `GENRE`, or MP4
 `©gen`).
-
-To enrich untagged songs from MusicBrainz, open **Library Health**, run
-**Metadata Analysis**, then find the **Missing genre** issues and choose
-**Discover match**. In the linked Song review, select a viable provider match,
-generate suggestions, accept the **Genre** suggestion, preview it, and apply
-it. Harmony records that canonical Library change in its history. To update the
-file itself, separately preview and run **Write canonical tags**; this explicit
-step can also embed cached artwork and is the step media servers observe.
 
 ---
 
@@ -357,7 +328,7 @@ Current configurable settings include:
 - Spotify configuration
 - Optional YouTube Music download source
 - Navidrome connection and playlist synchronization
-- MusicBrainz provider settings
+- Cover Art Archive request settings
 - Appearance, date/time, and runtime behavior
 - System information
 
@@ -644,10 +615,7 @@ Just a synchronized self-hosted music library.
 
 ### Library Intelligence
 
-- Metadata editing beyond reviewed MusicBrainz suggestions
-- Additional metadata providers and repair workflows
-- Duplicate detection and resolution
-- Manual artwork replacement
+- Optional metadata editing and repair workflows
 - Advanced search improvements
 
 ---
@@ -699,21 +667,6 @@ Library changes should follow
 [`docs/architecture/library.md`](docs/architecture/library.md), which is the
 source of truth for Library ownership, service boundaries, API contracts, and
 large-library performance requirements.
-
-## Canonical metadata and audio tags
-
-Harmony intentionally separates metadata repair into three explicit stages:
-
-1. **Accept provider match** records the review decision only.
-2. **Apply to canonical metadata** updates Harmony's database and audit history only.
-3. **Write canonical tags to the audio file** is a separately confirmed action that
-   changes embedded tags. It is the stage Navidrome and similar music servers
-   require; run their library scan afterwards to pick up the changed file mtime.
-
-Harmony never silently rewrites the library during matching, acceptance, or
-canonical metadata application.
-
----
 
 # License
 

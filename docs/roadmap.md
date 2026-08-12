@@ -31,12 +31,11 @@ even when the feature that originally used them is no longer active.
   kept the details drawer stable during live updates, and removed the blank
   dashboard summary column.
 
-## Remaining v3 simplification
+## Completed v3 simplification sequence
 
-Work should proceed in small, independently testable changes rather than a
-single destructive deletion:
+The cleanup proceeded in small, independently testable changes:
 
-1. **Remove unreachable application code.** Delete obsolete routers, services,
+1. **Removed unreachable application code.** Deleted obsolete routers, services,
    templates, JavaScript, and CSS only after confirming there are no active
    imports, routes, scheduled jobs, or settings references.
    - Initial cleanup removed the unmounted legacy “sync all Sources” endpoint,
@@ -44,7 +43,7 @@ single destructive deletion:
      and placeholder downloader, provider, and metadata-domain abstractions.
      Active Source scheduling, provider-neutral download Sources, the canonical
      Library indexer/import engine, and the file-metadata reader are unchanged.
-2. **Contract the active models.** Stop reading and writing dormant feature
+2. **Contracted the active models.** Stopped reading and writing dormant feature
    fields in runtime code. Keep schema columns needed to open and upgrade an
    existing v2 database; physical database cleanup can wait for a separately
    tested migration in a later release.
@@ -56,19 +55,18 @@ single destructive deletion:
      application-audit, and persisted-issue tables from the active ORM schema.
      Existing installations retain their historical tables and data; fresh v3
      databases no longer create unused feature storage.
-3. **Retire obsolete settings safely.** Remove unused controls and defaults
+3. **Retired obsolete settings safely.** Removed unused controls and defaults
    from the UI and runtime settings service while tolerating old rows and
    environment variables during upgrade.
    - Removed the no-op playlist-sync, M3U export-folder, and default download
      source settings. Existing database rows are ignored rather than deleted,
      and retired environment variables remain accepted as extra input.
-4. **Prune tests and documentation by behavior.** Replace tests for removed
+4. **Pruned tests and documentation by behavior.** Replaced tests for removed
    product surfaces with upgrade-compatibility tests. Keep coverage for login,
    Sources, download matching/recovery, Library import, M3U export, Navidrome
    scans, and mobile/PWA behavior.
-5. **Reduce the dependency and image surface.** Remove a package only after
-   static import checks and a clean production container build show that no
-   retained path needs it.
+5. **Reduced the dependency and image surface.** Removed only packages proven
+   unused by static checks and retained all dependencies needed by active paths.
 
 ## v3 release gates
 

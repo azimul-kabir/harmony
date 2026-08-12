@@ -1,19 +1,19 @@
 # Harmony Architecture
 
-> Release baseline: v2.0.0
+> Release target: v3.0.0
 >
-> Last updated: 2026-07-24
+> Last updated: 2026-08-13
 
 Harmony is a FastAPI application with a server-rendered, framework-free web UI,
 SQLite persistence, and background workers for downloads, Library maintenance,
-metadata work, playlist reconciliation, and scheduled source synchronization.
+playlist export, and scheduled source synchronization.
 It owns acquisition and organization; Navidrome or another media server owns
 playback.
 
 ## System boundaries
 
 ```text
-Spotify / YouTube Music / MusicBrainz
+Spotify / YouTube Music
                   │
                   ▼
          Harmony API + workers
@@ -22,19 +22,17 @@ Spotify / YouTube Music / MusicBrainz
        SQLite   Music   Artwork cache
           │       │
           └── M3U playlists ──► Navidrome / other media servers
-                     └────────► Navidrome Subsonic playlist API
 ```
 
 - **Web/API:** FastAPI routes serve HTML, JSON, OpenAPI, and SSE snapshots.
 - **Persistence:** SQLAlchemy 2.0 and Alembic manage the SQLite domain state.
 - **Downloads:** provider adapters feed durable queue records and the managed
-  music directory. Spotify track acquisition is a single original-URL SpotDL
-  attempt whose sole audio output must pass embedded identity validation before
-  import; no text-search substitute path exists.
+  music directory. Spotify acquisition tries exact identity first, then permits
+  controlled fallback candidates only when identity validation succeeds.
 - **Library:** the persistent Song index is the query boundary for browsing,
   search, health, artwork, and bulk work.
-- **Playlists:** Harmony stores source order, exports atomic M3Us, and can
-  reconcile stable Navidrome song/playlist IDs directly.
+- **Playlists:** Harmony stores source order and exports atomic M3Us for
+  Navidrome or another media server to scan.
 - **Automation:** per-source schedules use the same durable services as
   user-triggered synchronization.
 - **UI:** HTML, CSS, and vanilla JavaScript use responsive layouts and surgical
@@ -52,11 +50,9 @@ Spotify / YouTube Music / MusicBrainz
 
 - Database sessions are closed predictably, including worker-owned sessions.
 - Provider failures are bounded and returned as safe errors.
-- Metadata discovery never silently changes canonical data or file tags.
-- Canonical metadata application and audio-file tag writing are separate,
-  explicitly confirmed operations.
+- Library scanning reads embedded metadata without silently rewriting files.
 - Playlist exports include only existing files linked through available
   canonical Song associations and are replaced atomically; job completion and
   predicted paths never count as availability.
-- Direct Navidrome playlist updates are verified and fall back to M3U import.
+- Navidrome integration is limited to status, scans, and M3U-driven playlists.
 - SSE refreshes patch stable UI regions and do not replace active controls.
