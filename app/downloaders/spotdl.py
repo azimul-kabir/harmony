@@ -76,32 +76,47 @@ def _title_without_non_version_qualifiers(value: str | None) -> str:
     return _normalized(without_qualifiers)
 
 
-def _same_strict_title(requested: str | None, candidate: str | None) -> bool:
-    if _normalized(requested) == _normalized(candidate):
+def _same_strict_title(requested: Track, candidate: str | None) -> bool:
+    if _normalized(requested.title) == _normalized(candidate):
         return True
-    requested_base = _title_without_non_version_qualifiers(requested)
+    requested_base = _title_without_non_version_qualifiers(requested.title)
     candidate_base = _title_without_non_version_qualifiers(candidate)
-    return bool(
+    if (
         requested_base
         and requested_base == candidate_base
-        and _markers(requested) == _markers(candidate)
-    )
+        and _markers(requested.title) == _markers(candidate)
+    ):
+        return True
+
+    # YouTube Music commonly appends the film/album name to an otherwise exact
+    # song title (for example ``Song - Film Name``), while Spotify keeps that
+    # context only in the album field. Accept that representation only when the
+    # extra suffix identifies the requested album; arbitrary longer titles are
+    # still rejected.
+    album = _normalized(requested.album)
+    if not album or _markers(requested.title) != _markers(candidate):
+        return False
+    for left, right in ((requested.title, candidate), (candidate, requested.title)):
+        left_value = left or ""
+        right_value = right or ""
+        match = re.match(
+            rf"^\s*{re.escape(left_value)}\s*(?:[-–—|:]|\bfrom\b)\s*(.+?)\s*$",
+            right_value,
+            flags=re.IGNORECASE,
+        )
+        if match and _title_similarity(album, match.group(1)) >= 0.72:
+            return True
+    return False
 
 
-def _primary_artist(value: str | None) -> str:
-    """Return the first credited performer from a display-style artist value.
-
-    Spotify commonly supplies all track artists as one comma-separated value,
-    while Mutagen may expose only the first value from a multi-value artist tag.
-    Those representations describe the same recording and must not be rejected.
-    """
-    primary = re.split(
+def _artist_credits(value: str | None) -> frozenset[str]:
+    """Return normalized performers from common multi-artist tag formats."""
+    credits = re.split(
         r"\s*(?:,|;|&|\+|/|\b(?:and|feat(?:uring)?|ft)\.?\b)\s*",
         value or "",
-        maxsplit=1,
         flags=re.IGNORECASE,
-    )[0]
-    return _normalized(primary)
+    )
+    return frozenset(filter(None, (_normalized(credit) for credit in credits)))
 
 
 def _same_artist_credit(requested: str | None, candidate: str | None) -> bool:
@@ -109,12 +124,13 @@ def _same_artist_credit(requested: str | None, candidate: str | None) -> bool:
     candidate_normalized = _normalized(candidate)
     if requested_normalized == candidate_normalized:
         return True
-    # The primary performer is stable when one side contains the complete
-    # collaboration credit and the other side contains only its first tag.
+    # Provider credits are not ordered consistently. A Spotify track may name
+    # one primary performer while YouTube Music lists the same singer later in
+    # a multi-artist tag, so require overlap rather than identical first artist.
     return bool(
         requested_normalized
         and candidate_normalized
-        and _primary_artist(requested) == _primary_artist(candidate)
+        and _artist_credits(requested) & _artist_credits(candidate)
     )
 
 
@@ -150,7 +166,7 @@ def validate_track_identity(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="artist_mismatch",
         )
-    if strict and not _same_strict_title(requested.title, candidate.title):
+    if strict and not _same_strict_title(requested, candidate.title):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="title_mismatch",

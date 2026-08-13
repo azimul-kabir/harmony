@@ -97,7 +97,7 @@ def _format_track(raw_item: dict) -> Track | None:
         )
         return Track(
             title=meta["name"],
-            artist=artists[0],
+            artist=", ".join(artists),
             artists=artists,
             album=album.get("name"),
             album_artist=next(
