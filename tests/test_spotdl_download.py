@@ -267,12 +267,46 @@ def test_multi_artist_tag_representations_pass(candidate_artist):
     )
 
 
-def test_different_primary_artist_still_fails(track):
+def test_multi_artist_order_does_not_reject_same_recording():
+    requested = Track(title="Yaaron", artist="KK", duration=269)
+    validate_track_identity(
+        requested,
+        AudioIdentity("Yaaron", "Leslie Lewis, KK", 269),
+    )
+
+
+def test_album_name_may_be_appended_to_youtube_title():
+    requested = Track(
+        title="Mhare Hiwra Main Nache Mor",
+        artist="Hariharan, Kavita Krishnamurti",
+        album="Hum Saath-Saath Hain",
+        duration=371,
+    )
+    validate_track_identity(
+        requested,
+        AudioIdentity(
+            "Mhare Hiwra Main Nache Mor - Hum Saath Saath Hain",
+            "Kavita Krishnamurti, Hariharan",
+            371,
+        ),
+    )
+
+
+def test_arbitrary_title_suffix_is_not_treated_as_album_context():
+    requested = Track(
+        title="Song", artist="Artist", album="Original Film", duration=200
+    )
     with pytest.raises(DownloadFailed) as error:
         validate_track_identity(
-            track, AudioIdentity("Test Title", "Different Artist, Test Artist", 180)
+            requested, AudioIdentity("Song - Different Song", "Artist", 200)
         )
-    assert error.value.technical_detail == "artist_mismatch"
+    assert error.value.technical_detail == "title_mismatch"
+
+
+def test_requested_artist_may_appear_after_another_primary_credit(track):
+    validate_track_identity(
+        track, AudioIdentity("Test Title", "Different Artist, Test Artist", 180)
+    )
 
 
 @pytest.mark.parametrize("title", ["Test Title (Instrumental)", "Test Title Live", "Test Title Remix", "Test Title Karaoke", "Test Title Cover"])

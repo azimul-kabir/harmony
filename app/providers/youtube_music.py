@@ -61,8 +61,21 @@ def normalize_url(url: str) -> str:
 
 
 def watch_url(item_id: str) -> str:
-    """Keep YouTube Music tracks on the Music watch endpoint."""
+    """Return the canonical URL stored for a YouTube Music track."""
     return f"https://music.youtube.com/watch?v={item_id}"
+
+
+def acquisition_url(item_id: str) -> str:
+    """Return the public endpoint used by yt-dlp for a Music track.
+
+    The Music and standard watch pages identify the same video, but they do
+    not always have the same availability at the extractor/network boundary.
+    In particular, ``music.youtube.com`` can be blocked while the public
+    ``www.youtube.com`` watch page remains downloadable.  Keep Music URLs as
+    durable source identity, but acquire track audio and extractor metadata
+    through the more broadly available standard endpoint.
+    """
+    return f"https://www.youtube.com/watch?v={item_id}"
 
 
 def _best_artwork(data: dict) -> str | None:
@@ -304,15 +317,16 @@ class YouTubeMusicSource:
 
     def _resolve(self, url: str) -> tuple[str, list[Track]]:
         target = normalize_url(url)
+        source_target = target
         detected = self.detect_url(target)
         if not detected:
             raise ValueError("Unsupported YouTube Music URL.")
         item_type, item_id = detected
-        # Keep an explicitly supplied standard YouTube URL on that endpoint.
-        # Rewriting it to music.youtube.com can apply different Workspace or
-        # network restrictions even though the video is public on YouTube.
+        # A Music watch URL and the standard watch URL have the same video ID,
+        # but Music can be unavailable to yt-dlp on networks where YouTube is
+        # reachable.  Never send a Music watch endpoint to the extractor.
         if item_type == "track" and urlparse(target).hostname == "music.youtube.com":
-            target = watch_url(item_id)
+            target = acquisition_url(item_id)
         data = self._run_json(target, flat=item_type != "track")
         entries = data.get("entries") if item_type != "track" else [data]
         if item_type != "track" and len(entries or []) > self.max_collection_items:
@@ -325,14 +339,14 @@ class YouTubeMusicSource:
             # enters the durable queue so retries retain complete metadata.
             if item_type != "track" and entry.get("id"):
                 try:
-                    entry = self._run_json(watch_url(str(entry["id"])))
+                    entry = self._run_json(acquisition_url(str(entry["id"])))
                 except ValueError:
                     logger.warning("Could not hydrate YouTube Music playlist item {}; using flat metadata", entry.get("id"))
             result = self._result(entry)
             if not result.item_id or result.item_id in seen:
                 continue
             seen.add(result.item_id)
-            source_url = target if item_type == "track" else result.source_url
+            source_url = source_target if item_type == "track" else result.source_url
             tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or "Singles", album_artist=result.album_artist, track=result.track_number, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=source_url))
         if not tracks:
             raise ValueError("YouTube Music collection is empty or unavailable.")
@@ -355,7 +369,7 @@ class YouTubeMusicSource:
             and detected[0] == "track"
             and urlparse(target).hostname == "music.youtube.com"
         ):
-            target = watch_url(detected[1])
+            target = acquisition_url(detected[1])
         else:
             target = normalize_url(target)
         output = Path(output_dir)

@@ -58,7 +58,7 @@ def test_resolve_keeps_youtube_music_watch_url(monkeypatch):
     monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
     tracks = source.resolve("music.youtube.com/watch?v=abc1234")
 
-    assert targets == ["https://music.youtube.com/watch?v=abc1234"]
+    assert targets == ["https://www.youtube.com/watch?v=abc1234"]
     assert tracks[0].source_url == "https://music.youtube.com/watch?v=abc1234"
 
 
@@ -189,22 +189,27 @@ def test_result_prefers_canonical_youtube_music_metadata(monkeypatch):
 
 def test_playlist_name_is_never_used_as_track_album(monkeypatch):
     source = YouTubeMusicSource()
+    targets: list[tuple[str, bool]] = []
     playlist = {
         "title": "My Playlist",
         "entries": [{"id": "video123", "title": "Flat title"}],
     }
     hydrated = {"id": "video123", "title": "Hydrated title"}
-    monkeypatch.setattr(
-        source,
-        "_run_json",
-        lambda target, *, flat=False: playlist if flat else hydrated,
-    )
+    def run_json(target, *, flat=False):
+        targets.append((target, flat))
+        return playlist if flat else hydrated
+
+    monkeypatch.setattr(source, "_run_json", run_json)
     monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
 
     resolved = source.resolve("https://music.youtube.com/playlist?list=PLabc")
 
     assert resolved[0].album == "Singles"
     assert resolved[0].track is None
+    assert targets == [
+        ("https://music.youtube.com/playlist?list=PLabc", True),
+        ("https://www.youtube.com/watch?v=video123", False),
+    ]
 
 
 def test_synced_playlist_track_resolves_album_art_when_download_starts(monkeypatch):
@@ -313,7 +318,7 @@ def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path,
     assert "--write-thumbnail" not in commands[0]
     assert "--embed-thumbnail" not in commands[0]
     assert "--convert-thumbnails" not in commands[0]
-    assert commands[0][-1] == "https://music.youtube.com/watch?v=abc1234"
+    assert commands[0][-1] == "https://www.youtube.com/watch?v=abc1234"
 
 
 def test_download_preserves_standard_youtube_fallback_endpoint(tmp_path, monkeypatch):

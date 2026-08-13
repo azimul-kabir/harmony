@@ -73,7 +73,10 @@ def test_formatted_track_keeps_album_metadata_and_artwork(monkeypatch):
                 "id": "track-id",
                 "type": "track",
                 "name": "Song",
-                "artists": [{"name": "Track Artist"}],
+                "artists": [
+                    {"name": "Track Artist"},
+                    {"name": "Guest Artist"},
+                ],
                 "album": {
                     "id": "album-id",
                     "name": "Album",
@@ -92,6 +95,8 @@ def test_formatted_track_keeps_album_metadata_and_artwork(monkeypatch):
     track = playlist_batches._format_track({})
 
     assert track is not None
+    assert track.artist == "Track Artist, Guest Artist"
+    assert track.artists == ["Track Artist", "Guest Artist"]
     assert track.album == "Album"
     assert track.album_artist == "Album Artist"
     assert track.spotify_album_id == "album-id"
