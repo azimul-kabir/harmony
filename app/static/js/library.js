@@ -471,6 +471,7 @@ function renderActiveView() {
         view.hidden = view.id !== `view-${libraryState.view}`;
     });
 
+    updateMobileSelectAll();
     if (libraryState.view === "songs") renderSongs();
     if (libraryState.view === "albums") renderAlbums();
     if (libraryState.view === "artists") renderArtists();
@@ -720,6 +721,21 @@ function updateBulkSelection(pageSongs = currentSongPage()) {
     const selectPage = document.getElementById("library-select-page");
     selectPage.checked = pageSongs.length > 0 && selectedOnPage === pageSongs.length;
     selectPage.indeterminate = selectedOnPage > 0 && selectedOnPage < pageSongs.length;
+    updateMobileSelectAll();
+}
+
+function updateMobileSelectAll() {
+    const button = document.getElementById("library-select-all-mobile");
+    if (!button) return;
+    const visibleSongs = libraryState.filteredSongs;
+    const available = libraryState.view === "songs" && visibleSongs.length > 0;
+    button.hidden = !available;
+    if (!available) return;
+    const allSelected = visibleSongs.every((song) => libraryState.selectedSongs.has(song.id));
+    button.textContent = allSelected
+        ? "Clear selection"
+        : `Select all (${visibleSongs.length.toLocaleString()})`;
+    button.setAttribute("aria-pressed", String(allSelected));
 }
 
 function clearBulkSelection() {
@@ -827,6 +843,17 @@ document.getElementById("duplicate-review-close").addEventListener("click", () =
 document.getElementById("duplicate-tier").addEventListener("change", loadDuplicateCandidates);
 
 document.getElementById("library-clear-selection").addEventListener("click", clearBulkSelection);
+document.getElementById("library-select-all-mobile").addEventListener("click", () => {
+    const visibleSongs = libraryState.filteredSongs;
+    if (!visibleSongs.length) return;
+    const allSelected = visibleSongs.every((song) => libraryState.selectedSongs.has(song.id));
+    if (allSelected) {
+        libraryState.selectedSongs.clear();
+    } else {
+        visibleSongs.forEach((song) => libraryState.selectedSongs.add(song.id));
+    }
+    renderSongs();
+});
 document.querySelectorAll("[data-bulk-action]").forEach((button) => {
     button.addEventListener("click", () => showBulkDialog(button.dataset.bulkAction));
 });
