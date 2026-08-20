@@ -104,9 +104,10 @@ def test_bulk_move_preserves_song_identity_and_rejects_collisions(tmp_path, monk
 
 def test_bulk_delete_retains_song_provenance_as_missing(tmp_path):
     music = tmp_path / "music"
-    music.mkdir()
+    album = music / "Artist" / "Singles"
+    album.mkdir(parents=True)
     with SessionLocal() as db:
-        song = _songs(db, music, 1)[0]
+        song = _songs(db, album, 1)[0]
         worker = LibraryBulkWorker()
         worker.settings = SimpleNamespace(music_path=str(music), download_path=str(tmp_path))
         task = create_bulk_task(db, operation="delete", song_ids=[song.id])
@@ -119,6 +120,8 @@ def test_bulk_delete_retains_song_provenance_as_missing(tmp_path):
         db.refresh(song)
 
         assert not Path(song.path).exists()
+        assert not album.exists()
+        assert music.is_dir()
         assert song.availability_status == "missing"
         assert db.get(Song, song.id) is not None
 

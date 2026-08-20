@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
 from app.database.models import Song
 from app.services.artwork import artwork_url
-from app.services.library_service import index_library_file, rescan_library
+from app.services.library_service import delete_library_file, index_library_file, rescan_library
 from app.services.library_events import library_events
 from app.services.library_search import SearchFilters, SearchQueryError, library_search
 from app.services.library_filters import (
@@ -489,17 +489,12 @@ def index_file(request: IndexFileRequest, db: Session = Depends(get_db)):
 def delete_song(song_id: int, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
     if song:
-        from app.services.library_service import managed_library_path
-
         try:
-            path = managed_library_path(song.path)
+            delete_library_file(song.path)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
-        if path.exists():
-            try:
-                path.unlink()
-            except OSError as error:
-                raise HTTPException(status_code=409, detail=f"Could not delete song file: {error}") from error
+        except OSError as error:
+            raise HTTPException(status_code=409, detail=f"Could not delete song file: {error}") from error
         song.availability_status = "missing"
         db.commit()
         library_search.index_song(db, song_id)
