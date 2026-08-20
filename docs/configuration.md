@@ -165,6 +165,11 @@ mount through a shared directory. YouTube may invalidate them, and using them
 can affect the associated account. If cookies are not acceptable, test from a
 different public network/IP. Choose a different public video when only one
 video is affected.
+videos, test from another public network/IP. Harmony deliberately does not
+accept browser cookies, so videos or networks that require login, bot
+verification, age confirmation, or regional access cannot be bypassed by the
+manual fallback feature. Choose a different public video when only one video is
+affected.
 
 The manual fallback endpoint returns HTTP 422 before queueing when the submitted
 value is not a specific supported YouTube or YouTube Music **track** URL. HTTP
