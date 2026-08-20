@@ -343,6 +343,10 @@ class SpotDLClient:
                         "--output", output_template,
                         "--threads", "1",
                     ]
+                    if self.settings.yt_dlp_cookie_file:
+                        command_args.extend(
+                            ["--cookie-file", self.settings.yt_dlp_cookie_file]
+                        )
                     if loose_match:
                         command_args.append("--dont-filter-results")
                     result = self._run(command_args, timeout=300)

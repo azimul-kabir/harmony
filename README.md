@@ -64,12 +64,16 @@ playlist (`music.youtube.com/playlist?list=`) URLs through yt-dlp. Standard
 YouTube watch and playlist URLs are accepted as explicit user-provided fallback
 inputs; Harmony does not claim every standard YouTube video is music. Discovery
 currently uses bounded **general YouTube** `ytsearch` through yt-dlp, not a
-dedicated YouTube Music catalogue search. Harmony uses yt-dlp for search and audio extraction, so it does not add
-an authenticated scraper or require cookies. Results and jobs retain only
+dedicated YouTube Music catalogue search. Harmony uses yt-dlp for search and
+audio extraction, so it does not add an authenticated scraper. Public requests
+need no cookies by default, but operators can supply them when YouTube challenges
+the server IP. Results and jobs retain only
 normalized source metadata; extractor payloads and command output are not exposed.
 YouTube availability is subject to region, age, removal, and rate-limit policies.
 Enable it under **Settings → Downloads → Download Sources**. Use `YT_DLP_PATH`,
-`YOUTUBE_MUSIC_ENABLED`, and `YOUTUBE_MUSIC_TIMEOUT_SECONDS` to configure it.
+`YOUTUBE_MUSIC_ENABLED`, `YOUTUBE_MUSIC_TIMEOUT_SECONDS`, and the optional
+`YT_DLP_COOKIE_FILE` to configure it. Cookie files must be mounted read-only;
+see the configuration guide for security and setup details.
 
 Public YouTube Music playlists can also be saved on the **Sources** page. Source
 URLs are canonicalized to their `list` identity, so tracking parameters such as

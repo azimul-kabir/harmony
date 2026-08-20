@@ -24,6 +24,9 @@ services:
       - ./logs:/app/logs
       - ${MUSIC_HOST_PATH:-./music}:/music
       - ${DOWNLOAD_HOST_PATH:-./downloads}:/downloads
+      # Uncomment after exporting a Netscape-format cookies.txt file. Keep it
+      # read-only and set YT_DLP_COOKIE_FILE=/run/secrets/youtube-cookies.txt.
+      # - ${YOUTUBE_COOKIES_HOST_PATH}:/run/secrets/youtube-cookies.txt:ro
 
     restart: unless-stopped
 

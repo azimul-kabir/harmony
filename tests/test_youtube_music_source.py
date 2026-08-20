@@ -347,3 +347,37 @@ def test_download_preserves_standard_youtube_fallback_endpoint(tmp_path, monkeyp
         YouTubeMusicSource().download(track, str(tmp_path), job_id=9)
 
     assert commands[0][-1] == "https://www.youtube.com/watch?v=abc1234"
+
+
+def test_download_passes_configured_cookie_file(tmp_path, monkeypatch):
+    commands: list[list[str]] = []
+
+    class FailedProcess:
+        pid = 123
+        returncode = 1
+
+        def communicate(self, timeout):
+            return "", "video unavailable"
+
+    source = YouTubeMusicSource()
+    source.settings.yt_dlp_cookie_file = "/run/secrets/youtube-cookies.txt"
+    monkeypatch.setattr(
+        youtube_music.subprocess,
+        "Popen",
+        lambda command, **kwargs: commands.append(command) or FailedProcess(),
+    )
+    monkeypatch.setattr(youtube_music.download_processes, "register", lambda *_args: True)
+    monkeypatch.setattr(youtube_music.download_processes, "unregister", lambda *_args: None)
+
+    with pytest.raises(ValueError, match="could not download"):
+        source.download(
+            Track(source_url="https://www.youtube.com/watch?v=abc1234"),
+            str(tmp_path),
+            job_id=9,
+        )
+
+    assert commands[0][-3:] == [
+        "--cookies",
+        "/run/secrets/youtube-cookies.txt",
+        "https://www.youtube.com/watch?v=abc1234",
+    ]

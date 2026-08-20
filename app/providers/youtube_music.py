@@ -399,8 +399,10 @@ class YouTubeMusicSource:
                 "--write-info-json",
                 "-o",
                 template,
-                target,
             ]
+            if self.settings.yt_dlp_cookie_file:
+                command.extend(["--cookies", self.settings.yt_dlp_cookie_file])
+            command.append(target)
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
             if job_id is not None and not download_processes.register(job_id, process):
                 try:
