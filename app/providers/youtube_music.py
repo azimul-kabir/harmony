@@ -185,6 +185,66 @@ def _download_artwork_url(track: Track) -> str | None:
     return _best_artwork(_youtube_music_track(item_id))
 
 
+def _download_artwork(
+    track: Track,
+    selected_video_id: str | None,
+    job_id: int | None,
+) -> bytes | None:
+    """Fetch preferred cover art, then the selected Music candidate's album art.
+
+    ``selected_video_id`` is deliberately authoritative when supplied. Direct
+    acquisition starts with Spotify Tracks, whose durable source identity must
+    never be mistaken for a YouTube Music video ID.
+    """
+    direct = selected_video_id is not None
+    if track.cover_url:
+        try:
+            artwork = _fetch_artwork(track.cover_url)
+            logger.info(
+                "{} artwork used for job #{}",
+                "Spotify" if direct else "Track",
+                job_id,
+            )
+            return artwork
+        except Exception as exc:
+            logger.warning(
+                "{} artwork fetch failed for job #{}: {}",
+                "Spotify" if direct else "Track",
+                job_id,
+                type(exc).__name__,
+            )
+
+    item_id = selected_video_id
+    if item_id is None:
+        item_id = track.source_item_id
+        if not item_id and track.source_url:
+            parsed = urlparse(normalize_url(track.source_url))
+            item_id = (parse_qs(parsed.query).get("v") or [None])[0]
+
+    if item_id and _VIDEO_ID.fullmatch(item_id):
+        try:
+            artwork_url = _youtube_music_artwork(item_id)
+            if artwork_url:
+                artwork = _fetch_artwork(artwork_url)
+                logger.info(
+                    "YouTube Music fallback artwork used for job #{}", job_id
+                )
+                return artwork
+            logger.warning(
+                "YouTube Music fallback artwork failed for job #{}: no album artwork resolved",
+                job_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "YouTube Music fallback artwork failed for job #{}: {}",
+                job_id,
+                type(exc).__name__,
+            )
+
+    logger.info("No artwork available for job #{}", job_id)
+    return None
+
+
 def _write_download_tags(path: Path, track: Track, extracted: dict, artwork: bytes | None) -> None:
     """Replace sparse extractor tags with Harmony's canonical queue metadata."""
     artist = track.artist or extracted.get("artist") or extracted.get("uploader") or "Unknown Artist"
@@ -512,17 +572,7 @@ class YouTubeMusicSource:
                     extracted = json.loads(info_files[0].read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError):
                     logger.warning("YouTube Music produced unreadable metadata for job #{}", job_id)
-            artwork = None
-            try:
-                artwork_url = _download_artwork_url(track)
-            except Exception as exc:
-                artwork_url = None
-                logger.warning("Could not resolve YouTube Music album artwork for job #{}: {}", job_id, exc)
-            if artwork_url:
-                try:
-                    artwork = _fetch_artwork(artwork_url)
-                except Exception as exc:
-                    logger.warning("Could not fetch YouTube Music album artwork for job #{}: {}", job_id, exc)
+            artwork = _download_artwork(track, video_id, job_id)
             tagging_started = time.monotonic()
             try:
                 _write_download_tags(files[0], track, extracted, artwork)

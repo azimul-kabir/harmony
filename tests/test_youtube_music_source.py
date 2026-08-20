@@ -12,6 +12,7 @@ from app.providers import youtube_music
 from app.providers.youtube_music import (
     YouTubeMusicSource,
     _best_artwork,
+    _download_artwork,
     _download_artwork_url,
     _fetch_artwork,
     _square_jpeg,
@@ -239,6 +240,84 @@ def test_download_artwork_resolution_preserves_queued_cover(monkeypatch):
     assert _download_artwork_url(track) == "https://images.example/queued-cover.jpg"
 
 
+def test_direct_artwork_uses_spotify_cover_and_embeds_apic(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(youtube_music, "_fetch_artwork", lambda url: calls.append(url) or b"cover")
+    monkeypatch.setattr(
+        youtube_music,
+        "_youtube_music_artwork",
+        lambda item_id: pytest.fail(f"unexpected Music lookup for {item_id}"),
+    )
+
+    artwork = _download_artwork(
+        Track(cover_url="https://images.example/spotify.jpg"), "youtube123", 7
+    )
+
+    assert artwork == b"cover"
+    assert calls == ["https://images.example/spotify.jpg"]
+    path = tmp_path / "track.mp3"
+    path.write_bytes(b"audio placeholder")
+    _write_download_tags(path, Track(title="Song", artist="Artist"), {}, artwork)
+    covers = [frame for frame in ID3(path).getall("APIC") if frame.type == 3]
+    assert len(covers) == 1
+    assert covers[0].data == b"cover"
+
+
+@pytest.mark.parametrize("cover_url", ["https://images.example/spotify.jpg", None])
+def test_direct_artwork_falls_back_to_selected_youtube_candidate(cover_url, monkeypatch):
+    resolved = []
+
+    def fetch(url):
+        if "spotify" in url:
+            raise OSError("unavailable")
+        return b"music-cover"
+
+    monkeypatch.setattr(youtube_music, "_fetch_artwork", fetch)
+    monkeypatch.setattr(
+        youtube_music,
+        "_youtube_music_artwork",
+        lambda item_id: resolved.append(item_id) or "https://images.example/music.jpg",
+    )
+    track = Track(
+        cover_url=cover_url,
+        source_provider="spotify",
+        source_item_id="4uLU6hMCjMI75M1A2tKUQC",
+    )
+
+    assert _download_artwork(track, "youtube123", 7) == b"music-cover"
+    assert resolved == ["youtube123"]
+
+
+def test_direct_artwork_failures_are_non_fatal(monkeypatch):
+    monkeypatch.setattr(
+        youtube_music, "_fetch_artwork", lambda _url: (_ for _ in ()).throw(OSError())
+    )
+    monkeypatch.setattr(
+        youtube_music, "_youtube_music_artwork", lambda _item_id: None
+    )
+
+    assert _download_artwork(
+        Track(cover_url="https://images.example/spotify.jpg"), "youtube123", 7
+    ) is None
+
+
+def test_existing_youtube_music_track_still_resolves_its_source_id(monkeypatch):
+    resolved = []
+    monkeypatch.setattr(
+        youtube_music,
+        "_youtube_music_artwork",
+        lambda item_id: resolved.append(item_id) or "https://images.example/music.jpg",
+    )
+    monkeypatch.setattr(youtube_music, "_fetch_artwork", lambda _url: b"music-cover")
+
+    artwork = _download_artwork(
+        Track(source_provider="youtube_music", source_item_id="youtube123"), None, 7
+    )
+
+    assert artwork == b"music-cover"
+    assert resolved == ["youtube123"]
+
+
 def test_artwork_is_center_cropped_to_square_and_bounded():
     source = BytesIO()
     Image.new("RGB", (2400, 1200), "red").save(source, "PNG")
@@ -273,6 +352,20 @@ def test_download_tags_include_album_artist_hierarchy_and_source(tmp_path):
     assert str(tags["TCON"]) == "Rock"
     assert str(tags["TSRC"]) == "USABC2400001"
     assert tags.getall("TXXX:YouTube Music ID")[0].text == ["abc1234"]
+
+
+def test_download_tags_replace_front_cover_with_exactly_one_apic(tmp_path):
+    path = tmp_path / "track.mp3"
+    initial = ID3()
+    initial.add(youtube_music.APIC(mime="image/jpeg", type=3, desc="Old", data=b"old"))
+    initial.add(youtube_music.APIC(mime="image/jpeg", type=3, desc="Other", data=b"other"))
+    initial.save(path)
+
+    _write_download_tags(path, Track(title="Song", artist="Artist"), {}, b"new")
+
+    covers = [frame for frame in ID3(path).getall("APIC") if frame.type == 3]
+    assert len(covers) == 1
+    assert covers[0].data == b"new"
 
 
 def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path, monkeypatch):
