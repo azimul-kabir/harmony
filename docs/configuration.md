@@ -88,6 +88,52 @@ Existing Spotify Sources are migrated in place. Their legacy Spotify columns
 remain compatibility mirrors, while `provider`, `external_id`, and `source_url`
 are the authoritative durable identity. Source uniqueness is scoped by provider.
 
+### Troubleshooting YouTube download failures
+
+Playlist synchronization and audio acquisition are separate operations. A sync
+can finish successfully and export an M3U with (for example) 49 of 50 tracks
+available while the queued download for the missing track fails later.
+
+Both Spotify-backed downloads and manual YouTube fallbacks ultimately obtain
+audio through yt-dlp. Repeated `AudioProviderError: YT-DLP download error`
+messages followed by `HTTP Error 403: Forbidden` from a manual fallback
+therefore point to the shared YouTube delivery path, not Spotify metadata,
+playlist synchronization, Navidrome reconciliation, or Harmony's health check.
+Common causes are an outdated cached container image, a YouTube extractor
+change, or YouTube refusing media delivery to the container's public IP. A
+successful metadata lookup does not prove that the media URL itself is
+downloadable.
+
+Check the exact versions and reproduce the request from inside the running
+container:
+
+```sh
+docker compose exec harmony yt-dlp --version
+docker compose exec harmony deno --version
+docker compose exec harmony yt-dlp -v -f bestaudio --no-playlist \
+  'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+Rebuild without the dependency layer cache before retrying so the image
+contains the current yt-dlp package:
+
+```sh
+docker compose build --pull --no-cache harmony
+docker compose up -d harmony
+```
+
+If a current, verbose yt-dlp request still returns HTTP 403 for multiple public
+videos, test from another public network/IP. Harmony deliberately does not
+accept browser cookies, so videos or networks that require login, bot
+verification, age confirmation, or regional access cannot be bypassed by the
+manual fallback feature. Choose a different public video when only one video is
+affected.
+
+The manual fallback endpoint returns HTTP 422 before queueing when the submitted
+value is not a specific supported YouTube or YouTube Music **track** URL. HTTP
+201 means only that the fallback was validated and queued; the subsequent
+download can still fail if YouTube refuses the audio request.
+
 ## Large Spotify playlists
 
 Spotify playlist downloads first run SpotDL's metadata-only `save` operation.
