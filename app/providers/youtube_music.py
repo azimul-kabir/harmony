@@ -1,9 +1,10 @@
-"""Public YouTube Music source using yt-dlp only (no login or cookies)."""
+"""YouTube Music resolution and yt-dlp acquisition, with optional cookies."""
 import json
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -220,7 +221,7 @@ def _write_download_tags(path: Path, track: Track, extracted: dict, artwork: byt
     tags.delall("COMM")
     tags.add(COMM(encoding=3, lang="eng", desc="Source", text=track.source_url or extracted.get("webpage_url") or "YouTube Music"))
     tags.delall("TXXX:YouTube Music ID")
-    source_id = track.source_item_id or extracted.get("id")
+    source_id = extracted.get("id") or track.source_item_id
     if source_id:
         tags.add(TXXX(encoding=3, desc="YouTube Music ID", text=str(source_id)))
     if artwork:
@@ -270,7 +271,15 @@ class YouTubeMusicSource:
             command.extend(["--flat-playlist", "--playlist-end", str(self.max_collection_items + 1)])
         command.append(target)
         try:
-            result = subprocess.run(command, capture_output=True, text=True, timeout=self.settings.youtube_music_timeout_seconds)
+            with tempfile.TemporaryDirectory(prefix="harmony-yt-search-") as runtime:
+                if self.settings.yt_dlp_cookie_file:
+                    cookie_source = Path(self.settings.yt_dlp_cookie_file)
+                    cookie_argument = cookie_source
+                    if cookie_source.is_file():
+                        cookie_argument = Path(runtime) / "cookies.txt"
+                        shutil.copyfile(cookie_source, cookie_argument)
+                    command[-1:-1] = ["--cookies", str(cookie_argument)]
+                result = subprocess.run(command, capture_output=True, text=True, timeout=self.settings.youtube_music_timeout_seconds)
         except subprocess.TimeoutExpired as exc:
             raise ValueError("YouTube Music timed out. Please try again.") from exc
         if result.returncode:
@@ -314,6 +323,35 @@ class YouTubeMusicSource:
         data = self._run_json(f"ytsearch{bounded}:{query}", flat=True)
         entries = data.get("entries") or []
         return [self._result(entry) for entry in entries if entry and entry.get("id")]
+
+    def inspect_search(self, query: str, limit: int = 5) -> list[SourceResult]:
+        """Return cheap, flat candidate metadata without hydrating every result.
+
+        Acquisition uses this deliberately smaller surface instead of ``search``:
+        one yt-dlp request can reject weak candidates before any media transfer or
+        per-video YouTube Music API request is attempted.
+        """
+        bounded = max(1, min(limit, self.settings.youtube_music_max_search_results))
+        data = self._run_json(f"ytsearch{bounded}:{query}", flat=True)
+        results: list[SourceResult] = []
+        for entry in data.get("entries") or []:
+            if not entry or not entry.get("id"):
+                continue
+            artist = entry.get("artist") or entry.get("creator") or entry.get("uploader")
+            if artist and artist.endswith(" - Topic"):
+                artist = artist[:-8]
+            results.append(SourceResult(
+                self.identifier,
+                str(entry["id"]),
+                "song",
+                clean_title(entry.get("track") or entry.get("title")) or "Unknown title",
+                artist,
+                entry.get("album"),
+                entry.get("album_artist"),
+                entry.get("duration"),
+                source_url=watch_url(str(entry["id"])),
+            ))
+        return results
 
     def _resolve(self, url: str) -> tuple[str, list[Track]]:
         target = normalize_url(url)
@@ -359,6 +397,18 @@ class YouTubeMusicSource:
         name, tracks = self._resolve(url)
         return Playlist(name=name, url=normalize_url(url), tracks=tracks)
 
+    def download_candidate(
+        self,
+        track: Track,
+        video_id: str,
+        output_dir: str,
+        job_id: int | None = None,
+    ) -> Path:
+        """Acquire one already-inspected candidate using canonical Track tags."""
+        return self._download_target(
+            track, acquisition_url(video_id), output_dir, job_id, video_id=video_id
+        )
+
     def download(self, track: Track, output_dir: str, job_id: int | None = None) -> Path:
         target = track.source_url or track.spotify_url
         if not target:
@@ -372,6 +422,17 @@ class YouTubeMusicSource:
             target = acquisition_url(detected[1])
         else:
             target = normalize_url(target)
+        return self._download_target(track, target, output_dir, job_id)
+
+    def _download_target(
+        self,
+        track: Track,
+        target: str,
+        output_dir: str,
+        job_id: int | None,
+        *,
+        video_id: str | None = None,
+    ) -> Path:
         output = Path(output_dir)
         with tempfile.TemporaryDirectory(dir=output) as temporary:
             template = str(Path(temporary) / "%(title)s.%(ext)s")
@@ -401,8 +462,16 @@ class YouTubeMusicSource:
                 template,
             ]
             if self.settings.yt_dlp_cookie_file:
-                command.extend(["--cookies", self.settings.yt_dlp_cookie_file])
+                # yt-dlp may refresh its cookie jar. Never require a mounted
+                # secret to be writable; operate on a private runtime copy.
+                cookie_source = Path(self.settings.yt_dlp_cookie_file)
+                cookie_argument = cookie_source
+                if cookie_source.is_file():
+                    cookie_argument = Path(temporary) / "cookies.txt"
+                    shutil.copyfile(cookie_source, cookie_argument)
+                command.extend(["--cookies", str(cookie_argument)])
             command.append(target)
+            transfer_started = time.monotonic()
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
             if job_id is not None and not download_processes.register(job_id, process):
                 try:
@@ -426,6 +495,7 @@ class YouTubeMusicSource:
                 if job_id is not None:
                     download_processes.unregister(job_id, process)
             result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+            download_seconds = time.monotonic() - transfer_started
             if result.returncode:
                 # Keep yt-dlp's actionable diagnostics in the server log while
                 # returning a stable, non-sensitive message to the browser.
@@ -453,11 +523,23 @@ class YouTubeMusicSource:
                     artwork = _fetch_artwork(artwork_url)
                 except Exception as exc:
                     logger.warning("Could not fetch YouTube Music album artwork for job #{}: {}", job_id, exc)
+            tagging_started = time.monotonic()
             try:
                 _write_download_tags(files[0], track, extracted, artwork)
             except Exception as exc:
-                logger.error("Could not write YouTube Music metadata for job #{}: {}", job_id, exc)
-                raise ValueError("YouTube Music audio was downloaded but its metadata could not be written.") from exc
+                # Valid acquired audio remains resumable/importable even when
+                # optional canonical tag correction fails.
+                logger.warning("Could not write YouTube Music metadata for job #{}: {}", job_id, exc)
+            tagging_seconds = time.monotonic() - tagging_started
             destination = output / files[0].name
             files[0].replace(destination)
+            logger.bind(
+                job_id=job_id,
+                selected_video_id=video_id,
+                download_seconds=round(download_seconds, 3),
+                tagging_seconds=round(tagging_seconds, 3),
+            ).info(
+                "Direct yt-dlp download completed job={} selected_video_id={} download_seconds={}",
+                job_id, video_id, round(download_seconds, 3),
+            )
             return destination

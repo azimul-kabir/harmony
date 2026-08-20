@@ -42,10 +42,10 @@ Harmony v1.6.0 was never published.
 ## 🎵 Spotify Downloads
 
 - Download tracks, albums, and playlists
-- Exact-match-only import: Harmony first requests the original Spotify track
-  URL, then lets SpotDL retry by artist/title when the provider returns no
-  usable output. Every result, including the fallback, must pass strict
-  embedded-metadata validation before it can enter the Library.
+- Exact-match-only import: after Spotify metadata resolution, Harmony performs
+  one bounded yt-dlp metadata search, validates candidates before transfer, and
+  downloads only the strongest safe match. SpotDL remains the acquisition
+  fallback when direct search or download cannot produce an acceptable result.
 - Before import, Harmony requires exactly one audio file and validates its
   embedded primary artist, title, material version markers, and duration
   against the stored Spotify request. Instrumental, karaoke, live, remix,
@@ -73,7 +73,8 @@ YouTube availability is subject to region, age, removal, and rate-limit policies
 Enable it under **Settings → Downloads → Download Sources**. Use `YT_DLP_PATH`,
 `YOUTUBE_MUSIC_ENABLED`, `YOUTUBE_MUSIC_TIMEOUT_SECONDS`, and the optional
 `YT_DLP_COOKIE_FILE` to configure it. Cookie files must be mounted read-only;
-see the configuration guide for security and setup details.
+Harmony uses a private writable runtime copy when yt-dlp needs a cookie jar, so
+the mounted secret is never modified. See the configuration guide for details.
 
 Public YouTube Music playlists can also be saved on the **Sources** page. Source
 URLs are canonicalized to their `list` identity, so tracking parameters such as

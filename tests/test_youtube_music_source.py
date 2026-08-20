@@ -381,3 +381,25 @@ def test_download_passes_configured_cookie_file(tmp_path, monkeypatch):
         "/run/secrets/youtube-cookies.txt",
         "https://www.youtube.com/watch?v=abc1234",
     ]
+
+
+def test_search_uses_runtime_copy_of_read_only_cookie(tmp_path, monkeypatch):
+    cookie = tmp_path / "mounted-cookies.txt"
+    cookie.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    cookie.chmod(0o400)
+    commands = []
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        runtime_cookie = Path(command[command.index("--cookies") + 1])
+        assert runtime_cookie != cookie
+        assert runtime_cookie.read_text(encoding="utf-8") == cookie.read_text(encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, '{"entries": []}', "")
+
+    source = YouTubeMusicSource()
+    source.settings.yt_dlp_cookie_file = str(cookie)
+    monkeypatch.setattr(youtube_music.subprocess, "run", run)
+
+    assert source.inspect_search("Artist Song") == []
+    assert cookie.stat().st_mode & 0o777 == 0o400
+    assert "--cookies" in commands[0]

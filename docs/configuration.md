@@ -134,8 +134,10 @@ Requests` followed by `Sign in to confirm you're not a bot` confirms that
 YouTube has challenged the container's public IP; changing the video alone will
 usually not help.
 
-Harmony can pass a Netscape-format cookies file to both SpotDL and direct
-YouTube fallback downloads. Export a fresh `cookies.txt` from a dedicated
+Harmony can pass a Netscape-format cookies file to SpotDL, direct Spotify-track
+candidate search/acquisition, and explicit YouTube Music downloads. Direct
+yt-dlp operations use a private writable runtime copy; the read-only source
+mount is never modified. Export a fresh `cookies.txt` from a dedicated
 YouTube account, stop using that account in the browser session from which it
 was exported, store the file outside the repository with owner-only
 permissions, and mount it read-only:
@@ -178,9 +180,10 @@ download can still fail if YouTube refuses the audio request.
 
 ## Large Spotify playlists
 
-Spotify playlist downloads first run SpotDL's metadata-only `save` operation.
-Harmony shows this as a distinct Source sync stage and does not create download
-jobs until the complete ordered track list is available. The metadata timeout
+Spotify playlist synchronization continues to use SpotDL's pinned unofficial
+Spotify metadata layer. This remains separate from audio acquisition: each
+resolved `Track` uses direct yt-dlp first and SpotDL only as its fallback.
+Harmony shows metadata retrieval as a distinct Source sync stage. The timeout
 defaults to 3600 seconds and can be changed under Settings → Downloads or with:
 
 ```env
@@ -194,12 +197,12 @@ virtual-environment paths inside the container.
 
 ## Exact Spotify track acquisition
 
-Spotify track acquisition has no loose-search setting. Harmony first invokes
-SpotDL with the stored Spotify track URL and automatically retries by
-artist/title if the provider fails or produces no audio. A successful process
-must produce exactly one supported audio file, and Harmony validates embedded
-artist/title identity, material recording-version markers, and reliable
-duration before the worker can import it.
+Spotify track acquisition has no loose-search setting. Harmony first performs
+one bounded, metadata-only yt-dlp search using resolved artist, title, and album
+metadata. Existing strict artist/title, album-context, version, and duration
+rules reject unsafe candidates before only the best candidate is transferred.
+If no candidate is safe or transfer fails, Harmony enters the existing SpotDL
+fallback ladder, whose output must still pass embedded identity validation.
 
 A zero exit with no audio or an identity rejection is recorded as
 `exact_match_unavailable` and is not automatically requeued indefinitely.
