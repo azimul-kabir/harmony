@@ -146,8 +146,8 @@ body {
     box-shadow: 0 0 0 55px rgb(94 234 212 / .025), 0 0 0 110px rgb(94 234 212 / .018);
 }
 .login-brand, .login-mobile-brand { display: flex; align-items: center; gap: 13px; color: #fff; font-size: 1.15rem; font-weight: 760; letter-spacing: -.015em; }
-.login-mark { display: grid; place-items: center; width: 42px; aspect-ratio: 1 / 1; flex: 0 0 auto; border: 1px solid rgb(94 234 212 / .35); border-radius: 12px; background: linear-gradient(145deg, #173d4b, #10243d); color: #5eead4; box-shadow: 0 10px 25px rgb(10 24 42 / .3); }
-.login-mark svg { width: 22px; height: 22px; }
+.login-mark { display: grid; place-items: center; width: 42px; aspect-ratio: 1 / 1; flex: 0 0 auto; filter: drop-shadow(0 10px 17px rgb(10 24 42 / .34)); }
+.login-mark img { display: block; width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; }
 .login-showcase-copy { position: relative; z-index: 1; margin-top: 76px; }
 .login-eyebrow { margin: 0 0 12px; color: #5eead4; font-size: .72rem; font-weight: 780; letter-spacing: .14em; text-transform: uppercase; }
 .login-showcase h2 { max-width: 440px; margin: 0; color: #f8fbff; font-size: clamp(2.25rem, 4.5vw, 3.55rem); line-height: 1.03; letter-spacing: -.052em; }
@@ -253,7 +253,8 @@ body {
     overflow-y: auto;
 }
 
-.sidebar h1 { margin-top: 0; margin-bottom: 32px; padding-left: 8px; color: var(--text-sidebar); font-size: 1.8rem; }
+.app-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 32px; padding-left: 8px; color: var(--text-sidebar); font-size: 1.45rem; font-weight: 760; letter-spacing: -.035em; text-decoration: none; }
+.app-brand img { display: block; width: 32px; aspect-ratio: 1 / 1; border-radius: 9px; box-shadow: 0 7px 16px rgb(0 0 0 / .23); }
 
 .sidebar nav { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 
@@ -945,7 +946,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         z-index: 2000;
     }
 
-    .sidebar h1, .sidebar-footer { display: none; }
+    .app-brand, .sidebar-footer { display: none; }
     
     .sidebar nav {
         flex-direction: row;

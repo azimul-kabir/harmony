@@ -1,4 +1,4 @@
-const CACHE_VERSION = "harmony-shell-v3";
+const CACHE_VERSION = "harmony-shell-v4";
 const APP_SHELL = [
     "/static/css/app.css",
     "/static/js/app.js",
@@ -6,6 +6,7 @@ const APP_SHELL = [
     "/static/pwa/offline.html",
     "/static/pwa/icon-192.png",
     "/static/pwa/icon-512.png",
+    "/static/brand/harmony-icon.svg",
 ];
 
 self.addEventListener("install", (event) => {
