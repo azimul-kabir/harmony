@@ -100,5 +100,10 @@ def test_direct_failure_falls_back_to_spotdl(failure, tmp_path, monkeypatch):
     fallback = tmp_path / "fallback.mp3"
     monkeypatch.setattr(download.settings, "staging_path", str(tmp_path))
     monkeypatch.setattr(download.direct_client, "download", lambda *_: (_ for _ in ()).throw(failure))
-    monkeypatch.setattr(download.client, "download", lambda *_: fallback)
+    observed = {}
+    def fallback_download(*args, **kwargs):
+        observed.update(kwargs)
+        return fallback
+    monkeypatch.setattr(download.client, "download", fallback_download)
     assert download.download_track(track()) == fallback
+    assert observed["timeout_seconds"] == 45

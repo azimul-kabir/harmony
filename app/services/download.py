@@ -28,17 +28,33 @@ def download_track(track: Track, job_id: int | None = None) -> Path:
             job_id, getattr(direct_error, "reason_code", type(direct_error).__name__),
         )
         fallback_started = time.monotonic()
+        fallback_outcome = "success"
         try:
-            return client.download(track, Path(settings.staging_path), job_id)
+            return client.download(
+                track,
+                Path(settings.staging_path),
+                job_id,
+                timeout_seconds=settings.spotdl_fallback_timeout_seconds,
+            )
+        except Exception as fallback_error:
+            fallback_outcome = getattr(
+                fallback_error, "reason_code", type(fallback_error).__name__
+            )
+            raise
         finally:
             logger.bind(
                 job_id=job_id,
                 spotdl_fallback=True,
+                spotdl_fallback_timeout_seconds=(
+                    settings.spotdl_fallback_timeout_seconds
+                ),
                 spotdl_fallback_seconds=round(time.monotonic() - fallback_started, 3),
                 total_acquisition_seconds=round(time.monotonic() - started, 3),
+                spotdl_fallback_outcome=fallback_outcome,
             ).info(
                 "Acquisition fallback completed job={} spotdl_fallback=true "
-                "spotdl_fallback_seconds={} total_acquisition_seconds={}",
-                job_id, round(time.monotonic() - fallback_started, 3),
+                "outcome={} spotdl_fallback_seconds={} total_acquisition_seconds={}",
+                job_id, fallback_outcome,
+                round(time.monotonic() - fallback_started, 3),
                 round(time.monotonic() - started, 3),
             )

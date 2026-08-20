@@ -44,8 +44,10 @@ Harmony v1.6.0 was never published.
 - Download tracks, albums, and playlists
 - Exact-match-only import: after Spotify metadata resolution, Harmony performs
   one bounded yt-dlp metadata search, validates candidates before transfer, and
-  downloads only the strongest safe match. SpotDL remains the acquisition
-  fallback when direct search or download cannot produce an acceptable result.
+  downloads only the strongest safe match. SpotDL remains a single bounded
+  acquisition rescue when direct search or download cannot produce an
+  acceptable result. Set `SPOTDL_FALLBACK_TIMEOUT_SECONDS` (default: 45) to
+  control the whole rescue's wall-clock budget.
 - Before import, Harmony requires exactly one audio file and validates its
   embedded primary artist, title, material version markers, and duration
   against the stored Spotify request. Instrumental, karaoke, live, remix,

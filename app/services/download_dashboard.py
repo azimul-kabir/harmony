@@ -30,6 +30,7 @@ FAILURE_REASON_LABELS = {
     "manual_fallback_unavailable": "Approved link unavailable",
     "manual_fallback_mismatch": "Approved link does not match",
     "download_timeout": "Download timeouts",
+    "spotdl_fallback_timeout": "SpotDL fallback timeout",
     "filesystem_permission_denied": "Library permissions",
     "disk_full": "Disk full",
     "unexpected_error": "Unexpected errors",

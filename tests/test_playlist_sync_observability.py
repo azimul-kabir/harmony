@@ -51,11 +51,18 @@ def test_spotdl_run_uses_writable_xdg_config_directory(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", "/")
     monkeypatch.setenv("HARMONY_SPOTDL_CONFIG_DIR", str(config_dir))
 
-    def run(command, **kwargs):
-        observed.update(kwargs)
-        return subprocess.CompletedProcess(command, 0, "", "")
+    class Process:
+        returncode = 0
 
-    monkeypatch.setattr(subprocess, "run", run)
+        def communicate(self, timeout):
+            observed["timeout"] = timeout
+            return "", ""
+
+    def popen(command, **kwargs):
+        observed.update(kwargs)
+        return Process()
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
 
     client._run(["--version"])
 
@@ -67,6 +74,7 @@ def test_spotdl_run_uses_writable_xdg_config_directory(monkeypatch, tmp_path):
     assert observed["env"]["HARMONY_SPOTDL_CONFIG_DIR"] == str(
         runtime_home / ".config" / "spotdl"
     )
+    assert observed["start_new_session"] is True
 
 
 def test_playlist_sync_persists_actionable_metadata_timeout(monkeypatch):

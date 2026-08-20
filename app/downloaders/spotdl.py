@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import shutil
 import re
+import signal
 import time
 import unicodedata
 from difflib import SequenceMatcher
@@ -30,11 +31,8 @@ class AudioIdentity:
     duration: float | None
 
 
-@dataclass(frozen=True, slots=True)
-class FallbackCandidate:
-    path: Path
-    score: float
-    query_type: str
+class SpotDLFallbackTimeout(RuntimeError):
+    """The bounded track-acquisition fallback exhausted its wall-clock budget."""
 
 
 _VERSION_MARKERS = (
@@ -279,6 +277,7 @@ class SpotDLClient:
         track: Track,
         output_dir: Path,
         job_id: int | None = None,
+        timeout_seconds: int | None = None,
     ) -> Path:
         # Fetch current quality setting from database
         db = SessionLocal()
@@ -288,35 +287,28 @@ class SpotDLClient:
         finally:
             db.close()
 
-        attempts: list[tuple[str, str, bool]] = []
+        timeout_seconds = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else self.settings.spotdl_fallback_timeout_seconds
+        )
+        if timeout_seconds <= 0:
+            raise ValueError("SpotDL fallback timeout must be greater than zero.")
+
+        # Direct acquisition has already performed the metadata-search ladder.
+        # Give SpotDL one high-value rescue using the canonical Spotify identity
+        # when possible, rather than serially replaying URL, ISRC, album, and
+        # title searches with a separate timeout for each one.
+        attempt: tuple[str, str, bool] | None = None
         if track.spotify_url:
-            attempts.append(("spotify_url", track.spotify_url, False))
-        if track.artist and track.title:
-            # SpotDL can exit successfully without an output when its Spotify URL
-            # lookup cannot resolve an audio provider result.  A text lookup is
-            # safe as long as the produced file is subjected to the same strict
-            # metadata validation as the URL result.
-            fallback_queries = []
-            if track.isrc:
-                fallback_queries.append(("isrc_search", track.isrc))
-            if track.album:
-                fallback_queries.append(
-                    (
-                        "album_search",
-                        f"{track.artist} - {track.title} {track.album} audio",
-                    )
-                )
-            fallback_queries.append(
-                ("metadata_search", f"{track.artist} - {track.title} audio")
+            attempt = ("spotify_url_rescue", track.spotify_url, True)
+        elif track.artist and track.title:
+            attempt = (
+                "metadata_rescue",
+                f"{track.artist} - {track.title} {track.album or ''} audio".strip(),
+                True,
             )
-            seen_queries = set()
-            for query_type, query in fallback_queries:
-                normalized_query = query.casefold().strip()
-                if normalized_query in seen_queries:
-                    continue
-                seen_queries.add(normalized_query)
-                attempts.append((query_type, query, True))
-        if not attempts:
+        if attempt is None:
             raise DownloadFailed(
                 "exact_match_unavailable", "Exact match unavailable", "download",
                 retryable=False, technical_detail="download_identity_missing",
@@ -325,8 +317,7 @@ class SpotDLClient:
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
             failures: list[DownloadFailed] = []
-            fallback_candidates: list[FallbackCandidate] = []
-            for query_type, query, loose_match in attempts:
+            for query_type, query, loose_match in (attempt,):
                 attempt_started = time.monotonic()
                 attempt_path = temp_path / query_type
                 attempt_path.mkdir()
@@ -349,7 +340,7 @@ class SpotDLClient:
                         )
                     if loose_match:
                         command_args.append("--dont-filter-results")
-                    result = self._run(command_args, timeout=300)
+                    result = self._run(command_args, timeout=timeout_seconds)
                     return_code = result.returncode
                     files = self._audio_files(attempt_path)
                     output_count = len(files)
@@ -398,18 +389,20 @@ class SpotDLClient:
                         strict=not loose_match,
                     )
                     reason_category = "success"
-                    if not loose_match:
-                        final_path = output_dir / downloaded_file.name
-                        final_path.unlink(missing_ok=True)
-                        shutil.move(str(downloaded_file), str(final_path))
-                        return final_path
-                    fallback_candidates.append(
-                        FallbackCandidate(
-                            path=downloaded_file,
-                            score=fallback_candidate_score(track, identity),
-                            query_type=query_type,
-                        )
-                    )
+                    final_path = output_dir / downloaded_file.name
+                    final_path.unlink(missing_ok=True)
+                    shutil.move(str(downloaded_file), str(final_path))
+                    return final_path
+                except SpotDLFallbackTimeout as exc:
+                    reason_category = "spotdl_fallback_timeout"
+                    diagnostic = self._bounded_diagnostic(str(exc), attempt_path)
+                    failures.append(DownloadFailed(
+                        reason_category,
+                        "The SpotDL fallback exceeded its time limit.",
+                        "download",
+                        retryable=False,
+                        technical_detail=diagnostic,
+                    ))
                 except DownloadFailed as exc:
                     reason_category = exc.reason_code
                     diagnostic = self._bounded_diagnostic(
@@ -432,21 +425,6 @@ class SpotDLClient:
                                       reason_category, diagnostic,
                                       time.monotonic() - attempt_started)
 
-            if fallback_candidates:
-                selected = max(
-                    fallback_candidates,
-                    key=lambda candidate: (candidate.score, candidate.query_type),
-                )
-                final_path = output_dir / selected.path.name
-                final_path.unlink(missing_ok=True)
-                shutil.move(str(selected.path), str(final_path))
-                logger.info(
-                    "Selected fallback candidate job={} query_type={} score={}",
-                    job_id,
-                    selected.query_type,
-                    selected.score,
-                )
-                return final_path
             raise failures[-1] from None
 
     _AUDIO_EXTENSIONS = frozenset(
@@ -572,7 +550,7 @@ class SpotDLClient:
     def _run(
         self,
         args: list[str],
-        timeout: int = 120, # Default fallback timeout
+        timeout: int = 120,
     ) -> subprocess.CompletedProcess[str]:
         command = [
             self.settings.spotdl_path,
@@ -603,18 +581,44 @@ class SpotDLClient:
             environment["XDG_CONFIG_HOME"] = str(runtime_home / ".config")
             environment["HARMONY_SPOTDL_CONFIG_DIR"] = str(invocation_config)
 
-            try:
-                return subprocess.run(
+            process = subprocess.Popen(
                     command,
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
-                    timeout=timeout,
                     env=environment,
+                    start_new_session=True,
+                )
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+                return subprocess.CompletedProcess(
+                    command, process.returncode, stdout, stderr
                 )
             except subprocess.TimeoutExpired as e:
-                raise RuntimeError(
+                self._terminate_process_group(process)
+                raise SpotDLFallbackTimeout(
                     f"SpotDL execution timed out after {timeout} seconds."
                 ) from e
+
+    @staticmethod
+    def _terminate_process_group(process: subprocess.Popen[str]) -> None:
+        """Terminate SpotDL and every downloader/transcoder child it spawned."""
+        if process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            process.terminate()
+        try:
+            process.communicate(timeout=2)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            process.kill()
+        process.communicate()
 
     @staticmethod
     def _extract_json(

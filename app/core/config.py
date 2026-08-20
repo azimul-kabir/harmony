@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     spotdl_path: str = "spotdl"
+    spotdl_fallback_timeout_seconds: int = 45
     spotify_playlist_metadata_timeout_seconds: int = 3600
     yt_dlp_path: str = "yt-dlp"
     yt_dlp_cookie_file: str | None = None
