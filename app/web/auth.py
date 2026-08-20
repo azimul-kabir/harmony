@@ -59,7 +59,12 @@ async def login_page(request: Request, next: str = "/"):
         return RedirectResponse(_safe_next(next), status_code=303)
     return templates.TemplateResponse(
         "login.html",
-        {"request": request, "error": None, "next": _safe_next(next)},
+        {
+            "request": request,
+            "error": None,
+            "next": _safe_next(next),
+            "version": request.app.state.settings.app_version,
+        },
         headers={"Cache-Control": "no-store"},
     )
 
@@ -88,6 +93,7 @@ async def login(request: Request):
             "request": request,
             "error": "Harmony authentication is not configured." if not configured else "Incorrect username or password.",
             "next": next_path,
+            "version": settings.app_version,
         },
         status_code=503 if not configured else 401,
         headers={"Cache-Control": "no-store"},

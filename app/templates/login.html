@@ -3,28 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#080c1c">
+    <meta name="theme-color" content="#08111f">
     <title>Sign in · Harmony</title>
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/pwa/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/pwa/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
 </head>
 <body class="login-page">
     <main class="login-shell">
-        <section class="login-card" aria-labelledby="login-title">
-            <div class="login-mark" aria-hidden="true">H</div>
-            <p class="login-eyebrow">Your private music space</p>
-            <h1 id="login-title">Welcome to Harmony</h1>
-            <p class="login-copy">Sign in to manage downloads, playlists, and your library.</p>
-            {% if error %}<div class="login-error" role="alert">{{ error }}</div>{% endif %}
-            <form method="post" action="/login" class="login-form">
-                <input type="hidden" name="next" value="{{ next }}">
-                <label for="username">Username</label>
-                <input id="username" name="username" type="text" autocomplete="username" autofocus required>
-                <label for="password">Password</label>
-                <input id="password" name="password" type="password" autocomplete="current-password" required>
-                <button class="btn-primary" type="submit">Sign in</button>
-            </form>
-            <p class="login-footnote">Protected access for your personal Harmony server.</p>
-        </section>
+        <div class="login-frame">
+            <section class="login-showcase" aria-label="About Harmony">
+                <div class="login-brand">
+                    <span class="login-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 18V5l11-2v13"></path>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <circle cx="17" cy="16" r="3"></circle>
+                        </svg>
+                    </span>
+                    <span>Harmony</span>
+                </div>
+
+                <div class="login-showcase-copy">
+                    <p class="login-eyebrow">Your music, in one place</p>
+                    <h2>Keep your library<br>in perfect rhythm.</h2>
+                    <p>Downloads, playlists, and your private collection—organized and ready whenever you are.</p>
+                </div>
+
+                <div class="login-visual" aria-hidden="true">
+                    <div class="login-record">
+                        <div class="login-record-ring"></div>
+                        <div class="login-record-label">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"></path></svg>
+                        </div>
+                    </div>
+                    <div class="login-wave">
+                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                    </div>
+                </div>
+
+                <p class="login-showcase-foot">Self-hosted. Private. Always yours.</p>
+            </section>
+
+            <section class="login-card" aria-labelledby="login-title">
+                <div class="login-mobile-brand">
+                    <span class="login-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 18V5l11-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle>
+                        </svg>
+                    </span>
+                    <span>Harmony</span>
+                </div>
+                <div class="login-heading">
+                    <p class="login-eyebrow">Welcome back</p>
+                    <h1 id="login-title">Sign in to Harmony</h1>
+                    <p class="login-copy">Enter your credentials to continue to your library.</p>
+                </div>
+
+                {% if error %}
+                <div class="login-error" role="alert">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 17h.01"></path></svg>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
+
+                <form method="post" action="/login" class="login-form">
+                    <input type="hidden" name="next" value="{{ next }}">
+                    <div class="login-field">
+                        <label for="username">Username</label>
+                        <div class="login-input-wrap">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+                            <input id="username" name="username" type="text" autocomplete="username" placeholder="Enter your username" autofocus required>
+                        </div>
+                    </div>
+                    <div class="login-field">
+                        <label for="password">Password</label>
+                        <div class="login-input-wrap">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+                            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+                        </div>
+                    </div>
+                    <button class="login-submit" type="submit">
+                        <span>Sign in</span>
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+                    </button>
+                </form>
+
+                <p class="login-footnote">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                    Secure access to your private server
+                </p>
+            </section>
+        </div>
     </main>
 </body>
 </html>
