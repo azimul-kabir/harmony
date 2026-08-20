@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     spotdl_path: str = "spotdl"
     spotify_playlist_metadata_timeout_seconds: int = 3600
     yt_dlp_path: str = "yt-dlp"
+    yt_dlp_cookie_file: str | None = None
     youtube_music_enabled: bool = True
     youtube_music_timeout_seconds: int = 300
     youtube_music_audio_quality: str = "0"

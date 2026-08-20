@@ -40,6 +40,27 @@ def test_success_is_exactly_one_url_attempt(client, track, tmp_path, monkeypatch
     assert "Test Artist - Test Title audio" not in calls[0]
 
 
+def test_download_passes_configured_cookie_file(client, track, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        client.settings,
+        "yt_dlp_cookie_file",
+        "/run/secrets/youtube-cookies.txt",
+    )
+
+    def run(args, timeout):
+        calls.append(args)
+        (output_dir(args) / "song.mp3").write_bytes(b"audio")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(client, "_run", run)
+    client.download(track, tmp_path)
+
+    assert calls[0][calls[0].index("--cookie-file") + 1] == (
+        "/run/secrets/youtube-cookies.txt"
+    )
+
+
 def test_attempt_log_includes_elapsed_time(client, track, tmp_path, monkeypatch):
     log_context = {}
 

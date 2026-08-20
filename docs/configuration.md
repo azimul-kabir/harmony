@@ -68,13 +68,16 @@ poll interval, and scan timeout can be adjusted under **Settings → Navidrome**
 ```env
 YOUTUBE_MUSIC_ENABLED=true
 YT_DLP_PATH=yt-dlp
+YT_DLP_COOKIE_FILE=
 YOUTUBE_MUSIC_TIMEOUT_SECONDS=300
 ```
 
 This provider accepts public YouTube Music and explicit YouTube URLs. It uses
-yt-dlp without cookies or authenticated catalogue scraping and remains subject
-to provider availability and restrictions. Timeout, playlist/search/queue
-limits, enabled state, and default source are available under Settings.
+yt-dlp and remains subject to provider availability and restrictions. An
+optional read-only cookies file can authenticate audio requests when YouTube
+challenges the server IP; authenticated catalogue scraping and private playlist
+synchronization remain unsupported. Timeout, playlist/search/queue limits,
+enabled state, and default source are available under Settings.
 
 The Sources page accepts public `music.youtube.com/playlist?list=...` URLs in
 addition to Spotify playlists. Extra YouTube Music query parameters are removed
@@ -87,6 +90,86 @@ acquired. Cookies and private playlists are not supported.
 Existing Spotify Sources are migrated in place. Their legacy Spotify columns
 remain compatibility mirrors, while `provider`, `external_id`, and `source_url`
 are the authoritative durable identity. Source uniqueness is scoped by provider.
+
+### Troubleshooting YouTube download failures
+
+Playlist synchronization and audio acquisition are separate operations. A sync
+can finish successfully and export an M3U with (for example) 49 of 50 tracks
+available while the queued download for the missing track fails later.
+
+Both Spotify-backed downloads and manual YouTube fallbacks ultimately obtain
+audio through yt-dlp. Repeated `AudioProviderError: YT-DLP download error`
+messages followed by `HTTP Error 403: Forbidden` from a manual fallback
+therefore point to the shared YouTube delivery path, not Spotify metadata,
+playlist synchronization, Navidrome reconciliation, or Harmony's health check.
+Common causes are an outdated cached container image, a YouTube extractor
+change, or YouTube refusing media delivery to the container's public IP. A
+successful metadata lookup does not prove that the media URL itself is
+downloadable.
+
+Check the exact versions and reproduce the request from inside the running
+container:
+
+```sh
+docker compose exec harmony yt-dlp --version
+docker compose exec harmony deno --version
+docker compose exec harmony yt-dlp -v -f bestaudio --no-playlist \
+  'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+Pass the raw watch URL as shown. Do not paste Markdown link syntax such as
+`[https://...](https://...)` into the shell.
+
+Rebuild without the dependency layer cache before retrying so the image
+contains the current yt-dlp package:
+
+```sh
+docker compose build --pull --no-cache harmony
+docker compose up -d harmony
+```
+
+If a current, verbose yt-dlp request still returns HTTP 403 for multiple public
+videos, inspect the lines immediately before it. `HTTP Error 429: Too Many
+Requests` followed by `Sign in to confirm you're not a bot` confirms that
+YouTube has challenged the container's public IP; changing the video alone will
+usually not help.
+
+Harmony can pass a Netscape-format cookies file to both SpotDL and direct
+YouTube fallback downloads. Export a fresh `cookies.txt` from a dedicated
+YouTube account, stop using that account in the browser session from which it
+was exported, store the file outside the repository with owner-only
+permissions, and mount it read-only:
+
+```yaml
+services:
+  harmony:
+    volumes:
+      - /volume1/docker/secrets/youtube-cookies.txt:/run/secrets/youtube-cookies.txt:ro
+```
+
+Then configure the path **inside** the container and recreate it:
+
+```env
+YT_DLP_COOKIE_FILE=/run/secrets/youtube-cookies.txt
+```
+
+```sh
+chmod 600 /volume1/docker/secrets/youtube-cookies.txt
+docker compose up -d --force-recreate harmony
+docker compose exec harmony yt-dlp --cookies /run/secrets/youtube-cookies.txt \
+  -v -f bestaudio --no-playlist 'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+Cookies are credentials: never paste them into logs, commit them, or expose the
+mount through a shared directory. YouTube may invalidate them, and using them
+can affect the associated account. If cookies are not acceptable, test from a
+different public network/IP. Choose a different public video when only one
+video is affected.
+
+The manual fallback endpoint returns HTTP 422 before queueing when the submitted
+value is not a specific supported YouTube or YouTube Music **track** URL. HTTP
+201 means only that the fallback was validated and queued; the subsequent
+download can still fail if YouTube refuses the audio request.
 
 ## Large Spotify playlists
 
