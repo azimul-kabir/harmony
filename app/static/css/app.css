@@ -946,7 +946,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         z-index: 2000;
     }
 
-    .app-brand, .sidebar-footer { display: none; }
+    .sidebar .app-brand, .sidebar-footer { display: none; }
     
     .sidebar nav {
         flex-direction: row;
