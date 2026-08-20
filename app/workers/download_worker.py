@@ -1,6 +1,5 @@
 import time
 import threading
-import json
 from datetime import timedelta
 from pathlib import Path
 
@@ -22,6 +21,7 @@ from app.domain.download_outcome import DownloadCancelled, DownloadFailed, Downl
 from app.domain.task import TaskStatus, TaskType
 from app.domain.track import Track
 from app.downloaders.spotdl import AudioIdentity, validate_track_identity
+from app.mappers.download_job import download_job_to_track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
 from app.services import settings_service
@@ -44,6 +44,7 @@ from app.services.task_service import (
 MAX_DOWNLOAD_ATTEMPTS = 3
 RETRY_DELAYS_SECONDS = (15, 60)
 RATE_LIMIT_DELAYS_SECONDS = (60, 180)
+
 
 def worker_loop() -> None:
     logger.info(
@@ -150,27 +151,10 @@ def process_job(
             acquisition_item_id = detected[1]
             acquisition_url = job.manual_fallback_url
 
-        # Build the Track domain object, carrying the cover_url and extended metadata forward
-        track = Track(
-            title=job.title,
-            artist=job.artist,
-            album=job.album,
-            album_artist=job.album_artist,
-            track=job.track,
-            disc=job.disc,
-            year=job.year,
-            isrc=job.isrc,
-            cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
-            spotify_track_id=job.spotify_track_id, 
-            spotify_url=job.source_url, 
-            source_provider=acquisition_provider,
-            source_item_id=acquisition_item_id,
-            source_url=acquisition_url,
-            genre=job.genre,
-            duration=job.duration,
-            spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
-            genre_provenance=job.genre_provenance,
-        )
+        track = download_job_to_track(job)
+        track.source_provider = acquisition_provider
+        track.source_item_id = acquisition_item_id
+        track.source_url = acquisition_url
         if job.manual_fallback_url:
             try:
                 resolved = fallback_source.resolve(job.manual_fallback_url)

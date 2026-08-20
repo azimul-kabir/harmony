@@ -102,3 +102,26 @@ def test_formatted_track_keeps_album_metadata_and_artwork(monkeypatch):
     assert track.spotify_album_id == "album-id"
     assert track.cover_url == "https://images.example/cover.jpg"
     assert track.year == 2026
+
+
+def test_formatted_track_recovers_artwork_from_raw_playlist_item(monkeypatch):
+    monkeypatch.setattr(
+        playlist_batches.SpotifyFormatter,
+        "formatPlaylistTrack",
+        lambda _item: {"track": {
+            "id": "track-id", "type": "track", "name": "Song",
+            "artists": [{"name": "Artist"}], "album": {},
+            "duration_ms": 180000,
+            "external_urls": {"spotify": "https://open.spotify.com/track/track-id"},
+        }},
+    )
+    raw_item = {"itemV2": {"data": {"albumOfTrack": {
+        "uri": "spotify:album:album-id", "name": "Album",
+        "coverArt": {"sources": [{"url": "https://i.scdn.co/image/cover"}]},
+    }}}}
+
+    track = playlist_batches._format_track(raw_item)
+
+    assert track is not None
+    assert track.cover_url == "https://i.scdn.co/image/cover"
+    assert track.spotify_album_id == "album-id"
