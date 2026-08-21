@@ -1,8 +1,8 @@
 # Harmony Architecture
 
-> Release target: v3.0.0
+> Current release: v3.0.0
 >
-> Last updated: 2026-08-13
+> Last updated: 2026-08-21
 
 Harmony is a FastAPI application with a server-rendered, framework-free web UI,
 SQLite persistence, and background workers for downloads, Library maintenance,

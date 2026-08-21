@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "2.1.0"
+    app_version: str = "3.0.0"
 
     host: str = "0.0.0.0"
     port: int = 8080

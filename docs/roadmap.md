@@ -1,10 +1,10 @@
 # Harmony Roadmap
 
-> Stable baseline: v2.1.0
+> Current release: v3.0.0
 >
-> Next release: v3.0.0
+> Previous stable baseline: v2.1.0
 >
-> Last updated: 2026-08-12
+> Last updated: 2026-08-21
 
 Harmony v3 deliberately narrows the product around one dependable path:
 
@@ -68,7 +68,7 @@ The cleanup proceeded in small, independently testable changes:
 5. **Reduced the dependency and image surface.** Removed only packages proven
    unused by static checks and retained all dependencies needed by active paths.
 
-## v3 release gates
+## v3 release validation
 
 - A v2.1.0 database upgrades in place without data loss or manual SQL.
 - Existing Library songs, Sources, playlist order, M3U files, login, and runtime
@@ -77,8 +77,8 @@ The cleanup proceeded in small, independently testable changes:
   retries, and cancellation have regression coverage.
 - The full Python 3.12 suite passes, the production image builds, and the
   `linux/amd64` image starts with persistent database/music/download mounts.
-- The preview is validated on a DS220+-class Synology deployment before a v3
-  tag is published.
+- Validate each maintenance release on a DS220+-class Synology deployment
+  before publishing its version tag.
 
 ## After v3
 

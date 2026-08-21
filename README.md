@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.1.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v3.0.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,14 +25,12 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v2.1.0**
+Current stable version: **v3.0.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v2.1.0 release notes](docs/releases/v2.1.0.md) for upgrade guidance and a
-summary of the new login portal, playlist Sources, and Navidrome improvements.
-Development toward the narrower v3 release is documented in the
-[v3 preview notes](docs/releases/v3.0.0-preview.md) and the
-[roadmap](docs/roadmap.md).
+[v3.0.0 release notes](docs/releases/v3.0.0.md) for upgrade guidance and a
+summary of the streamlined acquisition, Source synchronization, Library, and
+mobile/PWA experience. Future work is tracked in the [roadmap](docs/roadmap.md).
 Harmony v1.6.0 was never published.
 
 ---
@@ -499,26 +497,26 @@ Start Harmony.
 docker compose up -d --build
 ```
 
-### Pull the preview image on Synology
+### Pull the v3.0.0 image on Synology
 
-The completed Harmony v3 branch publishes an Intel/AMD image for Synology
+Harmony publishes an Intel/AMD image for Synology
 models such as the DS220+ to GitHub Container Registry. Pull it from Container
 Manager or over SSH:
 
 ```bash
-docker pull ghcr.io/azimul-kabir/harmony:v3-preview
+docker pull ghcr.io/azimul-kabir/harmony:v3.0.0
 ```
 
-Use `ghcr.io/azimul-kabir/harmony:v3-preview` as the image name in a Synology
+Use `ghcr.io/azimul-kabir/harmony:v3.0.0` as the image name in a Synology
 Container Manager project. If the package is private, sign in to `ghcr.io`
 with the GitHub username and a personal access token that has `read:packages`.
 
 Opening a pull request runs CI, including a production-image build that is
 discarded after validation. It does **not** publish a registry image. The
-`v3-preview` image is built and pushed only from the
-`codex/harmony-v3-completed` branch; `main` publishes `latest`, version tags
-publish their matching tag, and maintainers can also start the publish workflow
-manually. All published images currently target `linux/amd64` for Synology
+development branch publishes `v3-preview`; `main` publishes `latest`, and a
+`v3.0.0` Git tag publishes the stable versioned image. Maintainers can also
+start the publish workflow manually. All published images currently target
+`linux/amd64` for Synology
 models such as the DS220+.
 
 Open:

@@ -3,7 +3,22 @@
 All notable changes to Harmony are documented in this file. The format is based
 on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
-## [Unreleased]
+## [v3.0.0] - 2026-08-21
+
+### Added
+
+- Added a unified Equalizer H brand mark across the web app, login portal,
+  browser favicon, PWA manifest, Apple touch icon, and project documentation.
+- Added a responsive **Select all** Library control that selects the current
+  filtered song set on desktop and mobile, with an in-place clear state.
+- Added direct YouTube and YouTube Music acquisition with bounded,
+  identity-validated fallback handling alongside existing Source workflows.
+
+### Changed
+
+- Simplified the active product surface around Sources, Downloads, Library,
+  M3U export, and Navidrome scan controls while keeping existing databases and
+  migrations upgrade-compatible.
 
 ### Removed
 

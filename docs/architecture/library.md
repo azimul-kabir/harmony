@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
-> Version: 2.0.0
-> Status: Released in v2.0.0 (direct successor to v1.5.0)
-> Last Updated: 2026-07-24
+> Version: 3.0.0
+> Status: Current Library architecture
+> Last Updated: 2026-08-21
 
 ---
 
