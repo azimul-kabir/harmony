@@ -437,10 +437,13 @@ Navidrome / Jellyfin / Plex
 
 - Docker
 - Docker Compose
-- Synology NAS
-- Linux
-- macOS
-- Windows
+- Linux servers
+- macOS and Windows through Docker Desktop
+- Synology NAS through Container Manager
+
+Harmony is not limited to Synology. Synology is a documented reference host for
+NAS deployments; any host with a supported Docker or Docker Compose runtime can
+run Harmony.
 
 ---
 
@@ -472,8 +475,8 @@ Spotify credentials remain optional and are needed only when the official
 Spotify metadata API is explicitly enabled. Harmony does not contact Spotify
 solely to enrich genres.
 
-Review the storage paths before starting, especially when using Docker or a
-Synology NAS:
+Review the storage paths before starting. The host paths must exist and be
+writable by the container user:
 
 ```env
 DATABASE_URL=sqlite:////database/harmony.db
@@ -485,11 +488,13 @@ ARTWORK_CACHE_PATH=/database/artwork
 ```
 
 The Compose file reads this same `.env` file. Set `MUSIC_HOST_PATH` and
-`DOWNLOAD_HOST_PATH` when you want to use NAS shared folders. Without those
-overrides, Harmony stores music and downloads in local project folders;
-database and log data remain in `./database` and `./logs`. Set
-`WEB_AUTH_SECURE_COOKIE=true` when an HTTPS reverse proxy is in front of
-Harmony.
+`DOWNLOAD_HOST_PATH` to absolute or relative paths valid on your Docker host.
+Without overrides, Harmony stores music and downloads in local project folders;
+database and log data remain in `./database` and `./logs`. The bundled Compose
+file uses Synology's common `1026:100` UID:GID mapping; on another host, change
+its `user:` value to the UID:GID that owns your mounted directories, or remove
+the line when Docker should use the image default. Set `WEB_AUTH_SECURE_COOKIE=true`
+when an HTTPS reverse proxy is in front of Harmony.
 
 Start Harmony.
 
@@ -497,27 +502,35 @@ Start Harmony.
 docker compose up -d --build
 ```
 
-### Pull the v3.0.0 image on Synology
+### Pull the v3.0.0 image on any Docker host
 
-Harmony publishes an Intel/AMD image for Synology
-models such as the DS220+ to GitHub Container Registry. Pull it from Container
-Manager or over SSH:
+Harmony publishes a Linux Intel/AMD (`linux/amd64`) image to GitHub Container
+Registry. Pull it from any Docker host:
 
 ```bash
 docker pull ghcr.io/azimul-kabir/harmony:v3.0.0
 ```
 
-Use `ghcr.io/azimul-kabir/harmony:v3.0.0` as the image name in a Synology
-Container Manager project. If the package is private, sign in to `ghcr.io`
-with the GitHub username and a personal access token that has `read:packages`.
+Use `ghcr.io/azimul-kabir/harmony:v3.0.0` as the image name in your Compose,
+Docker, or Synology Container Manager project. If the package is private, sign
+in to `ghcr.io` with the GitHub username and a personal access token that has
+`read:packages`. Apple Silicon Macs and ARM hosts can build locally with
+`docker compose up -d --build`; the published release image currently targets
+`linux/amd64`.
+
+### Synology Container Manager
+
+For Synology, create a Container Manager project with the supplied Compose
+file, set the shared-folder paths in `.env`, and retain `user: "1026:100"` when
+that UID:GID owns the shared folders. The same Compose file is otherwise
+platform-neutral.
 
 Opening a pull request runs CI, including a production-image build that is
 discarded after validation. It does **not** publish a registry image. The
 development branch publishes `v3-preview`; `main` publishes `latest`, and a
 `v3.0.0` Git tag publishes the stable versioned image. Maintainers can also
 start the publish workflow manually. All published images currently target
-`linux/amd64` for Synology
-models such as the DS220+.
+`linux/amd64`, including Intel-based Synology models such as the DS220+.
 
 Open:
 

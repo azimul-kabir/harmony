@@ -38,12 +38,16 @@ meant only for isolated development.
 
 ## Docker Compose and paths
 
-`docker-compose.yml` and `.env` are the complete deployment configuration; no
-override or second environment file is required. The `MUSIC_HOST_PATH` and
-`DOWNLOAD_HOST_PATH` values are host paths, while `MUSIC_PATH`,
-`DOWNLOAD_PATH`, and related values remain container paths. Compose retains the
-Synology `1026:100` user mapping and joins the existing external `harmony-net`
-network:
+`docker-compose.yml` and `.env` are the complete deployment configuration for
+Linux servers, Docker Desktop on macOS/Windows, and Synology Container Manager.
+The `MUSIC_HOST_PATH` and `DOWNLOAD_HOST_PATH` values are host paths, while
+`MUSIC_PATH`, `DOWNLOAD_PATH`, and related values remain container paths.
+
+The bundled Compose file defaults to Synology's common `1026:100` UID:GID
+mapping and the existing external `harmony-net` network. On a non-Synology
+host, change the `user:` value in `docker-compose.yml` to the UID:GID that owns
+the mounted paths, or remove it when Docker should use the image default. Set
+the host paths for your platform; these are Synology examples:
 
 ```env
 MUSIC_HOST_PATH=/volume1/music/library
@@ -146,7 +150,7 @@ permissions, and mount it read-only:
 services:
   harmony:
     volumes:
-      - /volume1/docker/secrets/youtube-cookies.txt:/run/secrets/youtube-cookies.txt:ro
+      - /absolute/path/to/youtube-cookies.txt:/run/secrets/youtube-cookies.txt:ro
 ```
 
 Then configure the path **inside** the container and recreate it:
@@ -156,7 +160,7 @@ YT_DLP_COOKIE_FILE=/run/secrets/youtube-cookies.txt
 ```
 
 ```sh
-chmod 600 /volume1/docker/secrets/youtube-cookies.txt
+chmod 600 /absolute/path/to/youtube-cookies.txt
 docker compose up -d --force-recreate harmony
 docker compose exec harmony yt-dlp --cookies /run/secrets/youtube-cookies.txt \
   -v -f bestaudio --no-playlist 'https://www.youtube.com/watch?v=VIDEO_ID'
