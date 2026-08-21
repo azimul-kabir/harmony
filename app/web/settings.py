@@ -17,7 +17,6 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     # 2. Fetch the current settings to populate the form
     general = settings_service.get_settings_by_category(db, "general")
     downloads = settings_service.get_settings_by_category(db, "downloads")
-    playlists = settings_service.get_settings_by_category(db, "playlists")
     appearance = settings_service.get_settings_by_category(db, "appearance")
     metadata = settings_service.get_settings_by_category(db, "metadata")
     navidrome = settings_service.get_settings_by_category(db, "navidrome")
@@ -31,15 +30,10 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
             page="settings",
             general=general,
             downloads=downloads,
-            playlists=playlists,
             appearance=appearance,
             metadata=metadata,
             navidrome=navidrome,
             library_settings=library,
             settings=runtime_settings,
-            spotify_credentials_configured=bool(
-                runtime_settings.spotify_client_id
-                and runtime_settings.spotify_client_secret
-            ),
         ),
     )

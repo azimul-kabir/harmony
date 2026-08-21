@@ -93,8 +93,7 @@ That's it. Open your browser, add a Spotify playlist, and Harmony takes care of 
 ### Current Status
 
 Harmony has reached **v2.1.0**. The release adds a secure-by-default web login,
-public YouTube Music playlist Sources, Navidrome-powered automatic playlists,
-playlist Love/Unlove actions, and stronger Navidrome reconciliation and
+public YouTube Music playlist Sources and stronger Navidrome reconciliation and
 download validation. See the [v2.1.0 release notes](docs/releases/v2.1.0.md)
 before upgrading. Harmony v1.6.0 was never published.
 
@@ -107,7 +106,3 @@ I'm continuing to improve it, and suggestions, feedback, or feature requests are
 Downloads can be selected only from the current visible, bounded Downloads feed. The selection toolbar supports retrying failed or cancelled records, cancelling queued or running records, clearing selected terminal history, and clearing all completed or all failed/cancelled history. Eligibility is returned by the server per record and mixed selections safely skip ineligible records.
 
 History clearing removes only terminal download records. It never deletes downloaded music files, Library records, or artwork cache, and it never removes active or queued work. Requests are limited to 100 selected IDs; responses contain only aggregate counts, so repeated terminal-history clearing is safe and reports zero changes when there is nothing left. On mobile the toolbar wraps into full-size touch controls without horizontal scrolling.
-
-## Love or unlove a Navidrome playlist
-
-Configure `NAVIDROME_URL`, `NAVIDROME_USERNAME`, and `NAVIDROME_PASSWORD`, then use **Settings → Navidrome → Test Connection**. On **Playlists**, choose a playlist fetched from Navidrome and confirm Love or Unlove. Loved status belongs to the configured Navidrome user. Harmony uses stable Navidrome playlist/song IDs—not names or metadata matching—and never modifies Navidrome's database. Repeated IDs are sent in batches of 100 by default. Progress is retained after each batch; an idempotent rerun processes the complete current playlist. Unlove removes current Loved status and does not restore an earlier state. Environment secrets follow Harmony's existing plaintext environment convention and should be protected with deployment-level secret controls.

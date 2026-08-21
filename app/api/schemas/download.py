@@ -11,3 +11,7 @@ class DownloadRequest(BaseModel):
 class DownloadBulkRequest(BaseModel):
     action: str
     download_ids: list[int] = Field(default_factory=list, max_length=100)
+
+
+class ManualFallbackRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2_048)

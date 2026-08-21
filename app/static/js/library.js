@@ -5,31 +5,16 @@ const DEFAULT_BITRATE_RANGES = {
     standard: { min: 192000, max: 319999 },
     compact: { min: null, max: 191999 },
 };
-const DEFAULT_COLLECTIONS = [
-    ["recently-added", "Recently Added", "Music added to the Library Index during the last seven days.", "blue", "recent"],
-    ["recently-downloaded", "Recently Downloaded", "Downloads added during the last seven days.", "cyan", "download"],
-    ["highest-bitrate", "Highest Bitrate", "Tracks at the highest bitrate currently in the Library.", "violet", "quality"],
-    ["missing-artwork", "Missing Artwork", "Tracks that still need a local artwork resource.", "amber", "artwork"],
-    ["missing-metadata", "Missing Metadata", "Tracks missing a title, artist, or album.", "rose", "metadata"],
-    ["recently-modified", "Recently Modified", "Files modified during the last seven days.", "green", "modified"],
-    ["large-albums", "Large Albums", "Tracks from albums containing at least ten indexed songs.", "indigo", "album"],
-    ["favorites", "Favorites", "Ready for a future favorites signal.", "pink", "favorite", true],
-].map(([id, name, description, tone, icon, placeholder = false]) => ({
-    id, name, description, tone, icon, placeholder, song_count: 0,
-}));
 const savedPreferences = readLibraryPreferences();
 
 const libraryState = {
     songs: [],
     albums: [],
     artists: [],
-    collections: [],
     filterOptions: null,
-    analytics: null,
     filteredSongs: [],
     filteredAlbums: [],
     filteredArtists: [],
-    filteredCollections: [],
     view: "songs",
     sort: savedPreferences.sort || "artist",
     filters: {
@@ -47,9 +32,7 @@ const libraryState = {
     query: "",
     requestedAlbumKey: null,
     requestedSongId: null,
-    requestedMetadataReviewSongId: null,
     requestedAvailability: null,
-    collectionId: null,
     searchTotal: 0,
     searchRequest: 0,
     pages: { songs: 1, albums: 1, artists: 1 },
@@ -175,52 +158,12 @@ async function submitDuplicateResolution(preview, target) {
     target.textContent = task.status === "completed"
         ? "Duplicate resolution completed. Removed files remain as missing Library records."
         : `Duplicate resolution ${task.status.replaceAll("_", " ")}. Review the Library task for details.`;
-    await Promise.all([loadDuplicateCandidates(), loadLibraryData({preserveState: true}), loadAnalytics()]);
+    await Promise.all([loadDuplicateCandidates(), loadLibraryData({preserveState: true})]);
 }
 
 function openDuplicateReview() {
     document.getElementById("duplicate-review-dialog").showModal();
     loadDuplicateCandidates();
-}
-
-async function loadAnalytics() {
-    try {
-        libraryState.analytics = await fetchJson("/api/library/analytics");
-        renderAnalytics(libraryState.analytics);
-    } catch (error) {
-        console.error("Library analytics error:", error);
-        document.getElementById("analytics-updated").textContent = "Analytics unavailable";
-    }
-}
-
-function renderAnalytics(analytics) {
-    const values = {
-        songs: Number(analytics.songs || 0).toLocaleString(),
-        albums: Number(analytics.albums || 0).toLocaleString(),
-        artists: Number(analytics.artists || 0).toLocaleString(),
-        genres: Number(analytics.genres || 0).toLocaleString(),
-        storage: formatBytes(analytics.storage_bytes),
-        bitrate: formatBitrate(analytics.average_bitrate),
-        duration: formatDuration(analytics.average_duration),
-        recent: Number(analytics.recently_added || 0).toLocaleString(),
-    };
-    Object.entries(values).forEach(([key, value]) => {
-        document.getElementById(`analytics-${key}`).textContent = value;
-    });
-    renderAlbumInsight("largest", analytics.largest_album, (album) =>
-        `${album.artist} · ${pluralize(album.song_count, "song")} · ${formatBytes(album.storage_bytes)}`);
-    renderAlbumInsight("newest", analytics.newest_album, (album) =>
-        `${album.artist} · ${album.year || "Year unknown"}`);
-    renderAlbumInsight("oldest", analytics.oldest_album, (album) =>
-        `${album.artist} · ${album.year || "Year unknown"}`);
-    document.getElementById("analytics-updated").textContent = "Live from the Library Index";
-}
-
-function renderAlbumInsight(key, album, detail) {
-    document.getElementById(`analytics-${key}-name`).textContent = album?.name || "—";
-    document.getElementById(`analytics-${key}-detail`).textContent = album
-        ? detail(album)
-        : "No album data";
 }
 
 function formatBytes(bytes) {
@@ -423,15 +366,11 @@ async function loadLibraryData({ preserveState = false } = {}) {
     errorBox.hidden = true;
 
     try {
-        const songEndpoint = libraryState.collectionId
-            ? `/api/library/collections/${encodeURIComponent(libraryState.collectionId)}/songs`
-            : "/api/library/songs";
+        const songEndpoint = "/api/library/songs";
         // Songs are the source for the Songs, Albums, and Artists views. Do
-        // not let auxiliary collections or filter-options requests hide all
-        // three views when one of those optional endpoints is unavailable.
+        // not let the optional filter-options request hide all three views.
         const songResult = await fetchJson(`${songEndpoint}?${libraryRequestParams()}`);
-        const [collectionsResult, filterOptionsResult] = await Promise.allSettled([
-            fetchJson("/api/library/collections"),
+        const filterOptionsResult = await Promise.allSettled([
             libraryState.filterOptions
                 ? Promise.resolve(libraryState.filterOptions)
                 : fetchJson("/api/library/filter-options"),
@@ -439,18 +378,12 @@ async function loadLibraryData({ preserveState = false } = {}) {
 
         const songs = Array.isArray(songResult) ? songResult : songResult.items;
         const { albums, artists } = projectSongs(songs);
-        const collections = collectionsResult.status === "fulfilled"
-            ? collectionsResult.value
-            : DEFAULT_COLLECTIONS;
-        const filterOptions = filterOptionsResult.status === "fulfilled"
-            ? filterOptionsResult.value
+        const filterOptions = filterOptionsResult[0].status === "fulfilled"
+            ? filterOptionsResult[0].value
             : libraryState.filterOptions;
-        Object.assign(libraryState, { songs, albums, artists, collections, filterOptions });
-        if (collectionsResult.status === "rejected") {
-            console.error("Library collections error:", collectionsResult.reason);
-        }
-        if (filterOptionsResult.status === "rejected") {
-            console.error("Library filter options error:", filterOptionsResult.reason);
+        Object.assign(libraryState, { songs, albums, artists, filterOptions });
+        if (filterOptionsResult[0].status === "rejected") {
+            console.error("Library filter options error:", filterOptionsResult[0].reason);
         }
         populateFilterOptions();
         updateFilterControls();
@@ -460,11 +393,6 @@ async function loadLibraryData({ preserveState = false } = {}) {
         } else {
             applyFilters();
             renderActiveView();
-        }
-        if (libraryState.requestedMetadataReviewSongId) {
-            const songId = libraryState.requestedMetadataReviewSongId;
-            libraryState.requestedMetadataReviewSongId = null;
-            await openMetadataReview(songId);
         }
     } catch (error) {
         console.error("Library load error:", error);
@@ -477,7 +405,7 @@ async function loadLibraryData({ preserveState = false } = {}) {
 
 function applyFilters() {
     const query = libraryState.query.toLocaleLowerCase().trim();
-    let songs = libraryState.songs.filter(songMatchesCollection);
+    let songs = libraryState.songs;
 
     if (query) {
         songs = songs.filter((song) => [song.title, song.artist, song.album, song.filename]
@@ -492,8 +420,6 @@ function applyFilters() {
         (!libraryState.requestedAlbumKey || album.metadata_key === libraryState.requestedAlbumKey));
     libraryState.filteredArtists = libraryState.artists.filter((artist) => !query ||
         String(artist.artist || "").toLocaleLowerCase().includes(query));
-    libraryState.filteredCollections = libraryState.collections.filter((collection) => !query ||
-        [collection.name, collection.description].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
 }
 
 async function performSearch() {
@@ -514,13 +440,10 @@ async function performSearch() {
         if (request !== libraryState.searchRequest) return;
 
         libraryState.searchTotal = result.total;
-        libraryState.filteredSongs = result.items.filter(songMatchesCollection);
+        libraryState.filteredSongs = result.items;
         const projections = projectSongs(result.items);
         libraryState.filteredAlbums = projections.albums;
         libraryState.filteredArtists = projections.artists;
-        libraryState.filteredCollections = libraryState.collections.filter((collection) =>
-            [collection.name, collection.description].some((value) =>
-                String(value || "").toLocaleLowerCase().includes(query.toLocaleLowerCase())));
 
         const shown = result.items.length;
         status.textContent = result.total > shown
@@ -537,15 +460,10 @@ async function performSearch() {
     }
 }
 
-function songMatchesCollection(song) {
-    return true;
-}
-
 function updateCounts() {
     document.getElementById("songs-count").textContent = libraryState.songs.length.toLocaleString();
     document.getElementById("albums-count").textContent = libraryState.albums.length.toLocaleString();
     document.getElementById("artists-count").textContent = libraryState.artists.length.toLocaleString();
-    document.getElementById("collections-count").textContent = libraryState.collections.length.toLocaleString();
 }
 
 function renderActiveView() {
@@ -553,10 +471,10 @@ function renderActiveView() {
         view.hidden = view.id !== `view-${libraryState.view}`;
     });
 
+    updateMobileSelectAll();
     if (libraryState.view === "songs") renderSongs();
     if (libraryState.view === "albums") renderAlbums();
     if (libraryState.view === "artists") renderArtists();
-    if (libraryState.view === "collections") renderCollections();
 }
 
 function renderSongs() {
@@ -583,8 +501,6 @@ function renderSongs() {
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
                 <td data-label="Actions"><div class="library-row-actions">
-                    ${song.has_lyrics ? `<button class="btn-secondary" type="button" data-lyrics-song="${song.id}">Lyrics</button>` : ""}
-                    <button class="btn-secondary metadata-review-open" type="button" data-review-song="${song.id}">Review</button>
                 </div></td>
             </tr>
         `).join("");
@@ -598,403 +514,9 @@ function renderSongs() {
             updateBulkSelection(page.items);
         });
     });
-    body.querySelectorAll("[data-review-song]").forEach((button) => {
-        button.addEventListener("click", () => openMetadataReview(Number(button.dataset.reviewSong)));
-    });
-    body.querySelectorAll("[data-lyrics-song]").forEach((button) => {
-        button.addEventListener("click", () => openLyrics(Number(button.dataset.lyricsSong)));
-    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
-}
-
-async function openLyrics(songId) {
-    const dialog = document.getElementById("lyrics-dialog");
-    const title = document.getElementById("lyrics-title");
-    const byline = document.getElementById("lyrics-byline");
-    const status = document.getElementById("lyrics-status");
-    const content = document.getElementById("lyrics-content");
-    title.textContent = "Loading lyrics…";
-    byline.textContent = "";
-    status.textContent = "";
-    content.textContent = "";
-    dialog.showModal();
-    try {
-        const result = await fetchJson(`/api/library/songs/${songId}/lyrics`);
-        title.textContent = result.title;
-        byline.textContent = result.artist || "Unknown artist";
-        status.textContent = result.lyrics
-            ? `${result.synchronized ? "Synchronized" : "Plain"} lyrics · ${String(result.source || "local").replaceAll("_", " ")}`
-            : "No locally indexed lyrics are available.";
-        content.textContent = result.lyrics || "";
-        content.hidden = !result.lyrics;
-    } catch (error) {
-        title.textContent = "Lyrics unavailable";
-        status.textContent = "Harmony could not load lyrics for this song.";
-        content.hidden = true;
-    }
-}
-
-function metadataValue(value) {
-    if (value === null || value === undefined || value === "") return "—";
-    return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function evidenceText(value) {
-    if (value === null || value === undefined) return "None recorded";
-    if (Array.isArray(value)) return value.map(metadataValue).join(" · ") || "None recorded";
-    if (typeof value === "object") return Object.entries(value).map(([key, item]) => `${key}: ${metadataValue(item)}`).join(" · ");
-    return String(value);
-}
-
-const manualMetadataFields = [
-    ["title", "Title", "text"], ["artist", "Artist", "text"],
-    ["album", "Album", "text"], ["album_artist", "Album artist", "text"],
-    ["genre", "Genre", "text"], ["year", "Year", "number"],
-    ["track_number", "Track number", "number"], ["total_tracks", "Total tracks", "number"],
-    ["disc_number", "Disc number", "number"], ["total_discs", "Total discs", "number"],
-    ["isrc", "ISRC", "text"], ["musicbrainz_recording_id", "MusicBrainz recording ID", "text"],
-    ["musicbrainz_release_id", "MusicBrainz release ID", "text"],
-    ["musicbrainz_release_group_id", "MusicBrainz release-group ID", "text"],
-    ["musicbrainz_artist_id", "MusicBrainz artist ID", "text"],
-    ["musicbrainz_release_artist_id", "MusicBrainz release artist ID", "text"],
-];
-
-function renderManualMetadataForm(review) {
-    const current = Object.fromEntries(review.fields.map((item) => [item.field_name, item.current_value]));
-    const form = document.getElementById("metadata-manual-form");
-    form.innerHTML = manualMetadataFields.map(([field, label, type]) => {
-        const value = current[field] ?? "";
-        const numeric = type === "number" ? ' min="1" step="1"' : "";
-        return `<label>${escapeHtml(label)}<input type="${type}" data-manual-field="${field}" value="${escapeAttribute(String(value))}"${numeric}></label>`;
-    }).join("");
-    form.querySelectorAll("[data-manual-field]").forEach((input) => input.addEventListener("input", () => {
-        document.getElementById("metadata-apply-manual").disabled = true;
-        document.getElementById("metadata-manual-preview").textContent = "";
-    }));
-}
-
-function renderManualArtwork(songId) {
-    const song = libraryState.songs.find((item) => item.id === songId);
-    const target = document.getElementById("metadata-manual-artwork");
-    const remove = document.getElementById("metadata-artwork-remove");
-    remove.disabled = !song?.cover_url;
-    target.innerHTML = song?.cover_url
-        ? `<img src="${escapeAttribute(song.cover_url)}" alt=""><div><strong>Current canonical artwork</strong><small>Rendered as a square in Harmony. Uploading a replacement does not alter the audio file.</small></div>`
-        : '<div class="metadata-artwork-placeholder">No art</div><div><strong>No canonical artwork</strong><small>Choose an image to create a content-addressed cache resource.</small></div>';
-}
-
-async function uploadManualArtwork(songId, file) {
-    const status = document.getElementById("metadata-review-status");
-    if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    status.textContent = "Validating and caching artwork…";
-    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "POST", body});
-    const result = await response.json();
-    if (!response.ok) {
-        status.textContent = result.detail || "Artwork could not be uploaded.";
-        return;
-    }
-    const song = libraryState.songs.find((item) => item.id === songId);
-    if (song) {
-        song.cover_url = result.artwork.url;
-        song.artwork_id = result.artwork.id;
-        song.artwork_status = "manual";
-    }
-    renderManualArtwork(songId);
-    await previewFileTags(songId);
-    status.textContent = result.message;
-}
-
-async function removeManualArtwork(songId) {
-    if (!window.confirm("Remove Harmony's canonical artwork association? Cached and audio-file artwork will remain unchanged.")) return;
-    const status = document.getElementById("metadata-review-status");
-    const response = await fetch(`/api/artwork/songs/${songId}`, {method: "DELETE"});
-    const result = await response.json();
-    if (!response.ok) {
-        status.textContent = result.detail || "Artwork association could not be removed.";
-        return;
-    }
-    const song = libraryState.songs.find((item) => item.id === songId);
-    if (song) {
-        song.cover_url = null;
-        song.artwork_id = null;
-        song.artwork_status = "missing";
-    }
-    renderManualArtwork(songId);
-    await previewFileTags(songId);
-    status.textContent = result.message;
-}
-
-function manualMetadataChanges() {
-    return Object.fromEntries([...document.querySelectorAll("[data-manual-field]")].map((input) => {
-        const value = input.value.trim();
-        return [input.dataset.manualField, input.type === "number" && value ? Number(value) : value || null];
-    }));
-}
-
-async function previewManualMetadata(songId) {
-    const target = document.getElementById("metadata-manual-preview");
-    const apply = document.getElementById("metadata-apply-manual");
-    apply.disabled = true;
-    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-preview`, {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
-    });
-    const result = await response.json();
-    if (!response.ok) { target.textContent = result.error?.message || "Manual edit preview is unavailable."; return; }
-    const invalid = result.operations.some((item) => item.status === "invalid");
-    const applicable = result.operations.some((item) => item.status === "applicable");
-    apply.disabled = invalid || !applicable;
-    target.innerHTML = result.operations.filter((item) => item.status !== "unchanged").map((item) =>
-        `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small></article>`
-    ).join("") || '<p class="library-search-status">No manual changes to apply.</p>';
-}
-
-async function applyManualMetadata(songId) {
-    const status = document.getElementById("metadata-review-status");
-    const button = document.getElementById("metadata-apply-manual");
-    button.disabled = true;
-    const response = await fetch(`/api/library/songs/${songId}/metadata/manual-apply`, {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({changes: manualMetadataChanges(), initiated_by: "library-ui"}),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-        status.textContent = result.error?.message || "Manual metadata edits could not be queued.";
-        return;
-    }
-    status.textContent = `Manual edit queued (job ${result.job_id}).`;
-    await pollMetadataApplication(result.job_id, songId);
-}
-
-async function openMetadataReview(songId) {
-    const dialog = document.getElementById("metadata-review-dialog");
-    dialog.dataset.songId = String(songId);
-    dialog.showModal();
-    document.getElementById("metadata-discover").onclick = () => discoverMetadataMatch(songId);
-    document.getElementById("metadata-select-eligible").onclick = () => document.querySelectorAll("[data-accepted-field]:not(:disabled)").forEach((item) => { item.checked = true; });
-    document.getElementById("metadata-clear-selection").onclick = () => document.querySelectorAll("[data-accepted-field]").forEach((item) => { item.checked = false; });
-    document.getElementById("metadata-preview-accepted").onclick = () => previewMetadataApplication(songId);
-    document.getElementById("metadata-apply-selected").onclick = () => submitMetadataApplication(songId, false);
-    document.getElementById("metadata-apply-accepted").onclick = () => submitMetadataApplication(songId, true);
-    document.getElementById("metadata-preview-manual").onclick = () => previewManualMetadata(songId);
-    document.getElementById("metadata-apply-manual").onclick = () => applyManualMetadata(songId);
-    document.getElementById("metadata-artwork-file").onchange = (event) => {
-        const file = event.target.files?.[0];
-        uploadManualArtwork(songId, file).finally(() => { event.target.value = ""; });
-    };
-    document.getElementById("metadata-artwork-remove").onclick = () => removeManualArtwork(songId);
-    await loadMetadataReview(songId);
-}
-
-function selectedAcceptedSuggestions(allEligible) {
-    const fields = [...document.querySelectorAll("[data-accepted-field]:not(:disabled)")];
-    return (allEligible ? fields : fields.filter((item) => item.checked)).map((item) => Number(item.dataset.acceptedField));
-}
-
-async function previewMetadataApplication(songId) {
-    const ids = selectedAcceptedSuggestions(false);
-    const target = document.getElementById("metadata-application-preview");
-    if (!ids.length) { target.textContent = "Select one or more eligible accepted fields first."; return; }
-    const response = await fetch(`/api/library/songs/${songId}/metadata/application-preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: ids, initiated_by: "library-ui" }) });
-    const preview = await response.json();
-    if (!response.ok) { target.textContent = preview.error?.message || "Preview unavailable."; return; }
-    const stale = preview.operations.some((item) => item.status === "stale");
-    document.getElementById("metadata-force-control").hidden = !stale;
-    preview.operations.filter((item) => ["invalid", "unsupported"].includes(item.status)).forEach((item) => {
-        const input = document.querySelector(`[data-accepted-field="${item.suggestion_id}"]`);
-        if (input) { input.checked = false; input.disabled = true; }
-    });
-    target.innerHTML = preview.operations.map((item) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(item.current_value))} → ${escapeHtml(metadataValue(item.proposed_value))}</p><small>${escapeHtml(item.status)}${item.validation_error ? ` · ${escapeHtml(item.validation_error)}` : ""}</small>${item.status === "stale" ? `<small>Expected ${escapeHtml(metadataValue(item.expected_current_value))}; current canonical value differs.</small>` : ""}</article>`).join("");
-}
-
-async function submitMetadataApplication(songId, allEligible) {
-    const ids = selectedAcceptedSuggestions(allEligible);
-    const status = document.getElementById("metadata-review-status");
-    if (!ids.length) { status.textContent = "No eligible accepted fields are selected."; return; }
-    const force = document.getElementById("metadata-force").checked;
-    const response = await fetch(`/api/library/songs/${songId}/metadata/apply-selected`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: ids, force, force_confirmation: force, initiated_by: "library-ui" }) });
-    const result = await response.json();
-    if (!response.ok) { status.textContent = result.error?.message || "Metadata application could not be queued."; return; }
-    status.textContent = `Application queued (job ${result.job_id}).`;
-    await pollMetadataApplication(result.job_id, songId);
-}
-
-async function pollMetadataApplication(jobId, songId) {
-    const status = document.getElementById("metadata-review-status");
-    let task = await fetchJson(`/api/tasks/jobs/${jobId}`);
-    while (["queued", "running", "cancelling"].includes(task.status)) {
-        status.textContent = `${task.status.replaceAll("_", " ")} · ${task.processed_items}/${task.total_items}.`;
-        await new Promise((resolve) => setTimeout(resolve, 750));
-        task = await fetchJson(`/api/tasks/jobs/${jobId}`);
-    }
-    status.textContent = task.status === "completed" ? "Library metadata updated. Audio-file tags were not modified." : `Metadata application ${task.status.replaceAll("_", " ")}; see task ${jobId} for details.`;
-    await loadMetadataReview(songId);
-}
-
-async function discoverMetadataMatch(songId) {
-    const status = document.getElementById("metadata-review-status");
-    const target = document.getElementById("metadata-matches");
-    status.textContent = "Discovering bounded provider candidates…";
-    target.innerHTML = '<p class="library-search-status">Contacting metadata provider…</p>';
-    try {
-        const provider = document.getElementById("metadata-provider").value;
-        const response = await fetch(`/api/metadata/discoveries/songs/${songId}`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }),
-        });
-        const started = await response.json();
-        if (!response.ok) throw new Error(started.error?.message || "Discovery failed");
-        const job = started.job;
-        const discoveryId = started.discovery.id;
-        target.innerHTML = `<p class="library-search-status">Discovery job ${job.id} queued.</p><button class="btn-secondary" type="button" data-cancel-discovery="${job.id}">Cancel discovery</button>`;
-        target.querySelector("[data-cancel-discovery]").onclick = async () => fetch(`/api/tasks/jobs/${job.id}/cancel`, {method:"POST"});
-        let state = job;
-        while (["queued", "running", "cancelling"].includes(state.status)) {
-            await new Promise((resolve) => setTimeout(resolve, 750));
-            state = await fetchJson(`/api/tasks/jobs/${job.id}`);
-            status.textContent = `${state.status.replaceAll("_", " ")} · ${state.progress_percentage}% · ${state.processed_items}/${state.total_items}`;
-        }
-        if (["cancelled", "interrupted", "failed"].includes(state.status)) {
-            target.innerHTML = `<p class="library-search-status">Discovery ${escapeHtml(state.status)}. Existing metadata was not changed.</p><button class="btn-secondary" type="button" data-retry-discovery>Retry discovery</button>`;
-            target.querySelector("[data-retry-discovery]").onclick = () => discoverMetadataMatch(songId);
-            return;
-        }
-        const discovery = await fetchJson(`/api/metadata/discoveries/${discoveryId}`);
-        renderMetadataMatches(discovery, target);
-        status.textContent = discovery.status === "completed_with_errors" ? "Partial results: one or more provider searches failed safely." : "Discovery complete. Selection does not accept metadata.";
-    } catch (error) {
-        target.innerHTML = '<p class="library-search-status">Provider discovery is unavailable. Existing metadata was not changed.</p>';
-        status.textContent = error.message;
-    }
-}
-
-function renderMetadataMatches(discovery, target) {
-        target.innerHTML = `${discovery.stale ? '<p class="library-search-status">These results are stale because canonical metadata changed after discovery.</p>' : ""}${discovery.results.map((result) => {
-            const candidate = result.candidate_summary;
-            const label = result.confidence_level === "medium" ? "possible match" : result.confidence_level === "low" ? "weak match" : `${result.confidence_level} confidence`;
-            return `<article class="metadata-suggestion-card">
-                <header><strong>${escapeHtml(candidate.title || "Untitled candidate")}</strong><span>${result.score.toFixed(2)} · ${escapeHtml(result.ambiguous ? "ambiguous" : label)}</span></header>
-                <p>${escapeHtml(candidate.artist || "Unknown artist")} · ${escapeHtml(candidate.album || "Release unavailable")} · ${escapeHtml(candidate.release_date || "Date unavailable")}</p>
-                <small><b>Positive evidence:</b> ${escapeHtml(result.positive_evidence.map((item) => item.message).join(" · ") || "None")}</small>
-                <small><b>Conflicts:</b> ${escapeHtml(result.conflicting_evidence.map((item) => item.message).join(" · ") || "None")}</small>
-                <small><b>Unavailable:</b> ${escapeHtml(result.unavailable_evidence.map((item) => item.message).join(" · ") || "None")}</small>
-                <small><b>Found by:</b> ${escapeHtml(result.search_provenance.join(" · ") || "Unknown")}</small>
-                <label><input type="checkbox" data-compare-result="${result.id}"> Compare</label>
-                ${result.viable ? `<button class="btn-secondary" type="button" data-match-result="${result.id}" data-discovery="${discovery.id}" data-confirm="${result.ambiguous || result.confidence_level === "low"}">Select candidate</button>` : "<b>Rejected candidate</b>"}
-            </article>`;
-        }).join("") || '<p class="library-search-status">No provider candidates were found.</p>'}<button class="btn-secondary" type="button" data-compare-selected>Compare two selected candidates</button><div data-comparison-output></div>`;
-        target.querySelectorAll("[data-match-result]").forEach((button) => button.addEventListener("click", () => selectMetadataMatch(button)));
-        target.querySelector("[data-compare-selected]").onclick = async () => {
-            const ids=[...target.querySelectorAll("[data-compare-result]:checked")].map((item)=>item.dataset.compareResult);
-            if (ids.length !== 2) { target.querySelector("[data-comparison-output]").textContent="Select exactly two candidates to compare."; return; }
-            const comparison=await fetchJson(`/api/metadata/discoveries/${discovery.id}/compare?left_result_id=${ids[0]}&right_result_id=${ids[1]}`);
-            target.querySelector("[data-comparison-output]").innerHTML=`<p><strong>Score difference:</strong> ${comparison.score_difference}</p><small>${escapeHtml(comparison.left.positive_evidence.map((x)=>x.message).join(" · "))}</small><small>${escapeHtml(comparison.right.positive_evidence.map((x)=>x.message).join(" · "))}</small>`;
-        };
-}
-
-async function selectMetadataMatch(button) {
-    const needsConfirmation = button.dataset.confirm === "true";
-    if (needsConfirmation && !window.confirm("This candidate is ambiguous or low confidence. Select it for suggestion generation anyway?")) return;
-    const response = await fetch(`/api/metadata/discoveries/${button.dataset.discovery}/select`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
-        result_id:Number(button.dataset.matchResult), confirm_ambiguous:needsConfirmation, confirm_low_confidence:needsConfirmation,
-    })});
-    if (!response.ok) { document.getElementById("metadata-review-status").textContent="Candidate selection could not be saved."; return; }
-    const generateButton = button.cloneNode(true);
-    generateButton.textContent = "Generate pending suggestions";
-    button.replaceWith(generateButton);
-    generateButton.addEventListener("click", async () => {
-        generateButton.disabled = true;
-        const generate = await fetch(`/api/metadata/discoveries/${generateButton.dataset.discovery}/suggestions`, {method:"POST"});
-        document.getElementById("metadata-review-status").textContent = generate.ok ? "Pending suggestions generated; acceptance remains a separate decision." : "The selected candidate produced no new applicable suggestions.";
-        await loadMetadataReview(Number(document.getElementById("metadata-review-dialog").dataset.songId));
-    });
-    document.getElementById("metadata-review-status").textContent = "Candidate selected. Generate suggestions only if you want field-level proposals.";
-}
-
-async function loadMetadataReview(songId) {
-    const status = document.getElementById("metadata-review-status");
-    status.textContent = "Loading metadata review…";
-    try {
-        const [review, history] = await Promise.all([
-            fetchJson(`/api/library/songs/${songId}/metadata`),
-            fetchJson(`/api/library/songs/${songId}/metadata/history`),
-        ]);
-        const song = libraryState.songs.find((item) => item.id === songId);
-        document.getElementById("metadata-review-title").textContent = song?.title || song?.filename || `Song ${songId}`;
-        document.getElementById("metadata-current").innerHTML = review.fields
-            .filter((field) => field.current_value !== null && field.current_value !== "")
-            .map((field) => `<div><dt>${escapeHtml(field.field_name.replaceAll("_", " "))}</dt><dd>${escapeHtml(metadataValue(field.current_value))}</dd></div>`).join("") || "<p>No canonical metadata is indexed.</p>";
-        renderManualMetadataForm(review);
-        renderManualArtwork(songId);
-        const pending = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "pending");
-        document.getElementById("metadata-suggestions").innerHTML = pending.map((item) => `
-            <article class="metadata-suggestion-card">
-                <header><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(item.provider)} · ${escapeHtml(item.confidence_level)}${item.confidence === null ? "" : ` (${Math.round(item.confidence * 100)}%)`}</span></header>
-                <p class="metadata-proposed">${escapeHtml(metadataValue(item.current_value))} <span aria-hidden="true">→</span> <strong>${escapeHtml(metadataValue(item.suggested_value))}</strong></p>
-                <p>${escapeHtml(item.match_explanation || "No match explanation supplied.")}</p>
-                <small><b>Positive evidence:</b> ${escapeHtml(evidenceText(item.positive_evidence))}</small>
-                <small><b>Conflicting evidence:</b> ${escapeHtml(evidenceText(item.conflicting_evidence))}</small>
-                <div><button class="btn-primary" data-metadata-action="accept" data-suggestion-id="${item.id}">Accept</button><button class="btn-secondary" data-metadata-action="reject" data-suggestion-id="${item.id}">Reject</button></div>
-            </article>`).join("") || '<p class="library-search-status">No pending suggestions.</p>';
-        const accepted = review.fields.flatMap((field) => field.suggestions).filter((item) => item.status === "accepted");
-        const acceptedTarget = document.getElementById("metadata-accepted");
-        acceptedTarget.innerHTML = accepted.map((item) => `
-            <article class="metadata-suggestion-card">
-                <header><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(item.provider)} · ${escapeHtml(item.confidence_level)}${item.confidence === null ? "" : ` (${Math.round(item.confidence * 100)}%)`}</span></header>
-                <p class="metadata-proposed">${escapeHtml(metadataValue(item.current_value))} <span aria-hidden="true">→</span> <strong>${escapeHtml(metadataValue(item.suggested_value))}</strong></p>
-                <label><input type="checkbox" data-accepted-field="${item.id}"> Select this field for preview or application</label><small>Validation and stale state are verified by Preview before application.</small>
-            </article>`).join("") || '<p class="library-search-status">No accepted suggestions are available.</p>';
-        document.getElementById("metadata-history").innerHTML = history.items.map((item) => `
-            <article><strong>${escapeHtml(item.field_name.replaceAll("_", " "))}</strong><span>${escapeHtml(metadataValue(item.previous_value))} → ${escapeHtml(metadataValue(item.new_value))}</span><small>${escapeHtml(item.change_source)} · ${new Date(item.changed_at).toLocaleString()}</small></article>`).join("") || '<p class="library-search-status">No applied-change history.</p>';
-        document.querySelectorAll("[data-metadata-action]").forEach((button) => button.addEventListener("click", () => reviewMetadataSuggestion(button)));
-        document.getElementById("metadata-preview-tags").onclick = () => previewFileTags(songId);
-        document.getElementById("metadata-write-tags").onclick = () => writeFileTags(songId);
-        await previewFileTags(songId);
-        status.textContent = "Accepting records a decision only; it does not change tags or canonical metadata.";
-    } catch (error) {
-        status.textContent = "Harmony could not load this metadata review.";
-    }
-}
-
-async function previewFileTags(songId) {
-    const target = document.getElementById("metadata-tag-preview");
-    const button = document.getElementById("metadata-write-tags");
-    try {
-        const preview = await fetchJson(`/api/library/songs/${songId}/metadata/tag-preview`);
-        button.disabled = !preview.available;
-        target.innerHTML = preview.available
-            ? preview.fields.map((field) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(field.field.replaceAll("_", " "))}</strong><p>${escapeHtml(metadataValue(field.current))} → ${escapeHtml(metadataValue(field.canonical))}</p><small>${field.will_change ? "Will change" : "Already matches"}</small></article>`).join("") + `<article class="metadata-suggestion-card"><strong>Cached canonical artwork</strong><p>${escapeHtml(preview.artwork.status)}</p><label><input id="metadata-embed-artwork" type="checkbox" ${preview.artwork.canonical_available ? "checked" : "disabled"}> Embed canonical artwork in this audio file</label><small>Harmony's private cached artwork is distinct from artwork embedded in the file.</small></article>`
-            : "<p class=\"library-search-status\">Tags cannot be written: the file is missing, unsafe, unsupported, or canonical metadata is unavailable.</p>";
-    } catch (_) { button.disabled = true; target.textContent = "Tag preview is unavailable."; }
-}
-
-async function writeFileTags(songId) {
-    const embedArtwork = document.getElementById("metadata-embed-artwork")?.checked ?? false;
-    if (!window.confirm(`This will modify the audio file's embedded tags${embedArtwork ? " and artwork" : ""}. Continue?`)) return;
-    const status = document.getElementById("metadata-review-status");
-    const button = document.getElementById("metadata-write-tags"); button.disabled = true;
-    try {
-        const response = await fetch(`/api/library/songs/${songId}/metadata/write-tags`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ embed_artwork: embedArtwork }) });
-        const result = await response.json();
-        status.textContent = result.status === "succeeded" ? (result.artwork === "embedded" ? "Tags and artwork written." : "Canonical tags were written to the audio file.") : "Tags were not written; the file was left unchanged.";
-        await previewFileTags(songId);
-    } catch (_) { status.textContent = "Harmony could not write tags to this audio file."; button.disabled = false; }
-}
-
-async function reviewMetadataSuggestion(button) {
-    button.disabled = true;
-    const response = await fetch(`/api/metadata/suggestions/${button.dataset.suggestionId}/${button.dataset.metadataAction}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewed_by: "library-ui" }),
-    });
-    if (!response.ok) {
-        document.getElementById("metadata-review-status").textContent = "The review decision could not be saved.";
-        button.disabled = false;
-        return;
-    }
-    await loadMetadataReview(Number(document.getElementById("metadata-review-dialog").dataset.songId));
 }
 
 function renderAlbums() {
@@ -1040,41 +562,6 @@ function renderArtists() {
     renderPagination("pagination-artists", page, "artists", renderArtists);
 }
 
-function renderCollections() {
-    const grid = document.getElementById("collections-grid");
-    const collectionIcons = {
-        recent: icons.recent,
-        download: icons.download,
-        quality: icons.quality,
-        artwork: icons.artwork,
-        metadata: icons.metadata,
-        modified: icons.modified,
-        album: icons.album,
-        favorite: icons.favorite,
-    };
-
-    grid.innerHTML = libraryState.filteredCollections.length
-        ? libraryState.filteredCollections.map((collection) => `
-            <button class="library-collection-card tone-${escapeAttribute(collection.tone)}" type="button" data-collection="${escapeAttribute(collection.id)}" data-name="${escapeAttribute(collection.name)}" ${collection.placeholder ? "disabled" : ""}>
-                <span class="library-collection-icon">${collectionIcons[collection.icon] || icons.music}</span>
-                <span class="library-collection-copy">
-                    <small>Smart collection</small>
-                    <strong>${escapeHtml(collection.name)}</strong>
-                    <span>${escapeHtml(collection.description)}</span>
-                </span>
-                <span class="library-collection-count">
-                    <b>${Number(collection.song_count || 0).toLocaleString()}</b>
-                    <small>${collection.placeholder ? "Coming soon" : pluralizeLabel(collection.song_count, "song")}</small>
-                </span>
-            </button>
-        `).join("")
-        : emptyGrid("No collections match your search.");
-
-    grid.querySelectorAll("[data-collection]").forEach((card) => {
-        card.addEventListener("click", () => applyCollection(card.dataset.collection, card.dataset.name));
-    });
-}
-
 function pageItems(items, key) {
     const totalPages = Math.max(1, Math.ceil(items.length / libraryState.pageSize));
     libraryState.pages[key] = Math.min(libraryState.pages[key], totalPages);
@@ -1111,7 +598,7 @@ function switchView(view) {
         tab.classList.toggle("active", active);
         tab.setAttribute("aria-selected", String(active));
     });
-    document.getElementById("library-sort").disabled = view === "collections";
+    document.getElementById("library-sort").disabled = false;
     renderActiveView();
 }
 
@@ -1127,25 +614,6 @@ function showSongsFor(field, value, albumKey = null) {
     }
     libraryState.pages.songs = 1;
     switchView("songs");
-}
-
-async function applyCollection(collectionId, name) {
-    libraryState.collectionId = collectionId;
-    libraryState.query = "";
-    document.getElementById("library-search").value = "";
-    const chip = document.getElementById("clear-collection");
-    document.getElementById("collection-filter-name").textContent = name;
-    chip.hidden = false;
-    libraryState.pages.songs = 1;
-    switchView("songs");
-    await loadLibraryData({ preserveState: true });
-}
-
-async function clearCollection() {
-    libraryState.collectionId = null;
-    document.getElementById("clear-collection").hidden = true;
-    libraryState.pages.songs = 1;
-    await loadLibraryData({ preserveState: true });
 }
 
 function artwork(url, className) {
@@ -1224,11 +692,6 @@ const bulkActions = {
         message: "Harmony will re-read tags and technical audio properties from every selected file.",
         confirm: "Refresh metadata",
     },
-    write_tags: {
-        title: "Write canonical tags?",
-        message: "Harmony will modify each selected audio file's embedded tags. This is required before Navidrome can read the canonical values.",
-        confirm: "Write tags",
-    },
     refresh_artwork: {
         title: "Refresh artwork cache?",
         message: "Harmony will re-read embedded and folder artwork and repair local cache associations.",
@@ -1258,6 +721,21 @@ function updateBulkSelection(pageSongs = currentSongPage()) {
     const selectPage = document.getElementById("library-select-page");
     selectPage.checked = pageSongs.length > 0 && selectedOnPage === pageSongs.length;
     selectPage.indeterminate = selectedOnPage > 0 && selectedOnPage < pageSongs.length;
+    updateMobileSelectAll();
+}
+
+function updateMobileSelectAll() {
+    const button = document.getElementById("library-select-all-mobile");
+    if (!button) return;
+    const visibleSongs = libraryState.filteredSongs;
+    const available = libraryState.view === "songs" && visibleSongs.length > 0;
+    button.hidden = !available;
+    if (!available) return;
+    const allSelected = visibleSongs.every((song) => libraryState.selectedSongs.has(song.id));
+    button.textContent = allSelected
+        ? "Clear selection"
+        : `Select all (${visibleSongs.length.toLocaleString()})`;
+    button.setAttribute("aria-pressed", String(allSelected));
 }
 
 function clearBulkSelection() {
@@ -1295,16 +773,6 @@ function showBulkDialog(operation) {
 }
 
 async function startBulkOperation(operation, optionValue) {
-    if (operation === "write_tags") {
-        const response = await fetch("/api/library/metadata/write-tags", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song_ids: [...libraryState.selectedSongs], embed_artwork: true }) });
-        if (!response.ok) throw new Error("Unable to write canonical tags.");
-        const result = await response.json();
-        document.getElementById("library-bulk-progress").hidden = false;
-        document.getElementById("library-bulk-progress-title").textContent = "Canonical tag writing finished";
-        document.getElementById("library-bulk-progress-detail").textContent = `Tag writing finished: ${result.totals.succeeded} succeeded, ${result.totals.skipped} skipped, ${result.totals.unsupported} unsupported, ${result.totals.missing} missing, ${result.totals.failed} failed. Artwork: ${result.totals.artwork_embedded} embedded, ${result.totals.artwork_unchanged} unchanged, ${result.totals.artwork_unavailable} unavailable, ${result.totals.artwork_unsupported} unsupported, ${result.totals.artwork_failed} failed.`;
-        await loadLibrary();
-        return;
-    }
     const options = {};
     if (operation === "move") options.destination = optionValue;
     if (operation === "rename") options.pattern = optionValue;
@@ -1332,7 +800,6 @@ async function pollBulkTask() {
         if (["completed", "failed", "cancelled"].includes(task.status)) {
             libraryState.selectedSongs.clear();
             await loadLibraryData({ preserveState: true });
-            await loadAnalytics();
             return;
         }
         libraryState.bulkPollTimer = setTimeout(pollBulkTask, 700);
@@ -1371,13 +838,22 @@ document.getElementById("library-select-page").addEventListener("change", (event
     });
     renderSongs();
 });
-document.getElementById("metadata-review-close").addEventListener("click", () => document.getElementById("metadata-review-dialog").close());
-document.getElementById("lyrics-close").addEventListener("click", () => document.getElementById("lyrics-dialog").close());
 document.getElementById("library-duplicates-open").addEventListener("click", openDuplicateReview);
 document.getElementById("duplicate-review-close").addEventListener("click", () => document.getElementById("duplicate-review-dialog").close());
 document.getElementById("duplicate-tier").addEventListener("change", loadDuplicateCandidates);
 
 document.getElementById("library-clear-selection").addEventListener("click", clearBulkSelection);
+document.getElementById("library-select-all-mobile").addEventListener("click", () => {
+    const visibleSongs = libraryState.filteredSongs;
+    if (!visibleSongs.length) return;
+    const allSelected = visibleSongs.every((song) => libraryState.selectedSongs.has(song.id));
+    if (allSelected) {
+        libraryState.selectedSongs.clear();
+    } else {
+        visibleSongs.forEach((song) => libraryState.selectedSongs.add(song.id));
+    }
+    renderSongs();
+});
 document.querySelectorAll("[data-bulk-action]").forEach((button) => {
     button.addEventListener("click", () => showBulkDialog(button.dataset.bulkAction));
 });
@@ -1418,13 +894,7 @@ document.getElementById("library-search").addEventListener("input", (event) => {
     searchTimer = setTimeout(async () => {
         libraryState.query = event.target.value;
         Object.keys(libraryState.pages).forEach((key) => { libraryState.pages[key] = 1; });
-        if (libraryState.collectionId !== null) {
-            libraryState.collectionId = null;
-            document.getElementById("clear-collection").hidden = true;
-            await loadLibraryData({ preserveState: true });
-        } else {
-            performSearch();
-        }
+        performSearch();
     }, 180);
 });
 document.querySelectorAll("[data-search-example]").forEach((button) => {
@@ -1487,7 +957,6 @@ document.getElementById("clear-library-filters").addEventListener("click", () =>
     loadLibraryData({ preserveState: true });
 });
 
-document.getElementById("clear-collection").addEventListener("click", clearCollection);
 
 document.getElementById("btn-rescan").addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -1498,7 +967,6 @@ document.getElementById("btn-rescan").addEventListener("click", async (event) =>
         const response = await fetch("/api/library/rescan", { method: "POST" });
         if (!response.ok) throw new Error("Rescan failed");
         await loadLibraryData({ preserveState: true });
-        await loadAnalytics();
     } catch (error) {
         document.getElementById("library-error").textContent = "The library rescan failed. Check Harmony logs for details.";
         document.getElementById("library-error").hidden = false;
@@ -1515,7 +983,6 @@ function connectLibraryEvents() {
         events.addEventListener(type, () => {
             clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => loadLibraryData({ preserveState: true }), 500);
-            setTimeout(loadAnalytics, 550);
         });
     });
 }
@@ -1530,11 +997,10 @@ document.addEventListener("DOMContentLoaded", () => {
         libraryState.requestedAlbumKey = requestedAlbumKey;
         Object.assign(libraryState.filters, { artist: "", album: "", genre: "", codec: "", bitrate: "", downloaded_today: false, recently_added: false, missing_artwork: false, missing_metadata: false });
     }
-    if (["songs", "albums", "artists", "collections"].includes(requestedView)) libraryState.view = requestedView;
+    if (["songs", "albums", "artists"].includes(requestedView)) libraryState.view = requestedView;
     if (Number.isInteger(requestedSongId) && requestedSongId > 0) {
         libraryState.requestedSongId = requestedSongId;
         libraryState.view = "songs";
-        if (params.get("metadata") === "review") libraryState.requestedMetadataReviewSongId = requestedSongId;
     }
     if (requestedAvailability === "missing") {
         libraryState.requestedAvailability = requestedAvailability;
@@ -1546,6 +1012,5 @@ document.addEventListener("DOMContentLoaded", () => {
     updateFilterControls();
     switchView(libraryState.view);
     loadLibraryData();
-    loadAnalytics();
     connectLibraryEvents();
 });

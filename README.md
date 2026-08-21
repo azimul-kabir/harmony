@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.1.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v3.0.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python">
   <img src="https://img.shields.io/badge/docker-supported-2496ED?logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/platform-Synology%20NAS-success" alt="Synology">
@@ -25,11 +25,12 @@ Harmony is a modern self-hosted music management platform that bridges Spotify w
 
 It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
 
-Current stable version: **v2.1.0**
+Current stable version: **v3.0.0**
 
 See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
-[v2.1.0 release notes](docs/releases/v2.1.0.md) for upgrade guidance and a
-summary of the new login portal, playlist Sources, and Navidrome improvements.
+[v3.0.0 release notes](docs/releases/v3.0.0.md) for upgrade guidance and a
+summary of the streamlined acquisition, Source synchronization, Library, and
+mobile/PWA experience. Future work is tracked in the [roadmap](docs/roadmap.md).
 Harmony v1.6.0 was never published.
 
 ---
@@ -39,10 +40,12 @@ Harmony v1.6.0 was never published.
 ## 🎵 Spotify Downloads
 
 - Download tracks, albums, and playlists
-- Exact-match-only import: Harmony first requests the original Spotify track
-  URL, then lets SpotDL retry by artist/title when the provider returns no
-  usable output. Every result, including the fallback, must pass strict
-  embedded-metadata validation before it can enter the Library.
+- Exact-match-only import: after Spotify metadata resolution, Harmony performs
+  one bounded yt-dlp metadata search, validates candidates before transfer, and
+  downloads only the strongest safe match. SpotDL remains a single bounded
+  acquisition rescue when direct search or download cannot produce an
+  acceptable result. Set `SPOTDL_FALLBACK_TIMEOUT_SECONDS` (default: 45) to
+  control the whole rescue's wall-clock budget.
 - Before import, Harmony requires exactly one audio file and validates its
   embedded primary artist, title, material version markers, and duration
   against the stored Spotify request. Instrumental, karaoke, live, remix,
@@ -50,7 +53,9 @@ Harmony v1.6.0 was never published.
   substitutions are rejected unless the requested title identifies the same
   version.
 - A rejected or unavailable exact match stays failed and absent from the
-  Library and playlist availability count.
+  Library and playlist availability count, unless Harmony confirms that the
+  requested recording is already available in the indexed Library. In that
+  case the job is skipped and linked to the existing Library song.
 
 ## YouTube Music downloads and playlist sources
 
@@ -59,12 +64,17 @@ playlist (`music.youtube.com/playlist?list=`) URLs through yt-dlp. Standard
 YouTube watch and playlist URLs are accepted as explicit user-provided fallback
 inputs; Harmony does not claim every standard YouTube video is music. Discovery
 currently uses bounded **general YouTube** `ytsearch` through yt-dlp, not a
-dedicated YouTube Music catalogue search. Harmony uses yt-dlp for search and audio extraction, so it does not add
-an authenticated scraper or require cookies. Results and jobs retain only
+dedicated YouTube Music catalogue search. Harmony uses yt-dlp for search and
+audio extraction, so it does not add an authenticated scraper. Public requests
+need no cookies by default, but operators can supply them when YouTube challenges
+the server IP. Results and jobs retain only
 normalized source metadata; extractor payloads and command output are not exposed.
 YouTube availability is subject to region, age, removal, and rate-limit policies.
 Enable it under **Settings → Downloads → Download Sources**. Use `YT_DLP_PATH`,
-`YOUTUBE_MUSIC_ENABLED`, and `YOUTUBE_MUSIC_TIMEOUT_SECONDS` to configure it.
+`YOUTUBE_MUSIC_ENABLED`, `YOUTUBE_MUSIC_TIMEOUT_SECONDS`, and the optional
+`YT_DLP_COOKIE_FILE` to configure it. Cookie files must be mounted read-only;
+Harmony uses a private writable runtime copy when yt-dlp needs a cookie jar, so
+the mounted secret is never modified. See the configuration guide for details.
 
 Public YouTube Music playlists can also be saved on the **Sources** page. Source
 URLs are canonicalized to their `list` identity, so tracking parameters such as
@@ -98,12 +108,8 @@ paths, provider URLs/payloads, credentials, command lines, or raw errors.
 - SpotDL integration
 - Background download queue
 - Automatic library import
-- Spotify artist-genre enrichment is optional and disabled by default. When
-  enabled, Harmony uses Spotify **artist** metadata (track and album objects do
-  not provide genres). MusicBrainz and embedded file metadata remain available
-  without Spotify. Spotify genre data can be empty or unavailable, and Spotify
-  failures never block a download. Manual metadata and approved MusicBrainz
-  metadata remain higher-priority sources.
+- Existing embedded or indexed genres are preserved during download and import.
+  Harmony no longer contacts Spotify solely to enrich genre tags.
 
 ---
 
@@ -124,13 +130,9 @@ Features include:
 - Direct `.m3u` downloads from the web interface
 - Direct, order-preserving Navidrome playlist synchronization with safe M3U
   fallback
-- Bulk Love/Unlove for playlists discovered directly through Navidrome, using
-  stable Navidrome playlist and song IDs in bounded batches
 - Playlist availability counts, filtering, and one-click source resync
 - Ordered playlist Library-file management and safe saved-playlist deletion
 - Per-source scheduled auto-sync (hourly, every 6 or 12 hours, daily, or weekly)
-- Auto-generated Recently Added and Recently Downloaded playlists with a
-  configurable 1–500-song limit
 
 ---
 
@@ -143,7 +145,7 @@ timestamps.
 
 The index updates incrementally through a supervised filesystem watcher. New,
 modified, deleted, moved, and renamed files are reconciled without periodic
-full-library scans. Library search, collections, analytics, health, and bulk
+full-library scans. Library search, health, and bulk
 operations read this index instead of walking the music filesystem.
 
 ### Songs View
@@ -173,15 +175,11 @@ operations read this index instead of walking the music filesystem.
 - Album counts
 - Click to browse artist collection
 
-### Smart Collections and Health
+### Library Filters and Health
 
-- Recently Added and Recently Downloaded
-- Highest Bitrate
+- Recently Added
 - Missing Artwork and Missing Metadata
-- Recently Modified
-- Large Albums
-- Favorites placeholder for a future favorites signal
-- Library health score, indexing checks, and maintenance actions
+- Direct library completeness and indexing checks with maintenance actions
 
 ---
 
@@ -237,15 +235,13 @@ To fetch online artwork, select songs in **Library → Songs** and choose
 **Fetch album art**. Harmony uses the canonical `musicbrainz_release_id`
 (MusicBrainz **Album Id**) for Cover Art Archive's `/release/{id}/front`
 lookup. A `musicbrainz_release_group_id` is a different identifier and is
-never sent to that endpoint. First apply the MusicBrainz release-ID suggestion
-to canonical metadata for songs that do not yet have one. A valid cached
-artwork result satisfies a normal fetch without another network request.
+never sent to that endpoint. Songs without a release ID are skipped with a
+clear explanation. A valid cached artwork result satisfies a normal fetch
+without another network request.
 
 **Refresh artwork** only re-indexes embedded/folder artwork and repairs
-Harmony's cache association. **Write canonical tags** (with artwork embedding
-enabled) modifies the audio file. Navidrome sees cover art only after that
-embed step, or when artwork has been exported into the music library; the
-Harmony cache itself is not a Navidrome media file.
+Harmony's cache association. The Harmony cache itself is not a Navidrome media
+file; Navidrome continues to read artwork from the music library.
 
 ---
 
@@ -257,15 +253,16 @@ average bitrate and duration, recently added music, and album insights.
 The dedicated **Library Health** page adds:
 
 - Missing artwork and missing metadata checks
-- Weighted health score
+- Direct completeness and availability counts
 - Library last-updated time
 - Refresh Library and Rebuild Index
 - Indexed-file verification
 - Artwork-cache clearing
 - Durable progress and cancellation
 
-Duplicate Detection is currently displayed as a placeholder; Harmony does not
-yet claim to calculate duplicate groups.
+Duplicate detection groups conservative exact, strong, probable, and possible
+matches. Resolution requires a fresh preview and explicit confirmation before
+non-keeper files are queued for deletion.
 
 ---
 
@@ -286,41 +283,13 @@ errors, cancellation, and recovery through Harmony's task system.
 
 ---
 
-## ✨ Metadata Intelligence
-
-Harmony can evaluate library metadata, discover authoritative candidates, and
-apply only the changes you review and accept.
-
-- Provider-neutral metadata-health rules identify missing, inconsistent, and
-  malformed Song metadata with durable issue records.
-- MusicBrainz discovery uses deterministic, explainable candidate matching and
-  confidence levels rather than silently overwriting tags.
-- Suggestions retain evidence, provider provenance, review status, and a
-  canonical-value snapshot so stale changes are detected before application.
-- Accepted changes can be previewed, applied in durable background batches,
-  audited in history, and rolled back when the recorded change is reversible.
-- MusicBrainz requests are rate-limited, retried, and cached locally to make
-  repeated discovery safe for public provider infrastructure.
-
-Metadata discovery, canonical application, explicit tag writing, and rollback
-currently support Songs. Album and Artist matching remains an internal
-foundation for future releases.
-
-### Repair missing genres
+## 🏷 Embedded Metadata
 
 Harmony indexes the genre tag already present in an audio file; it deliberately
 does not guess or silently overwrite genres while scanning. A **Refresh
 metadata** or **Rebuild Index** therefore fills `genre` only when the file
 itself contains a genre tag (for example ID3 `TCON`, Vorbis `GENRE`, or MP4
 `©gen`).
-
-To enrich untagged songs from MusicBrainz, open **Library Health**, run
-**Metadata Analysis**, then find the **Missing genre** issues and choose
-**Discover match**. In the linked Song review, select a viable provider match,
-generate suggestions, accept the **Genre** suggestion, preview it, and apply
-it. Harmony records that canonical Library change in its history. To update the
-file itself, separately preview and run **Write canonical tags**; this explicit
-step can also embed cached artwork and is the step media servers observe.
 
 ---
 
@@ -362,15 +331,14 @@ Current configurable settings include:
 - Storage paths
 - Download engine
 - Spotify configuration
-- Optional Spotify genre enrichment
 - Optional YouTube Music download source
 - Navidrome connection and playlist synchronization
-- MusicBrainz provider and discovery limits
+- Cover Art Archive request settings
 - Appearance, date/time, and runtime behavior
 - System information
 
-Metadata discovery can also be tuned with the documented `MUSICBRAINZ_*` and
-`METADATA_DISCOVERY_*` environment variables in `.env.example`.
+Cover Art Archive access can be tuned with the documented
+`COVER_ART_ARCHIVE_*` environment variables in `.env.example`.
 
 ---
 
@@ -390,21 +358,6 @@ Features include:
 - Full-width mobile dialogs, drawers, and scrollable content regions
 - Mobile typography, focus, overflow, and reduced-motion improvements
 - Pagination optimized for smaller screens
-
----
-
-## Lyrics Support
-
-Harmony indexes lyrics already stored with the local audio file. It supports
-embedded ID3, Vorbis/FLAC, and MP4 lyrics plus same-name `.lrc` and `.txt`
-sidecar files. `.lrc` sidecars take precedence so synchronized timestamps are
-preserved. Lyrics are available from each Song's **Lyrics** action in the
-Library; full text is loaded only when opened and is not included in Library
-list responses.
-
-Lyrics files are bounded to 512 KiB. Harmony does not contact an external lyrics
-provider, and adding, editing, or downloading lyrics remains outside this
-initial local-library implementation.
 
 ---
 
@@ -515,16 +468,9 @@ Before starting, set a long, unique `WEB_AUTH_PASSWORD` in `.env`.
 and fails closed when the password is empty. Login sessions last 12 hours by
 default and are invalidated whenever the password changes.
 
-Spotify artist-genre enrichment is optional. It is disabled by default, so
-credentials are not required for downloads, metadata resolution, tagging, or
-library indexing. Enable it only when you want Spotify artist metadata to be
-an additional genre source:
-
-```env
-SPOTIFY_GENRE_ENRICHMENT_ENABLED=false
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-```
+Spotify credentials remain optional and are needed only when the official
+Spotify metadata API is explicitly enabled. Harmony does not contact Spotify
+solely to enrich genres.
 
 Review the storage paths before starting, especially when using Docker or a
 Synology NAS:
@@ -539,9 +485,9 @@ ARTWORK_CACHE_PATH=/database/artwork
 ```
 
 The Compose file reads this same `.env` file. Set `MUSIC_HOST_PATH` and
-`DOWNLOAD_HOST_PATH` to directories that exist on your host. Database and log
-data remain in `./database` and `./logs`. The Compose deployment retains its
-Synology user mapping and external `harmony-net` network. Set
+`DOWNLOAD_HOST_PATH` when you want to use NAS shared folders. Without those
+overrides, Harmony stores music and downloads in local project folders;
+database and log data remain in `./database` and `./logs`. Set
 `WEB_AUTH_SECURE_COOKIE=true` when an HTTPS reverse proxy is in front of
 Harmony.
 
@@ -550,6 +496,28 @@ Start Harmony.
 ```bash
 docker compose up -d --build
 ```
+
+### Pull the v3.0.0 image on Synology
+
+Harmony publishes an Intel/AMD image for Synology
+models such as the DS220+ to GitHub Container Registry. Pull it from Container
+Manager or over SSH:
+
+```bash
+docker pull ghcr.io/azimul-kabir/harmony:v3.0.0
+```
+
+Use `ghcr.io/azimul-kabir/harmony:v3.0.0` as the image name in a Synology
+Container Manager project. If the package is private, sign in to `ghcr.io`
+with the GitHub username and a personal access token that has `read:packages`.
+
+Opening a pull request runs CI, including a production-image build that is
+discarded after validation. It does **not** publish a registry image. The
+development branch publishes `v3-preview`; `main` publishes `latest`, and a
+`v3.0.0` Git tag publishes the stable versioned image. Maintainers can also
+start the publish workflow manually. All published images currently target
+`linux/amd64` for Synology
+models such as the DS220+.
 
 Open:
 
@@ -652,10 +620,7 @@ Just a synchronized self-hosted music library.
 
 ### Library Intelligence
 
-- Metadata editing beyond reviewed MusicBrainz suggestions
-- Additional metadata providers and repair workflows
-- Duplicate detection and resolution
-- Manual artwork replacement
+- Optional metadata editing and repair workflows
 - Advanced search improvements
 
 ---
@@ -666,8 +631,6 @@ Just a synchronized self-hosted music library.
 - Ratings
 - Tags
 - User-defined collection rules
-- More built-in auto-playlists based on playback signals when those signals are
-  available
 
 ---
 
@@ -709,21 +672,6 @@ Library changes should follow
 [`docs/architecture/library.md`](docs/architecture/library.md), which is the
 source of truth for Library ownership, service boundaries, API contracts, and
 large-library performance requirements.
-
-## Canonical metadata and audio tags
-
-Harmony intentionally separates metadata repair into three explicit stages:
-
-1. **Accept provider match** records the review decision only.
-2. **Apply to canonical metadata** updates Harmony's database and audit history only.
-3. **Write canonical tags to the audio file** is a separately confirmed action that
-   changes embedded tags. It is the stage Navidrome and similar music servers
-   require; run their library scan afterwards to pick up the changed file mtime.
-
-Harmony never silently rewrites the library during matching, acceptance, or
-canonical metadata application.
-
----
 
 # License
 

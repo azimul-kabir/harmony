@@ -8,7 +8,7 @@
         <div>
             <span class="library-eyebrow">Library Index</span>
             <h1 id="library-title">Your music, organized</h1>
-            <p>Browse every track Harmony has indexed across albums, artists, and collections.</p>
+            <p>Browse every track Harmony has indexed across songs, albums, and artists.</p>
         </div>
         <div class="library-hero-actions">
         <a class="btn-secondary library-health-link" href="/library/health">Library Health</a>
@@ -22,43 +22,6 @@
         </button>
         </div>
     </header>
-
-    <section class="library-analytics" aria-labelledby="library-analytics-title">
-        <div class="library-analytics-heading">
-            <div>
-                <span class="library-eyebrow">Library analytics</span>
-                <h2 id="library-analytics-title">At a glance</h2>
-            </div>
-            <span id="analytics-updated" class="library-analytics-updated" aria-live="polite"></span>
-        </div>
-        <div class="library-analytics-grid">
-            <article><strong id="analytics-songs">—</strong><span>Songs</span></article>
-            <article><strong id="analytics-albums">—</strong><span>Albums</span></article>
-            <article><strong id="analytics-artists">—</strong><span>Artists</span></article>
-            <article><strong id="analytics-genres">—</strong><span>Genres</span></article>
-            <article><strong id="analytics-storage">—</strong><span>Storage used</span></article>
-            <article><strong id="analytics-bitrate">—</strong><span>Average bitrate</span></article>
-            <article><strong id="analytics-duration">—</strong><span>Average duration</span></article>
-            <article><strong id="analytics-recent">—</strong><span>Recently added</span></article>
-        </div>
-        <div class="library-album-insights">
-            <article>
-                <span>Largest album</span>
-                <strong id="analytics-largest-name">—</strong>
-                <small id="analytics-largest-detail">No album data</small>
-            </article>
-            <article>
-                <span>Newest album</span>
-                <strong id="analytics-newest-name">—</strong>
-                <small id="analytics-newest-detail">No release year</small>
-            </article>
-            <article>
-                <span>Oldest album</span>
-                <strong id="analytics-oldest-name">—</strong>
-                <small id="analytics-oldest-detail">No release year</small>
-            </article>
-        </div>
-    </section>
 
     <nav class="library-tabs" id="library-view-tabs" aria-label="Library sections" role="tablist">
         <button class="library-tab active" type="button" role="tab" aria-selected="true" data-view="songs">
@@ -76,11 +39,6 @@
             <span>Artists</span>
             <span class="library-tab-count" id="artists-count">—</span>
         </button>
-        <button class="library-tab" type="button" role="tab" aria-selected="false" data-view="collections">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
-            <span>Collections</span>
-            <span class="library-tab-count" id="collections-count">—</span>
-        </button>
     </nav>
 
     <div class="library-panel">
@@ -91,9 +49,8 @@
             </label>
             <span id="library-search-status" class="library-search-status" aria-live="polite"></span>
             <div class="library-toolbar-actions">
-                <button id="clear-collection" class="library-filter-chip" type="button" hidden>
-                    <span id="collection-filter-name"></span>
-                    <span aria-hidden="true">×</span>
+                <button id="library-select-all-mobile" class="btn-secondary library-select-all-mobile" type="button" hidden>
+                    Select all
                 </button>
                 <button id="library-filter-toggle" class="btn-secondary library-filter-toggle" type="button" aria-expanded="false" aria-controls="library-filter-panel">
                     Filters <span id="library-filter-count" class="library-filter-count" hidden>0</span>
@@ -154,7 +111,6 @@
                     <button type="button" data-bulk-action="move">Move</button>
                     <button type="button" data-bulk-action="rename">Rename</button>
                     <button type="button" data-bulk-action="refresh_metadata">Refresh metadata</button>
-                    <button type="button" data-bulk-action="write_tags">Write canonical tags</button>
                     <button type="button" data-bulk-action="refresh_artwork">Refresh artwork</button>
                     <button type="button" data-bulk-action="fetch_artwork">Fetch album art</button>
                     <button type="button" data-bulk-action="export">Export</button>
@@ -205,15 +161,6 @@
             <div id="pagination-artists" class="library-pagination"></div>
         </section>
 
-        <section id="view-collections" class="library-view" role="tabpanel" hidden>
-            <div class="library-section-intro">
-                <div>
-                    <h2>Smart collections</h2>
-                    <p>Automatic views generated from the Library Index.</p>
-                </div>
-            </div>
-            <div id="collections-grid" class="library-collections-grid"></div>
-        </section>
     </div>
 </section>
 
@@ -248,35 +195,6 @@
     </div>
 </dialog>
 
-<dialog id="lyrics-dialog" class="lyrics-dialog">
-    <div class="lyrics-dialog-shell">
-        <header>
-            <div>
-                <span class="library-eyebrow">Lyrics</span>
-                <h2 id="lyrics-title">Song lyrics</h2>
-                <p id="lyrics-byline" class="library-search-status"></p>
-            </div>
-            <button id="lyrics-close" class="btn-secondary" type="button">Close</button>
-        </header>
-        <p id="lyrics-status" class="library-search-status" aria-live="polite"></p>
-        <pre id="lyrics-content" class="lyrics-content"></pre>
-    </div>
-</dialog>
-
-<dialog id="metadata-review-dialog" class="metadata-review-dialog">
-    <div class="metadata-review-shell">
-        <header><div><span class="library-eyebrow">Metadata Intelligence</span><h2 id="metadata-review-title">Metadata review</h2></div><button id="metadata-review-close" class="btn-secondary" type="button">Close</button></header>
-        <p id="metadata-review-status" class="library-search-status" aria-live="polite"></p>
-        <section><h3>Provider matches</h3><div class="library-actions"><select id="metadata-provider" aria-label="Metadata provider"><option value="musicbrainz">MusicBrainz</option><option value="spotify">Spotify</option></select><button id="metadata-discover" class="btn-secondary" type="button">Discover match</button></div><div id="metadata-matches" class="metadata-suggestion-list"><p class="library-search-status">Discovery has not run.</p></div></section>
-        <section><h3>Current canonical metadata</h3><dl id="metadata-current" class="metadata-current-grid"></dl></section>
-        <section><h3>Edit canonical metadata</h3><p class="library-search-status">Manual edits update Harmony's Library only. Preview first; writing audio-file tags remains a separate action.</p><form id="metadata-manual-form" class="metadata-manual-form"></form><div class="library-actions"><button id="metadata-preview-manual" class="btn-secondary" type="button">Preview manual edits</button><button id="metadata-apply-manual" class="btn-primary" type="button" disabled>Apply manual edits</button></div><div id="metadata-manual-preview" class="metadata-suggestion-list"></div></section>
-        <section><h3>Canonical artwork</h3><p class="library-search-status">Upload JPEG, PNG, or WebP artwork up to 15 MB. Replacement changes Harmony's association only; embedding remains a separate tag-writing action.</p><div id="metadata-manual-artwork" class="metadata-manual-artwork"></div><div class="library-actions"><label class="btn-secondary metadata-artwork-upload">Choose image<input id="metadata-artwork-file" type="file" accept="image/jpeg,image/png,image/webp" hidden></label><button id="metadata-artwork-remove" class="btn-secondary" type="button">Remove association</button></div></section>
-        <section><h3>Audio-file tags</h3><p class="library-search-status">Writing tags modifies the audio file. Provider acceptance and canonical metadata application never do this.</p><div id="metadata-tag-preview" class="metadata-suggestion-list"></div><div class="library-actions"><button id="metadata-preview-tags" class="btn-secondary" type="button">Preview file-tag changes</button><button id="metadata-write-tags" class="btn-primary" type="button">Write tags to file</button></div></section>
-        <section><h3>Pending suggestions</h3><div id="metadata-suggestions" class="metadata-suggestion-list"></div></section>
-        <section><h3>Accepted suggestions</h3><p class="library-search-status">Select eligible fields, preview them, then queue a durable database-only update.</p><div id="metadata-accepted" class="metadata-suggestion-list"></div><div class="library-actions"><button id="metadata-select-eligible" class="btn-secondary" type="button">Select all eligible</button><button id="metadata-clear-selection" class="btn-secondary" type="button">Clear selection</button><button id="metadata-preview-accepted" class="btn-secondary" type="button">Preview changes</button><button id="metadata-apply-selected" class="btn-primary" type="button">Apply selected</button><button id="metadata-apply-accepted" class="btn-primary" type="button">Apply all eligible</button></div><label id="metadata-force-control" hidden><input id="metadata-force" type="checkbox"> Overwrite newer canonical values after reviewing stale fields.</label><div id="metadata-application-preview" class="metadata-suggestion-list"></div><small>Library metadata updated. Audio-file tags were NOT modified.</small></section>
-        <section><h3>Metadata history</h3><div id="metadata-history" class="metadata-history-list"></div></section>
-    </div>
-</dialog>
 {% endblock %}
 
 {% block scripts %}

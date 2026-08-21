@@ -5,7 +5,6 @@ from sqlalchemy import case, func, select
 from app.core.config import get_settings
 from app.database.models import (
     DownloadJob,
-    MetadataSuggestion,
     Playlist,
     Song,
     SyncSource,
@@ -13,10 +12,8 @@ from app.database.models import (
 )
 from app.domain.download import JobStatus
 from app.domain.task import TaskStatus, TaskType
-from app.services.collections import collection_engine
 from app.services.library_analytics import library_analytics
 from app.services.library_predicates import missing_metadata_expression
-from app.services.metadata_health import metadata_health
 from app.services.download_telemetry import STALE_HEARTBEAT_SECONDS
 
 
@@ -229,31 +226,15 @@ def get_dashboard_snapshot(db) -> dict:
             ),
         )
     ).one()
-    included_metadata_issues = metadata_health.included_open_issue_count(db)
-    suggestions_pending = (
-        db.scalar(select(func.count(MetadataSuggestion.id)).where(MetadataSuggestion.status == "pending"))
-        or 0
-    )
+    missing_metadata = int(health_row[1])
     attention = _get_attention_summary(
         failed_downloads=stats["failed"],
         missing_files=int(missing_files),
         missing_artwork=int(health_row[0]),
-        pending_suggestions=included_metadata_issues,
+        missing_metadata=missing_metadata,
         task_counts=_attention_task_counts(db),
     )
     playlist_count = db.scalar(select(func.count(Playlist.id))) or 0
-    collection_ids = (
-        "recently-added",
-        "missing-artwork",
-        "missing-metadata",
-        "highest-bitrate",
-        "large-albums",
-    )
-    collections = [
-        definition.to_dict(song_count=collection_engine.count(db, definition.id))
-        for collection_id in collection_ids
-        if (definition := collection_engine.get(collection_id)) is not None
-    ]
     maintenance = db.scalars(
         select(Task)
         .where(
@@ -297,23 +278,10 @@ def get_dashboard_snapshot(db) -> dict:
         "health": {
             "score": health_score,
             "missing_artwork": int(health_row[0]),
-            "missing_metadata": int(health_row[1]),
+            "missing_metadata": missing_metadata,
             "missing_files": int(missing_files),
-            "pending_suggestions": int(suggestions_pending),
         },
         "attention": attention,
-        # Keep richer dashboard insights owned by LibraryAnalyticsService.  The
-        # dashboard must not introduce its own filesystem access or grouping
-        # queries for facts that other Library consumers need.
-        "analytics": {
-            "genres": int(analytics["genres"] or 0),
-            "average_bitrate": int(analytics["average_bitrate"] or 0),
-            "average_duration": float(analytics["average_duration"] or 0),
-            "recently_added": int(analytics["recently_added"] or 0),
-            "largest_album": analytics["largest_album"],
-            "newest_album": analytics["newest_album"],
-            "oldest_album": analytics["oldest_album"],
-        },
         "maintenance": [
             {
                 "id": task.id,
@@ -327,7 +295,6 @@ def get_dashboard_snapshot(db) -> dict:
             }
             for task in maintenance
         ],
-        "collections": collections,
     }
 
 
@@ -372,11 +339,11 @@ _ATTENTION_DEFINITIONS = (
     (
         "pending_metadata",
         "warning",
-        "Open metadata issues",
-        "/library/health?metadata_status=open#metadata-issues-title",
+        "Missing metadata",
+        "/library?missing_metadata=true",
         "Review",
-        "analyze_metadata",
-        "Analyze metadata",
+        "refresh_library",
+        "Refresh library",
     ),
     (
         "missing_artwork",
@@ -430,7 +397,7 @@ def _get_attention_summary(
     failed_downloads: int,
     missing_files: int,
     missing_artwork: int,
-    pending_suggestions: int,
+    missing_metadata: int,
     task_counts: dict[str, int],
 ) -> dict:
     """Create a privacy-safe, navigation-only Dashboard attention contract."""
@@ -439,7 +406,7 @@ def _get_attention_summary(
         "missing_files": missing_files,
         "maintenance_jobs": task_counts["maintenance_jobs"],
         "bulk_jobs": task_counts["bulk_jobs"],
-        "pending_metadata": pending_suggestions,
+        "pending_metadata": missing_metadata,
         "missing_artwork": missing_artwork,
     }
     items = []

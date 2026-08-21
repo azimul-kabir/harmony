@@ -5,7 +5,6 @@ const healthState = {
     jobType: null,
     recentJobs: [],
     recentVisible: 10,
-    selectedIssues: new Set(),
 };
 const healthCheckDestinations = {
     artwork: "/library?missing_artwork=true",
@@ -48,7 +47,6 @@ async function loadHealth() {
         document.getElementById("health-score").textContent = health.health_score;
         document.getElementById("health-score-ring").style.setProperty("--health-score", `${health.health_score * 3.6}deg`);
         renderHealthChecks(health.checks || []);
-        await loadMetadataIssues();
         await loadLibraryJobs();
         document.getElementById("health-error").hidden = true;
     } catch (error) {
@@ -56,94 +54,6 @@ async function loadHealth() {
         box.textContent = `Harmony could not load Library health: ${error.message}`;
         box.hidden = false;
     }
-}
-
-async function loadMetadataIssues() {
-    const status = document.getElementById("metadata-status")?.value || "open";
-    const severity = document.getElementById("metadata-severity")?.value || "";
-    const query = document.getElementById("metadata-search")?.value || "";
-    const entityType = document.getElementById("metadata-entity")?.value || "";
-    const params = new URLSearchParams({ status, limit: "50" });
-    if (status === "open") params.set("included_only", "true");
-    if (severity) params.set("severity", severity);
-    if (entityType) params.set("entity_type", entityType);
-    if (query) params.set("search", query);
-    const data = await healthJson(`/api/library/health/metadata/issues?${params}`);
-    const target = document.getElementById("metadata-issues");
-    const items = data.items;
-    target.innerHTML = items.length ? items.map((item) => {
-        const destination = item.entity_type === "song" && item.song_id
-            ? `<a class="btn-secondary" href="/library?song=${item.song_id}&metadata=review">Review song</a>`
-            : item.entity_type === "album" && item.album_key
-                ? `<a class="btn-secondary" href="/library?view=albums&album_key=${encodeURIComponent(item.album_key)}">Open album</a>` : "";
-        const action = item.status === "ignored"
-            ? `<button class="btn-secondary" data-metadata-restore="${item.id}">Restore</button>`
-            : item.status === "open" ? `<button class="btn-secondary" data-metadata-ignore="${item.id}">Ignore</button>` : "";
-        const discoverable = ["missing_musicbrainz_recording_id","missing_musicbrainz_release_id","missing_musicbrainz_artist_id","missing_title","placeholder_title","filename_derived_title","missing_artist","placeholder_artist","missing_album","placeholder_album","missing_genre","suspicious_whitespace","inconsistent_capitalization"].includes(item.rule_id);
-        const discover = discoverable ? `<label class="metadata-repair-select"><input type="checkbox" data-select-issue="${item.id}" ${healthState.selectedIssues.has(item.id) ? "checked" : ""}> Select for repair</label><button class="btn-secondary" data-discover-issue="${item.id}">Find candidates</button>` : "";
-        return `<details class="health-check status-${escapeHealth(item.severity)}"><summary><span class="health-check-indicator"></span><div><strong>${escapeHealth(item.title)}</strong><small>${escapeHealth(item.rule_id)} · ${escapeHealth(item.entity_type)} · ${escapeHealth(item.severity)}</small></div></summary><p>${escapeHealth(item.explanation)}</p><p><strong>Next action:</strong> ${escapeHealth(item.suggested_action)}</p><div>${destination}${action}${discover}</div></details>`;
-    }).join("") : `<p>${status === "open" ? "No open metadata issues. Run an analysis to refresh results." : `No ${escapeHealth(status)} metadata issues match these filters.`}</p>`;
-    target.querySelectorAll("[data-metadata-ignore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataIgnore}/ignore`, {method:"POST"}); loadMetadataIssues(); });
-    target.querySelectorAll("[data-metadata-restore]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataRestore}/restore`, {method:"POST"}); loadMetadataIssues(); });
-    target.querySelectorAll("[data-metadata-resolve]").forEach((button) => button.onclick = async () => { await healthJson(`/api/library/health/metadata/issues/${button.dataset.metadataResolve}/resolve`, {method:"POST"}); loadMetadataIssues(); });
-    target.querySelectorAll("[data-select-issue]").forEach((checkbox) => checkbox.onchange = () => {
-        const issueId=Number(checkbox.dataset.selectIssue);
-        checkbox.checked ? healthState.selectedIssues.add(issueId) : healthState.selectedIssues.delete(issueId);
-        updateRepairSelection();
-    });
-    target.querySelectorAll("[data-discover-issue]").forEach((button) => button.onclick = async () => {
-        const provider=document.getElementById("metadata-repair-provider").value;
-        const result=await healthJson("/api/metadata/discoveries/health-issues",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_ids:[Number(button.dataset.discoverIssue)],provider,initiated_by:"library-health-ui"})});
-        button.textContent=`Candidate search queued (job ${result.job.id})`;button.disabled=true;
-        healthState.taskId=result.job.id;renderHealthTask(result.job);pollHealthTask();
-    });
-    updateRepairSelection();
-    const summary = await healthJson("/api/library/health/metadata/summary");
-    document.getElementById("metadata-score-detail").textContent = `Metadata score ${summary.score.score}/100 · ${summary.score.inputs.included_open_issues} included open issue records · ${summary.score.inputs.ignored_issues} ignored historical records (diagnostic only). Warnings reduce this score.`;
-    const severityCounts = Object.fromEntries((summary.counts.severity || []).map((row) => [row.value, row.count]));
-    document.querySelectorAll("[data-metadata-severity-count]").forEach((count) => {
-        count.textContent = Number(severityCounts[count.dataset.metadataSeverityCount] || 0).toLocaleString();
-    });
-    const ruleCounts = (summary.counts.rule || []).sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value))).slice(0, 8);
-    const ruleSummary = document.getElementById("metadata-rule-counts");
-    ruleSummary.classList.toggle("is-empty", !ruleCounts.length);
-    const ruleIcon = document.createElement("span");
-    ruleIcon.className = "metadata-rule-icon";
-    ruleIcon.setAttribute("aria-hidden", "true");
-    ruleIcon.textContent = ruleCounts.length ? "↗" : "✓";
-    const ruleCopy = document.createElement("div");
-    const ruleTitle = document.createElement("strong");
-    const ruleDetail = document.createElement("small");
-    if (ruleCounts.length) {
-        ruleTitle.textContent = ruleCounts[0].value.replaceAll("_", " ");
-        ruleDetail.textContent = `${Number(ruleCounts[0].count).toLocaleString()} issue records${ruleCounts.length > 1 ? ` · ${ruleCounts.length - 1} more rules` : ""}`;
-    } else {
-        ruleTitle.textContent = "No recurring rule patterns";
-        ruleDetail.textContent = "Run metadata analysis to populate this summary.";
-    }
-    ruleCopy.append(ruleTitle, ruleDetail);
-    ruleSummary.replaceChildren(ruleIcon, ruleCopy);
-}
-
-function updateRepairSelection() {
-    const count=healthState.selectedIssues.size;
-    document.getElementById("metadata-repair-count").textContent=String(count);
-    document.getElementById("metadata-repair-selected").disabled=!count;
-    document.getElementById("metadata-repair-clear").disabled=!count;
-}
-
-async function loadRepairProviders() {
-    try {
-        const data=await healthJson("/api/providers/status");
-        const byName=Object.fromEntries(data.providers.map((item)=>[item.provider,item]));
-        const select=document.getElementById("metadata-repair-provider");
-        [...select.options].forEach((option)=>{
-            const available=byName[option.value]?.available !== false;
-            option.disabled=!available;
-            option.textContent=`${option.value === "musicbrainz" ? "MusicBrainz" : "Spotify"}${available ? "" : " (not configured)"}`;
-        });
-        if (select.selectedOptions[0]?.disabled) select.value="musicbrainz";
-    } catch (_) { /* MusicBrainz remains the conservative default. */ }
 }
 
 async function loadLibraryJobs() {
@@ -483,51 +393,5 @@ document.getElementById("health-task-dismiss").addEventListener("click", () => {
     healthState.taskId = null;
 });
 document.addEventListener("DOMContentLoaded", () => {
-    const requestedStatus = new URLSearchParams(window.location.search).get("metadata_status");
-    const status = document.getElementById("metadata-status");
-    if (requestedStatus && status && [...status.options].some((option) => option.value === requestedStatus)) status.value = requestedStatus;
-    loadRepairProviders();
     loadHealth();
-});
-document.getElementById("metadata-repair-selected")?.addEventListener("click", async (event) => {
-    const button=event.currentTarget;button.disabled=true;
-    try {
-        const provider=document.getElementById("metadata-repair-provider").value;
-        const result=await healthJson("/api/metadata/discoveries/health-issues",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_ids:[...healthState.selectedIssues],provider,initiated_by:"library-health-ui"})});
-        healthState.selectedIssues.clear();updateRepairSelection();
-        healthState.taskId=result.job.id;renderHealthTask(result.job);pollHealthTask();
-    } catch (error) {
-        document.getElementById("health-error").textContent=`Repair discovery could not start: ${error.message}`;
-        document.getElementById("health-error").hidden=false;
-    } finally { updateRepairSelection(); }
-});
-document.getElementById("metadata-repair-clear")?.addEventListener("click", () => {
-    healthState.selectedIssues.clear();
-    document.querySelectorAll("[data-select-issue]").forEach((item)=>{item.checked=false;});
-    updateRepairSelection();
-});
-document.getElementById("metadata-analysis")?.addEventListener("click", async () => { const task = await healthJson("/api/library/health/metadata/analyze", {method:"POST"}); healthState.taskId=task.id; renderHealthTask(task); pollHealthTask(); });
-document.getElementById("metadata-status")?.addEventListener("change", loadMetadataIssues);
-document.getElementById("metadata-severity")?.addEventListener("change", (event) => {
-    document.querySelectorAll("[data-metadata-severity-filter]").forEach((chip) => {
-        chip.classList.toggle("is-selected", chip.dataset.metadataSeverityFilter === event.target.value);
-    });
-    loadMetadataIssues();
-});
-document.querySelectorAll("[data-metadata-severity-filter]").forEach((button) => {
-    button.addEventListener("click", () => {
-        const select = document.getElementById("metadata-severity");
-        const next = button.dataset.metadataSeverityFilter;
-        select.value = select.value === next ? "" : next;
-        document.querySelectorAll("[data-metadata-severity-filter]").forEach((chip) => {
-            chip.classList.toggle("is-selected", chip.dataset.metadataSeverityFilter === select.value);
-        });
-        loadMetadataIssues();
-    });
-});
-document.getElementById("metadata-entity")?.addEventListener("change", loadMetadataIssues);
-let metadataSearchTimer;
-document.getElementById("metadata-search")?.addEventListener("input", () => {
-    clearTimeout(metadataSearchTimer);
-    metadataSearchTimer = setTimeout(loadMetadataIssues, 250);
 });

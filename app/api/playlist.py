@@ -6,17 +6,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
-from pydantic import BaseModel
 
-from app.api.schemas.comparison import PlaylistComparisonResponse
-from app.api.schemas.playlist import PlaylistImportRequest
-from app.api.schemas.playlist_response import PlaylistResponse
 from app.database.session import get_db
-from app.database.models import DownloadJob, Playlist
+from app.database.models import DownloadJob, Playlist, Song
 from app.services.artwork import artwork_url
-from app.services.comparison import compare_with_library
-from app.services.playlist import import_playlist
-from app.services.playlist_download import download_playlist
 from app.services.playlist_manager import (
     PLAYLIST_ARTWORK_SUFFIXES,
     playlist_artwork_path,
@@ -24,22 +17,11 @@ from app.services.playlist_manager import (
     remove_playlist_artwork,
     resolve_playlist_songs,
 )
-from app.services import auto_playlists
-from app.services.navidrome import NavidromeClient, NavidromeError
 
 router = APIRouter(
     prefix="/api/playlists",
     tags=["Playlists"],
 )
-
-
-class PlaylistDownloadRequest(BaseModel):
-    url: str
-
-
-class AutoPlaylistRequest(BaseModel):
-    limit: int = 50
-    enabled: bool = True
 
 
 PLAYLIST_ARTWORK_MAX_BYTES = 10 * 1024 * 1024
@@ -68,38 +50,6 @@ def _playlist_artwork_type(content_type: str | None, content: bytes) -> tuple[st
     return normalized_type, suffix
 
 
-@router.get("/auto/definitions")
-def auto_playlist_definitions(db: Session = Depends(get_db)):
-    return auto_playlists.definitions(db)
-
-
-@router.post("/auto/{rule_id}/generate")
-async def generate_auto_playlist(
-    rule_id: str,
-    request: AutoPlaylistRequest,
-    db: Session = Depends(get_db),
-):
-    try:
-        if rule_id in {"new-and-unplayed", "favorites", "rediscovery", "most-played"}:
-            auto_playlists.update_navidrome_stats(
-                db, await NavidromeClient().library_songs()
-            )
-        return auto_playlists.generate(
-            db,
-            rule_id,
-            limit=request.limit,
-            enabled=request.enabled,
-        )
-    except KeyError as error:
-        raise HTTPException(
-            status_code=404, detail="Auto-playlist definition not found."
-        ) from error
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except NavidromeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-
-
 @router.get("/{playlist_id}/tracks")
 def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
     playlist = db.scalar(
@@ -112,6 +62,11 @@ def playlist_tracks(playlist_id: int, db: Session = Depends(get_db)):
 
     spotify_ids = [track.spotify_track_id for track in playlist.tracks]
     songs_by_spotify_id = resolve_playlist_songs(db, playlist.tracks)
+    exact_songs = db.scalars(
+        select(Song).where(Song.spotify_track_id.in_(spotify_ids))
+    ).all()
+    for song in exact_songs:
+        songs_by_spotify_id.setdefault(song.spotify_track_id, song)
     jobs = db.scalars(
         select(DownloadJob)
         .where(DownloadJob.spotify_track_id.in_(spotify_ids))
@@ -281,33 +236,6 @@ def delete_playlist(playlist_id: int, db: Session = Depends(get_db)):
         "name": name,
         "message": "Playlist deleted. Library songs were not removed.",
     }
-
-
-@router.post("/import", response_model=PlaylistResponse)
-def import_spotify_playlist(request: PlaylistImportRequest):
-    playlist = import_playlist(request.url)
-    return PlaylistResponse.model_validate(playlist)
-
-
-@router.post("/compare", response_model=PlaylistComparisonResponse)
-def compare_spotify_playlist(
-    request: PlaylistImportRequest,
-    db: Session = Depends(get_db),
-):
-    playlist = import_playlist(request.url)
-    comparison = compare_with_library(db, playlist)
-    return PlaylistComparisonResponse.model_validate(comparison)
-
-
-@router.post("/download")
-def download(
-    request: PlaylistDownloadRequest,
-    db: Session = Depends(get_db),
-):
-    return download_playlist(
-        db=db,
-        url=request.url,
-    )
 
 
 @router.get("/{playlist_id}/download")

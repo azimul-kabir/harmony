@@ -6,18 +6,23 @@
     <meta name="theme-color" content="#080c1c">
     <meta name="application-name" content="Harmony">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Harmony">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>{% block title %}Harmony{% endblock %}</title>
     <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="/static/brand/harmony-icon.svg">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/pwa/icon-192.png">
     <link rel="apple-touch-icon" href="/static/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
+    <link rel="stylesheet" href="/static/css/app.css?v={{ version }}&brand=2">
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <div class="layout">
     <aside class="sidebar">
-        <h1>Harmony</h1>
+        <a class="app-brand" href="/" aria-label="Harmony dashboard">
+            <img src="/static/brand/harmony-icon.svg" alt="">
+            <span>Harmony</span>
+        </a>
         <nav>
             <a href="/" class="{% if page == 'dashboard' %}active{% endif %}"{% if page == 'dashboard' %} aria-current="page"{% endif %}>
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>

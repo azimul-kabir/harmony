@@ -88,42 +88,6 @@ function renderNavidromeStatus(status) {
     const enabled = Boolean(status.configured && status.reachable && !status.scanning);
     rescan.disabled = !enabled;
     fullRescan.disabled = !enabled;
-    const healthCheck = document.getElementById("navidrome-health-check");
-    if (healthCheck) healthCheck.disabled = !enabled;
-}
-
-function countComparison(health, key) {
-    if (!health.expected || !health.actual) return "—";
-    return `${Number(health.actual[key] || 0).toLocaleString()} / ${Number(health.expected[key] || 0).toLocaleString()}`;
-}
-
-function renderNavidromeSyncHealth(health) {
-    const panel = document.querySelector(".navidrome-panel");
-    if (panel) panel.dataset.syncHealth = health.state || "pending";
-    ["songs", "albums", "artists", "playlists"].forEach((key) => setText(`navidrome-health-${key}`, countComparison(health, key)));
-    setText("navidrome-health-missing", health.missing_tracks === undefined ? "—" : Number(health.missing_tracks).toLocaleString());
-    setText("navidrome-health-stale", health.stale_tracks === undefined ? "—" : Number(health.stale_tracks).toLocaleString());
-    const reconcile = document.getElementById("navidrome-reconcile");
-    if (reconcile) reconcile.disabled = health.state !== "drift";
-    const messages = {
-        healthy: `Navidrome matches Harmony. Verified ${formatNavidromeDate(health.checked_at)}.`,
-        drift: `Index drift detected${health.reconciliation_requested ? "; a reconciliation scan was requested" : ""}.`,
-        checking: "A sync health check is already running.",
-        unavailable: health.error || "Navidrome could not be checked.",
-        unconfigured: "Configure Navidrome to verify sync health.",
-        pending: "Sync health has not been verified yet.",
-    };
-    setText("navidrome-health-message", messages[health.state] || messages.pending);
-}
-
-async function refreshNavidromeSyncHealth(refresh = false) {
-    try {
-        const response = await fetch(`/api/navidrome/sync-health?refresh=${refresh}`);
-        if (!response.ok) throw new Error("Health request failed");
-        renderNavidromeSyncHealth(await response.json());
-    } catch (_) {
-        renderNavidromeSyncHealth({ state: "unavailable", error: "Harmony could not verify Navidrome sync health." });
-    }
 }
 
 async function refreshNavidromeStatus() {
@@ -156,8 +120,7 @@ async function startNavidromeScan(fullScan, button) {
         setText("navidrome-message", "Scan request accepted; waiting for Navidrome to start…");
         const completed = await pollNavidromeScan(payload);
         if (!completed) throw new Error("Navidrome did not finish the scan within four minutes.");
-        setText("navidrome-message", "Scan completed; refreshing sync health…");
-        await refreshNavidromeSyncHealth(true);
+        setText("navidrome-message", "Scan completed.");
     } catch (error) {
         setText("navidrome-message", error.message || "The Navidrome scan could not be started.");
     } finally {
@@ -196,37 +159,8 @@ function setupNavidromeControls() {
             startNavidromeScan(true, fullRescan);
         }
     });
-    const healthCheck = document.getElementById("navidrome-health-check");
-    const reconcile = document.getElementById("navidrome-reconcile");
-    if (healthCheck) healthCheck.addEventListener("click", async () => {
-        healthCheck.disabled = true;
-        setText("navidrome-health-message", "Comparing Harmony and Navidrome libraries…");
-        await refreshNavidromeSyncHealth(true);
-        healthCheck.disabled = false;
-    });
-    if (reconcile) reconcile.addEventListener("click", async () => {
-        reconcile.disabled = true;
-        setText("navidrome-health-message", "Requesting a Navidrome reconciliation scan…");
-        try {
-            const response = await fetch("/api/navidrome/sync-health/reconcile", { method: "POST" });
-            const result = await response.json().catch(() => null);
-            if (!response.ok || !result || !result.post_scan_health) throw new Error(result?.detail?.message || "Reconciliation returned an invalid response.");
-            renderNavidromeSyncHealth(result.post_scan_health);
-            const scanResult = result.scan || {};
-            const remaining = Number(result.remaining_drift?.missing_tracks || 0);
-            const repaired = Number(result.repaired_navidrome_ids || 0);
-            const prefix = scanResult.completed ? "Scan completed." : scanResult.timed_out ? "Scan timed out." : "Scan ended without confirmed completion.";
-            setText("navidrome-health-message", `${prefix} Repaired ${repaired.toLocaleString()} Navidrome IDs. ${remaining.toLocaleString()} tracks remain missing.`);
-        } catch (error) {
-            setText("navidrome-health-message", error.message || "Navidrome reconciliation failed.");
-        } finally {
-            reconcile.disabled = false;
-        }
-    });
     refreshNavidromeStatus();
-    refreshNavidromeSyncHealth();
     window.setInterval(refreshNavidromeStatus, 15000);
-    window.setInterval(refreshNavidromeSyncHealth, 60000);
 }
 
 function renderDownloadTrends(trends) {
@@ -277,22 +211,6 @@ function renderQueueHealth(health) {
     }
 }
 
-function renderAlbumInsight(id, album, detail) {
-    const element = document.getElementById(id);
-    if (!element) return;
-    const title = element.querySelector("strong");
-    const subtitle = element.querySelector("small");
-    if (!album) {
-        element.href = "/library";
-        title.textContent = "No album data";
-        subtitle.textContent = "—";
-        return;
-    }
-    element.href = `/library?album=${encodeURIComponent(album.name)}`;
-    title.textContent = album.name;
-    subtitle.textContent = detail(album);
-}
-
 function renderDashboard(snapshot) {
     if (!snapshot) return;
     const kpis = snapshot.kpis || {};
@@ -319,73 +237,9 @@ function renderDashboard(snapshot) {
     setText("health-artwork", Number(health.missing_artwork || 0).toLocaleString());
     setText("health-metadata", Number(health.missing_metadata || 0).toLocaleString());
     setText("health-files", Number(health.missing_files || 0).toLocaleString());
-    setText("health-suggestions", Number(health.pending_suggestions || 0).toLocaleString());
     const artworkLink = document.getElementById("health-artwork-link");
     if (artworkLink) artworkLink.href = "/library?missing_artwork=true";
-    const analytics = snapshot.analytics || {};
-    setText("insight-recently-added", Number(analytics.recently_added || 0).toLocaleString());
-    setText("insight-genres", Number(analytics.genres || 0).toLocaleString());
-    setText("insight-bitrate", analytics.average_bitrate ? `${Math.round(analytics.average_bitrate / 1000)} kbps` : "—");
-    setText("insight-duration", analytics.average_duration ? formatDuration(analytics.average_duration) : "—");
-    renderAlbumInsight("insight-largest-album", analytics.largest_album, (album) => `${Number(album.song_count || 0).toLocaleString()} songs`);
-    renderAlbumInsight("insight-newest-album", analytics.newest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
-    renderAlbumInsight("insight-oldest-album", analytics.oldest_album, (album) => `${album.artist || "Unknown Artist"} · ${album.year || "Unknown year"}`);
     renderMaintenance(snapshot.maintenance || []);
-    renderCollections(snapshot.collections || []);
-    renderSynologyHealth(snapshot.synology || {});
-}
-
-function renderSynologyHealth(health) {
-    const card = document.getElementById("synology-health-card");
-    const disks = document.getElementById("synology-disks");
-    if (!card || !disks) return;
-    const enabled = health.enabled === true;
-    card.hidden = !enabled;
-    if (!enabled) return;
-
-    const state = health.stale ? "Stale" : (health.available ? "Available" : "Unavailable");
-    setText("synology-health-state", state);
-    card.dataset.state = state.toLowerCase();
-    setText("synology-health-message", health.stale
-        ? "Showing the last successful sample; current data may be out of date."
-        : (health.available ? "Latest NAS metrics." : "NAS monitoring is temporarily unavailable."));
-    const metric = (value, suffix = "") => value === null || value === undefined ? "—" : `${value}${suffix}`;
-    setText("synology-cpu", metric(health.cpu_percent, "%"));
-    setText("synology-memory", metric(health.memory_percent, "%"));
-    setText("synology-temperature", metric(health.system_temperature_c, "°C"));
-    setText("synology-load", metric(health.load_average_1m));
-    setText("synology-uptime", health.uptime_seconds == null ? "—" : formatDuration(health.uptime_seconds));
-    setText("synology-thermal", health.thermal_status || "unknown");
-
-    const rows = Array.isArray(health.disks) ? health.disks : [];
-    const existing = new Map(Array.from(disks.children).map(row => [row.dataset.snmpIndex, row]));
-    rows.forEach(disk => {
-        const key = String(disk.snmp_index);
-        let row = existing.get(key);
-        if (!row) {
-            row = document.createElement("div");
-            row.className = "synology-disk-row";
-            row.dataset.snmpIndex = key;
-            for (const className of ["synology-disk-id", "synology-disk-model", "synology-disk-status", "synology-disk-temperature"]) {
-                const element = document.createElement(className === "synology-disk-id" ? "strong" : "span");
-                element.className = className;
-                row.appendChild(element);
-            }
-            disks.appendChild(row);
-        }
-        row.querySelector(".synology-disk-id").textContent = disk.id || "Unknown disk";
-        row.querySelector(".synology-disk-model").textContent = disk.model || "Unknown model";
-        row.querySelector(".synology-disk-status").textContent = disk.status || "unknown";
-        row.querySelector(".synology-disk-temperature").textContent = metric(disk.temperature_c, "°C");
-        existing.delete(key);
-    });
-    existing.forEach(row => row.remove());
-    if (!rows.length) {
-        const empty = document.createElement("p");
-        empty.className = "empty-state synology-disks-empty";
-        empty.textContent = "No disks were reported by DSM.";
-        disks.replaceChildren(empty);
-    }
 }
 
 function renderAttention(attention) {
@@ -459,7 +313,6 @@ function renderAttention(attention) {
 
 const ATTENTION_RECOVERY_ENDPOINTS = {
     verify_files: "/api/library/health/actions/verify",
-    analyze_metadata: "/api/library/health/metadata/analyze",
     refresh_library: "/api/library/health/actions/refresh",
 };
 
@@ -505,22 +358,6 @@ function renderMaintenance(jobs) {
         detail.textContent = `${String(job.status || "unknown").replaceAll("_", " ")} · ${processed}/${Number(job.total || 0)}${job.error_code ? ` · ${job.error_code}` : ""}`;
         item.append(name, detail);
         container.appendChild(item);
-    });
-}
-
-function renderCollections(collections) {
-    const container = document.getElementById("dashboard-collections");
-    if (!container) return;
-    container.replaceChildren();
-    collections.forEach((collection) => {
-        const link = document.createElement("a");
-        link.href = `/library?collection=${encodeURIComponent(collection.id)}`;
-        const name = document.createElement("span");
-        name.textContent = collection.name;
-        const count = document.createElement("strong");
-        count.textContent = Number(collection.song_count || 0).toLocaleString();
-        link.append(name, count);
-        container.appendChild(link);
     });
 }
 

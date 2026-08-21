@@ -8,30 +8,27 @@ RUNTIME_SETTING_DEFINITIONS = {
     "youtube_music_max_playlist_items": ("downloads", "int", 1, 5000),
     "youtube_music_max_search_results": ("downloads", "int", 1, 100),
     "youtube_music_max_queue_items": ("downloads", "int", 1, 5000),
-    "spotify_genre_max_values": ("spotify", "int", 1, 20),
-    "spotify_genre_include_featured_fallback": ("spotify", "boolean", None, None),
-    "spotify_genre_merge_featured": ("spotify", "boolean", None, None),
-    "spotify_genre_replace_existing": ("spotify", "boolean", None, None),
-    "musicbrainz_timeout_seconds": ("metadata", "float", 1, 120),
-    "musicbrainz_max_retries": ("metadata", "int", 0, 10),
-    "musicbrainz_cache_ttl_seconds": ("metadata", "int", 0, 2_592_000),
-    "musicbrainz_max_concurrent_requests": ("metadata", "int", 1, 10),
     "cover_art_archive_timeout_seconds": ("metadata", "float", 1, 120),
     "navidrome_timeout_seconds": ("navidrome", "float", 1, 120),
-    "navidrome_direct_playlist_sync_enabled": ("navidrome", "boolean", None, None),
-    "navidrome_direct_search_limit": ("navidrome", "int", 1, 500),
-    "navidrome_direct_duration_tolerance_seconds": ("navidrome", "float", 0, 60),
     "navidrome_playlist_reimport_enabled": ("navidrome", "boolean", None, None),
     "navidrome_playlist_reimport_debounce_seconds": ("navidrome", "float", 0, 300),
     "navidrome_playlist_reimport_poll_seconds": ("navidrome", "float", 0.25, 60),
     "navidrome_playlist_reimport_scan_timeout_seconds": ("navidrome", "float", 10, 3600),
-    "navidrome_sync_health_enabled": ("navidrome", "boolean", None, None),
-    "navidrome_sync_health_interval_minutes": ("navidrome", "int", 1, 1440),
-    "navidrome_sync_health_auto_reconcile": ("navidrome", "boolean", None, None),
-    "navidrome_sync_health_scan_timeout_seconds": ("navidrome", "float", 10, 3600),
-    "navidrome_sync_health_full_scan_timeout_seconds": ("navidrome", "float", 600, 7200),
     "library_watcher_enabled": ("library", "boolean", None, None),
     "library_watcher_debounce_seconds": ("library", "float", 0.1, 60),
+}
+
+# v2 rows may remain in upgraded databases. Keep them readable at the schema
+# level, but do not expose or mutate settings that no longer control behavior.
+RETIRED_SETTING_KEYS = {
+    "default_download_source",
+    "playlist_sync_enabled",
+    "m3u_export_folder",
+    "spotify_genre_enrichment_enabled",
+    "spotify_genre_max_values",
+    "spotify_genre_include_featured_fallback",
+    "spotify_genre_merge_featured",
+    "spotify_genre_replace_existing",
 }
 
 DEFAULT_SETTINGS = [
@@ -39,14 +36,10 @@ DEFAULT_SETTINGS = [
     {"key": "date_format", "value": "DD/MM/YYYY", "type": "string", "category": "general"},
     {"key": "time_format", "value": "12h", "type": "string", "category": "general"},
     {"key": "audio_quality", "value": "128k", "type": "string", "category": "downloads"},
-    {"key": "download_workers", "value": "4", "type": "int", "category": "downloads"},
+    {"key": "download_workers", "value": "2", "type": "int", "category": "downloads"},
     {"key": "retry_failed", "value": "true", "type": "boolean", "category": "downloads"},
     {"key": "youtube_music_enabled", "value": "true", "type": "boolean", "category": "downloads"},
-    {"key": "default_download_source", "value": "spotify", "type": "string", "category": "downloads"},
-    {"key": "playlist_sync_enabled", "value": "true", "type": "boolean", "category": "playlists"},
-    {"key": "m3u_export_folder", "value": "/music/Playlists", "type": "string", "category": "playlists"},
     {"key": "theme", "value": "auto", "type": "string", "category": "appearance"},
-    {"key": "spotify_genre_enrichment_enabled", "value": "false", "type": "boolean", "category": "spotify"},
 ]
 
 
@@ -69,25 +62,47 @@ def initialize_defaults(db: Session):
     for setting in DEFAULT_SETTINGS + _runtime_defaults():
         exists = db.query(AppSetting).filter(AppSetting.key == setting["key"]).first()
         if not exists:
-            value = setting["value"]
-            if setting["key"] == "spotify_genre_enrichment_enabled":
-                value = str(get_settings().spotify_genre_enrichment_enabled).lower()
-            db.add(AppSetting(**(setting | {"value": value})))
+            db.add(AppSetting(**setting))
     db.commit()
     apply_runtime_overrides(db)
 
 def get_settings_by_category(db: Session, category: str):
-    settings = db.query(AppSetting).filter(AppSetting.category == category).all()
+    settings = db.query(AppSetting).filter(
+        AppSetting.category == category,
+        AppSetting.key.not_in(RETIRED_SETTING_KEYS),
+    ).all()
     return {s.key: _cast_value(s.value, s.type) for s in settings}
 
 def update_settings(db: Session, category: str, updates: dict):
     for key, value in updates.items():
+        if key in RETIRED_SETTING_KEYS:
+            continue
         setting = db.query(AppSetting).filter(AppSetting.key == key, AppSetting.category == category).first()
         if setting:
-            cast_value = _validate_runtime_value(key, value) if key in RUNTIME_SETTING_DEFINITIONS else value
+            if key == "download_workers":
+                try:
+                    cast_value = int(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("download_workers must be a number from 1 to 8.") from exc
+                if not 1 <= cast_value <= 8:
+                    raise ValueError("download_workers must be between 1 and 8.")
+            else:
+                cast_value = _validate_runtime_value(key, value) if key in RUNTIME_SETTING_DEFINITIONS else value
             setting.value = str(cast_value).lower() if isinstance(cast_value, bool) else str(cast_value)
     db.commit()
     apply_runtime_overrides(db)
+
+
+def configured_download_workers(db: Session) -> int:
+    """Apply the persisted startup worker count to the authoritative runtime."""
+    downloads = get_settings_by_category(db, "downloads")
+    try:
+        count = int(downloads.get("download_workers", 2))
+    except (TypeError, ValueError):
+        count = 2
+    count = max(1, min(8, count))
+    get_settings().max_parallel_downloads = count
+    return count
 
 
 def apply_runtime_overrides(db: Session):

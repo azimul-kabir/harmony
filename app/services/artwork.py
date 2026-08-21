@@ -6,6 +6,7 @@ from hashlib import sha256
 import os
 from pathlib import Path
 import struct
+import tempfile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import UUID
@@ -13,6 +14,7 @@ from uuid import UUID
 from mutagen import File
 from mutagen.flac import Picture
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -131,35 +133,31 @@ class ArtworkService:
 
     def cache(self, db: Session, candidate: ArtworkCandidate) -> Artwork:
         checksum = sha256(candidate.data).hexdigest()
-        existing = db.scalar(select(Artwork).where(Artwork.checksum == checksum))
-        if existing is not None:
-            if not Path(existing.cache_path).is_file():
-                self._write_cache(Path(existing.cache_path), candidate.data)
-            return existing
-
         extension = _extension_for_mime(candidate.mime_type)
         cache_path = self.cache_root / checksum[:2] / f"{checksum}{extension}"
         self._write_cache(cache_path, candidate.data)
         width, height = _image_dimensions(candidate.data, candidate.mime_type)
-        artwork = Artwork(
-            checksum=checksum,
-            cache_path=str(cache_path),
-            source=candidate.source,
-            mime_type=candidate.mime_type,
-            width=width,
-            height=height,
-            file_size=len(candidate.data),
-            provider=candidate.provider,
-            provider_id=candidate.provider_id,
-            original_url=candidate.original_url,
+        result = db.execute(
+            sqlite_insert(Artwork)
+            .values(
+                checksum=checksum,
+                cache_path=str(cache_path),
+                source=candidate.source,
+                mime_type=candidate.mime_type,
+                width=width,
+                height=height,
+                file_size=len(candidate.data),
+                provider=candidate.provider,
+                provider_id=candidate.provider_id,
+                original_url=candidate.original_url,
+            )
+            .on_conflict_do_nothing(index_elements=[Artwork.checksum])
         )
-        db.add(artwork)
-        db.flush()
-        logger.info(
-            "Cached {} artwork {}",
-            candidate.source,
-            artwork.id,
-        )
+        artwork = db.scalar(select(Artwork).where(Artwork.checksum == checksum))
+        if artwork is None:
+            raise RuntimeError("Artwork cache insert completed without a stored row")
+        if result.rowcount:
+            logger.info("Cached {} artwork {}", candidate.source, artwork.id)
         return artwork
 
     def cache_manual_upload(self, db: Session, data: bytes) -> Artwork:
@@ -356,9 +354,22 @@ class ArtworkService:
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.is_file():
             return
-        temporary = path.with_suffix(path.suffix + ".tmp")
-        temporary.write_bytes(data)
-        temporary.replace(path)
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as file:
+                temporary = Path(file.name)
+                file.write(data)
+            os.replace(temporary, path)
+            temporary = None
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     def _embedded_candidate(self, path: Path) -> ArtworkCandidate | None:
         audio = File(path, easy=False)

@@ -8,9 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=0 \
     HOME=/tmp/harmony \
     XDG_CONFIG_HOME=/tmp/harmony/.config \
-    HARMONY_SPOTDL_CONFIG_DIR=/tmp/harmony/.config/spotdl \
-    DENO_INSTALL=/root/.deno \
-    PATH="/root/.deno/bin:${PATH}"
+    HARMONY_SPOTDL_CONFIG_DIR=/tmp/harmony/.config/spotdl
 
 WORKDIR /app
 
@@ -19,13 +17,17 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
         ffmpeg \
-        sqlite3 \
         unzip \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Deno.
-RUN curl -fsSL https://deno.land/install.sh | sh
+# Install Deno into a path accessible to the unprivileged Synology UID/GID
+# selected by Compose. Installing under /root makes it invisible at runtime.
+RUN export DENO_INSTALL=/tmp/deno-install \
+    && curl -fsSL https://deno.land/install.sh | sh \
+    && install -m 0755 /tmp/deno-install/bin/deno /usr/local/bin/deno \
+    && rm -rf /tmp/deno-install \
+    && deno --version
 
 # Copy dependency metadata first so dependency installation remains cached
 # when only application source files change.

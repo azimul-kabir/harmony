@@ -16,6 +16,13 @@
     <button type="button" class="downloads-summary-card downloads-summary-attention" data-summary-filter="CANCELLED"><span>Cancelled</span><strong id="downloads-cancelled">—</strong></button>
 </section>
 
+<section id="download-failure-breakdown" class="panel download-failure-breakdown" aria-labelledby="download-failure-heading" hidden>
+    <div class="queue-section-heading">
+        <div><span class="library-eyebrow">Failure diagnosis</span><h2 id="download-failure-heading">Why downloads failed</h2></div>
+    </div>
+    <div id="download-failure-reasons" class="download-failure-reasons"></div>
+</section>
+
 <div class="panel download-ingest-panel">
     <form id="download-form" class="download-ingest-form">
         <input 

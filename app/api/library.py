@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.database.session import SessionLocal, get_db
 from app.database.models import Song
 from app.services.artwork import artwork_url
-from app.services.library_service import index_library_file, rescan_library
+from app.services.library_service import delete_library_file, index_library_file, rescan_library
 from app.services.library_events import library_events
 from app.services.library_search import SearchFilters, SearchQueryError, library_search
 from app.services.library_filters import (
@@ -17,8 +17,6 @@ from app.services.library_filters import (
     apply_song_filters,
     apply_song_sort,
 )
-from app.services.collections import collection_engine
-from app.services.library_analytics import library_analytics
 from app.services.duplicate_detector import TIERS, duplicate_detector
 from app.services.library_bulk import create_bulk_task
 from app.services.library_catalog import (
@@ -32,7 +30,6 @@ from app.api.schemas.library import (
     ArtistProjectionResponse,
     SearchPageResponse,
     SongResponse,
-    LyricsResponse,
 )
 
 router = APIRouter(
@@ -54,11 +51,6 @@ class DuplicateResolutionRequest(BaseModel):
     confirmation_token: str = Field(min_length=64, max_length=64)
     confirm_delete: bool = False
     initiated_by: str | None = Field(default=None, max_length=120)
-
-
-@router.get("/analytics", summary="Get Library analytics")
-def get_library_analytics(db: Session = Depends(get_db)):
-    return library_analytics.calculate(db)
 
 
 @router.get("/duplicates", summary="List explainable duplicate candidate groups")
@@ -354,25 +346,6 @@ def get_song(song_id: int, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/songs/{song_id}/lyrics",
-    response_model=LyricsResponse,
-    summary="Get locally indexed lyrics for one Song",
-)
-def get_song_lyrics(song_id: int, db: Session = Depends(get_db)):
-    song = db.get(Song, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Song not found")
-    return {
-        "song_id": song.id,
-        "title": song.title or song.filename,
-        "artist": song.artist,
-        "lyrics": song.lyrics,
-        "source": song.lyrics_source,
-        "synchronized": bool(song.lyrics_synced),
-    }
-
-
-@router.get(
     "/albums",
     response_model=list[AlbumProjectionResponse],
     summary="List indexed album projections",
@@ -455,74 +428,6 @@ def list_artists(
     ]
 
 
-@router.get("/collections", summary="List Smart Collection definitions and counts")
-def list_collections(db: Session = Depends(get_db)):
-    return collection_engine.summaries(db)
-
-
-@router.get("/collections/{collection_id}", summary="Get a Smart Collection definition")
-def get_collection(collection_id: str, db: Session = Depends(get_db)):
-    definition = collection_engine.get(collection_id)
-    if definition is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    return definition.to_dict(song_count=collection_engine.count(db, collection_id))
-
-
-@router.get("/collections/{collection_id}/songs", summary="List Songs in a Smart Collection")
-def get_collection_songs(
-    collection_id: str,
-    db: Session = Depends(get_db),
-    sort_by: str = "artist",
-    artist: str | None = None,
-    album: str | None = None,
-    genre: str | None = None,
-    codec: str | None = None,
-    min_bitrate: int | None = Query(default=None, ge=0),
-    max_bitrate: int | None = Query(default=None, ge=0),
-    downloaded_today: bool = False,
-    recently_added: bool = False,
-    missing_artwork: bool = False,
-    missing_metadata: bool = False,
-    limit: int | None = Query(default=None, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-):
-    definition = collection_engine.get(collection_id)
-    if definition is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    filters = LibraryFilters(
-        artist=artist,
-        album=album,
-        genre=genre,
-        codec=codec,
-        min_bitrate=min_bitrate,
-        max_bitrate=max_bitrate,
-        downloaded_today=downloaded_today,
-        recently_added=recently_added,
-        missing_artwork=missing_artwork,
-        missing_metadata=missing_metadata,
-    )
-    statement = collection_engine.statement(
-        collection_id,
-        filters=filters,
-        sort_by=sort_by,
-    )
-    total = db.scalar(
-        select(func.count()).select_from(statement.order_by(None).subquery())
-    ) or 0
-    if offset:
-        statement = statement.offset(offset)
-    if limit is not None:
-        statement = statement.limit(limit)
-    songs = db.scalars(with_song_artwork(statement)).all()
-    return {
-        "collection": definition.to_dict(song_count=total),
-        "items": serialize_song_page(db, songs),
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
-
-
 @router.get("/genres", summary="List indexed genres")
 def list_genres(db: Session = Depends(get_db)):
     """Retrieve available genres for filtering."""
@@ -584,17 +489,12 @@ def index_file(request: IndexFileRequest, db: Session = Depends(get_db)):
 def delete_song(song_id: int, db: Session = Depends(get_db)):
     song = db.get(Song, song_id)
     if song:
-        from app.services.library_service import managed_library_path
-
         try:
-            path = managed_library_path(song.path)
+            delete_library_file(song.path)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
-        if path.exists():
-            try:
-                path.unlink()
-            except OSError as error:
-                raise HTTPException(status_code=409, detail=f"Could not delete song file: {error}") from error
+        except OSError as error:
+            raise HTTPException(status_code=409, detail=f"Could not delete song file: {error}") from error
         song.availability_status = "missing"
         db.commit()
         library_search.index_song(db, song_id)

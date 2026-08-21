@@ -1,8 +1,10 @@
-"""Public YouTube Music source using yt-dlp only (no login or cookies)."""
+"""YouTube Music resolution and yt-dlp acquisition, with optional cookies."""
 import json
 import re
+import shutil
 import subprocess
 import tempfile
+import time
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -27,6 +29,19 @@ _ARTWORK_MAX_BYTES = 15 * 1024 * 1024
 _ARTWORK_SIZE = 1200
 
 
+def _yt_dlp_command(executable: str) -> list[str]:
+    """Build a yt-dlp command with Harmony's bundled JS runtime enabled."""
+    command = [executable]
+    deno = shutil.which("deno")
+    if deno:
+        command.extend(["--js-runtimes", f"deno:{deno}"])
+    else:
+        logger.warning(
+            "Deno was not found on PATH; YouTube extraction may be incomplete"
+        )
+    return command
+
+
 def clean_title(value: str | None) -> str:
     """Remove only high-confidence presentation suffixes from extractor titles."""
     return _SUFFIX.sub("", value or "").strip()
@@ -47,8 +62,21 @@ def normalize_url(url: str) -> str:
 
 
 def watch_url(item_id: str) -> str:
-    """Keep YouTube Music tracks on the Music watch endpoint."""
+    """Return the canonical URL stored for a YouTube Music track."""
     return f"https://music.youtube.com/watch?v={item_id}"
+
+
+def acquisition_url(item_id: str) -> str:
+    """Return the public endpoint used by yt-dlp for a Music track.
+
+    The Music and standard watch pages identify the same video, but they do
+    not always have the same availability at the extractor/network boundary.
+    In particular, ``music.youtube.com`` can be blocked while the public
+    ``www.youtube.com`` watch page remains downloadable.  Keep Music URLs as
+    durable source identity, but acquire track audio and extractor metadata
+    through the more broadly available standard endpoint.
+    """
+    return f"https://www.youtube.com/watch?v={item_id}"
 
 
 def _best_artwork(data: dict) -> str | None:
@@ -157,6 +185,66 @@ def _download_artwork_url(track: Track) -> str | None:
     return _best_artwork(_youtube_music_track(item_id))
 
 
+def _download_artwork(
+    track: Track,
+    selected_video_id: str | None,
+    job_id: int | None,
+) -> bytes | None:
+    """Fetch preferred cover art, then the selected Music candidate's album art.
+
+    ``selected_video_id`` is deliberately authoritative when supplied. Direct
+    acquisition starts with Spotify Tracks, whose durable source identity must
+    never be mistaken for a YouTube Music video ID.
+    """
+    direct = selected_video_id is not None
+    if track.cover_url:
+        try:
+            artwork = _fetch_artwork(track.cover_url)
+            logger.info(
+                "{} artwork used for job #{}",
+                "Spotify" if direct else "Track",
+                job_id,
+            )
+            return artwork
+        except Exception as exc:
+            logger.warning(
+                "{} artwork fetch failed for job #{}: {}",
+                "Spotify" if direct else "Track",
+                job_id,
+                type(exc).__name__,
+            )
+
+    item_id = selected_video_id
+    if item_id is None:
+        item_id = track.source_item_id
+        if not item_id and track.source_url:
+            parsed = urlparse(normalize_url(track.source_url))
+            item_id = (parse_qs(parsed.query).get("v") or [None])[0]
+
+    if item_id and _VIDEO_ID.fullmatch(item_id):
+        try:
+            artwork_url = _youtube_music_artwork(item_id)
+            if artwork_url:
+                artwork = _fetch_artwork(artwork_url)
+                logger.info(
+                    "YouTube Music fallback artwork used for job #{}", job_id
+                )
+                return artwork
+            logger.warning(
+                "YouTube Music fallback artwork failed for job #{}: no album artwork resolved",
+                job_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "YouTube Music fallback artwork failed for job #{}: {}",
+                job_id,
+                type(exc).__name__,
+            )
+
+    logger.info("No artwork available for job #{}", job_id)
+    return None
+
+
 def _write_download_tags(path: Path, track: Track, extracted: dict, artwork: bytes | None) -> None:
     """Replace sparse extractor tags with Harmony's canonical queue metadata."""
     artist = track.artist or extracted.get("artist") or extracted.get("uploader") or "Unknown Artist"
@@ -193,7 +281,7 @@ def _write_download_tags(path: Path, track: Track, extracted: dict, artwork: byt
     tags.delall("COMM")
     tags.add(COMM(encoding=3, lang="eng", desc="Source", text=track.source_url or extracted.get("webpage_url") or "YouTube Music"))
     tags.delall("TXXX:YouTube Music ID")
-    source_id = track.source_item_id or extracted.get("id")
+    source_id = extracted.get("id") or track.source_item_id
     if source_id:
         tags.add(TXXX(encoding=3, desc="YouTube Music ID", text=str(source_id)))
     if artwork:
@@ -234,7 +322,8 @@ class YouTubeMusicSource:
         return None
 
     def _run_json(self, target: str, *, flat: bool = False) -> dict:
-        command = [self.settings.yt_dlp_path, "--dump-single-json", "--no-warnings", "--no-playlist"]
+        command = _yt_dlp_command(self.settings.yt_dlp_path)
+        command.extend(["--dump-single-json", "--no-warnings", "--no-playlist"])
         if flat:
             command.remove("--no-playlist")
             # Request one additional entry so oversized playlists can be rejected
@@ -242,7 +331,15 @@ class YouTubeMusicSource:
             command.extend(["--flat-playlist", "--playlist-end", str(self.max_collection_items + 1)])
         command.append(target)
         try:
-            result = subprocess.run(command, capture_output=True, text=True, timeout=self.settings.youtube_music_timeout_seconds)
+            with tempfile.TemporaryDirectory(prefix="harmony-yt-search-") as runtime:
+                if self.settings.yt_dlp_cookie_file:
+                    cookie_source = Path(self.settings.yt_dlp_cookie_file)
+                    cookie_argument = cookie_source
+                    if cookie_source.is_file():
+                        cookie_argument = Path(runtime) / "cookies.txt"
+                        shutil.copyfile(cookie_source, cookie_argument)
+                    command[-1:-1] = ["--cookies", str(cookie_argument)]
+                result = subprocess.run(command, capture_output=True, text=True, timeout=self.settings.youtube_music_timeout_seconds)
         except subprocess.TimeoutExpired as exc:
             raise ValueError("YouTube Music timed out. Please try again.") from exc
         if result.returncode:
@@ -287,14 +384,47 @@ class YouTubeMusicSource:
         entries = data.get("entries") or []
         return [self._result(entry) for entry in entries if entry and entry.get("id")]
 
+    def inspect_search(self, query: str, limit: int = 5) -> list[SourceResult]:
+        """Return cheap, flat candidate metadata without hydrating every result.
+
+        Acquisition uses this deliberately smaller surface instead of ``search``:
+        one yt-dlp request can reject weak candidates before any media transfer or
+        per-video YouTube Music API request is attempted.
+        """
+        bounded = max(1, min(limit, self.settings.youtube_music_max_search_results))
+        data = self._run_json(f"ytsearch{bounded}:{query}", flat=True)
+        results: list[SourceResult] = []
+        for entry in data.get("entries") or []:
+            if not entry or not entry.get("id"):
+                continue
+            artist = entry.get("artist") or entry.get("creator") or entry.get("uploader")
+            if artist and artist.endswith(" - Topic"):
+                artist = artist[:-8]
+            results.append(SourceResult(
+                self.identifier,
+                str(entry["id"]),
+                "song",
+                clean_title(entry.get("track") or entry.get("title")) or "Unknown title",
+                artist,
+                entry.get("album"),
+                entry.get("album_artist"),
+                entry.get("duration"),
+                source_url=watch_url(str(entry["id"])),
+            ))
+        return results
+
     def _resolve(self, url: str) -> tuple[str, list[Track]]:
         target = normalize_url(url)
+        source_target = target
         detected = self.detect_url(target)
         if not detected:
             raise ValueError("Unsupported YouTube Music URL.")
         item_type, item_id = detected
-        if item_type == "track":
-            target = watch_url(item_id)
+        # A Music watch URL and the standard watch URL have the same video ID,
+        # but Music can be unavailable to yt-dlp on networks where YouTube is
+        # reachable.  Never send a Music watch endpoint to the extractor.
+        if item_type == "track" and urlparse(target).hostname == "music.youtube.com":
+            target = acquisition_url(item_id)
         data = self._run_json(target, flat=item_type != "track")
         entries = data.get("entries") if item_type != "track" else [data]
         if item_type != "track" and len(entries or []) > self.max_collection_items:
@@ -307,14 +437,15 @@ class YouTubeMusicSource:
             # enters the durable queue so retries retain complete metadata.
             if item_type != "track" and entry.get("id"):
                 try:
-                    entry = self._run_json(watch_url(str(entry["id"])))
+                    entry = self._run_json(acquisition_url(str(entry["id"])))
                 except ValueError:
                     logger.warning("Could not hydrate YouTube Music playlist item {}; using flat metadata", entry.get("id"))
             result = self._result(entry)
             if not result.item_id or result.item_id in seen:
                 continue
             seen.add(result.item_id)
-            tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or "Singles", album_artist=result.album_artist, track=result.track_number, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=result.source_url))
+            source_url = source_target if item_type == "track" else result.source_url
+            tracks.append(Track(title=result.title, artist=result.artist or "Unknown Artist", album=result.album or "Singles", album_artist=result.album_artist, track=result.track_number, disc=result.disc_number, year=result.year, duration=result.duration, cover_url=result.artwork_url, source_provider=self.identifier, source_item_id=result.item_id, source_url=source_url))
         if not tracks:
             raise ValueError("YouTube Music collection is empty or unavailable.")
         return clean_title(data.get("title")) or "YouTube Music Playlist", tracks
@@ -326,15 +457,42 @@ class YouTubeMusicSource:
         name, tracks = self._resolve(url)
         return Playlist(name=name, url=normalize_url(url), tracks=tracks)
 
+    def download_candidate(
+        self,
+        track: Track,
+        video_id: str,
+        output_dir: str,
+        job_id: int | None = None,
+    ) -> Path:
+        """Acquire one already-inspected candidate using canonical Track tags."""
+        return self._download_target(
+            track, acquisition_url(video_id), output_dir, job_id, video_id=video_id
+        )
+
     def download(self, track: Track, output_dir: str, job_id: int | None = None) -> Path:
         target = track.source_url or track.spotify_url
         if not target:
             raise ValueError("YouTube Music track is missing its source URL.")
         detected = self.detect_url(target)
-        if detected and detected[0] == "track":
-            target = watch_url(detected[1])
+        if (
+            detected
+            and detected[0] == "track"
+            and urlparse(target).hostname == "music.youtube.com"
+        ):
+            target = acquisition_url(detected[1])
         else:
             target = normalize_url(target)
+        return self._download_target(track, target, output_dir, job_id)
+
+    def _download_target(
+        self,
+        track: Track,
+        target: str,
+        output_dir: str,
+        job_id: int | None,
+        *,
+        video_id: str | None = None,
+    ) -> Path:
         output = Path(output_dir)
         with tempfile.TemporaryDirectory(dir=output) as temporary:
             template = str(Path(temporary) / "%(title)s.%(ext)s")
@@ -350,8 +508,7 @@ class YouTubeMusicSource:
             finally:
                 db.close()
 
-            command = [
-                self.settings.yt_dlp_path,
+            command = _yt_dlp_command(self.settings.yt_dlp_path) + [
                 "--no-playlist",
                 "-f",
                 "bestaudio/best",
@@ -363,8 +520,18 @@ class YouTubeMusicSource:
                 "--write-info-json",
                 "-o",
                 template,
-                target,
             ]
+            if self.settings.yt_dlp_cookie_file:
+                # yt-dlp may refresh its cookie jar. Never require a mounted
+                # secret to be writable; operate on a private runtime copy.
+                cookie_source = Path(self.settings.yt_dlp_cookie_file)
+                cookie_argument = cookie_source
+                if cookie_source.is_file():
+                    cookie_argument = Path(temporary) / "cookies.txt"
+                    shutil.copyfile(cookie_source, cookie_argument)
+                command.extend(["--cookies", str(cookie_argument)])
+            command.append(target)
+            transfer_started = time.monotonic()
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
             if job_id is not None and not download_processes.register(job_id, process):
                 try:
@@ -388,6 +555,7 @@ class YouTubeMusicSource:
                 if job_id is not None:
                     download_processes.unregister(job_id, process)
             result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+            download_seconds = time.monotonic() - transfer_started
             if result.returncode:
                 # Keep yt-dlp's actionable diagnostics in the server log while
                 # returning a stable, non-sensitive message to the browser.
@@ -404,22 +572,24 @@ class YouTubeMusicSource:
                     extracted = json.loads(info_files[0].read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError):
                     logger.warning("YouTube Music produced unreadable metadata for job #{}", job_id)
-            artwork = None
-            try:
-                artwork_url = _download_artwork_url(track)
-            except Exception as exc:
-                artwork_url = None
-                logger.warning("Could not resolve YouTube Music album artwork for job #{}: {}", job_id, exc)
-            if artwork_url:
-                try:
-                    artwork = _fetch_artwork(artwork_url)
-                except Exception as exc:
-                    logger.warning("Could not fetch YouTube Music album artwork for job #{}: {}", job_id, exc)
+            artwork = _download_artwork(track, video_id, job_id)
+            tagging_started = time.monotonic()
             try:
                 _write_download_tags(files[0], track, extracted, artwork)
             except Exception as exc:
-                logger.error("Could not write YouTube Music metadata for job #{}: {}", job_id, exc)
-                raise ValueError("YouTube Music audio was downloaded but its metadata could not be written.") from exc
+                # Valid acquired audio remains resumable/importable even when
+                # optional canonical tag correction fails.
+                logger.warning("Could not write YouTube Music metadata for job #{}: {}", job_id, exc)
+            tagging_seconds = time.monotonic() - tagging_started
             destination = output / files[0].name
             files[0].replace(destination)
+            logger.bind(
+                job_id=job_id,
+                selected_video_id=video_id,
+                download_seconds=round(download_seconds, 3),
+                tagging_seconds=round(tagging_seconds, 3),
+            ).info(
+                "Direct yt-dlp download completed job={} selected_video_id={} download_seconds={}",
+                job_id, video_id, round(download_seconds, 3),
+            )
             return destination

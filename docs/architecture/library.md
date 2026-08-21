@@ -1,8 +1,8 @@
 # Harmony Library Architecture
 
-> Version: 2.0.0
-> Status: Released in v2.0.0 (direct successor to v1.5.0)
-> Last Updated: 2026-07-24
+> Version: 3.0.0
+> Status: Current Library architecture
+> Last Updated: 2026-08-21
 
 ---
 
@@ -82,7 +82,7 @@ then informational items; their order within a severity is a fixed operational p
 not a count-based ranking.
 
 The panel links to existing review screens and exposes only explicitly allowlisted,
-non-destructive recovery actions: verify indexed files, queue metadata analysis, and
+non-destructive recovery actions: verify indexed files and
 refresh the library index. The browser maps these stable action keys to existing APIs;
 bulk retry, deletion, cache clearing, and metadata application remain unavailable here.
 Its contract contains only typed counts, labels, and navigation URLs: filesystem paths,
@@ -294,7 +294,12 @@ Favorites
 
 The Library Engine is composed of independent services.
 
-## Metadata Health Engine
+## Metadata Health Engine (v2 historical design)
+
+Harmony v3 removes this persisted rule/issue engine from the active product. Missing
+title, artist, and album counts are now derived directly from the song index and link
+to the corresponding Library filter. The details below remain as migration history
+for existing v2 databases.
 
 `MetadataHealthService` evaluates registered, provider-neutral rules against
 canonical `Song` rows and grouped projections; it never opens audio files or
@@ -313,6 +318,10 @@ Artist identities are normalized canonical artist strings with only a leading
 retained. These keys are projection identities, not future normalized IDs.
 
 ## Metadata Matching and Confidence Engine
+
+> Historical v2 design: the discovery, ranking, selection, and suggestion
+> generation workflow documented in this section is removed from Harmony v3.
+> The tables remain only for database upgrade compatibility.
 
 Metadata matching is a provider-neutral read pipeline:
 
@@ -569,7 +578,7 @@ Current canonical boundaries:
 - `library_search`: transactional FTS projection maintenance and bounded search.
 - `library_filters`: composable query filters and stable sorting.
 - `library_predicates`: shared semantic SQL definitions such as missing metadata.
-- `collections`, `library_analytics`, and `library_health`: index-only projections.
+- `library_analytics` and `library_health`: index-only projections.
 - `artwork`: content-addressed local artwork detection and storage.
 - `library_bulk` and `library_health`: task-backed filesystem orchestration.
 - `task_progress`: the shared durable-task API contract.
@@ -681,13 +690,6 @@ download source, Spotify/MusicBrainz/ISRC identifiers, and indexing timestamps.
 Playlist sources are resolved from the persistent `playlists` and
 `playlist_tracks` index using the Spotify track ID. This avoids duplicating
 playlist membership on each song row while still exposing it in Library APIs.
-
-Lyrics are local indexed metadata. Same-name `.lrc` and `.txt` sidecars take
-precedence over embedded ID3, Vorbis/FLAC, or MP4 lyrics; `.lrc` and synchronized
-ID3 frames retain their synchronized flag. Inputs are bounded before
-persistence. Song list responses expose only availability/source flags, while
-full text is returned by the dedicated per-Song lyrics endpoint. The filesystem
-watcher maps sidecar changes back to the sibling audio file for re-indexing.
 
 Playlist artwork is stored beside each exported M3U with the same sanitized
 base filename, for example `Playlists/Night Drive.m3u` and
@@ -975,6 +977,10 @@ Last Updated
 
 ## Metadata Intelligence foundation
 
+> Historical v2 design: suggestions, application batches, manual canonical
+> edits, history, rollback, and explicit tag writing are removed from Harmony
+> v3. Their schema remains only for upgrade compatibility.
+
 Canonical metadata remains on the existing `songs` Library Index. The
 `metadata_suggestions` table is a provider-neutral review queue and never
 overwrites a Song merely because a suggestion is created or accepted. The
@@ -1020,7 +1026,12 @@ unchanged.
 
 ---
 
-# Smart Collections
+# Smart Collections (v2 historical design)
+
+Harmony v3 removes this separate rule engine, API family, dashboard summary, and
+Library tab. The useful maintenance views remain as ordinary Library filters,
+including recently added, missing artwork, and missing metadata. The following
+section documents the previous v2 design for migration context.
 
 Smart Collections are generated live from the Library Index. Users never
 manually edit their membership, and no collection-item rows duplicate Song
@@ -1084,32 +1095,10 @@ Custom Rules
 Library Analytics use available records in the Library Index exclusively.
 They never inspect files, parse tags, or walk the filesystem.
 
-`LibraryAnalyticsService` returns one reusable structured snapshot. A single
-aggregate query calculates Songs, Artists, Genres, Storage Used, Average
-Bitrate, Average Duration, and Recently Added. Album count and the three album
-insights use grouped SQL subqueries with indexed ordering and `LIMIT 1`; Song
-rows are never materialized in application memory.
-
-Definitions:
-
-- Albums count distinct non-empty album/album-artist groups.
-- Storage Used is the sum of indexed file sizes.
-- Average Bitrate and Average Duration ignore unknown values.
-- Largest Album is the album with the most available Songs, using storage and
-  name as stable tie-breakers.
-- Newest Album and Oldest Album use indexed release year and ignore albums with
-  no year.
-- Recently Added is the rolling seven-day count shared with Smart Collections.
-
-`GET /api/library/analytics` exposes the analytics snapshot for dashboards and
-future integrations. The Library page loads it independently from song/filter
-queries and refreshes it after rescans and Library watcher events. Analytics
-therefore remain global when a user narrows the current Library view.
-
-The Dashboard's compact snapshot reuses these analytics under its `analytics`
-member for recently-added, genre, bitrate, duration, and album-insight cards.
-It does not duplicate aggregate queries or access the filesystem; the SSE
-stream only adds transient queue, worker, task, and activity state.
+`LibraryAnalyticsService` is limited to the operational summary shared by
+Library Health and the Dashboard: available songs, albums, artists, and indexed
+storage. The public analytics endpoint and album/quality insight cards are not
+part of the v3 surface.
 
 The same Dashboard snapshot includes at most three recent terminal Library
 Maintenance or Library Bulk jobs. These are durable task summaries without
@@ -1242,24 +1231,9 @@ container (for example `http://navidrome:4533` on a shared Compose network).
 Credentials stay server-side.
 
 Completed playlist syncs are batched for a configurable debounce window.
-Harmony waits for any active scan, requests one incremental scan to index newly
-downloaded audio, and rewrites the affected M3Us as portable backups. It then
-resolves each available local track, replaces the corresponding Navidrome
-playlist in source order, and reads it back to verify the exact ID sequence.
-Stable song and playlist IDs are cached in Harmony's database.
-
-Direct replacement is all-or-nothing. Harmony refuses ambiguous song matches,
-ambiguous same-name playlists, and read-only targets. Any direct API or
-verification failure is recorded on the playlist and triggers the previous
-incremental M3U-import scan automatically. A successful direct update therefore
-needs one media scan; fallback needs the second playlist-import scan. Neither
-path changes a successful download into a failure.
-
-Direct reconciliation is controlled by
-`NAVIDROME_DIRECT_PLAYLIST_SYNC_ENABLED`,
-`NAVIDROME_DIRECT_SEARCH_LIMIT`, and
-`NAVIDROME_DIRECT_DURATION_TOLERANCE_SECONDS`. The coordinator and fallback are
-controlled by
+Harmony waits for any active scan, requests an incremental scan to index newly
+downloaded audio, rewrites the affected M3Us, and requests a second scan so
+Navidrome imports those playlists. This background integration is controlled by
 `NAVIDROME_PLAYLIST_REIMPORT_ENABLED`,
 `NAVIDROME_PLAYLIST_REIMPORT_DEBOUNCE_SECONDS`,
 `NAVIDROME_PLAYLIST_REIMPORT_POLL_SECONDS`, and

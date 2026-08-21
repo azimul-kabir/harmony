@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "2.1.0"
+    app_version: str = "3.0.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -39,31 +39,22 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     spotdl_path: str = "spotdl"
+    spotdl_fallback_timeout_seconds: int = 45
     spotify_playlist_metadata_timeout_seconds: int = 3600
     yt_dlp_path: str = "yt-dlp"
+    yt_dlp_cookie_file: str | None = None
     youtube_music_enabled: bool = True
-    default_download_source: str = "spotify"
     youtube_music_timeout_seconds: int = 300
     youtube_music_audio_quality: str = "0"
     youtube_music_max_playlist_items: int = 500
     youtube_music_max_search_results: int = 25
     youtube_music_max_queue_items: int = 500
-    use_official_spotify_api: bool = False
-    spotify_metadata_provider: str = "spotify"
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None
-    # Artist genres are supplementary metadata only.  Keep the provider opt-in
-    # so normal downloads never need Spotify credentials or a Spotify request.
-    spotify_genre_enrichment_enabled: bool = False
-    spotify_genre_max_values: int = 3
-    spotify_genre_max_concurrent_requests: int = 4
-    spotify_genre_include_featured_fallback: bool = True
-    spotify_genre_merge_featured: bool = False
-    spotify_genre_replace_existing: bool = False
-
+    # Ordered providers passed to SpotDL for audio candidate discovery.
     audio_providers: str = "youtube-music,youtube"
 
-    max_parallel_downloads: int = 4
+    max_parallel_downloads: int = 2
 
     library_watcher_enabled: bool = True
     library_watcher_debounce_seconds: float = 0.75
@@ -72,46 +63,15 @@ class Settings(BaseSettings):
     navidrome_username: str = ""
     navidrome_password: str = ""
     navidrome_timeout_seconds: float = 5.0
-    navidrome_love_enabled: bool = True
-    navidrome_love_batch_size: int = 100
     navidrome_max_retries: int = 2
-    navidrome_direct_playlist_sync_enabled: bool = True
-    navidrome_direct_search_limit: int = 25
-    navidrome_direct_duration_tolerance_seconds: float = 5.0
     navidrome_playlist_reimport_enabled: bool = True
     navidrome_playlist_reimport_debounce_seconds: float = 10.0
     navidrome_playlist_reimport_poll_seconds: float = 2.0
     navidrome_playlist_reimport_scan_timeout_seconds: float = 900.0
-    navidrome_sync_health_enabled: bool = True
-    navidrome_sync_health_interval_minutes: int = 15
-    navidrome_sync_health_auto_reconcile: bool = False
-    navidrome_sync_health_scan_timeout_seconds: float = 240.0
-    navidrome_sync_health_full_scan_timeout_seconds: float = 600.0
-    navidrome_sync_health_poll_seconds: float = 1.0
-
-    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
-    musicbrainz_user_agent: str = "Harmony/2.1.0 (https://github.com/azimul-kabir/harmony)"
-    musicbrainz_timeout_seconds: float = 10.0
-    musicbrainz_max_retries: int = 3
-    musicbrainz_backoff_seconds: float = 0.5
-    musicbrainz_requests_per_second: float = 1.0
-    musicbrainz_cache_ttl_seconds: int = 86400
-    musicbrainz_max_concurrent_requests: int = 2
     cover_art_archive_base_url: str = "https://coverartarchive.org"
     cover_art_archive_timeout_seconds: float = 20.0
     cover_art_archive_max_bytes: int = 15 * 1024 * 1024
-    metadata_discovery_chunk_size: int = 25
-    metadata_discovery_max_batch_songs: int = 500
 
-    synology_monitoring_enabled: bool = False
-    synology_snmp_host: str = ""
-    synology_snmp_port: int = 161
-    synology_snmp_community: str = "public"
-    synology_snmp_timeout_seconds: float = 2.0
-    synology_snmp_retries: int = 1
-    synology_metrics_interval_seconds: float = 30.0
-    synology_metrics_stale_seconds: float = 120.0
-    synology_disk_max_index: int = 15
 
 
 @lru_cache

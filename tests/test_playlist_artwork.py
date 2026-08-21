@@ -24,7 +24,13 @@ def db_session():
 
 
 def _playlist(db, name="Night Drive"):
-    playlist = Playlist(spotify_id=f"playlist-{name}", name=name)
+    source_id = f"playlist-{name}"
+    playlist = Playlist(
+        spotify_id=source_id,
+        name=name,
+        source_provider="spotify",
+        source_external_id=source_id,
+    )
     db.add(playlist)
     db.commit()
     db.refresh(playlist)

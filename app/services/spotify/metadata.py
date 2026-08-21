@@ -5,7 +5,6 @@ from app.services.spotify.client import get_client
 from app.domain.playlist import Playlist
 from spotipy.exceptions import SpotifyException
 from app.core.logging import logger
-from app.services.spotify.genres import enrich_tracks
 
 
 def resolve_track(spotify_url: str) -> Track:
@@ -25,9 +24,7 @@ def resolve_track(spotify_url: str) -> Track:
     if data is None:
         raise RuntimeError(f"Spotify returned no metadata for {spotify_url}")
 
-    tracks = [_track_from_spotify(data, fallback_url=spotify_url)]
-    enrich_tracks(tracks)
-    return tracks[0]
+    return _track_from_spotify(data, fallback_url=spotify_url)
 
 
 def resolve_album(
@@ -96,7 +93,6 @@ def resolve_album(
             )
         )
 
-    enrich_tracks(tracks)
     return tracks
 
 
@@ -155,7 +151,6 @@ def resolve_playlist(
         else:
             results = None
 
-    enrich_tracks(tracks)
     return Playlist(
         name=playlist_info.get("name", "Unknown Playlist"),
         url=spotify_url,

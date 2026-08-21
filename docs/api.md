@@ -1,6 +1,6 @@
 # Library Jobs and Activity API
 
-> v2.1.0 API guide. Interactive OpenAPI contracts are available at `/docs`
+> v3.0.0 API guide. Interactive OpenAPI contracts are available at `/docs`
 > while Harmony is running.
 
 Library jobs extend Harmony's existing durable Task API. All timestamps are UTC
@@ -138,11 +138,6 @@ compatible with conservative SQLite parameter limits.
   Source objects expose both the provider-neutral identity fields and the
   legacy `spotify_url` compatibility mirror.
 
-- `GET /api/playlists/auto/definitions` lists built-in auto-playlist rules.
-- `POST /api/playlists/auto/{rule_id}/generate` accepts
-  `{ "limit": 50, "enabled": true }`. Supported v2.0.0 rules are
-  `recently_added` and `recently_downloaded`; limits are bounded to 1–500.
-
 ## Playlist management
 
 - `GET /api/playlists/{playlist_id}/tracks` returns source-ordered tracks,
@@ -158,93 +153,8 @@ compatible with conservative SQLite parameter limits.
 - `POST /api/tasks/jobs/clear` removes completed and cancelled Library activity.
   With `include_reviewed_attention=true`, it also removes reviewed terminal
   warnings; active and unreviewed attention jobs are always retained.
-- `POST /api/playlists/import`, `/compare`, and `/download` retain the existing
-  import, availability comparison, and direct-download contracts.
-
-## Metadata Intelligence API
-
-Metadata Intelligence uses the same durable Task lifecycle for discovery and
-application work. The public discovery and application scope in v2.0.0 is
-Songs; requests never silently apply provider values.
-
-### Provider diagnostics
-
-- `GET /api/providers/capabilities` lists MusicBrainz and Spotify metadata
-  provider capabilities.
-- `GET /api/providers/status` reports provider availability and cache-aware
-  operational status.
-- `POST /api/providers/test-search` and `POST /api/providers/lookup` provide
-  bounded provider diagnostics. Spotify currently supports recording search
-  and lookup only and returns `not_configured` when optional credentials are
-  absent. Provider failures return a clean structured error response with a
-  retryability flag.
-
-### Health, discovery, and suggestions
-
-- `GET /api/library/health/metadata/issues?status=open&included_only=true`
-  returns only current included open metadata issue records. This is the
-  Library Health Open-view scope and matches metadata score and summary totals.
-  Omitting `included_only` preserves the broader audit-history list.
-
-- `POST /api/metadata/discoveries/songs/{song_id}` starts discovery for one
-  Song; `POST /api/metadata/discoveries/songs` accepts an explicit Song scope.
-- `POST /api/metadata/discoveries/health-rules` and
-  `POST /api/metadata/discoveries/health-issues` submit discovery from metadata
-  health findings. Issue repair accepts 1–500 explicit issue IDs and a
-  provider; Library Health supports individual or selected-issue batches
-  through MusicBrainz or configured Spotify.
-- `GET /api/metadata/discoveries` lists durable discovery records;
-  `GET /api/metadata/discoveries/{discovery_id}` returns the selected candidate
-  and explainable matching evidence.
-- `POST /api/metadata/discoveries/{discovery_id}/select` explicitly selects a
-  result. Ambiguous or low-confidence results require the corresponding
-  confirmation flag. `DELETE /api/metadata/discoveries/{discovery_id}/selection`
-  clears a selection.
-- `POST /api/metadata/discoveries/{discovery_id}/suggestions` creates
-  reviewable per-field suggestions from the selected candidate.
-- `GET /api/metadata/suggestions/pending` lists suggestions; individual
-  suggestion details, acceptance, and rejection are available at
-  `/api/metadata/suggestions/{suggestion_id}` and its `/accept` and `/reject`
-  actions.
-
-### Application, history, and rollback
-
-- `GET /api/library/songs/{song_id}/metadata` returns canonical values and
-  review state. Song-scoped suggestion and history lists are available through
-  `/metadata/suggestions` and `/metadata/history`.
-- `GET /api/library/songs/{song_id}/lyrics` returns bounded lyrics indexed from
-  embedded audio tags or same-name `.lrc`/`.txt` sidecars. Library Song list
-  responses expose only `has_lyrics`, `lyrics_source`, and `lyrics_synced`, not
-  the full text.
-- `POST /api/library/songs/{song_id}/metadata/manual-preview` normalizes and
-  validates explicit operator edits without persistence.
-  `POST /api/library/songs/{song_id}/metadata/manual-apply` queues changed,
-  valid fields through the durable audit and rollback pipeline as provider
-  `manual`; it never modifies audio files.
-- `GET` or `POST /api/library/songs/{song_id}/metadata/application-preview`
-  previews accepted or explicitly selected changes without writing them.
-- `POST /api/library/songs/{song_id}/metadata/apply` queues accepted changes;
-  `/apply-selected` queues an explicit suggestion selection. Batch submission
-  is available at `POST /api/metadata/applications/apply`.
-- `GET /api/metadata/batches`, `/api/metadata/batches/{batch_id}`, and
-  `/api/metadata/batches/{batch_id}/results` expose durable application
-  outcomes. `POST /api/metadata/batches/{batch_id}/rollback` queues reversible
-  changes from a completed batch.
-- `GET /api/metadata/history` lists audited changes. A single history entry can
-  be previewed or rolled back at `/api/metadata/history/{history_id}` and its
-  `/rollback-preview` and `/rollback` actions.
-
-Use `GET /api/metadata/discoveries/capabilities` and
-`GET /api/metadata/application/capabilities` to obtain the supported entity
-types, fields, thresholds, and request limits before integrating a client.
-
-Canonical metadata and file tags remain separate:
-
-- `GET /api/library/songs/{song_id}/metadata/tag-preview` previews the file-tag
-  mutation.
-- `POST /api/library/songs/{song_id}/metadata/write-tags` explicitly writes one
-  Song.
-- `POST /api/library/metadata/write-tags` queues a bounded multi-Song write.
+- Playlist acquisition goes through Sources or `POST /api/downloads`; v3 no
+  longer exposes separate playlist import, comparison, and download endpoints.
 
 ## Downloads queue snapshot
 
@@ -267,8 +177,11 @@ remains available for cancelled-only history.
 
 Spotify failures may expose the stable reason code
 `exact_match_unavailable` with the user-facing meaning **Exact match
-unavailable**: Harmony could not obtain or validate the Spotify-linked track,
-and loose substitute searches are disabled. This outcome preserves the original
+unavailable**: Harmony could not obtain or validate the Spotify-linked track.
+Harmony then tries controlled fallback searches, requiring the same primary
+artist, a strongly related title, and a bounded duration difference. When ISRC
+or album context is available, Harmony evaluates those targeted searches too
+and ranks every safe result before selecting one. This outcome preserves the original
 job identity for manual retry but is not automatically requeued indefinitely.
 Other bounded provider categories include `provider_no_match`,
 `provider_rate_limited`, `provider_unavailable`, and `provider_error`; an
@@ -278,15 +191,32 @@ or local paths with these outcomes.
 
 ### `POST /api/downloads/bulk`
 
+Transient provider failures are retried up to three total attempts when
+`retry_failed` is enabled. Retry delays are persisted on each download job, so
+workers remain available for other queued tracks while a retry is waiting. If
+audio acquisition already succeeded, a post-processing retry reuses that file
+only when it still exists beneath Harmony's configured staging directory.
+Rate-limit failures use longer 60-second and 180-second delays and temporarily
+postpone other queued jobs for the same source without blocking other sources.
+Queued snapshot items expose `next_attempt_at`, `attempt`, and `max_attempts` for
+retry countdowns. On startup, Harmony removes staging files older than seven
+days unless they belong to active work or a recently failed resumable job.
+The Downloads snapshot also includes aggregate-only `failure_reasons` entries
+with a structured code, display label, and count for current failed jobs.
+
+### `POST /api/downloads/{job_id}/manual-fallback`
+
+Accepts `{ "url": "https://music.youtube.com/watch?v=..." }` only for a failed
+matching or availability outcome. The URL must identify one track. Harmony
+creates a separate queued job, preserving the failed history row and the
+original Spotify metadata and playlist identity; the approved URL controls
+audio acquisition only.
+
 Safely updates a bounded set of Downloads records. The JSON request is `{ "action": "retry", "download_ids": [10, 11] }`; selected-ID requests accept at most 100 IDs. Allowed actions are `retry` (failed/cancelled only), `cancel` (queued/running only), `clear_history` (selected terminal records only), `clear_completed_history`, and `clear_failed_cancelled_history`. The final two actions intentionally operate only on terminal history and accept an empty ID list.
 
 Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `succeeded`, `skipped`, `failed`, and `result_code` (`completed`, `partial`, or `failed`). They never include source URLs, local paths, downloader/provider data, or task payloads. Clearing history never deletes downloaded files, Library records, or artwork cache; it cannot clear active or queued jobs. Pause and resume are not exposed because download-job pause/resume is not currently supported.
 
-## Navidrome Loved-status operations
+## Navidrome connection
 
 - `POST /api/navidrome/test` calls authenticated Subsonic `ping`.
-- `GET /api/navidrome/playlists` returns safe playlist IDs, names, counts, and owners.
-- `POST /api/navidrome/playlists/{playlist_id}/{love|unlove}` queues a durable operation.
-- `GET /api/navidrome/jobs/{job_id}` returns batch/track progress and safe categorized errors.
-
-Credentials come only from server configuration. Harmony calls `getPlaylist`, then `star` or `unstar` with repeated song IDs in bounded batches. Passwords, tokens, salts, authenticated URLs, and provider details are excluded from responses. Partial completion is explicit and reruns process the full current playlist.
+- `POST /api/navidrome/rescan` requests a bounded Navidrome library scan.

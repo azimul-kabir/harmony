@@ -1,11 +1,11 @@
-from datetime import UTC, datetime, timedelta
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from fastapi.testclient import TestClient
 
 from app.database.base import Base
 from app.database.models import Song
 from app.services.library_analytics import library_analytics
+from app.main import app
 
 
 def _session() -> Session:
@@ -14,92 +14,32 @@ def _session() -> Session:
     return Session(engine)
 
 
-def test_library_analytics_use_available_index_rows_only():
-    now = datetime.now(UTC).replace(tzinfo=None)
-    old = now - timedelta(days=30)
-    with _session() as db:
-        db.add_all(
-            [
-                Song(
-                    path="/music/a1.flac", filename="a1.flac", title="A1",
-                    artist="Artist One", album_artist="Artist One", album="Album A",
-                    genre="Rock", year=1990, bitrate=1000000, duration=200,
-                    file_size=1000, created_at=old, availability_status="available",
-                ),
-                Song(
-                    path="/music/a2.flac", filename="a2.flac", title="A2",
-                    artist="Artist One", album_artist="Artist One", album="Album A",
-                    genre="Rock", year=1990, bitrate=800000, duration=220,
-                    file_size=2000, created_at=old, availability_status="available",
-                ),
-                Song(
-                    path="/music/b.mp3", filename="b.mp3", title="B",
-                    artist="Artist Two", album="Album B", genre="Pop", year=2024,
-                    bitrate=320000, duration=180, file_size=3000, created_at=now,
-                    availability_status="available",
-                ),
-                Song(
-                    path="/music/c.mp3", filename="c.mp3", title="C",
-                    artist="Artist Three", album="Album C", genre="Pop", year=2010,
-                    bitrate=128000, duration=100, file_size=4000, created_at=now,
-                    availability_status="available",
-                ),
-                Song(
-                    path="/music/missing.mp3", filename="missing.mp3", title="Missing",
-                    artist="Ignored", album="Ignored", genre="Jazz", year=2026,
-                    bitrate=9999999, duration=9999, file_size=999999,
-                    created_at=now, availability_status="missing",
-                ),
-            ]
-        )
-        db.commit()
-
-        analytics = library_analytics.calculate(db)
-
-        assert analytics["songs"] == 4
-        assert analytics["albums"] == 3
-        assert analytics["artists"] == 3
-        assert analytics["genres"] == 2
-        assert analytics["storage_bytes"] == 10000
-        assert analytics["average_bitrate"] == 562000
-        assert analytics["average_duration"] == 175
-        assert analytics["recently_added"] == 2
-        assert analytics["largest_album"] == {
-            "name": "Album A",
-            "artist": "Artist One",
-            "song_count": 2,
-            "storage_bytes": 3000,
-            "year": 1990,
-        }
-        assert analytics["newest_album"]["name"] == "Album B"
-        assert analytics["oldest_album"]["name"] == "Album A"
-
-
-def test_empty_library_analytics_are_stable():
-    with _session() as db:
-        analytics = library_analytics.calculate(db)
-
-        assert analytics["songs"] == 0
-        assert analytics["storage_bytes"] == 0
-        assert analytics["average_bitrate"] == 0
-        assert analytics["average_duration"] == 0
-        assert analytics["largest_album"] is None
-        assert analytics["newest_album"] is None
-        assert analytics["oldest_album"] is None
-
-
-def test_album_insights_fall_back_to_index_dates_when_release_years_are_missing():
-    now = datetime.now(UTC).replace(tzinfo=None)
+def test_library_summary_uses_available_index_rows_only():
     with _session() as db:
         db.add_all([
-            Song(path="/music/early.mp3", filename="early.mp3", title="Early", artist="Artist",
-                 album="Early Album", created_at=now - timedelta(days=10), availability_status="available"),
-            Song(path="/music/late.mp3", filename="late.mp3", title="Late", artist="Artist",
-                 album="Late Album", created_at=now, availability_status="available"),
+            Song(path="/music/a.mp3", filename="a.mp3", artist="Artist", album="Album", file_size=100, availability_status="available"),
+            Song(path="/music/b.mp3", filename="b.mp3", artist="Artist", album="Album", file_size=200, availability_status="available"),
+            Song(path="/music/missing.mp3", filename="missing.mp3", artist="Ignored", album="Ignored", file_size=999, availability_status="missing"),
         ])
         db.commit()
 
-        analytics = library_analytics.calculate(db)
+        assert library_analytics.calculate(db) == {
+            "songs": 2,
+            "albums": 1,
+            "artists": 1,
+            "storage_bytes": 300,
+        }
 
-        assert analytics["newest_album"]["name"] == "Late Album"
-        assert analytics["oldest_album"]["name"] == "Early Album"
+
+def test_empty_library_summary_is_stable():
+    with _session() as db:
+        assert library_analytics.calculate(db) == {
+            "songs": 0,
+            "albums": 0,
+            "artists": 0,
+            "storage_bytes": 0,
+        }
+
+
+def test_library_analytics_api_is_not_part_of_v3_surface():
+    assert TestClient(app).get("/api/library/analytics").status_code == 404

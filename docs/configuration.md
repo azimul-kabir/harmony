@@ -1,6 +1,6 @@
 # Configuration
 
-> v2.1.0 configuration guide
+> v3.0.0 configuration guide
 
 Harmony loads deployment defaults from the single `.env` file used by Docker
 Compose. The Settings UI persists supported runtime overrides in
@@ -56,33 +56,28 @@ DOWNLOAD_HOST_PATH=/volume1/music/incoming
 NAVIDROME_URL=http://navidrome:4533
 NAVIDROME_USERNAME=
 NAVIDROME_PASSWORD=
-NAVIDROME_DIRECT_PLAYLIST_SYNC_ENABLED=true
 ```
 
 The URL must be reachable from the Harmony container. Credentials stay
-server-side and use the Subsonic token flow. Direct sync resolves stable song
-IDs, replaces playlists in source order, verifies the result, and falls back to
-M3U import when direct reconciliation is unsafe. Search limits, duration
-tolerance, reimport debounce/poll intervals, and scan timeout can be adjusted
-under **Settings → Navidrome**.
-
-Health reconciliation keeps separate bounds for incremental and full scans:
-`NAVIDROME_SYNC_HEALTH_SCAN_TIMEOUT_SECONDS` defaults to 240 seconds, while
-`NAVIDROME_SYNC_HEALTH_FULL_SCAN_TIMEOUT_SECONDS` defaults to 600 seconds.
+server-side and use the Subsonic token flow. Harmony exports M3U playlists and
+asks Navidrome to scan after completed playlist downloads. Reimport debounce,
+poll interval, and scan timeout can be adjusted under **Settings → Navidrome**.
 
 ## YouTube Music
 
 ```env
 YOUTUBE_MUSIC_ENABLED=true
 YT_DLP_PATH=yt-dlp
-DEFAULT_DOWNLOAD_SOURCE=spotify
+YT_DLP_COOKIE_FILE=
 YOUTUBE_MUSIC_TIMEOUT_SECONDS=300
 ```
 
 This provider accepts public YouTube Music and explicit YouTube URLs. It uses
-yt-dlp without cookies or authenticated catalogue scraping and remains subject
-to provider availability and restrictions. Timeout, playlist/search/queue
-limits, enabled state, and default source are available under Settings.
+yt-dlp and remains subject to provider availability and restrictions. An
+optional read-only cookies file can authenticate audio requests when YouTube
+challenges the server IP; authenticated catalogue scraping and private playlist
+synchronization remain unsupported. Timeout, playlist/search/queue limits,
+enabled state, and default source are available under Settings.
 
 The Sources page accepts public `music.youtube.com/playlist?list=...` URLs in
 addition to Spotify playlists. Extra YouTube Music query parameters are removed
@@ -96,11 +91,99 @@ Existing Spotify Sources are migrated in place. Their legacy Spotify columns
 remain compatibility mirrors, while `provider`, `external_id`, and `source_url`
 are the authoritative durable identity. Source uniqueness is scoped by provider.
 
+### Troubleshooting YouTube download failures
+
+Playlist synchronization and audio acquisition are separate operations. A sync
+can finish successfully and export an M3U with (for example) 49 of 50 tracks
+available while the queued download for the missing track fails later.
+
+Both Spotify-backed downloads and manual YouTube fallbacks ultimately obtain
+audio through yt-dlp. Repeated `AudioProviderError: YT-DLP download error`
+messages followed by `HTTP Error 403: Forbidden` from a manual fallback
+therefore point to the shared YouTube delivery path, not Spotify metadata,
+playlist synchronization, Navidrome reconciliation, or Harmony's health check.
+Common causes are an outdated cached container image, a YouTube extractor
+change, or YouTube refusing media delivery to the container's public IP. A
+successful metadata lookup does not prove that the media URL itself is
+downloadable.
+
+Check the exact versions and reproduce the request from inside the running
+container:
+
+```sh
+docker compose exec harmony yt-dlp --version
+docker compose exec harmony deno --version
+docker compose exec harmony yt-dlp -v -f bestaudio --no-playlist \
+  'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+Pass the raw watch URL as shown. Do not paste Markdown link syntax such as
+`[https://...](https://...)` into the shell.
+
+Rebuild without the dependency layer cache before retrying so the image
+contains the current yt-dlp package:
+
+```sh
+docker compose build --pull --no-cache harmony
+docker compose up -d harmony
+```
+
+If a current, verbose yt-dlp request still returns HTTP 403 for multiple public
+videos, inspect the lines immediately before it. `HTTP Error 429: Too Many
+Requests` followed by `Sign in to confirm you're not a bot` confirms that
+YouTube has challenged the container's public IP; changing the video alone will
+usually not help.
+
+Harmony can pass a Netscape-format cookies file to SpotDL, direct Spotify-track
+candidate search/acquisition, and explicit YouTube Music downloads. Direct
+yt-dlp operations use a private writable runtime copy; the read-only source
+mount is never modified. Export a fresh `cookies.txt` from a dedicated
+YouTube account, stop using that account in the browser session from which it
+was exported, store the file outside the repository with owner-only
+permissions, and mount it read-only:
+
+```yaml
+services:
+  harmony:
+    volumes:
+      - /volume1/docker/secrets/youtube-cookies.txt:/run/secrets/youtube-cookies.txt:ro
+```
+
+Then configure the path **inside** the container and recreate it:
+
+```env
+YT_DLP_COOKIE_FILE=/run/secrets/youtube-cookies.txt
+```
+
+```sh
+chmod 600 /volume1/docker/secrets/youtube-cookies.txt
+docker compose up -d --force-recreate harmony
+docker compose exec harmony yt-dlp --cookies /run/secrets/youtube-cookies.txt \
+  -v -f bestaudio --no-playlist 'https://www.youtube.com/watch?v=VIDEO_ID'
+```
+
+Cookies are credentials: never paste them into logs, commit them, or expose the
+mount through a shared directory. YouTube may invalidate them, and using them
+can affect the associated account. If cookies are not acceptable, test from a
+different public network/IP. Choose a different public video when only one
+video is affected.
+videos, test from another public network/IP. Harmony deliberately does not
+accept browser cookies, so videos or networks that require login, bot
+verification, age confirmation, or regional access cannot be bypassed by the
+manual fallback feature. Choose a different public video when only one video is
+affected.
+
+The manual fallback endpoint returns HTTP 422 before queueing when the submitted
+value is not a specific supported YouTube or YouTube Music **track** URL. HTTP
+201 means only that the fallback was validated and queued; the subsequent
+download can still fail if YouTube refuses the audio request.
+
 ## Large Spotify playlists
 
-Spotify playlist downloads first run SpotDL's metadata-only `save` operation.
-Harmony shows this as a distinct Source sync stage and does not create download
-jobs until the complete ordered track list is available. The metadata timeout
+Spotify playlist synchronization continues to use SpotDL's pinned unofficial
+Spotify metadata layer. This remains separate from audio acquisition: each
+resolved `Track` uses direct yt-dlp first and SpotDL only as its fallback.
+Harmony shows metadata retrieval as a distinct Source sync stage. The timeout
 defaults to 3600 seconds and can be changed under Settings → Downloads or with:
 
 ```env
@@ -114,12 +197,12 @@ virtual-environment paths inside the container.
 
 ## Exact Spotify track acquisition
 
-Spotify track acquisition has no loose-search setting. Harmony first invokes
-SpotDL with the stored Spotify track URL and automatically retries by
-artist/title if the provider fails or produces no audio. A successful process
-must produce exactly one supported audio file, and Harmony validates embedded
-artist/title identity, material recording-version markers, and reliable
-duration before the worker can import it.
+Spotify track acquisition has no loose-search setting. Harmony first performs
+one bounded, metadata-only yt-dlp search using resolved artist, title, and album
+metadata. Existing strict artist/title, album-context, version, and duration
+rules reject unsafe candidates before only the best candidate is transferred.
+If no candidate is safe or transfer fails, Harmony enters the existing SpotDL
+fallback ladder, whose output must still pass embedded identity validation.
 
 A zero exit with no audio or an identity rejection is recorded as
 `exact_match_unavailable` and is not automatically requeued indefinitely.
@@ -132,71 +215,31 @@ Rejected temporary output is removed. Harmony does not automatically delete
 previously imported Library files; incorrect historic files and associations
 must be reviewed and removed manually.
 
-## MusicBrainz and artwork
+## Artwork
 
-Set `MUSICBRAINZ_*` values to tune timeout, retry, request rate, cache TTL, and
-concurrency. Keep a descriptive `MUSICBRAINZ_USER_AGENT`. `METADATA_DISCOVERY_*`
-values bound chunk and batch sizes. `COVER_ART_ARCHIVE_*` values control remote
-artwork fetch timeout and response size.
+`COVER_ART_ARCHIVE_*` values control remote artwork fetch timeout and response
+size for files that already contain a canonical MusicBrainz release ID.
 
-The defaults are conservative for public provider infrastructure. Metadata
-discovery is review-first; changing provider settings never authorizes
-automatic canonical changes or file-tag writes.
+The defaults are conservative for public infrastructure. Fetching artwork
+never authorizes canonical metadata changes or file-tag writes.
 
-## Optional Spotify genre enrichment
+## Spotify metadata credentials
 
-`SPOTIFY_GENRE_ENRICHMENT_ENABLED` is `false` by default. Harmony therefore does not create a Spotify client, authenticate, request a token, or call a Spotify API endpoint merely to download, tag, resolve metadata, or index the library. MusicBrainz enrichment and genres embedded in audio files continue to work without Spotify.
+Harmony no longer calls Spotify solely to enrich artist genres. Existing
+embedded or indexed genres remain preserved during download and import. The
+optional `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` values are used only
+when the official Spotify metadata API is explicitly enabled.
 
-To use Spotify artist metadata as an additional, best-effort genre source, set the flag to `true` and configure both credentials:
-
-```env
-SPOTIFY_GENRE_ENRICHMENT_ENABLED=false
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-```
-
-Spotify genres can be empty or unavailable. A missing credential or provider failure is non-fatal and never blocks a download. Existing genres and their provenance are retained when the feature is disabled. The precedence is: user-provided genre, MusicBrainz genre, enabled Spotify genre, embedded genre, then empty.
-
-The same optional credentials enable Spotify as an explicit, review-first
-Metadata Intelligence provider independently of genre enrichment. Selecting
-Spotify permits bounded recording search and lookup. Merely configuring
-credentials never makes scanning, indexing, or ordinary downloads contact
-Spotify, and Spotify candidates never populate MusicBrainz identifier fields.
-
-## Source schedules and auto-playlists
+## Source schedules
 
 Source auto-sync is configured per Source in the Sources UI, not through an
 environment variable. v2.0.0 offers hourly, 6-hour, 12-hour, daily, and weekly
 intervals. Enabling auto-sync also enables the Source.
 
-Recently Added and Recently Downloaded auto-playlists are configured from the
-Playlists page. Each stores its enabled state and a 1–500-song limit; 50 is the
-default.
-
 ## Runtime settings
 
-The UI validates bounded settings for Downloads, Spotify enrichment,
-MusicBrainz/Cover Art Archive, Navidrome reconciliation, and the Library
+The UI validates bounded settings for Downloads, Cover Art Archive, Navidrome
+reconciliation, and the Library
 watcher. Invalid updates return HTTP 422 and leave the previous value in place.
 General date/time, theme, audio quality, worker, retry, playlist, and export
 preferences are also persisted.
-# Synology NAS health monitoring
-
-Enable SNMP in DSM under **Control Panel → Terminal & SNMP → SNMP**, enable
-SNMPv2c, and configure a read-only community. Set
-`SYNOLOGY_MONITORING_ENABLED=true`, `SYNOLOGY_SNMP_HOST` to an address reachable
-from the Harmony container, and `SYNOLOGY_SNMP_COMMUNITY` to that community.
-Port, timeout, retries, polling interval, stale threshold, and the maximum disk
-index can be adjusted with the corresponding variables in `.env.example`.
-
-Harmony uses PySNMP directly; it neither mounts the Docker socket nor invokes
-command-line SNMP programs. Only normalized system and disk health is exposed.
-The community, raw OIDs, SNMP responses, and internal exception details remain
-server-private. If DSM is unreachable, the last successful sample remains
-visible and is marked unavailable or stale.
-
-Disk discovery deliberately probes indexed columns with bounded GET requests
-from index `.0` through `SYNOLOGY_DISK_MAX_INDEX` (default `.15`). Some DSM
-versions return no disk rows from an SNMP walk even though indexed GET requests
-work. Missing indexes are ignored, and DSM's returned disk ID—not the SNMP
-index—is the displayed disk label.

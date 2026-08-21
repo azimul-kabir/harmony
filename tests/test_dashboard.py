@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 
 from app.database.models import (
     DownloadJob,
-    MetadataSuggestion,
-    MetadataIssue,
     Playlist,
     Song,
     SyncSource,
@@ -186,19 +184,6 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     spotify_url="https://example.test/source",
                     name="Source",
                 ),
-                MetadataSuggestion(
-                    entity_type="song",
-                    entity_id=1,
-                    field_name="genre",
-                    provider="musicbrainz",
-                    confidence_level="high",
-                    status="pending",
-                ),
-                MetadataIssue(
-                    identity_key="dashboard-open-metadata", rule_id="missing_genre", rule_version="1",
-                    entity_type="song", entity_id="1", song_id=1, severity="warning", status="open",
-                    title="Missing genre", explanation="Missing genre",
-                ),
                 Task(
                     name="Refresh Library",
                     spotify_url="library://maintenance/refresh",
@@ -237,7 +222,6 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
             "missing_artwork": 1,
             "missing_metadata": 1,
             "missing_files": 1,
-            "pending_suggestions": 1,
         }
         assert snapshot["attention"] == {
             "healthy": False,
@@ -288,12 +272,12 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                     "key": "pending_metadata",
                     "severity": "warning",
                     "count": 1,
-                    "title": "Open metadata issues",
+                    "title": "Missing metadata",
                     "description": "1 item requires attention",
-                    "href": "/library/health?metadata_status=open#metadata-issues-title",
+                    "href": "/library?missing_metadata=true",
                     "action_label": "Review",
-                    "recovery_action": "analyze_metadata",
-                    "recovery_label": "Analyze metadata",
+                    "recovery_action": "refresh_library",
+                    "recovery_label": "Refresh library",
                 },
                 {
                     "key": "missing_artwork",
@@ -315,33 +299,7 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
             assert attention[f"{severity}_count"] == sum(
                 item["count"] for item in attention["items"] if item["severity"] == severity
             )
-        assert snapshot["analytics"] == {
-            "genres": 1,
-            "average_bitrate": 320000,
-            "average_duration": 245.0,
-            "recently_added": 1,
-            "largest_album": {
-                "name": "Album",
-                "artist": "Artist",
-                "song_count": 1,
-                "storage_bytes": 0,
-                "year": None,
-            },
-            "newest_album": {
-                "name": "Album",
-                "artist": "Artist",
-                "song_count": 1,
-                "storage_bytes": 0,
-                "year": None,
-            },
-            "oldest_album": {
-                "name": "Album",
-                "artist": "Artist",
-                "song_count": 1,
-                "storage_bytes": 0,
-                "year": None,
-            },
-        }
+        assert "analytics" not in snapshot
         assert snapshot["maintenance"] == [
             {
                 "id": 1,
@@ -354,13 +312,7 @@ def test_dashboard_snapshot_contains_actionable_queue_and_library_summaries():
                 "error_code": "INDEX_ERROR",
             }
         ]
-        assert [item["id"] for item in snapshot["collections"]] == [
-            "recently-added",
-            "missing-artwork",
-            "missing-metadata",
-            "highest-bitrate",
-            "large-albums",
-        ]
+        assert "collections" not in snapshot
 
 
 def test_dashboard_attention_excludes_healthy_categories_and_counts_bulk_failures():

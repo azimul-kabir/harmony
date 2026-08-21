@@ -235,11 +235,8 @@ class LibrarySearchService:
         parameters: dict[str, Any] = {}
         if ("has", "issues") in controls:
             clauses.append(
-                """EXISTS (
-                    SELECT 1 FROM metadata_issues
-                    WHERE metadata_issues.song_id = songs.id
-                    AND metadata_issues.status = 'open'
-                )"""
+                "(coalesce(songs.title, '') = '' OR coalesce(songs.artist, '') = '' "
+                "OR coalesce(songs.album, '') = '')"
             )
         if ("missing", "artwork") in controls:
             clauses.append("songs.artwork_status = 'missing'")

@@ -6,6 +6,7 @@ def spotdl_song_to_track(song: SpotDLSong) -> Track:
     return Track(
         title=song.name,
         artist=song.artist,
+        artists=song.artists,
         album=song.album_name,
         album_artist=song.album_artist,
         track=song.track_number,

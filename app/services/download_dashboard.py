@@ -20,6 +20,22 @@ QUEUE_LIMIT = 25
 HISTORY_LIMIT = 250
 DETAIL_EVENT_LIMIT = 3
 COUNT_KEYS = ("running", "queued", "paused", "completed", "failed", "cancelled", "skipped")
+FAILURE_REASON_LABELS = {
+    "provider_rate_limited": "Provider rate limiting",
+    "provider_unavailable": "Provider unavailable",
+    "provider_error": "Provider errors",
+    "provider_no_match": "No provider match",
+    "exact_match_unavailable": "Exact match unavailable",
+    "fallback_match_unavailable": "No safe fallback",
+    "manual_fallback_unavailable": "Approved link unavailable",
+    "manual_fallback_mismatch": "Approved link does not match",
+    "download_timeout": "Download timeouts",
+    "spotdl_fallback_timeout": "SpotDL fallback timeout",
+    "filesystem_permission_denied": "Library permissions",
+    "disk_full": "Disk full",
+    "unexpected_error": "Unexpected errors",
+    "legacy_failure": "Older unclassified failures",
+}
 
 
 def normalized_status(status: str | None) -> str:
@@ -40,6 +56,7 @@ def _job_columns():
                      DownloadJob.started_at, DownloadJob.completed_at, DownloadJob.updated_at,
                      DownloadJob.reason_code, DownloadJob.reason_message, DownloadJob.failure_stage,
                      DownloadJob.provider, DownloadJob.retryable, DownloadJob.technical_detail,
+                     DownloadJob.attempt_count, DownloadJob.next_attempt_at,
                      DownloadJob.error, DownloadJob.error_message, DownloadJob.source_provider,
                      DownloadJob.pipeline_stage, DownloadJob.progress_percent,
                      DownloadJob.heartbeat_at, DownloadJob.worker_name,
@@ -117,6 +134,27 @@ def download_counts(db: Session) -> dict[str, int]:
     return counts
 
 
+def download_failure_reasons(db: Session) -> list[dict[str, int | str]]:
+    """Return aggregate-only failure categories for operational diagnosis."""
+    code = func.coalesce(DownloadJob.reason_code, "legacy_failure")
+    rows = db.execute(
+        select(code, func.count(DownloadJob.id))
+        .where(DownloadJob.status == JobStatus.FAILED.value)
+        .group_by(code)
+        .order_by(func.count(DownloadJob.id).desc(), code.asc())
+    ).all()
+    return [
+        {
+            "code": reason_code,
+            "label": FAILURE_REASON_LABELS.get(
+                reason_code, reason_code.replace("_", " ").capitalize()
+            ),
+            "count": int(count),
+        }
+        for reason_code, count in rows
+    ]
+
+
 def download_history(db: Session, *, page: int = 1, page_size: int = HISTORY_LIMIT,
                      status: str | None = None, search: str | None = None) -> dict:
     """Fetch persisted track history without requiring a parent task or worker."""
@@ -180,8 +218,17 @@ def download_details(job: DownloadJob) -> dict:
             "progress": 100 if status == "completed" else job.progress_percent, "created_at": _timestamp(job.created_at),
             "started_at": _timestamp(job.started_at), "finished_at": _timestamp(job.completed_at),
             "queue_wait_seconds": _duration_seconds(job.created_at, job.started_at),
-            "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at), "retry_count": 0,
+            "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at),
+            "retry_count": max(0, (job.attempt_count or 0) - 1),
             "can_cancel": status in ("queued", "running"), "can_retry": status == "failed" and bool(job.retryable),
+            "can_manual_fallback": status == "failed" and job.reason_code in {
+                "exact_match_unavailable",
+                "fallback_match_unavailable",
+                "provider_no_match",
+                "provider_unavailable",
+                "manual_fallback_unavailable",
+                "manual_fallback_mismatch",
+            },
             **outcome,
             "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]]}
 
@@ -196,8 +243,9 @@ def get_download_snapshot(db: Session, *, queue_limit: int = QUEUE_LIMIT,
                           .order_by(DownloadJob.created_at.asc(), DownloadJob.id.asc()).limit(queue_limit)).all()
     active, queued, paused = queue("running"), queue("queued"), queue("paused")
     return {"event_type": "snapshot", "counts": download_counts(db),
+            "failure_reasons": download_failure_reasons(db),
             "active": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "queue_position": j.queue_position, "status": normalized_status(j.status), **serialize_telemetry(j), "worker_slot": j.worker_name, "started_at": _timestamp(j.started_at)} for j in active],
-            "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(queued, 1)],
+            "queued": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at), "stage": j.pipeline_stage, "next_attempt_at": _timestamp(j.next_attempt_at), "attempt": j.attempt_count, "max_attempts": 3} for i, j in enumerate(queued, 1)],
             "paused": [{"id": j.id, "task_id": j.task_id, "title": j.title, "artist": j.artist, "position": i, "queue_position": j.queue_position, "status": normalized_status(j.status), "created_at": _timestamp(j.created_at)} for i, j in enumerate(paused, 1)],
             "jobs": history["items"], "history": history}
 

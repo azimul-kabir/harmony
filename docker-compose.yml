@@ -22,8 +22,11 @@ services:
     volumes:
       - ./database:/database
       - ./logs:/app/logs
-      - ${MUSIC_HOST_PATH:-/volume1/music/library}:/music
-      - ${DOWNLOAD_HOST_PATH:-/volume1/music/incoming}:/downloads
+      - ${MUSIC_HOST_PATH:-./music}:/music
+      - ${DOWNLOAD_HOST_PATH:-./downloads}:/downloads
+      # Uncomment after exporting a Netscape-format cookies.txt file. Keep it
+      # read-only and set YT_DLP_COOKIE_FILE=/run/secrets/youtube-cookies.txt.
+      # - ${YOUTUBE_COOKIES_HOST_PATH}:/run/secrets/youtube-cookies.txt:ro
 
     restart: unless-stopped
 
@@ -41,5 +44,4 @@ services:
 
 networks:
   harmony-net:
-    external: true
     name: harmony-net

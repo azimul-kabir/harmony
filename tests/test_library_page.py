@@ -31,16 +31,28 @@ def test_normal_library_exposes_file_delete_not_forget():
         'id="library-bulk-forget-missing" class="library-bulk-delete" '
         'data-bulk-action="forget_missing" hidden'
     ) in response.text
-    assert 'id="metadata-manual-form"' in response.text
-    assert 'id="metadata-preview-manual"' in response.text
-    assert 'id="metadata-apply-manual"' in response.text
-    assert 'id="metadata-artwork-file"' in response.text
-    assert 'id="metadata-artwork-remove"' in response.text
+    assert 'id="metadata-review-dialog"' not in response.text
+    assert 'data-bulk-action="write_tags"' not in response.text
     assert 'id="library-duplicates-open"' in response.text
     assert 'id="duplicate-review-dialog"' in response.text
-    assert 'id="lyrics-dialog"' in response.text
-    assert 'id="lyrics-content"' in response.text
     assert 'class="library-search-help"' in response.text
     assert 'data-search-example="is:duplicate"' in response.text
-    assert 'id="metadata-provider"' in response.text
-    assert '<option value="spotify">Spotify</option>' in response.text
+    assert 'id="metadata-provider"' not in response.text
+    assert 'id="metadata-discover"' not in response.text
+    assert 'data-view="collections"' not in response.text
+    assert 'id="collections-grid"' not in response.text
+
+
+def test_metadata_application_api_is_not_part_of_v3_surface():
+    client = TestClient(app)
+
+    assert client.get("/api/metadata/suggestions/pending").status_code == 404
+    assert client.get("/api/metadata/history").status_code == 404
+    assert client.post("/api/library/songs/1/metadata/manual-preview", json={"changes": {}}).status_code == 404
+
+
+def test_smart_collection_api_is_not_part_of_v3_surface():
+    client = TestClient(app)
+
+    assert client.get("/api/library/collections").status_code == 404
+    assert client.get("/api/library/collections/recently-added").status_code == 404

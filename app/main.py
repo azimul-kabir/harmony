@@ -16,15 +16,11 @@ from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
 from app.api.library_bulk import router as library_bulk_router
 from app.api.library_health import router as library_health_router
-from app.api.metadata import router as metadata_router
-from app.api.metadata_discovery import router as metadata_discovery_router
 from app.api.navidrome import router as navidrome_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
-from app.api.system_health import router as system_health_router
 from app.api.sync_sources import router as sync_sources_router
 from app.api.tasks import router as tasks_router
-from app.api.providers import router as providers_router
 from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
@@ -34,23 +30,19 @@ from app.services.library_watcher import LibraryWatcher
 from app.services.library_bulk import library_bulk_worker
 from app.services.library_health import library_maintenance_worker
 from app.services.task_service import cleanup_library_jobs, recover_library_jobs
-from app.services.metadata_intelligence import MetadataServiceError
 from app.web.downloads import router as downloads_page_router
 from app.web.auth import AuthenticationMiddleware, router as auth_router
 from app.web.library import router as library_page_router
 from app.web.playlists import router as playlists_page_router
 from app.web.sources import router as sources_page_router
-from app.web.providers import router as providers_page_router
 from app.web.settings import router as settings_page_router
-from app.providers.metadata.registry import close_providers
 from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
-from app.services.settings_service import initialize_defaults
+from app.services.settings_service import configured_download_workers, initialize_defaults
+from app.services.staging_cleanup import cleanup_staging_downloads
 from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
-from app.services.navidrome_sync_health import navidrome_sync_health_scheduler
 from app.services.source_auto_sync import source_auto_sync_scheduler
-from app.services.synology_monitor import synology_monitor
 
 settings = get_settings()
 
@@ -73,6 +65,8 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         initialize_defaults(db)
+        configured_download_workers(db)
+        cleanup_staging_downloads(db, Path(settings.staging_path))
         recover_library_jobs(db)
         cleanup_library_jobs(db)
     finally:
@@ -80,9 +74,7 @@ async def lifespan(app: FastAPI):
     library_bulk_worker.start()
     library_maintenance_worker.start()
     navidrome_playlist_reimport.start()
-    navidrome_sync_health_scheduler.start()
     source_auto_sync_scheduler.start()
-    synology_monitor.start()
     
     logger.info("Starting Harmony...")
     logger.info(
@@ -113,10 +105,7 @@ async def lifespan(app: FastAPI):
         library_bulk_worker.stop()
         library_maintenance_worker.stop()
         navidrome_playlist_reimport.stop()
-        navidrome_sync_health_scheduler.stop()
         source_auto_sync_scheduler.stop()
-        await synology_monitor.stop()
-        await close_providers()
         if library_watcher is not None:
             library_watcher.stop()
         logger.info("Harmony stopped")
@@ -148,14 +137,11 @@ app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
-app.include_router(system_health_router)
 app.include_router(settings_page_router)  # The /settings HTML Web page (app/web/settings.py)
 app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(library_bulk_router)
 app.include_router(library_health_router)
-app.include_router(metadata_router)
-app.include_router(metadata_discovery_router)
 app.include_router(navidrome_router)
 app.include_router(artwork_router)
 app.include_router(library_page_router)
@@ -164,8 +150,6 @@ app.include_router(sources_page_router)
 app.include_router(playlists_page_router)  # <-- Added the new Playlists route
 app.include_router(playlist_router)
 app.include_router(sync_sources_router)
-app.include_router(providers_router)
-app.include_router(providers_page_router)
 
 PWA_ASSET_DIR = Path("app/static/pwa")
 
@@ -199,10 +183,6 @@ async def unhandled_api_error_handler(request: Request, exc: Exception):
         )
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
-
-@app.exception_handler(MetadataServiceError)
-async def metadata_error_handler(request: Request, exc: MetadataServiceError):
-    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": exc.message}})
 
 @app.get("/")
 def home(request: Request):

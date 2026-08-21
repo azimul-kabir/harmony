@@ -4,8 +4,10 @@ import subprocess
 import tempfile
 import shutil
 import re
+import signal
 import time
 import unicodedata
+from difflib import SequenceMatcher
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +31,10 @@ class AudioIdentity:
     duration: float | None
 
 
+class SpotDLFallbackTimeout(RuntimeError):
+    """The bounded track-acquisition fallback exhausted its wall-clock budget."""
+
+
 _VERSION_MARKERS = (
     "instrumental", "karaoke", "live", "remix", "sped up", "slowed",
     "acoustic", "demo", "radio edit", "remaster", "cover", "tribute",
@@ -48,20 +54,67 @@ def _markers(value: str | None) -> frozenset[str]:
     return frozenset(marker for marker in _VERSION_MARKERS if marker in normalized)
 
 
-def _primary_artist(value: str | None) -> str:
-    """Return the first credited performer from a display-style artist value.
+def _title_without_non_version_qualifiers(value: str | None) -> str:
+    """Remove parenthetical context that does not identify a recording version.
 
-    Spotify commonly supplies all track artists as one comma-separated value,
-    while Mutagen may expose only the first value from a multi-value artist tag.
-    Those representations describe the same recording and must not be rejected.
+    Spotify sometimes includes soundtrack context in the canonical title (for
+    example ``Earned It (Fifty Shades Of Grey)``), while the audio provider's
+    embedded title contains only ``Earned It``.  Such context is safe to ignore
+    only when it is bracketed and contains none of our material version markers.
     """
-    primary = re.split(
+    value = value or ""
+
+    def preserve_version(match: re.Match[str]) -> str:
+        qualifier = match.group(1)
+        return match.group(0) if _markers(qualifier) else " "
+
+    without_qualifiers = re.sub(
+        r"[\[(]([^\]\)]+)[\])]", preserve_version, value
+    )
+    return _normalized(without_qualifiers)
+
+
+def _same_strict_title(requested: Track, candidate: str | None) -> bool:
+    if _normalized(requested.title) == _normalized(candidate):
+        return True
+    requested_base = _title_without_non_version_qualifiers(requested.title)
+    candidate_base = _title_without_non_version_qualifiers(candidate)
+    if (
+        requested_base
+        and requested_base == candidate_base
+        and _markers(requested.title) == _markers(candidate)
+    ):
+        return True
+
+    # YouTube Music commonly appends the film/album name to an otherwise exact
+    # song title (for example ``Song - Film Name``), while Spotify keeps that
+    # context only in the album field. Accept that representation only when the
+    # extra suffix identifies the requested album; arbitrary longer titles are
+    # still rejected.
+    album = _normalized(requested.album)
+    if not album or _markers(requested.title) != _markers(candidate):
+        return False
+    for left, right in ((requested.title, candidate), (candidate, requested.title)):
+        left_value = left or ""
+        right_value = right or ""
+        match = re.match(
+            rf"^\s*{re.escape(left_value)}\s*(?:[-–—|:]|\bfrom\b)\s*(.+?)\s*$",
+            right_value,
+            flags=re.IGNORECASE,
+        )
+        if match and _title_similarity(album, match.group(1)) >= 0.72:
+            return True
+    return False
+
+
+def _artist_credits(value: str | None) -> frozenset[str]:
+    """Return normalized performers from common multi-artist tag formats."""
+    credits = re.split(
         r"\s*(?:,|;|&|\+|/|\b(?:and|feat(?:uring)?|ft)\.?\b)\s*",
         value or "",
-        maxsplit=1,
         flags=re.IGNORECASE,
-    )[0]
-    return _normalized(primary)
+    )
+    return frozenset(filter(None, (_normalized(credit) for credit in credits)))
 
 
 def _same_artist_credit(requested: str | None, candidate: str | None) -> bool:
@@ -69,17 +122,38 @@ def _same_artist_credit(requested: str | None, candidate: str | None) -> bool:
     candidate_normalized = _normalized(candidate)
     if requested_normalized == candidate_normalized:
         return True
-    # The primary performer is stable when one side contains the complete
-    # collaboration credit and the other side contains only its first tag.
+    # Provider credits are not ordered consistently. A Spotify track may name
+    # one primary performer while YouTube Music lists the same singer later in
+    # a multi-artist tag, so require overlap rather than identical first artist.
     return bool(
         requested_normalized
         and candidate_normalized
-        and _primary_artist(requested) == _primary_artist(candidate)
+        and _artist_credits(requested) & _artist_credits(candidate)
     )
 
 
-def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
-    """Reject output whose embedded identity is not the requested recording."""
+def _title_similarity(requested: str | None, candidate: str | None) -> float:
+    left = _normalized(requested)
+    right = _normalized(candidate)
+    if not left or not right:
+        return 0.0
+    left_tokens = set(left.split())
+    right_tokens = set(right.split())
+    if left_tokens.issubset(right_tokens) and _markers(candidate):
+        return 0.9
+    token_score = len(left_tokens & right_tokens) / max(
+        len(left_tokens), len(right_tokens)
+    )
+    return max(token_score, SequenceMatcher(None, left, right).ratio())
+
+
+def validate_track_identity(
+    requested: Track,
+    candidate: AudioIdentity,
+    *,
+    strict: bool = True,
+) -> None:
+    """Reject unrelated output while allowing a controlled fallback version."""
     if not candidate.title or not candidate.artist:
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
@@ -90,15 +164,20 @@ def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="artist_mismatch",
         )
-    if _normalized(requested.title) != _normalized(candidate.title):
+    if strict and not _same_strict_title(requested, candidate.title):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="title_mismatch",
         )
-    if _markers(requested.title) != _markers(candidate.title):
+    if strict and _markers(requested.title) != _markers(candidate.title):
         raise DownloadFailed(
             "exact_match_unavailable", "Exact match unavailable", "validation",
             retryable=False, technical_detail="version_mismatch",
+        )
+    if not strict and _title_similarity(requested.title, candidate.title) < 0.72:
+        raise DownloadFailed(
+            "fallback_match_unavailable", "No safe fallback match was found", "validation",
+            retryable=False, technical_detail="fallback_title_mismatch",
         )
     if requested.duration and candidate.duration:
         requested_duration = requested.duration
@@ -107,12 +186,29 @@ def validate_track_identity(requested: Track, candidate: AudioIdentity) -> None:
         # existing queued jobs valid while all newly resolved tracks use seconds.
         if requested_duration > candidate.duration * 100:
             requested_duration /= 1000
-        tolerance = max(5.0, min(10.0, requested_duration * 0.04))
+        tolerance = (
+            max(12.0, min(25.0, requested_duration * 0.10))
+            if not strict
+            else max(5.0, min(10.0, requested_duration * 0.04))
+        )
         if abs(requested_duration - candidate.duration) > tolerance:
             raise DownloadFailed(
-                "exact_match_unavailable", "Exact match unavailable", "validation",
-                retryable=False, technical_detail="duration_mismatch",
+                "exact_match_unavailable" if strict else "fallback_match_unavailable",
+                "Exact match unavailable" if strict else "No safe fallback match was found",
+                "validation", retryable=False,
+                technical_detail="duration_mismatch",
             )
+
+
+def fallback_candidate_score(requested: Track, candidate: AudioIdentity) -> float:
+    """Rank only candidates that already passed controlled fallback validation."""
+    title_score = _title_similarity(requested.title, candidate.title)
+    marker_score = 1.0 if _markers(requested.title) == _markers(candidate.title) else 0.7
+    duration_score = 0.5
+    if requested.duration and candidate.duration:
+        requested_duration = requested.duration / 1000 if requested.duration > candidate.duration * 100 else requested.duration
+        duration_score = max(0.0, 1.0 - abs(requested_duration - candidate.duration) / max(requested_duration, 1.0))
+    return round(title_score * 0.65 + duration_score * 0.25 + marker_score * 0.10, 4)
 
 class SpotDLClient:
     def __init__(self) -> None:
@@ -181,6 +277,7 @@ class SpotDLClient:
         track: Track,
         output_dir: Path,
         job_id: int | None = None,
+        timeout_seconds: int | None = None,
     ) -> Path:
         # Fetch current quality setting from database
         db = SessionLocal()
@@ -190,18 +287,28 @@ class SpotDLClient:
         finally:
             db.close()
 
-        attempts: list[tuple[str, str, bool]] = []
+        timeout_seconds = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else self.settings.spotdl_fallback_timeout_seconds
+        )
+        if timeout_seconds <= 0:
+            raise ValueError("SpotDL fallback timeout must be greater than zero.")
+
+        # Direct acquisition has already performed the metadata-search ladder.
+        # Give SpotDL one high-value rescue using the canonical Spotify identity
+        # when possible, rather than serially replaying URL, ISRC, album, and
+        # title searches with a separate timeout for each one.
+        attempt: tuple[str, str, bool] | None = None
         if track.spotify_url:
-            attempts.append(("spotify_url", track.spotify_url, False))
-        if track.artist and track.title:
-            # SpotDL can exit successfully without an output when its Spotify URL
-            # lookup cannot resolve an audio provider result.  A text lookup is
-            # safe as long as the produced file is subjected to the same strict
-            # metadata validation as the URL result.
-            attempts.append(
-                ("metadata_search", f"{track.artist} - {track.title} audio", True)
+            attempt = ("spotify_url_rescue", track.spotify_url, True)
+        elif track.artist and track.title:
+            attempt = (
+                "metadata_rescue",
+                f"{track.artist} - {track.title} {track.album or ''} audio".strip(),
+                True,
             )
-        if not attempts:
+        if attempt is None:
             raise DownloadFailed(
                 "exact_match_unavailable", "Exact match unavailable", "download",
                 retryable=False, technical_detail="download_identity_missing",
@@ -210,7 +317,7 @@ class SpotDLClient:
         with tempfile.TemporaryDirectory(dir=output_dir) as temp_dir:
             temp_path = Path(temp_dir)
             failures: list[DownloadFailed] = []
-            for query_type, query, loose_match in attempts:
+            for query_type, query, loose_match in (attempt,):
                 attempt_started = time.monotonic()
                 attempt_path = temp_path / query_type
                 attempt_path.mkdir()
@@ -227,9 +334,13 @@ class SpotDLClient:
                         "--output", output_template,
                         "--threads", "1",
                     ]
+                    if self.settings.yt_dlp_cookie_file:
+                        command_args.extend(
+                            ["--cookie-file", self.settings.yt_dlp_cookie_file]
+                        )
                     if loose_match:
                         command_args.append("--dont-filter-results")
-                    result = self._run(command_args, timeout=300)
+                    result = self._run(command_args, timeout=timeout_seconds)
                     return_code = result.returncode
                     files = self._audio_files(attempt_path)
                     output_count = len(files)
@@ -271,14 +382,27 @@ class SpotDLClient:
                         )
 
                     downloaded_file = files[0]
+                    identity = self._read_audio_identity(downloaded_file)
                     validate_track_identity(
-                        track, self._read_audio_identity(downloaded_file)
+                        track,
+                        identity,
+                        strict=not loose_match,
                     )
                     reason_category = "success"
                     final_path = output_dir / downloaded_file.name
                     final_path.unlink(missing_ok=True)
                     shutil.move(str(downloaded_file), str(final_path))
                     return final_path
+                except SpotDLFallbackTimeout as exc:
+                    reason_category = "spotdl_fallback_timeout"
+                    diagnostic = self._bounded_diagnostic(str(exc), attempt_path)
+                    failures.append(DownloadFailed(
+                        reason_category,
+                        "The SpotDL fallback exceeded its time limit.",
+                        "download",
+                        retryable=False,
+                        technical_detail=diagnostic,
+                    ))
                 except DownloadFailed as exc:
                     reason_category = exc.reason_code
                     diagnostic = self._bounded_diagnostic(
@@ -426,7 +550,7 @@ class SpotDLClient:
     def _run(
         self,
         args: list[str],
-        timeout: int = 120, # Default fallback timeout
+        timeout: int = 120,
     ) -> subprocess.CompletedProcess[str]:
         command = [
             self.settings.spotdl_path,
@@ -443,21 +567,58 @@ class SpotDLClient:
             )
         )
         config_path.mkdir(parents=True, exist_ok=True)
-        environment = os.environ.copy()
-        environment["HOME"] = "/tmp"
-        environment["XDG_CONFIG_HOME"] = str(config_path)
-        environment["HARMONY_SPOTDL_CONFIG_DIR"] = str(config_path)
-        
+        # SpotDL 4.5 derives its runtime directories from Path.home() and uses
+        # check-then-mkdir for its temp folder. Sharing one HOME between worker
+        # processes therefore races with concurrent downloads. Give every
+        # invocation an isolated home while keeping all temporary state under
+        # Harmony's configured writable root.
+        with tempfile.TemporaryDirectory(prefix="run-", dir=config_path) as runtime_dir:
+            runtime_home = Path(runtime_dir)
+            invocation_config = runtime_home / ".config" / "spotdl"
+            invocation_config.mkdir(parents=True)
+            environment = os.environ.copy()
+            environment["HOME"] = str(runtime_home)
+            environment["XDG_CONFIG_HOME"] = str(runtime_home / ".config")
+            environment["HARMONY_SPOTDL_CONFIG_DIR"] = str(invocation_config)
+
+            process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=environment,
+                    start_new_session=True,
+                )
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+                return subprocess.CompletedProcess(
+                    command, process.returncode, stdout, stderr
+                )
+            except subprocess.TimeoutExpired as e:
+                self._terminate_process_group(process)
+                raise SpotDLFallbackTimeout(
+                    f"SpotDL execution timed out after {timeout} seconds."
+                ) from e
+
+    @staticmethod
+    def _terminate_process_group(process: subprocess.Popen[str]) -> None:
+        """Terminate SpotDL and every downloader/transcoder child it spawned."""
+        if process.poll() is not None:
+            return
         try:
-            return subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=environment,
-            )
-        except subprocess.TimeoutExpired as e:
-            raise RuntimeError(f"SpotDL execution timed out after {timeout} seconds.") from e
+            os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            process.terminate()
+        try:
+            process.communicate(timeout=2)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            process.kill()
+        process.communicate()
 
     @staticmethod
     def _extract_json(

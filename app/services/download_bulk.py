@@ -66,8 +66,16 @@ def run_bulk_action(db: Session, action: str, download_ids: list[int]) -> dict[s
         for job in eligible:
             if action == "retry":
                 job.status = JobStatus.QUEUED.value
+                job.attempt_count = 0
+                job.next_attempt_at = None
                 job.started_at = None
                 job.completed_at = None
+                job.reason_code = None
+                job.reason_message = None
+                job.failure_stage = None
+                job.provider = None
+                job.retryable = False
+                job.technical_detail = None
             elif action == "cancel":
                 job.status = JobStatus.CANCELLED.value
                 job.completed_at = now

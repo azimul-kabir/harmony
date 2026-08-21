@@ -6,7 +6,6 @@ import hashlib
 import json
 
 from mutagen import File
-from app.services.lyrics import extract_lyrics
 
 
 def _first(value: Any, default=None):
@@ -64,7 +63,7 @@ def _tag_value(tags: Any, *names: str):
         value = tags.get(name) if hasattr(tags, "get") else None
         if value is not None:
             return _first(value)
-    # ID3 stores the user-visible names written by file_tag_writer as TXXX
+    # ID3 stores these user-visible names in TXXX frames.
     # frames.  This is indexing/repair logic, not artwork-fetch lookup.
     if getattr(tags, "getall", None):
         requested = {name.casefold() for name in names}
@@ -135,10 +134,6 @@ def read_metadata(file_path: str | Path) -> dict:
         "isrc": _first(tags.get("isrc")),
     }
 
-    lyrics = extract_lyrics(path, tags)
-    metadata["lyrics"] = lyrics.text if lyrics else None
-    metadata["lyrics_source"] = lyrics.source if lyrics else None
-    metadata["lyrics_synced"] = lyrics.synchronized if lyrics else False
     metadata["artwork_status"] = _artwork_status(audio)
     metadata["metadata_hash"] = _metadata_hash(metadata)
     return metadata

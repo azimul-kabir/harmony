@@ -12,14 +12,30 @@ from app.providers import youtube_music
 from app.providers.youtube_music import (
     YouTubeMusicSource,
     _best_artwork,
+    _download_artwork,
     _download_artwork_url,
     _fetch_artwork,
     _square_jpeg,
+    _yt_dlp_command,
     _youtube_music_artwork,
     _youtube_music_track,
     _write_download_tags,
     clean_title,
 )
+
+
+def test_yt_dlp_command_enables_discovered_deno(monkeypatch):
+    monkeypatch.setattr(
+        youtube_music.shutil,
+        "which",
+        lambda name: "/opt/deno/bin/deno" if name == "deno" else None,
+    )
+
+    assert _yt_dlp_command("yt-dlp") == [
+        "yt-dlp",
+        "--js-runtimes",
+        "deno:/opt/deno/bin/deno",
+    ]
 
 
 def test_detects_public_youtube_music_and_standard_fallback_urls():
@@ -43,8 +59,24 @@ def test_resolve_keeps_youtube_music_watch_url(monkeypatch):
     monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
     tracks = source.resolve("music.youtube.com/watch?v=abc1234")
 
-    assert targets == ["https://music.youtube.com/watch?v=abc1234"]
+    assert targets == ["https://www.youtube.com/watch?v=abc1234"]
     assert tracks[0].source_url == "https://music.youtube.com/watch?v=abc1234"
+
+
+def test_resolve_preserves_standard_youtube_fallback_url(monkeypatch):
+    source = YouTubeMusicSource()
+    targets: list[str] = []
+
+    def run_json(target, *, flat=False):
+        targets.append(target)
+        return {"id": "abc1234", "title": "Song", "uploader": "Artist"}
+
+    monkeypatch.setattr(source, "_run_json", run_json)
+    monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
+    tracks = source.resolve("https://www.youtube.com/watch?v=abc1234")
+
+    assert targets == ["https://www.youtube.com/watch?v=abc1234"]
+    assert tracks[0].source_url == "https://www.youtube.com/watch?v=abc1234"
 
 
 def test_metadata_cleanup_only_removes_known_presentation_suffixes():
@@ -158,22 +190,27 @@ def test_result_prefers_canonical_youtube_music_metadata(monkeypatch):
 
 def test_playlist_name_is_never_used_as_track_album(monkeypatch):
     source = YouTubeMusicSource()
+    targets: list[tuple[str, bool]] = []
     playlist = {
         "title": "My Playlist",
         "entries": [{"id": "video123", "title": "Flat title"}],
     }
     hydrated = {"id": "video123", "title": "Hydrated title"}
-    monkeypatch.setattr(
-        source,
-        "_run_json",
-        lambda target, *, flat=False: playlist if flat else hydrated,
-    )
+    def run_json(target, *, flat=False):
+        targets.append((target, flat))
+        return playlist if flat else hydrated
+
+    monkeypatch.setattr(source, "_run_json", run_json)
     monkeypatch.setattr(youtube_music, "_youtube_music_track", lambda _item_id: {})
 
     resolved = source.resolve("https://music.youtube.com/playlist?list=PLabc")
 
     assert resolved[0].album == "Singles"
     assert resolved[0].track is None
+    assert targets == [
+        ("https://music.youtube.com/playlist?list=PLabc", True),
+        ("https://www.youtube.com/watch?v=video123", False),
+    ]
 
 
 def test_synced_playlist_track_resolves_album_art_when_download_starts(monkeypatch):
@@ -201,6 +238,84 @@ def test_download_artwork_resolution_preserves_queued_cover(monkeypatch):
     track = Track(cover_url="https://images.example/queued-cover.jpg")
 
     assert _download_artwork_url(track) == "https://images.example/queued-cover.jpg"
+
+
+def test_direct_artwork_uses_spotify_cover_and_embeds_apic(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(youtube_music, "_fetch_artwork", lambda url: calls.append(url) or b"cover")
+    monkeypatch.setattr(
+        youtube_music,
+        "_youtube_music_artwork",
+        lambda item_id: pytest.fail(f"unexpected Music lookup for {item_id}"),
+    )
+
+    artwork = _download_artwork(
+        Track(cover_url="https://images.example/spotify.jpg"), "youtube123", 7
+    )
+
+    assert artwork == b"cover"
+    assert calls == ["https://images.example/spotify.jpg"]
+    path = tmp_path / "track.mp3"
+    path.write_bytes(b"audio placeholder")
+    _write_download_tags(path, Track(title="Song", artist="Artist"), {}, artwork)
+    covers = [frame for frame in ID3(path).getall("APIC") if frame.type == 3]
+    assert len(covers) == 1
+    assert covers[0].data == b"cover"
+
+
+@pytest.mark.parametrize("cover_url", ["https://images.example/spotify.jpg", None])
+def test_direct_artwork_falls_back_to_selected_youtube_candidate(cover_url, monkeypatch):
+    resolved = []
+
+    def fetch(url):
+        if "spotify" in url:
+            raise OSError("unavailable")
+        return b"music-cover"
+
+    monkeypatch.setattr(youtube_music, "_fetch_artwork", fetch)
+    monkeypatch.setattr(
+        youtube_music,
+        "_youtube_music_artwork",
+        lambda item_id: resolved.append(item_id) or "https://images.example/music.jpg",
+    )
+    track = Track(
+        cover_url=cover_url,
+        source_provider="spotify",
+        source_item_id="4uLU6hMCjMI75M1A2tKUQC",
+    )
+
+    assert _download_artwork(track, "youtube123", 7) == b"music-cover"
+    assert resolved == ["youtube123"]
+
+
+def test_direct_artwork_failures_are_non_fatal(monkeypatch):
+    monkeypatch.setattr(
+        youtube_music, "_fetch_artwork", lambda _url: (_ for _ in ()).throw(OSError())
+    )
+    monkeypatch.setattr(
+        youtube_music, "_youtube_music_artwork", lambda _item_id: None
+    )
+
+    assert _download_artwork(
+        Track(cover_url="https://images.example/spotify.jpg"), "youtube123", 7
+    ) is None
+
+
+def test_existing_youtube_music_track_still_resolves_its_source_id(monkeypatch):
+    resolved = []
+    monkeypatch.setattr(
+        youtube_music,
+        "_youtube_music_artwork",
+        lambda item_id: resolved.append(item_id) or "https://images.example/music.jpg",
+    )
+    monkeypatch.setattr(youtube_music, "_fetch_artwork", lambda _url: b"music-cover")
+
+    artwork = _download_artwork(
+        Track(source_provider="youtube_music", source_item_id="youtube123"), None, 7
+    )
+
+    assert artwork == b"music-cover"
+    assert resolved == ["youtube123"]
 
 
 def test_artwork_is_center_cropped_to_square_and_bounded():
@@ -237,6 +352,20 @@ def test_download_tags_include_album_artist_hierarchy_and_source(tmp_path):
     assert str(tags["TCON"]) == "Rock"
     assert str(tags["TSRC"]) == "USABC2400001"
     assert tags.getall("TXXX:YouTube Music ID")[0].text == ["abc1234"]
+
+
+def test_download_tags_replace_front_cover_with_exactly_one_apic(tmp_path):
+    path = tmp_path / "track.mp3"
+    initial = ID3()
+    initial.add(youtube_music.APIC(mime="image/jpeg", type=3, desc="Old", data=b"old"))
+    initial.add(youtube_music.APIC(mime="image/jpeg", type=3, desc="Other", data=b"other"))
+    initial.save(path)
+
+    _write_download_tags(path, Track(title="Song", artist="Artist"), {}, b"new")
+
+    covers = [frame for frame in ID3(path).getall("APIC") if frame.type == 3]
+    assert len(covers) == 1
+    assert covers[0].data == b"new"
 
 
 def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path, monkeypatch):
@@ -282,4 +411,88 @@ def test_download_timeout_cancels_before_unregister_and_cleans_tempdir(tmp_path,
     assert "--write-thumbnail" not in commands[0]
     assert "--embed-thumbnail" not in commands[0]
     assert "--convert-thumbnails" not in commands[0]
-    assert commands[0][-1] == "https://music.youtube.com/watch?v=abc1234"
+    assert commands[0][-1] == "https://www.youtube.com/watch?v=abc1234"
+
+
+def test_download_preserves_standard_youtube_fallback_endpoint(tmp_path, monkeypatch):
+    commands: list[list[str]] = []
+
+    class FailedProcess:
+        pid = 123
+        returncode = 1
+
+        def communicate(self, timeout):
+            return "", "video unavailable"
+
+    monkeypatch.setattr(
+        youtube_music.subprocess,
+        "Popen",
+        lambda command, **kwargs: commands.append(command) or FailedProcess(),
+    )
+    monkeypatch.setattr(youtube_music.download_processes, "register", lambda *_args: True)
+    monkeypatch.setattr(youtube_music.download_processes, "unregister", lambda *_args: None)
+    track = Track(
+        source_provider="youtube_music",
+        source_url="https://www.youtube.com/watch?v=abc1234",
+    )
+
+    with pytest.raises(ValueError, match="could not download"):
+        YouTubeMusicSource().download(track, str(tmp_path), job_id=9)
+
+    assert commands[0][-1] == "https://www.youtube.com/watch?v=abc1234"
+
+
+def test_download_passes_configured_cookie_file(tmp_path, monkeypatch):
+    commands: list[list[str]] = []
+
+    class FailedProcess:
+        pid = 123
+        returncode = 1
+
+        def communicate(self, timeout):
+            return "", "video unavailable"
+
+    source = YouTubeMusicSource()
+    source.settings.yt_dlp_cookie_file = "/run/secrets/youtube-cookies.txt"
+    monkeypatch.setattr(
+        youtube_music.subprocess,
+        "Popen",
+        lambda command, **kwargs: commands.append(command) or FailedProcess(),
+    )
+    monkeypatch.setattr(youtube_music.download_processes, "register", lambda *_args: True)
+    monkeypatch.setattr(youtube_music.download_processes, "unregister", lambda *_args: None)
+
+    with pytest.raises(ValueError, match="could not download"):
+        source.download(
+            Track(source_url="https://www.youtube.com/watch?v=abc1234"),
+            str(tmp_path),
+            job_id=9,
+        )
+
+    assert commands[0][-3:] == [
+        "--cookies",
+        "/run/secrets/youtube-cookies.txt",
+        "https://www.youtube.com/watch?v=abc1234",
+    ]
+
+
+def test_search_uses_runtime_copy_of_read_only_cookie(tmp_path, monkeypatch):
+    cookie = tmp_path / "mounted-cookies.txt"
+    cookie.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    cookie.chmod(0o400)
+    commands = []
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        runtime_cookie = Path(command[command.index("--cookies") + 1])
+        assert runtime_cookie != cookie
+        assert runtime_cookie.read_text(encoding="utf-8") == cookie.read_text(encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, '{"entries": []}', "")
+
+    source = YouTubeMusicSource()
+    source.settings.yt_dlp_cookie_file = str(cookie)
+    monkeypatch.setattr(youtube_music.subprocess, "run", run)
+
+    assert source.inspect_search("Artist Song") == []
+    assert cookie.stat().st_mode & 0o777 == 0o400
+    assert "--cookies" in commands[0]

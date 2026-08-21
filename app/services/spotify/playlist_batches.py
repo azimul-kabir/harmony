@@ -90,6 +90,19 @@ def _format_track(raw_item: dict) -> Track | None:
         if not track_id or not artists or not meta.get("name"):
             return None
         album = meta.get("album") or {}
+        # SpotipyFree 1.2 formats the current playlist GraphQL payload with an
+        # empty album mapping. The source item still contains album artwork.
+        raw_album = (
+            raw_item.get("itemV2", {}).get("data", {}).get("albumOfTrack") or {}
+        )
+        if not album.get("images") and raw_album:
+            album = {
+                **album,
+                "id": album.get("id")
+                or str(raw_album.get("uri") or "").removeprefix("spotify:album:"),
+                "name": album.get("name") or raw_album.get("name"),
+                "images": (raw_album.get("coverArt") or {}).get("sources") or [],
+            }
         images = album.get("images") or []
         cover_url = next(
             (image.get("url") for image in images if image.get("url")),
@@ -97,7 +110,7 @@ def _format_track(raw_item: dict) -> Track | None:
         )
         return Track(
             title=meta["name"],
-            artist=artists[0],
+            artist=", ".join(artists),
             artists=artists,
             album=album.get("name"),
             album_artist=next(

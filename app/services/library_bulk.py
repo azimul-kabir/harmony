@@ -18,6 +18,7 @@ from app.database.session import SessionLocal
 from app.domain.task import TaskStatus, TaskType
 from app.services.artwork import ArtworkFetchSkipped, ArtworkService
 from app.services.library_events import library_events
+from app.services.library_service import delete_library_file
 from app.services.library_scanner import index_file
 from app.services.library_search import library_search
 from app.services.task_service import create_task, record_item_failure
@@ -340,12 +341,9 @@ class LibraryBulkWorker:
         source = self._managed_path(song.path)
 
         if operation == "delete":
-            try:
-                source.unlink()
-            except FileNotFoundError:
-                # Deletion is idempotent: a stale index path means the
-                # filesystem side of the operation is already complete.
-                pass
+            # Deletion is idempotent; the shared service also prunes empty
+            # ancestors after an existing file is successfully removed.
+            delete_library_file(source, self.settings.music_path)
             # Retain the durable row and its provenance after deletion.
             song.availability_status = "missing"
             song.last_indexed_at = utcnow_naive()

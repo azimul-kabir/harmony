@@ -1,9 +1,9 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
-from app.api.library import _serialize_song, list_collections, list_songs
+from app.api.library import _serialize_song, list_songs
 from app.api.schemas.library import SongResponse
 from app.database.base import Base
 from app.database.models import Song
@@ -15,56 +15,6 @@ def _session() -> Session:
     return Session(engine)
 
 
-def test_collections_are_generated_from_available_library_songs():
-    with _session() as db:
-        db.add_all(
-            [
-                Song(
-                    path="/music/recent.mp3",
-                    filename="recent.mp3",
-                    title="Recent",
-                    artist="Artist",
-                    album="Album",
-                    bitrate=320000,
-                    artwork_status="missing",
-                    availability_status="available",
-                    created_at=datetime.now(UTC).replace(tzinfo=None),
-                ),
-                Song(
-                    path="/music/old.mp3",
-                    filename="old.mp3",
-                    title="Old",
-                    artist="Artist",
-                    album="Album",
-                    bitrate=128000,
-                    artwork_status="embedded",
-                    availability_status="available",
-                    created_at=(datetime.now(UTC) - timedelta(days=30)).replace(
-                        tzinfo=None
-                    ),
-                ),
-                Song(
-                    path="/music/missing.mp3",
-                    filename="missing.mp3",
-                    artwork_status="missing",
-                    availability_status="missing",
-                ),
-            ]
-        )
-        db.commit()
-
-        collections = {item["id"]: item for item in list_collections(db)}
-
-        assert collections["recently-added"]["song_count"] == 1
-        assert collections["highest-bitrate"]["song_count"] == 1
-        assert collections["missing-artwork"]["song_count"] == 1
-        assert collections["missing-metadata"]["song_count"] == 0
-        assert collections["recently-downloaded"]["song_count"] == 0
-        assert collections["recently-modified"]["song_count"] == 0
-        assert collections["large-albums"]["song_count"] == 0
-        assert collections["favorites"]["song_count"] == 0
-
-
 def test_song_response_marks_recently_added_tracks():
     song = Song(
         path="/music/recent.mp3",
@@ -73,6 +23,33 @@ def test_song_response_marks_recently_added_tracks():
     )
 
     assert _serialize_song(song)["recently_added"] is True
+
+
+def test_song_response_does_not_expose_legacy_lyrics_columns():
+    song = Song(
+        path="/music/legacy-lyrics.mp3",
+        filename="legacy-lyrics.mp3",
+    )
+
+    response = _serialize_song(song)
+
+    assert "has_lyrics" not in response
+    assert "lyrics_source" not in response
+    assert "lyrics_synced" not in response
+
+
+def test_retired_v2_columns_are_not_part_of_the_active_song_model():
+    mapped_columns = set(inspect(Song).columns.keys())
+
+    assert mapped_columns.isdisjoint({
+        "lyrics",
+        "lyrics_source",
+        "lyrics_synced",
+        "navidrome_play_count",
+        "navidrome_last_played_at",
+        "navidrome_starred_at",
+        "navidrome_stats_synced_at",
+    })
 
 
 def test_song_response_falls_back_when_a_legacy_song_has_no_created_at():

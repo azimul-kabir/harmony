@@ -3,11 +3,117 @@
 All notable changes to Harmony are documented in this file. The format is based
 on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
-## [Unreleased]
+## [v3.0.0] - 2026-08-21
+
+### Added
+
+- Added a unified Equalizer H brand mark across the web app, login portal,
+  browser favicon, PWA manifest, Apple touch icon, and project documentation.
+- Added a responsive **Select all** Library control that selects the current
+  filtered song set on desktop and mobile, with an in-place clear state.
+- Added direct YouTube and YouTube Music acquisition with bounded,
+  identity-validated fallback handling alongside existing Source workflows.
+
+### Changed
+
+- Simplified the active product surface around Sources, Downloads, Library,
+  M3U export, and Navidrome scan controls while keeping existing databases and
+  migrations upgrade-compatible.
+
+### Removed
+
+- Removed the duplicate playlist import, availability-comparison, and direct
+  download API path. Sources and the main Downloads API remain canonical.
+- Removed the duplicate legacy settings-page handler and inert download-source
+  and Spotify metadata-provider environment variables.
+- Removed optional Spotify artist-genre enrichment, its credentials/status UI,
+  runtime controls, provider requests, diagnostic command, and download-worker
+  preflight. Existing embedded and indexed genres remain preserved.
+- Started the v3 unreachable-code cleanup by removing the unmounted legacy
+  sync-all endpoint, superseded Library/Source compatibility helpers, unused
+  response schemas, and placeholder downloader, provider, and metadata domain
+  abstractions.
+- Removed settings controls and defaults that did not affect playlist sync, M3U
+  export, or download-source selection. Existing v2 rows and environment values
+  remain harmless during upgrades.
+- Removed retired lyrics, Navidrome playback-stat, and Smart Collection fields
+  from active ORM models. Historical migrations still preserve existing data.
+- Removed the stale Dashboard “Suggestions pending” value left behind by the
+  retired metadata-suggestion workflow.
+- Removed retired metadata workflow tables from the active ORM schema so fresh
+  installations do not create unused suggestion, discovery, cache, audit, and
+  persisted-issue storage. Upgrade migrations and existing data are preserved.
+
+### Fixed
+
+- Validate a manually supplied YouTube video's title and duration before
+  downloading so unrelated audio cannot be relabeled as the requested song.
+- Report restricted or unavailable user-supplied YouTube links as a terminal
+  manual-fallback outcome without pointless retries, while allowing another
+  explicit link to be submitted.
+- Installed Deno in the container's system executable path so yt-dlp can use
+  its JavaScript runtime when Synology runs Harmony as an unprivileged UID/GID.
+- Made artwork-cache insertion and file publication conflict-safe when the
+  download importer and Library watcher index the same new song concurrently.
+- Reconciled provider no-match outcomes with the indexed Library. When the
+  requested recording is already available, Harmony now records the download
+  as skipped, preserves its provider identity, and does not offer an
+  unnecessary manual fallback.
+- Stopped live Downloads snapshots from rebuilding an unchanged details drawer.
+  The drawer now remains scrollable and preserves its position when a real job
+  state change requires refreshed details.
+- Made the two dashboard summary cards fill the available desktop row instead
+  of reserving an empty third column.
+
+### Removed
+
+- Removed Smart Collections as a separate rule engine, API, dashboard card,
+  and Library tab. Direct filters retain the useful maintenance views.
+- Removed Synology SNMP health monitoring, its dashboard card and API, and the
+  PySNMP dependency. Harmony remains deployable on Synology NAS devices, while
+  host monitoring is left to NAS and infrastructure monitoring tools.
+- Removed the developer-facing metadata provider console and its raw test
+  search and lookup endpoints. Read-only provider capability and status APIs
+  remain available to supported Library workflows.
+- Removed lyrics extraction, indexing, sidecar watching, Library UI, and API
+  exposure. Historical database columns and migrations remain in place so
+  existing installations can upgrade safely.
+- Removed generated auto-playlists and Navidrome playback-stat ingestion from
+  the active product. Legacy playlist and Song columns remain available for
+  database upgrade compatibility.
+- Removed Navidrome Love/Unlove jobs, APIs, client mutations, configuration,
+  and Playlists UI. Harmony no longer changes user playback preferences.
+- Removed periodic Navidrome catalog comparison and automatic drift
+  reconciliation. Explicit connection status, incremental/full scans, and
+  playlist synchronization remain available.
+- Removed direct Navidrome playlist mutation and catalog-matching logic.
+  Playlist delivery now uses the existing M3U export and scan workflow only.
+- Removed the dedicated Library analytics API and album/quality insight cards.
+  Operational song, album, artist, and storage totals remain for health views.
+- Removed metadata discovery jobs, ranked provider candidates, selection APIs,
+  and repair-discovery UI. Historical database tables remain upgradeable.
+- Removed the discovery-only provider registry, async provider clients, cache,
+  candidate models, confidence matcher, and provider diagnostics API.
+- Removed metadata suggestions, review/application jobs, manual canonical edits,
+  history/rollback APIs, and explicit audio tag writing. Index extraction and
+  metadata-health visibility remain.
+- Removed persisted metadata-health rules, issue scoring, analysis jobs, and
+  issue-management UI. Missing metadata is now derived directly from the index.
 
 ## [v2.1.0] - 2026-08-08
 
 ### Added
+
+- Added an explicit manual fallback control for failed matches. A user-approved
+  YouTube track is queued separately while original Spotify history and playlist
+  identity remain intact.
+- Added retry countdown and attempt information to waiting Downloads, plus
+  conservative seven-day cleanup for unprotected staging files.
+- Added aggregate failure-reason counts to the Downloads screen so provider
+  throttling, matching, timeout, and local system failures are distinguishable.
+- Added bounded automatic recovery for transient download failures. Harmony now
+  persists provider attempts, delays retries without blocking workers, and
+  honors the existing Retry Failed Downloads setting.
 
 - Added a secure-by-default web login portal that protects the UI, API,
   interactive documentation, and event streams with signed HTTP-only sessions;
@@ -26,6 +132,12 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added durable download duration telemetry and detailed SpotDL attempt timing.
 
 ### Changed
+
+- Automatic fallback now evaluates targeted ISRC, album-aware, and metadata
+  searches and selects the strongest safe candidate instead of the first one.
+- Spotify-linked downloads now try the exact recording first, then a controlled
+  fallback version with the same primary artist, a strongly related title, and
+  a bounded duration difference.
 
 - Restored SpotDL's generated artist/title fallback when the original Spotify
   URL attempt fails or produces no audio. Fallback output now passes the same
@@ -48,6 +160,13 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   concurrent downloads and large playlist synchronization remain responsive.
 
 ### Fixed
+
+- The saved Maximum Workers value now controls the startup worker pool; fresh
+  installations default to two workers to reduce provider throttling.
+- Provider rate limits now trigger a persisted source-wide queue cooldown, so
+  other providers continue while Harmony stops compounding a 429 response.
+- Download retries now reuse safely persisted staging audio after tagging or
+  Library import failures instead of fetching the same provider audio again.
 
 - Fixed stalled and overlapping playlist synchronization, late duplicate
   resolution, inaccurate availability counts, and stuck progress indicators.

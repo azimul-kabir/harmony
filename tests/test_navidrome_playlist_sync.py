@@ -16,7 +16,6 @@ def _settings(**overrides):
         "navidrome_url": "http://navidrome:4533",
         "navidrome_username": "harmony",
         "navidrome_password": "secret",
-        "navidrome_direct_playlist_sync_enabled": False,
         "navidrome_playlist_reimport_enabled": True,
         "navidrome_playlist_reimport_debounce_seconds": 0,
         "navidrome_playlist_reimport_poll_seconds": 0.01,
@@ -31,6 +30,8 @@ def _playlist_sync_task(db):
         type="playlist",
         spotify_id="playlist-1",
         spotify_url="https://open.spotify.com/playlist/playlist-1",
+        provider="spotify",
+        external_id="playlist-1",
         name="Road Trip",
     )
     db.add(source)
@@ -38,6 +39,8 @@ def _playlist_sync_task(db):
     db.refresh(source)
     playlist = Playlist(
         spotify_id=source.spotify_id,
+        source_provider=source.provider,
+        source_external_id=source.external_id,
         name=source.name,
         track_count=2,
     )
@@ -128,58 +131,3 @@ def test_scan_completion_detected_when_scan_finishes_between_polls():
     coordinator = NavidromePlaylistReimportCoordinator(settings=_settings())
 
     asyncio.run(coordinator._incremental_scan(Client()))
-
-
-def test_successful_direct_reconcile_skips_second_scan(monkeypatch):
-    events = []
-
-    class Client:
-        def __init__(self):
-            self.statuses = iter([False, True, False])
-
-        async def status(self):
-            events.append("status")
-            return {"reachable": True, "scanning": next(self.statuses), "last_scan": None}
-
-        async def start_scan(self, *, full_scan=False):
-            events.append("scan")
-            return {"accepted": True}
-
-    class Direct:
-        def __init__(self, **kwargs):
-            pass
-
-        async def reconcile(self, playlist_id):
-            events.append(f"direct:{playlist_id}")
-            return SimpleNamespace(
-                playlist_id=playlist_id,
-                track_count=2,
-            )
-
-    monkeypatch.setattr(navidrome_playlist_sync, "NavidromeDirectPlaylistSync", Direct)
-    monkeypatch.setattr(
-        navidrome_playlist_sync,
-        "export_m3u",
-        lambda db, playlist: events.append(f"export:{playlist.id}") or 2,
-    )
-    db = SessionLocal()
-    try:
-        task, playlist = _playlist_sync_task(db)
-        coordinator = NavidromePlaylistReimportCoordinator(
-            settings=_settings(
-                navidrome_direct_playlist_sync_enabled=True
-            ),
-            client_factory=Client,
-        )
-
-        assert asyncio.run(coordinator.reconcile({task.id})) is True
-        assert events == [
-            "status",
-            "scan",
-            "status",
-            "status",
-            f"export:{playlist.id}",
-            f"direct:{playlist.id}",
-        ]
-    finally:
-        db.close()

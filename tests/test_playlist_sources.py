@@ -11,6 +11,7 @@ from app.services.playlist_source import PlaylistSourceError, parse_playlist_sou
 
 
 YTM_ID = "RDCLAK5uy_n1yUj1SIY2iIAIiVtdlwy6z7RLFqKXmB0"
+SPOTIFY_ID = "37i9dQZF1DXcBWIGoYBM5M"
 
 
 @pytest.mark.parametrize("url", [
@@ -44,7 +45,7 @@ def test_source_creation_is_provider_aware_and_deduplicates_canonical_urls():
     with SessionLocal() as db:
         first = create_playlist_source(db, f"https://music.youtube.com/playlist?list={YTM_ID}&si=one")
         duplicate = create_playlist_source(db, f"music.youtube.com/playlist?list={YTM_ID}&playnext=1")
-        spotify = create_playlist_source(db, f"https://open.spotify.com/playlist/{YTM_ID}")
+        spotify = create_playlist_source(db, f"https://open.spotify.com/playlist/{SPOTIFY_ID}")
         assert duplicate.id == first.id
         assert first.provider == "youtube_music"
         assert first.external_id == YTM_ID

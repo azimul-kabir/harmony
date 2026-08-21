@@ -1,28 +1,32 @@
 import time
 import threading
-import json
+from datetime import timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.logging import logger
+from app.core.config import get_settings
 from app.database.crud_downloads import (
     claim_next_job,
     recover_running_jobs,
     update_status,
 )
-from app.database.crud import link_song_source
+from app.database.crud import find_song, link_song_source
 from app.database.models import DownloadJob, Song
 from app.database.session import SessionLocal
 from app.domain.download import JobStatus
 from app.domain.download_outcome import DownloadCancelled, DownloadFailed, DownloadOutcome, DownloadSkipped, classify_unexpected
 from app.domain.task import TaskStatus, TaskType
 from app.domain.track import Track
+from app.downloaders.spotdl import AudioIdentity, validate_track_identity
+from app.mappers.download_job import download_job_to_track
 from app.exceptions.library import DuplicateTrackError
 from app.services.download import download_track
-from app.services.download_telemetry import heartbeat_ticker, update_telemetry
-from app.services.spotify.genres import enrich_tracks
+from app.services import settings_service
+from app.providers.download_sources import get_source
+from app.services.download_telemetry import heartbeat_ticker, update_telemetry, utcnow_naive
 from app.services.genre_tags import write_genres
 from app.services.library_manager import import_downloaded_track
 from app.services.library_scanner import index_file
@@ -36,6 +40,11 @@ from app.services.task_service import (
     set_current_item,
     start_task,
 )
+
+MAX_DOWNLOAD_ATTEMPTS = 3
+RETRY_DELAYS_SECONDS = (15, 60)
+RATE_LIMIT_DELAYS_SECONDS = (60, 180)
+
 
 def worker_loop() -> None:
     logger.info(
@@ -125,42 +134,85 @@ def process_job(
     ticker = heartbeat_ticker(job.id)
     ticker.__enter__()
     try:
-        # Build the Track domain object, carrying the cover_url and extended metadata forward
-        track = Track(
-            title=job.title,
-            artist=job.artist,
-            album=job.album,
-            album_artist=job.album_artist,
-            track=job.track,
-            disc=job.disc,
-            year=job.year,
-            isrc=job.isrc,
-            cover_url=job.cover_url,  # <-- NEW: Carry artwork URL to engine
-            spotify_track_id=job.spotify_track_id, 
-            spotify_url=job.source_url, 
-            source_provider=job.source_provider or "spotify",
-            source_item_id=job.source_item_id,
-            source_url=job.source_url,
-            genre=job.genre,
-            duration=job.duration,
-            spotify_artist_ids=json.loads(job.spotify_artist_ids or "[]"),
-            genre_provenance=job.genre_provenance,
-        )
-        # A queued job may predate genre support; resolve safely at execution.
-        if not track.genre:
-            update_telemetry(db, job, stage="metadata", progress_percent=10)
-            # Enrichment is optional; a provider outage must not fail audio.
+        acquisition_provider = job.source_provider or "spotify"
+        acquisition_item_id = job.source_item_id
+        acquisition_url = job.source_url
+        if job.manual_fallback_url:
+            fallback_source = get_source("youtube_music")
+            detected = fallback_source.detect_url(job.manual_fallback_url)
+            if detected is None or detected[0] != "track":
+                raise DownloadFailed(
+                    "manual_fallback_invalid",
+                    "The approved fallback track is no longer valid.",
+                    "preflight",
+                    retryable=False,
+                )
+            acquisition_provider = "youtube_music"
+            acquisition_item_id = detected[1]
+            acquisition_url = job.manual_fallback_url
+
+        track = download_job_to_track(job)
+        track.source_provider = acquisition_provider
+        track.source_item_id = acquisition_item_id
+        track.source_url = acquisition_url
+        if job.manual_fallback_url:
             try:
-                enrich_tracks([track], job_id=job.id)
-            except Exception:
-                logger.warning("Optional genre enrichment failed for job #{}", job.id)
-            # Persist successful pre-flight enrichment for retries and future jobs.
-            if track.genre:
-                job.genre = track.genre
-                job.genre_provenance = track.genre_provenance
-                db.commit()
-        update_telemetry(db, job, stage="downloading", progress_percent=None)
-        output_file = download_track(track, job.id)
+                resolved = fallback_source.resolve(job.manual_fallback_url)
+                candidate = resolved[0] if len(resolved) == 1 else None
+                if candidate is None:
+                    raise ValueError("The approved URL did not resolve to one track")
+                # Manual fallback is user-directed, so channel/uploader artist
+                # credits are not authoritative. Still require the supplied
+                # video title and duration to fit the requested recording.
+                validate_track_identity(
+                    track,
+                    AudioIdentity(
+                        candidate.title,
+                        track.artist,
+                        candidate.duration,
+                    ),
+                    strict=False,
+                )
+            except DownloadFailed as error:
+                raise DownloadFailed(
+                    "manual_fallback_mismatch",
+                    "The approved YouTube link does not match the requested track.",
+                    "validation",
+                    provider="youtube_music",
+                    retryable=False,
+                    technical_detail=error.technical_detail,
+                ) from error
+            except ValueError as error:
+                raise DownloadFailed(
+                    "manual_fallback_unavailable",
+                    "The approved YouTube link is unavailable. Choose a different video.",
+                    "download",
+                    provider="youtube_music",
+                    retryable=False,
+                    technical_detail=type(error).__name__,
+                ) from error
+        output_file = _resumable_staging_file(job)
+        if output_file is None:
+            update_telemetry(db, job, stage="downloading", progress_percent=None)
+            try:
+                output_file = download_track(track, job.id)
+            except ValueError as error:
+                if not job.manual_fallback_url:
+                    raise
+                raise DownloadFailed(
+                    "manual_fallback_unavailable",
+                    "The approved YouTube link is unavailable. Choose a different video.",
+                    "download",
+                    provider="youtube_music",
+                    retryable=False,
+                    technical_detail=type(error).__name__,
+                ) from error
+            # Persist acquisition before any post-processing. If tagging or
+            # import fails, a bounded retry can resume from this exact file.
+            job.output_file = str(output_file.resolve())
+            db.commit()
+        else:
+            logger.info("Resuming job #{} from staged audio", job.id)
         if _cancelled(db, job, output_file):
             return
         update_telemetry(db, job, stage="tagging", progress_percent=80)
@@ -190,9 +242,16 @@ def process_job(
             link_song_source(
                 db,
                 indexed_song,
-                job.source_provider or "spotify",
-                job.source_item_id or job.spotify_track_id,
+                acquisition_provider,
+                acquisition_item_id,
             )
+            if job.manual_fallback_url:
+                link_song_source(
+                    db,
+                    indexed_song,
+                    job.source_provider or "spotify",
+                    job.source_item_id or job.spotify_track_id,
+                )
         job.error = None
         db.commit()
         
@@ -308,6 +367,20 @@ def _cancelled(db, job, output_file):
     return True
 
 
+def _resumable_staging_file(job: DownloadJob) -> Path | None:
+    """Return a safe acquired file from a prior attempt, never a library path."""
+    if not job.output_file:
+        return None
+    candidate = Path(job.output_file)
+    try:
+        resolved = candidate.resolve(strict=True)
+        staging = Path(get_settings().staging_path).resolve(strict=True)
+        resolved.relative_to(staging)
+    except (OSError, ValueError):
+        return None
+    return resolved if resolved.is_file() else None
+
+
 def _finish_with_outcome(db, job, status, outcome):
     # Database errors raised by telemetry/heartbeat updates can leave the
     # transaction inactive.  Recover it before refreshing and finalizing the
@@ -318,12 +391,117 @@ def _finish_with_outcome(db, job, status, outcome):
     db.refresh(job)
     if job.status == JobStatus.CANCELLED.value:
         return
+    if status == JobStatus.FAILED and outcome.reason_code in {
+        "exact_match_unavailable", "fallback_match_unavailable", "provider_no_match"
+    }:
+        owned_song = find_song(
+            db,
+            title=job.title,
+            artist=job.artist,
+            album=job.album,
+            spotify_track_id=job.spotify_track_id,
+            isrc=job.isrc,
+        )
+        if owned_song is not None and owned_song.availability_status != "missing":
+            link_song_source(
+                db,
+                owned_song,
+                job.source_provider or "spotify",
+                job.source_item_id or job.spotify_track_id,
+            )
+            db.commit()
+            status = JobStatus.SKIPPED
+            outcome = DownloadSkipped(
+                "duplicate_in_library",
+                "This track is already in your library.",
+                "preflight",
+                technical_detail="library_identity_reconciled",
+            )
+    if status == JobStatus.FAILED and _schedule_retry(db, job, outcome):
+        return
     _record_outcome(db, job, status, outcome.reason_code, outcome.message, outcome.stage, outcome.provider, outcome.retryable, outcome.technical_detail)
     update_status(db=db, job=job, status=status)
     if job.task is not None:
         set_current_item(db=db, task=job.task, item=None)
         {JobStatus.SKIPPED: increment_skipped, JobStatus.FAILED: increment_failed}.get(status, lambda **_: None)(db=db, task=job.task)
         _schedule_navidrome_reimport(job)
+
+
+def _schedule_retry(db, job, outcome) -> bool:
+    """Delay transient failures without blocking a download worker thread."""
+    downloads = settings_service.get_settings_by_category(db, "downloads")
+    enabled = bool(downloads.get("retry_failed", True))
+    if not enabled or not outcome.retryable or job.attempt_count >= MAX_DOWNLOAD_ATTEMPTS:
+        return False
+
+    attempt = max(1, job.attempt_count)
+    delays = (
+        RATE_LIMIT_DELAYS_SECONDS
+        if outcome.reason_code == "provider_rate_limited"
+        else RETRY_DELAYS_SECONDS
+    )
+    delay = delays[min(attempt - 1, len(delays) - 1)]
+    job.reason_code = outcome.reason_code
+    job.reason_message = outcome.message
+    job.failure_stage = outcome.stage
+    job.provider = outcome.provider
+    job.retryable = True
+    job.technical_detail = outcome.technical_detail
+    job.status = JobStatus.QUEUED.value
+    job.started_at = None
+    job.completed_at = None
+    job.next_attempt_at = utcnow_naive() + timedelta(seconds=delay)
+    job.pipeline_stage = "retry_wait"
+    job.progress_percent = None
+    job.heartbeat_at = utcnow_naive()
+    job.worker_name = None
+    job.bytes_downloaded = None
+    job.bytes_total = None
+    job.transfer_rate_bps = None
+    job.eta_seconds = None
+    if job.task is not None:
+        set_current_item(db=db, task=job.task, item=None)
+    if outcome.reason_code == "provider_rate_limited":
+        _cool_down_queued_provider_jobs(
+            db,
+            source_provider=job.source_provider or "spotify",
+            until=job.next_attempt_at,
+            exclude_job_id=job.id,
+        )
+    db.commit()
+    logger.info(
+        "download_retry_scheduled download_id={} attempt={} max_attempts={} "
+        "delay_seconds={} reason_code={}",
+        job.id,
+        attempt,
+        MAX_DOWNLOAD_ATTEMPTS,
+        delay,
+        outcome.reason_code,
+    )
+    return True
+
+
+def _cool_down_queued_provider_jobs(
+    db: Session,
+    *,
+    source_provider: str,
+    until,
+    exclude_job_id: int,
+) -> None:
+    """Persist a provider-wide pause while allowing other sources to proceed."""
+    db.execute(
+        update(DownloadJob)
+        .where(
+            DownloadJob.id != exclude_job_id,
+            DownloadJob.status == JobStatus.QUEUED.value,
+            DownloadJob.source_provider == source_provider,
+            or_(
+                DownloadJob.next_attempt_at.is_(None),
+                DownloadJob.next_attempt_at < until,
+            ),
+        )
+        .values(next_attempt_at=until, pipeline_stage="provider_cooldown")
+    )
 
 
 def _schedule_navidrome_reimport(job: DownloadJob) -> None:
