@@ -124,6 +124,14 @@ function renderSources(sources) {
                 </button>
             </div>
         `;
+        const scheduleRun = source.latest_schedule_run;
+        const scheduleHtml = scheduleRun ? `
+            <div class="source-outcome">
+                <span>Last run: ${escapeHtml(scheduleRun.trigger)} · ${escapeHtml(scheduleRun.status)}</span>
+                <span class="${source.missed_run_count ? "has-failures" : ""}">${source.missed_run_count || 0} late runs</span>
+                <button class="btn-secondary schedule-history-btn" data-id="${source.id}">History</button>
+            </div>
+        ` : `<div class="source-outcome"><span>No schedule runs recorded</span></div>`;
         
         // Evaluate Task State
         let taskHtml = "";
@@ -235,6 +243,7 @@ function renderSources(sources) {
                 <div><strong>Last Sync:</strong> ${lastSync}</div>
             </div>
             ${autoSyncHtml}
+            ${scheduleHtml}
             ${playlistHtml}
             ${outcomeHtml}
             ${taskHtml}
@@ -288,11 +297,24 @@ function bindEvents() {
     document.querySelectorAll(".toggle-btn").forEach(btn => btn.onclick = toggleSource);
     document.querySelectorAll(".delete-btn").forEach(btn => btn.onclick = deleteSource);
     document.querySelectorAll(".auto-sync-btn").forEach(btn => btn.onclick = updateAutoSync);
+    document.querySelectorAll(".schedule-history-btn").forEach(btn => btn.onclick = showScheduleHistory);
     document.querySelectorAll(".source-auto-sync-interval").forEach(select => select.onchange = updateAutoSyncInterval);
     
     document.querySelectorAll(".pause-btn").forEach(btn => btn.onclick = (e) => handleTaskAction(e, "pause"));
     document.querySelectorAll(".resume-btn").forEach(btn => btn.onclick = (e) => handleTaskAction(e, "resume"));
     document.querySelectorAll(".cancel-btn").forEach(btn => btn.onclick = (e) => handleTaskAction(e, "cancel"));
+}
+
+async function showScheduleHistory(event) {
+    const response = await fetch(`/api/sources/${event.currentTarget.dataset.id}/schedule-history`);
+    const runs = await response.json();
+    if (!response.ok) { alert(runs.detail || "Could not load schedule history."); return; }
+    const lines = runs.map(run => {
+        const when = new Date(`${run.started_at}${String(run.started_at).includes("Z") ? "" : "Z"}`).toLocaleString();
+        const late = run.missed ? ` · late by ${Math.floor(run.delay_seconds / 60)}m` : "";
+        return `${when} · ${run.trigger} · ${run.status}${late}${run.message ? ` · ${run.message}` : ""}`;
+    });
+    alert(lines.length ? lines.join("\n") : "No schedule runs have been recorded yet.");
 }
 
 async function saveAutoSync(sourceId, enabled, interval, control) {

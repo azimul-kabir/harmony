@@ -17,6 +17,7 @@
                 <option value="metadata">Metadata</option>
                 <option value="navidrome">Navidrome</option>
                 <option value="library-settings">Library</option>
+                <option value="operations">Operations</option>
             </select>
         </label>
         <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings categories">
@@ -26,6 +27,7 @@
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-metadata" data-target="metadata">Metadata</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-navidrome" data-target="navidrome">Navidrome</button>
             <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-library-settings" data-target="library-settings">Library</button>
+            <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="tab-operations" data-target="operations">Operations</button>
         </div>
     </div>
 
@@ -182,6 +184,29 @@
                 <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
             </form>
         </div>
+
+        <div class="settings-section" id="tab-operations" style="display: none;">
+            <h2 style="margin-top: 0;">Operations &amp; automation</h2>
+            <div class="operations-card">
+                <h3>Backup &amp; restore</h3>
+                <p class="settings-help">Download a consistent database snapshot with cached artwork. Restoring replaces Harmony's database and overlays artwork from the archive.</p>
+                <div class="operations-actions">
+                    <a class="btn-primary" href="/api/settings/operations/backup">Download backup</a>
+                    <label class="btn-secondary operation-file-button">Restore backup<input id="backup-restore-file" type="file" accept=".zip,application/zip" hidden></label>
+                </div>
+                <p id="backup-operation-status" class="settings-help" role="status" aria-live="polite"></p>
+            </div>
+            <div class="operations-card">
+                <h3>Settings transfer</h3>
+                <p class="settings-help">Export database-managed preferences as portable JSON. Environment secrets and paths are excluded.</p>
+                <div class="operations-actions">
+                    <a class="btn-primary" href="/api/settings/operations/settings-export">Export settings</a>
+                    <label class="btn-secondary operation-file-button">Import settings<input id="settings-import-file" type="file" accept=".json,application/json" hidden></label>
+                </div>
+                <p id="settings-operation-status" class="settings-help" role="status" aria-live="polite"></p>
+            </div>
+            <p class="settings-help">Restart Harmony after a restore or settings import so startup-only services use the restored configuration.</p>
+        </div>
     </div>
 </div>
 
@@ -291,6 +316,11 @@
     .settings-save-row {
         margin-top: 32px;
     }
+    .operations-card { padding: 18px; margin: 18px 0; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface); }
+    .operations-card h3 { margin-top: 0; }
+    .operations-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .operations-actions a { text-decoration: none; }
+    .operation-file-button { cursor: pointer; }
     .settings-save-row .save-status {
         display: none;
         margin-left: 12px;
@@ -496,5 +526,29 @@
         } catch (error) { result.textContent = ` ${error.message}`; }
         finally { button.disabled = false; }
     });
+
+    async function uploadOperation(input, url, statusId, confirmation) {
+        const file = input.files?.[0];
+        if (!file) return;
+        if (confirmation && !window.confirm(confirmation)) { input.value = ''; return; }
+        const status = document.getElementById(statusId);
+        status.textContent = 'Uploading…';
+        const body = new FormData(); body.append('file', file);
+        try {
+            const response = await fetch(url, {method: 'POST', body});
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.detail || 'Operation failed.');
+            status.textContent = payload.restart_recommended ? 'Complete. Restart Harmony now.' : 'Complete.';
+        } catch (error) { status.textContent = error.message; }
+        finally { input.value = ''; }
+    }
+    document.getElementById('settings-import-file')?.addEventListener('change', event => uploadOperation(
+        event.currentTarget, '/api/settings/operations/settings-import', 'settings-operation-status',
+        'Import these settings? Existing database-managed values with matching keys will be replaced.'
+    ));
+    document.getElementById('backup-restore-file')?.addEventListener('change', event => uploadOperation(
+        event.currentTarget, '/api/settings/operations/restore', 'backup-operation-status',
+        'Restore this backup? The current Harmony database will be replaced. This cannot be undone unless you download a backup first.'
+    ));
 </script>
 {% endblock %}
