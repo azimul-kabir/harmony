@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from mutagen import File
@@ -42,16 +42,37 @@ def write_metadata(path: str | Path, values: dict) -> None:
 
 
 def search_musicbrainz(*, title: str | None, artist: str | None, album: str | None) -> list[dict]:
-    terms = []
-    for field, value in (("recording", title), ("artist", artist), ("release", album)):
-        if value and value.strip():
-            escaped = value.strip().replace('"', r'\"')
-            terms.append(f'{field}:"{escaped}"')
+    values = {
+        field: value.strip().replace('"', r'\"')
+        for field, value in (("recording", title), ("artist", artist), ("release", album))
+        if value and value.strip()
+    }
+    # A recording title and artist identify a track more reliably than its
+    # release name. Library tags commonly contain a translated, shortened, or
+    # misspelled album name; making all three clauses mandatory causes
+    # MusicBrainz to return no recordings even when title + artist is an exact
+    # match. Use the album only when one of those primary fields is unavailable.
+    fields = (
+        ("recording", "artist")
+        if "recording" in values and "artist" in values
+        else tuple(values)
+    )
+    terms = [f'{field}:"{values[field]}"' for field in fields]
     if not terms:
         raise ValueError("Enter a title, artist, or album to search.")
     settings = get_settings()
-    url = f"{settings.musicbrainz_base_url.rstrip('/')}/recording/?query={quote(' AND '.join(terms))}&fmt=json&limit=8"
-    request = Request(url, headers={"Accept": "application/json", "User-Agent": "Harmony/3.0 metadata-editor"})
+    query = urlencode({"query": " AND ".join(terms), "fmt": "json", "limit": 8})
+    # MusicBrainz treats ``recording`` as the collection search endpoint. A
+    # trailing slash instead addresses an empty recording ID and is rejected
+    # by the production API.
+    url = f"{settings.musicbrainz_base_url.rstrip('/')}/recording?{query}"
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Harmony/3.0.0 (https://github.com/azimul-kabir/harmony)",
+        },
+    )
     try:
         with urlopen(request, timeout=settings.musicbrainz_timeout_seconds) as response:
             payload = json.load(response)

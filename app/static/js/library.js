@@ -598,6 +598,9 @@ async function saveMetadata(event) {
             const artworkResponse = await fetch(`/api/library/songs/${metadataEditorSong.id}/metadata/artwork`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({release_id: metadataEditorArtworkRelease})});
             if (!artworkResponse.ok) { const error = await artworkResponse.json(); throw new Error(error.detail || "Artwork could not be imported."); }
         }
+        // Navidrome reads tags and embedded covers from the shared audio file.
+        // Start an incremental scan after either metadata or artwork changes.
+        fetch("/api/navidrome/rescan?full_scan=false", {method: "POST"}).catch(() => {});
         status.textContent = "Saved."; await loadLibraryData({preserveState: true}); setTimeout(() => document.getElementById("metadata-editor-dialog").close(), 350);
     } catch (error) { status.textContent = error.message; }
 }

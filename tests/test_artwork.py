@@ -109,6 +109,37 @@ def test_embedded_artwork_is_detected(tmp_path, monkeypatch):
     assert candidate.data == PNG
 
 
+def test_embed_replaces_front_cover_and_saves(monkeypatch, tmp_path):
+    class FakeAudio:
+        def __init__(self):
+            self.tags = {}
+            self.cleared = False
+            self.picture = None
+            self.saved = False
+
+        def clear_pictures(self):
+            self.cleared = True
+
+        def add_picture(self, picture):
+            self.picture = picture
+
+        def save(self):
+            self.saved = True
+
+    audio = FakeAudio()
+    service = ArtworkService(tmp_path / "cache")
+    monkeypatch.setattr(service, "validated_cached_bytes", lambda _artwork: (PNG, "image/png"))
+    monkeypatch.setattr("app.services.artwork.File", lambda *_args, **_kwargs: audio)
+
+    service.embed(tmp_path / "track.flac", object())
+
+    assert audio.cleared is True
+    assert audio.picture.type == 3
+    assert audio.picture.mime == "image/png"
+    assert audio.picture.data == PNG
+    assert audio.saved is True
+
+
 def test_artwork_metadata_and_file_apis(tmp_path):
     session_factory = _database()
     service = ArtworkService(tmp_path / "cache")

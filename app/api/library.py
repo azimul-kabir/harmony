@@ -128,6 +128,11 @@ def import_song_metadata_artwork(song_id: int, request: MetadataArtworkRequest):
         except ValueError as error:
             logger.warning("Artwork import failed for Song {}: {}", song_id, error)
             raise HTTPException(status_code=400, detail=str(error)) from error
+        try:
+            service.embed(song.path, artwork)
+        except (OSError, ValueError) as error:
+            logger.warning("Artwork embedding failed for Song {}: {}", song_id, error)
+            raise HTTPException(status_code=400, detail=str(error)) from error
         service.associate(song, artwork)
         song.musicbrainz_release_id = request.release_id
         db.commit()
