@@ -227,6 +227,17 @@ size for files that already contain a canonical MusicBrainz release ID.
 The defaults are conservative for public infrastructure. Fetching artwork
 never authorizes canonical metadata changes or file-tag writes.
 
+`MUSICBRAINZ_BASE_URL` (default `https://musicbrainz.org/ws/2`) and
+`MUSICBRAINZ_TIMEOUT_SECONDS` (default `12`) configure the Library editor's
+manual metadata search. Searches are user initiated, require at least one of
+title, artist, or album, and return a small bounded result set. No API key is
+required. Keep the public default unless routing requests through a compatible
+MusicBrainz mirror.
+
+Choosing a result is only a preview. Audio tags and the canonical release ID
+change only after **Save changes**; the Cover Art Archive timeout and size
+settings continue to bound the subsequent artwork import.
+
 ## Spotify metadata credentials
 
 Harmony no longer calls Spotify solely to enrich artist genres. Existing

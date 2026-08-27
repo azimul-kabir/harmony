@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     cover_art_archive_base_url: str = "https://coverartarchive.org"
     cover_art_archive_timeout_seconds: float = 20.0
     cover_art_archive_max_bytes: int = 15 * 1024 * 1024
+    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
+    musicbrainz_timeout_seconds: float = 12.0
 
 
 

@@ -294,6 +294,42 @@ Favorites
 
 The Library Engine is composed of independent services.
 
+## Explicit Metadata Editor
+
+The active v3 editor is deliberately smaller than the retired v2 discovery and
+suggestion system. It has no candidate tables, background discovery jobs,
+confidence engine, or automatic application. Its boundaries are:
+
+1. The browser starts with current Song values but owns independent title,
+   artist, and album search inputs.
+2. `metadata_editor.search_musicbrainz` performs one bounded recording query
+   and normalizes at most eight preview candidates.
+3. Selecting a candidate copies values into the form only; it does not mutate
+   persistence or the filesystem.
+4. A confirmed metadata save writes the supported easy tags, preserves
+   unrelated tags, force-reindexes the file, and emits a track-updated event.
+5. Manual artwork uploads and selected-release artwork imports use the existing
+   content-addressed `ArtworkService`. They update the canonical Song artwork
+   association but do not modify embedded audio artwork.
+
+Metadata editing owns a short-lived `SessionLocal` session closed in a
+`finally` block. File/format and provider failures are logged and translated to
+bounded client errors. Tag writing necessarily precedes reindexing; artwork is
+a separate request so its remote failure is visible and cannot misrepresent a
+successful tag save as rolled back.
+
+### Active metadata editor API
+
+| Method | Path | Effect |
+| --- | --- | --- |
+| `GET` | `/api/library/metadata/search` | Read-only MusicBrainz preview using user-supplied terms |
+| `PUT` | `/api/library/songs/{id}/metadata` | Explicit tag write and single-file reindex |
+| `POST` | `/api/library/songs/{id}/metadata/artwork` | Cache and associate selected release artwork |
+| `POST` | `/api/artwork/songs/{id}` | Validate, cache, and associate a manual upload |
+
+Search and selection are always non-mutating. Only the two explicit save/import
+requests change state.
+
 ## Metadata Health Engine (v2 historical design)
 
 Harmony v3 removes this persisted rule/issue engine from the active product. Missing
