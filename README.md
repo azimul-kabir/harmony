@@ -160,6 +160,25 @@ operations read this index instead of walking the music filesystem.
 - Multi-song selection
 - Recently Added badges
 - Responsive pagination
+- Per-song metadata and artwork editing
+
+### Edit Metadata and Artwork
+
+Choose **Edit** on any available song to correct title, artist, album, album
+artist, genre, year, track, or disc tags. The editor writes only those
+user-facing tags, preserves unrelated provider tags, and re-indexes the file
+after a successful save. Missing files cannot be edited.
+
+The **Find metadata** fields are intentionally separate from the saved tags.
+Replace a noisy video title or incorrect uploader/album with the title, artist,
+and album you expect, then search MusicBrainz. Select a candidate to copy its
+values into the editable form, review them, and save explicitly; searching or
+selecting a result never changes the file by itself.
+
+Artwork can be replaced with a JPEG, PNG, or WebP file up to 15 MB. Selecting a
+MusicBrainz result also previews its Cover Art Archive image and imports it only
+when the form is saved. Artwork is stored in Harmony's content-addressed cache;
+manual replacement and online import do not rewrite embedded audio artwork.
 
 ### Albums View
 
@@ -242,6 +261,10 @@ without another network request.
 **Refresh artwork** only re-indexes embedded/folder artwork and repairs
 Harmony's cache association. The Harmony cache itself is not a Navidrome media
 file; Navidrome continues to read artwork from the music library.
+
+For a song whose canonical release ID is missing or wrong, use its **Edit**
+dialog instead: enter corrected search terms, select the intended release, and
+save to associate the chosen release artwork.
 
 ---
 
@@ -334,11 +357,15 @@ Current configurable settings include:
 - Optional YouTube Music download source
 - Navidrome connection and playlist synchronization
 - Cover Art Archive request settings
+- MusicBrainz Library-editor request settings
 - Appearance, date/time, and runtime behavior
 - System information
 
 Cover Art Archive access can be tuned with the documented
 `COVER_ART_ARCHIVE_*` environment variables in `.env.example`.
+User-initiated metadata lookup can similarly be pointed at a compatible mirror
+or given a different timeout with `MUSICBRAINZ_BASE_URL` and
+`MUSICBRAINZ_TIMEOUT_SECONDS`.
 
 ---
 
@@ -633,7 +660,7 @@ Just a synchronized self-hosted music library.
 
 ### Library Intelligence
 
-- Optional metadata editing and repair workflows
+- Additional provider-assisted metadata review workflows
 - Advanced search improvements
 
 ---

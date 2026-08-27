@@ -13,6 +13,8 @@ from uuid import UUID
 
 from mutagen import File
 from mutagen.flac import Picture
+from mutagen.id3 import APIC
+from mutagen.mp4 import MP4Cover
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -183,6 +185,37 @@ class ArtworkService:
         song.artwork_id = artwork.id if artwork else None
         song.artwork_status = artwork.source if artwork else "missing"
         song.cover_url = artwork_url(artwork.id) if artwork else None
+
+    def embed(self, audio_path: str | Path, artwork: Artwork) -> None:
+        """Replace the audio file's front cover so shared-library players see it."""
+        cached = self.validated_cached_bytes(artwork)
+        if cached is None:
+            raise ArtworkValidationError("The selected artwork cannot be embedded in the audio file.")
+        data, mime = cached
+        audio = File(Path(audio_path), easy=False)
+        if audio is None:
+            raise ArtworkValidationError("This audio format does not support embedded artwork.")
+        if audio.tags is None:
+            audio.add_tags()
+        picture = Picture()
+        picture.type = 3
+        picture.mime = mime
+        picture.desc = "Front cover"
+        picture.data = data
+        if hasattr(audio, "clear_pictures") and hasattr(audio, "add_picture"):
+            audio.clear_pictures()
+            audio.add_picture(picture)
+        elif hasattr(audio.tags, "delall") and hasattr(audio.tags, "add"):
+            audio.tags.delall("APIC")
+            audio.tags.add(APIC(encoding=3, mime=mime, type=3, desc="Front cover", data=data))
+        elif audio.__class__.__module__.startswith("mutagen.mp4"):
+            image_format = MP4Cover.FORMAT_PNG if mime == "image/png" else MP4Cover.FORMAT_JPEG
+            audio.tags["covr"] = [MP4Cover(data, imageformat=image_format)]
+        elif hasattr(audio.tags, "__setitem__"):
+            audio.tags["metadata_block_picture"] = [base64.b64encode(picture.write()).decode("ascii")]
+        else:
+            raise ArtworkValidationError("This audio format does not support embedded artwork.")
+        audio.save()
 
     def validated_cached_bytes(self, artwork: Artwork | None) -> tuple[bytes, str] | None:
         """Return safe embeddable cache bytes without exposing its private path."""

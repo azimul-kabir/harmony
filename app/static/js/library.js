@@ -501,6 +501,7 @@ function renderSongs() {
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
                 <td data-label="Actions"><div class="library-row-actions">
+                    <button class="btn-secondary library-edit-metadata" type="button" data-edit-metadata="${song.id}">Edit</button>
                 </div></td>
             </tr>
         `).join("");
@@ -514,9 +515,94 @@ function renderSongs() {
             updateBulkSelection(page.items);
         });
     });
+    body.querySelectorAll("[data-edit-metadata]").forEach((button) => {
+        button.addEventListener("click", () => openMetadataEditor(Number(button.dataset.editMetadata)));
+    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
+}
+
+let metadataEditorSong = null;
+let metadataEditorArtworkRelease = null;
+
+function setMetadataForm(song) {
+    const form = document.getElementById("metadata-editor-form");
+    ["title", "artist", "album", "album_artist", "genre", "year", "track", "disc"].forEach((field) => {
+        form.elements[field].value = song[field] ?? song[`${field}_number`] ?? "";
+    });
+    form.elements.musicbrainz_recording_id.value = song.musicbrainz_recording_id || "";
+    form.elements.musicbrainz_release_id.value = "";
+}
+
+function openMetadataEditor(songId) {
+    metadataEditorSong = libraryState.songs.find((song) => song.id === songId);
+    if (!metadataEditorSong) return;
+    metadataEditorArtworkRelease = null;
+    setMetadataForm(metadataEditorSong);
+    document.getElementById("metadata-search-title-input").value = metadataEditorSong.title || "";
+    document.getElementById("metadata-search-artist").value = metadataEditorSong.artist || "";
+    document.getElementById("metadata-search-album").value = metadataEditorSong.album || "";
+    document.getElementById("metadata-artwork-preview").src = metadataEditorSong.cover_url || "";
+    document.getElementById("metadata-artwork-file").value = "";
+    document.getElementById("metadata-search-results").innerHTML = "";
+    document.getElementById("metadata-search-status").textContent = "";
+    document.getElementById("metadata-editor-status").textContent = "";
+    document.getElementById("metadata-editor-dialog").showModal();
+}
+
+async function searchMetadata() {
+    const params = new URLSearchParams();
+    [["title", "metadata-search-title-input"], ["artist", "metadata-search-artist"], ["album", "metadata-search-album"]].forEach(([field, id]) => {
+        const value = document.getElementById(id).value.trim(); if (value) params.set(field, value);
+    });
+    const status = document.getElementById("metadata-search-status");
+    const results = document.getElementById("metadata-search-results");
+    status.textContent = "Searching…"; results.innerHTML = "";
+    try {
+        const payload = await fetchJson(`/api/library/metadata/search?${params}`);
+        status.textContent = `${payload.items.length} possible ${payload.items.length === 1 ? "match" : "matches"}`;
+        results.innerHTML = payload.items.map((item, index) => `<button type="button" data-metadata-result="${index}" class="metadata-search-result">
+            ${item.artwork_url ? `<img src="${escapeAttribute(item.artwork_url)}" alt="" loading="lazy">` : `<span class="library-artwork-placeholder">${icons.music}</span>`}
+            <span><strong>${escapeHtml(item.title || "Untitled")}</strong><small>${escapeHtml(item.artist || "Unknown artist")} · ${escapeHtml(item.album || "Unknown album")}${item.year ? ` · ${item.year}` : ""}</small></span>
+        </button>`).join("") || "<p>No matches found. Try shorter or corrected search terms.</p>";
+        results.querySelectorAll("[data-metadata-result]").forEach((button) => button.onclick = () => {
+            const item = payload.items[Number(button.dataset.metadataResult)];
+            setMetadataForm(item);
+            metadataEditorArtworkRelease = item.release_id || null;
+            if (item.artwork_url) document.getElementById("metadata-artwork-preview").src = item.artwork_url;
+            results.querySelectorAll("button").forEach((entry) => entry.classList.toggle("is-selected", entry === button));
+            status.textContent = "Match copied below. Review every field before saving.";
+        });
+    } catch (error) { status.textContent = error.message; }
+}
+
+async function saveMetadata(event) {
+    event.preventDefault();
+    if (!metadataEditorSong) return;
+    const form = event.currentTarget;
+    const status = document.getElementById("metadata-editor-status");
+    const payload = {};
+    ["title", "artist", "album", "album_artist", "genre", "musicbrainz_recording_id", "musicbrainz_release_id"].forEach((field) => { payload[field] = form.elements[field].value.trim() || null; });
+    ["year", "track", "disc"].forEach((field) => { payload[field] = form.elements[field].value === "" ? null : Number(form.elements[field].value); });
+    status.textContent = "Saving metadata…";
+    try {
+        const response = await fetch(`/api/library/songs/${metadataEditorSong.id}/metadata`, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+        const result = await response.json(); if (!response.ok) throw new Error(result.detail || "Metadata could not be saved.");
+        const file = document.getElementById("metadata-artwork-file").files[0];
+        if (file) {
+            const data = new FormData(); data.append("file", file);
+            const artworkResponse = await fetch(`/api/artwork/songs/${metadataEditorSong.id}`, {method: "POST", body: data});
+            if (!artworkResponse.ok) { const error = await artworkResponse.json(); throw new Error(error.detail || "Artwork could not be saved."); }
+        } else if (metadataEditorArtworkRelease) {
+            const artworkResponse = await fetch(`/api/library/songs/${metadataEditorSong.id}/metadata/artwork`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({release_id: metadataEditorArtworkRelease})});
+            if (!artworkResponse.ok) { const error = await artworkResponse.json(); throw new Error(error.detail || "Artwork could not be imported."); }
+        }
+        // Navidrome reads tags and embedded covers from the shared audio file.
+        // Start an incremental scan after either metadata or artwork changes.
+        fetch("/api/navidrome/rescan?full_scan=false", {method: "POST"}).catch(() => {});
+        status.textContent = "Saved."; await loadLibraryData({preserveState: true}); setTimeout(() => document.getElementById("metadata-editor-dialog").close(), 350);
+    } catch (error) { status.textContent = error.message; }
 }
 
 function renderAlbums() {
@@ -988,6 +1074,10 @@ function connectLibraryEvents() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("metadata-search-button").addEventListener("click", searchMetadata);
+    document.getElementById("metadata-editor-form").addEventListener("submit", saveMetadata);
+    ["metadata-editor-close", "metadata-editor-cancel"].forEach((id) => document.getElementById(id).addEventListener("click", () => document.getElementById("metadata-editor-dialog").close()));
+    document.getElementById("metadata-artwork-file").addEventListener("change", (event) => { const file = event.target.files[0]; if (file) { metadataEditorArtworkRelease = null; document.getElementById("metadata-artwork-preview").src = URL.createObjectURL(file); } });
     const params = new URLSearchParams(window.location.search);
     const requestedView = params.get("view");
     const requestedAlbumKey = params.get("album_key");

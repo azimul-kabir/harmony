@@ -102,6 +102,29 @@ Manual artwork replacement uses multipart uploads:
 Replacement and removal do not modify embedded audio-file artwork or delete
 shared cached resources.
 
+## Song metadata editing and assisted lookup
+
+- `GET /api/library/metadata/search` accepts optional `title`, `artist`, and
+  `album` query parameters. At least one non-blank value is required. The
+  values are supplied by the editor rather than taken from the Song row, and
+  the endpoint returns at most eight normalized MusicBrainz recording/release
+  candidates. It does not mutate the Song or audio file.
+- `PUT /api/library/songs/{song_id}/metadata` accepts `title`, `artist`,
+  `album`, `album_artist`, `genre`, `year`, `track`, `disc`, and optional
+  MusicBrainz recording/release IDs. It requires an available Song, writes the
+  editable tags to the audio file, force-reindexes that path, and publishes a
+  `library.track.updated` event. Blank nullable fields remove their editable
+  tag; unrelated tags are preserved.
+- `POST /api/library/songs/{song_id}/metadata/artwork` accepts
+  `{ "release_id": "<MusicBrainz release UUID>" }`, downloads the bounded
+  Cover Art Archive front image, associates the cached artwork with the Song,
+  and stores that release ID. It does not embed the image in the audio file.
+
+The metadata and artwork write routes are intentionally separate. Clients can
+report an artwork-provider failure without implying that an already completed
+audio-tag write was rolled back. Provider and unsupported-file failures use
+clean HTTP 400 responses; unknown and missing Songs use HTTP 404 and 409.
+
 Advanced Library search remains available through `GET /api/library/search`.
 The `q` value supports:
 

@@ -18,6 +18,9 @@ from app.services.library_filters import (
     apply_song_sort,
 )
 from app.services.duplicate_detector import TIERS, duplicate_detector
+from app.services.metadata_editor import search_musicbrainz, write_metadata
+from app.services.artwork import ArtworkService
+from app.core.logging import logger
 from app.services.library_bulk import create_bulk_task
 from app.services.library_catalog import (
     playlist_sources_for_tracks,
@@ -51,6 +54,92 @@ class DuplicateResolutionRequest(BaseModel):
     confirmation_token: str = Field(min_length=64, max_length=64)
     confirm_delete: bool = False
     initiated_by: str | None = Field(default=None, max_length=120)
+
+
+class MetadataEditRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=500)
+    artist: str | None = Field(default=None, max_length=500)
+    album: str | None = Field(default=None, max_length=500)
+    album_artist: str | None = Field(default=None, max_length=500)
+    genre: str | None = Field(default=None, max_length=200)
+    year: int | None = Field(default=None, ge=0, le=9999)
+    track: int | None = Field(default=None, ge=0, le=9999)
+    disc: int | None = Field(default=None, ge=0, le=999)
+    musicbrainz_recording_id: str | None = Field(default=None, max_length=36)
+    musicbrainz_release_id: str | None = Field(default=None, max_length=36)
+
+
+class MetadataArtworkRequest(BaseModel):
+    release_id: str = Field(min_length=36, max_length=36)
+
+
+@router.get("/metadata/search", summary="Search MusicBrainz with editable query fields")
+def metadata_search(
+    title: str | None = Query(default=None, max_length=500),
+    artist: str | None = Query(default=None, max_length=500),
+    album: str | None = Query(default=None, max_length=500),
+):
+    try:
+        return {"items": search_musicbrainz(title=title, artist=artist, album=album)}
+    except ValueError as error:
+        logger.warning("Metadata search failed: {}", error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.put("/songs/{song_id}/metadata", summary="Edit a Song's file metadata")
+def edit_song_metadata(song_id: int, request: MetadataEditRequest):
+    # This route owns its session because file I/O and re-indexing form one explicit unit.
+    db = SessionLocal()
+    try:
+        song = db.get(Song, song_id)
+        if song is None:
+            raise HTTPException(status_code=404, detail="Song not found")
+        if song.availability_status != "available":
+            raise HTTPException(status_code=409, detail="The audio file is not available.")
+        values = request.model_dump(exclude={"musicbrainz_recording_id", "musicbrainz_release_id"})
+        try:
+            write_metadata(song.path, values)
+            index_library_file(db, song.path, force=True, download_source=song.download_source)
+        except (OSError, ValueError) as error:
+            db.rollback()
+            logger.warning("Could not edit metadata for Song {}: {}", song_id, error)
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        refreshed = db.get(Song, song_id)
+        refreshed.musicbrainz_recording_id = request.musicbrainz_recording_id
+        refreshed.musicbrainz_release_id = request.musicbrainz_release_id
+        db.commit()
+        db.refresh(refreshed)
+        library_events.publish("library.track.updated", path=refreshed.path, song_id=refreshed.id)
+        return serialize_song(refreshed, playlist_sources_for_tracks(db, [refreshed.spotify_track_id]).get(refreshed.spotify_track_id or "", []))
+    finally:
+        db.close()
+
+
+@router.post("/songs/{song_id}/metadata/artwork", summary="Import selected release artwork")
+def import_song_metadata_artwork(song_id: int, request: MetadataArtworkRequest):
+    db = SessionLocal()
+    try:
+        song = db.get(Song, song_id)
+        if song is None:
+            raise HTTPException(status_code=404, detail="Song not found")
+        service = ArtworkService()
+        try:
+            artwork = service.fetch_musicbrainz_release_artwork(db, request.release_id)
+        except ValueError as error:
+            logger.warning("Artwork import failed for Song {}: {}", song_id, error)
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        try:
+            service.embed(song.path, artwork)
+        except (OSError, ValueError) as error:
+            logger.warning("Artwork embedding failed for Song {}: {}", song_id, error)
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        service.associate(song, artwork)
+        song.musicbrainz_release_id = request.release_id
+        db.commit()
+        library_events.publish("library.track.updated", path=song.path, song_id=song.id)
+        return {"song_id": song.id, "artwork_id": artwork.id, "cover_url": artwork_url(artwork.id)}
+    finally:
+        db.close()
 
 
 @router.get("/duplicates", summary="List explainable duplicate candidate groups")

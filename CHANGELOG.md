@@ -3,6 +3,24 @@
 All notable changes to Harmony are documented in this file. The format is based
 on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
+## [Unreleased]
+
+### Added
+
+- Added a responsive per-song Library metadata editor for title, artist, album,
+  album artist, genre, year, track, and disc tags. Saving explicitly writes the
+  selected audio file and immediately refreshes its Library index projection.
+- Added a bounded MusicBrainz search inside the editor. Search title, artist,
+  and album are independently editable, so incorrect downloaded tags do not
+  constrain lookup; results remain previews until the user selects and saves.
+- Added manual JPEG, PNG, and WebP artwork replacement from the editor and
+  explicit Cover Art Archive import for a selected MusicBrainz release.
+
+### Security
+
+- Metadata provider failures return bounded user-facing errors, and all remote
+  search and artwork requests retain configured time and response-size limits.
+
 ## [v3.0.0] - 2026-08-21
 
 ### Added
