@@ -69,6 +69,9 @@
 .library-upload-album-fields label { display: grid; gap: .3rem; font-size: .78rem; color: var(--text-muted); }
 .library-upload-album-fields input { width: 100%; min-width: 0; }
 .library-upload-album-review .btn-secondary { justify-self: start; }
+.library-upload-album-actions,.library-upload-album-artwork { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.library-upload-album-artwork img { width:72px; aspect-ratio:1 / 1; object-fit:cover; border-radius:8px; background:var(--bg-surface); }
+.library-upload-album-artwork label { display:grid; gap:.3rem; }
 .library-upload-item { display: grid; grid-template-columns: auto 1fr; gap: .85rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 12px; }
 .library-upload-item-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
 .library-upload-item-fields label { display: grid; gap: .3rem; font-size: .78rem; color: var(--text-muted); }

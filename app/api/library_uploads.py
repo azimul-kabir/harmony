@@ -16,7 +16,9 @@ from app.services.library_uploads import (
     load_batch,
     save_upload,
     summarize_batch,
+    set_batch_artwork,
 )
+from app.services.artwork import ArtworkService, ArtworkValidationError, MAX_EMBEDDED_ARTWORK_BYTES
 from app.services.navidrome import NavidromeClient, NavidromeError
 
 
@@ -132,5 +134,47 @@ async def confirm_upload_batch(batch_id: str, request: ImportUploadBatch):
 def delete_upload_batch(batch_id: str):
     try:
         discard_batch(batch_id)
+    except UploadValidationError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.post("/batches/{batch_id}/groups/{group_id}/artwork", summary="Stage album artwork")
+async def upload_batch_artwork(batch_id: str, group_id: str, file: UploadFile = File(...)):
+    data = await file.read(MAX_EMBEDDED_ARTWORK_BYTES + 1)
+    await file.close()
+    db = SessionLocal()
+    try:
+        try:
+            artwork = ArtworkService().cache_manual_upload(db, data)
+            if ArtworkService().validated_cached_bytes(artwork) is None:
+                raise ArtworkValidationError("Album artwork must be a JPEG or PNG image that can be embedded in audio files.")
+            db.commit()
+            return set_batch_artwork(batch_id, group_id, artwork)
+        except (ArtworkValidationError, UploadValidationError, ValueError) as error:
+            db.rollback()
+            raise _bad_upload(error) from error
+    finally:
+        db.close()
+
+
+@router.post("/batches/{batch_id}/groups/{group_id}/artwork/musicbrainz", summary="Stage Cover Art Archive artwork")
+async def import_batch_musicbrainz_artwork(batch_id: str, group_id: str, release_id: str):
+    db = SessionLocal()
+    try:
+        try:
+            artwork = ArtworkService().fetch_musicbrainz_release_artwork(db, release_id)
+            db.commit()
+            return set_batch_artwork(batch_id, group_id, artwork)
+        except (UploadValidationError, ValueError) as error:
+            db.rollback()
+            raise _bad_upload(error) from error
+    finally:
+        db.close()
+
+
+@router.delete("/batches/{batch_id}/groups/{group_id}/artwork", summary="Remove staged album artwork")
+def remove_batch_artwork(batch_id: str, group_id: str):
+    try:
+        return set_batch_artwork(batch_id, group_id, None)
     except UploadValidationError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

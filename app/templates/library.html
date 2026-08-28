@@ -219,7 +219,9 @@
                 <label>Year<input id="library-upload-album-year" type="number" min="0" max="9999"></label>
             </div>
             <p id="library-upload-album-findings" class="library-search-status"></p>
-            <button id="library-upload-album-apply" class="btn-secondary" type="button">Apply to this album</button>
+            <div class="library-upload-album-actions"><button id="library-upload-album-apply" class="btn-secondary" type="button">Apply to this album</button><button id="library-upload-album-search" class="btn-secondary" type="button">Find on MusicBrainz</button></div>
+            <div id="library-upload-album-matches" class="metadata-search-results"></div>
+            <div class="library-upload-album-artwork"><img id="library-upload-album-artwork-preview" alt="Selected album artwork"><label>Replace album artwork<input id="library-upload-album-artwork-file" type="file" accept="image/jpeg,image/png"></label><button id="library-upload-album-artwork-remove" class="btn-secondary" type="button">Remove selection</button></div>
         </section>
         <div id="library-upload-review" class="library-upload-review"></div>
         <footer class="library-upload-actions">

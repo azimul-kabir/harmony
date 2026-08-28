@@ -16,6 +16,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added album-level upload review with shared metadata application and explicit
   findings for inconsistent album fields and missing, duplicate, or gapped
   track-number sequences.
+- Added MusicBrainz-assisted staged album matching plus manual or Cover Art
+  Archive artwork selection, preview, removal, and album-wide embedding at
+  confirmed import.
 
 - Added a responsive per-song Library metadata editor for title, artist, album,
   album artist, genre, year, track, and disc tags. Saving explicitly writes the

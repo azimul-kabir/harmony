@@ -1133,6 +1133,11 @@ function populateUploadAlbumFields() {
     document.getElementById("library-upload-album-year").value = group.values.year ?? "";
     document.getElementById("library-upload-album-findings").textContent = group.findings.length
         ? group.findings.join(" · ") : "This group has consistent shared album metadata and track numbering.";
+    const preview = document.getElementById("library-upload-album-artwork-preview");
+    preview.src = group.artwork?.url || "";
+    preview.hidden = !group.artwork?.url;
+    document.getElementById("library-upload-album-artwork-remove").hidden = !group.artwork;
+    document.getElementById("library-upload-album-matches").innerHTML = "";
 }
 
 function renderUploadAlbumReview() {
@@ -1166,6 +1171,47 @@ function applyUploadAlbumMetadata() {
         });
     });
     document.getElementById("library-upload-album-findings").textContent = `Applied shared metadata to ${group.item_ids.length} ${group.item_ids.length === 1 ? "track" : "tracks"}. Review individual titles and track numbers below.`;
+}
+
+async function searchUploadAlbumMetadata() {
+    const group = selectedUploadAlbumGroup();
+    if (!group) return;
+    const target = document.getElementById("library-upload-album-matches");
+    const album = document.getElementById("library-upload-album").value.trim();
+    const artist = document.getElementById("library-upload-album-artist").value.trim();
+    target.textContent = "Searching MusicBrainz…";
+    try {
+        const result = await uploadRequest(`/api/library/metadata/search?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`);
+        const unique = [...new Map(result.items.filter((item) => item.release_id).map((item) => [item.release_id, item])).values()];
+        target.innerHTML = unique.map((item) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.album || item.title || "Unknown release")}</strong><small>${escapeHtml(item.album_artist || item.artist || "Unknown artist")} · ${item.year || "Year unknown"}</small><button type="button" class="btn-secondary" data-upload-album-match="${item.release_id}">Use release</button></article>`).join("") || "No matching releases found.";
+        target.querySelectorAll("[data-upload-album-match]").forEach((button) => button.addEventListener("click", () => applyUploadAlbumMatch(unique.find((item) => item.release_id === button.dataset.uploadAlbumMatch))));
+    } catch (error) { target.textContent = error.message; }
+}
+
+async function applyUploadAlbumMatch(match) {
+    if (!match) return;
+    document.getElementById("library-upload-album").value = match.album || "";
+    document.getElementById("library-upload-album-artist").value = match.album_artist || match.artist || "";
+    document.getElementById("library-upload-album-year").value = match.year ?? "";
+    applyUploadAlbumMetadata();
+    const group = selectedUploadAlbumGroup();
+    try {
+        const updated = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/groups/${group.id}/artwork/musicbrainz?release_id=${encodeURIComponent(match.release_id)}`, {method:"POST"});
+        group.artwork = updated.artwork;
+        populateUploadAlbumFields();
+    } catch (error) { document.getElementById("library-upload-album-findings").textContent = `Metadata applied. Artwork was unavailable: ${error.message}`; }
+}
+
+async function uploadAlbumArtwork(file) {
+    const group = selectedUploadAlbumGroup(); if (!group || !file) return;
+    const form = new FormData(); form.append("file", file, file.name);
+    try { const updated = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/groups/${group.id}/artwork`, {method:"POST",body:form}); group.artwork=updated.artwork; populateUploadAlbumFields(); }
+    catch(error){ document.getElementById("library-upload-album-findings").textContent=error.message; }
+}
+
+async function removeAlbumArtwork() {
+    const group=selectedUploadAlbumGroup(); if(!group)return;
+    await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/groups/${group.id}/artwork`,{method:"DELETE"}); group.artwork=null; populateUploadAlbumFields();
 }
 
 async function ensureUploadBatch() {
@@ -1263,6 +1309,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("library-upload-import").addEventListener("click", importLocalFiles);
     document.getElementById("library-upload-album-group").addEventListener("change", populateUploadAlbumFields);
     document.getElementById("library-upload-album-apply").addEventListener("click", applyUploadAlbumMetadata);
+    document.getElementById("library-upload-album-search").addEventListener("click", searchUploadAlbumMetadata);
+    document.getElementById("library-upload-album-artwork-file").addEventListener("change", (event) => uploadAlbumArtwork(event.target.files[0]));
+    document.getElementById("library-upload-album-artwork-remove").addEventListener("click", removeAlbumArtwork);
     const uploadDrop = document.getElementById("library-upload-drop");
     ["dragenter", "dragover"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.add("is-dragging"); }));
     ["dragleave", "drop"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.remove("is-dragging"); }));

@@ -22,6 +22,8 @@ from app.services.import_engine import import_download
 from app.services.library_paths import build_destination
 from app.services.metadata import read_metadata
 from app.services.metadata_editor import write_metadata
+from app.services.artwork import ArtworkService
+from app.database.models import Artwork
 
 
 SUPPORTED_AUDIO_EXTENSIONS = {".flac", ".m4a", ".mp3", ".mp4", ".ogg", ".opus"}
@@ -170,8 +172,9 @@ def summarize_batch(manifest: dict) -> dict:
             expected = set(range(min(tracks), max(tracks) + 1))
             if set(tracks) != expected:
                 findings.append("The track-number sequence has gaps.")
+        group_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
         summaries.append({
-            "id": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16],
+            "id": group_id,
             "album": album,
             "label": album or f"Singles · {artists[0] if artists else 'Unknown Artist'}",
             "item_ids": [item["id"] for item in items],
@@ -183,9 +186,24 @@ def summarize_batch(manifest: dict) -> dict:
                 "genre": genres[0] if len(genres) == 1 else None,
             },
             "findings": findings,
+            "artwork": (manifest.get("artwork") or {}).get(group_id),
         })
     summaries.sort(key=lambda group: group["label"].casefold())
     return {"groups": summaries, "group_count": len(summaries), "finding_count": sum(len(group["findings"]) for group in summaries)}
+
+
+def set_batch_artwork(batch_id: str, group_id: str, artwork: Artwork | None) -> dict:
+    manifest = load_batch(batch_id)
+    group = next((item for item in summarize_batch(manifest)["groups"] if item["id"] == group_id), None)
+    if group is None:
+        raise UploadValidationError("Album group was not found.")
+    artwork_map = manifest.setdefault("artwork", {})
+    if artwork is None:
+        artwork_map.pop(group_id, None)
+    else:
+        artwork_map[group_id] = {"id": artwork.id, "mime_type": artwork.mime_type, "url": f"/api/artwork/{artwork.id}/file"}
+    _write_manifest(_batch_dir(batch_id), manifest)
+    return next(item for item in summarize_batch(manifest)["groups"] if item["id"] == group_id)
 
 
 def _clean_text(value: str | None) -> tuple[str | None, list[str]]:
@@ -294,6 +312,11 @@ def analyze_metadata(metadata: dict, *, original_name: str, path: Path | None = 
 
 def import_batch(db: Session, batch_id: str, selections: list[dict]) -> dict:
     manifest = load_batch(batch_id)
+    summary = summarize_batch(manifest)
+    artwork_by_item = {
+        item_id: group.get("artwork")
+        for group in summary["groups"] for item_id in group["item_ids"]
+    }
     by_id = {item["id"]: item for item in manifest["items"]}
     results = []
     imported = 0
@@ -312,6 +335,12 @@ def import_batch(db: Session, batch_id: str, selections: list[dict]) -> dict:
         try:
             sanitize_auxiliary_tags(staged_path, apply=True)
             write_metadata(staged_path, values)
+            artwork_ref = artwork_by_item.get(item["id"])
+            if artwork_ref:
+                artwork = db.get(Artwork, artwork_ref["id"])
+                if artwork is None:
+                    raise UploadValidationError("Selected album artwork is no longer available.")
+                ArtworkService().embed(staged_path, artwork)
             # A successful read-back proves the container remains parseable after tag mutation.
             verified = read_metadata(staged_path)
             if not verified.get("title"):

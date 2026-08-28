@@ -262,3 +262,10 @@ Upload and batch-read responses include a server-derived `summary` of album
 groups, their shared values, member item IDs, and consistency findings. The
 browser uses those bounded IDs to apply album-wide edits to the individual
 metadata values submitted at confirmation.
+
+Album groups accept manual artwork at
+`POST /api/library/uploads/batches/{id}/groups/{group_id}/artwork`, a Cover Art
+Archive release via the `/artwork/musicbrainz?release_id=` suffix, and staged
+artwork removal with `DELETE` on the group artwork endpoint. Group IDs are
+derived from the server manifest. Confirmed imports embed the selected cached
+artwork before canonical indexing.

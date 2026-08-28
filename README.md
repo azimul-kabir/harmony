@@ -198,6 +198,11 @@ artist, year, or genre values plus missing, duplicate, and gapped track-number
 sequences. Shared album metadata can be applied to the entire group in one
 step while titles and track numbers remain individually editable.
 
+Album review can also search MusicBrainz for a release, apply its shared album
+fields, and stage the corresponding Cover Art Archive image. A manual JPEG or
+PNG can be selected instead. Artwork remains a preview until import,
+when Harmony embeds it in every selected album track before indexing.
+
 ### Albums View
 
 - Album artwork grid

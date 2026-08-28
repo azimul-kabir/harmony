@@ -762,6 +762,10 @@ tracks, identifies inconsistent album artist/year/genre values, and checks
 track numbers for missing values, duplicates, and gaps. Album-wide editing is
 a browser convenience over the same bounded per-item confirmation schema; it
 does not add a second metadata writer or allow the client to choose paths.
+Manual or Cover Art Archive album artwork is cached through the canonical
+Artwork service and referenced by ID in the private manifest. Confirmation
+embeds that validated cache object before the import engine indexes each file,
+so Harmony and Navidrome see the same cover.
 
 Never scan the filesystem unless:
 

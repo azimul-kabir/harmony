@@ -13,6 +13,7 @@ from app.services.library_uploads import (
     load_batch,
     safe_upload_name,
     summarize_batch,
+    set_batch_artwork,
 )
 
 
@@ -120,6 +121,24 @@ def test_batch_summary_groups_albums_and_explains_inconsistencies():
         "Genre is inconsistent across this group.",
         "Duplicate track numbers were detected.",
     ]
+
+
+def test_staged_artwork_is_attached_to_server_derived_album_group(tmp_path, monkeypatch):
+    import app.services.library_uploads as uploads
+    monkeypatch.setattr(uploads, "upload_root", lambda: tmp_path / "uploads")
+    batch = create_batch()
+    manifest = load_batch(batch["id"])
+    manifest["items"] = [{"id": "one", "proposed": {"title": "One", "artist": "A", "album_artist": "A", "album": "Record", "track": 1}}]
+    uploads._write_manifest(uploads._batch_dir(batch["id"]), manifest)
+    group_id = summarize_batch(manifest)["groups"][0]["id"]
+
+    class Artwork:
+        id = 42
+        mime_type = "image/jpeg"
+
+    group = set_batch_artwork(batch["id"], group_id, Artwork())
+    assert group["artwork"] == {"id": 42, "mime_type": "image/jpeg", "url": "/api/artwork/42/file"}
+    assert set_batch_artwork(batch["id"], group_id, None)["artwork"] is None
 
 
 def test_library_page_exposes_review_first_local_import():
