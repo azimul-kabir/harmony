@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -134,6 +135,57 @@ def _public_metadata(metadata: dict) -> dict:
         "duration", "bitrate", "codec", "sample_rate", "artwork_status", "isrc",
     )
     return {key: metadata.get(key) for key in keys}
+
+
+def summarize_batch(manifest: dict) -> dict:
+    """Return album-oriented review groups without trusting browser grouping."""
+    groups: dict[str, list[dict]] = {}
+    for item in manifest.get("items", []):
+        metadata = item.get("proposed") or item.get("metadata") or {}
+        album = (metadata.get("album") or "").strip()
+        artist = (metadata.get("album_artist") or metadata.get("artist") or "Unknown Artist").strip()
+        identity = album.casefold() if album else f"__singles__:{artist.casefold()}"
+        groups.setdefault(identity, []).append(item)
+
+    summaries = []
+    for identity, items in groups.items():
+        values = [item.get("proposed") or item.get("metadata") or {} for item in items]
+        album = next((value.get("album") for value in values if value.get("album")), None)
+        artists = sorted({value.get("album_artist") or value.get("artist") for value in values if value.get("album_artist") or value.get("artist")}, key=str.casefold)
+        years = sorted({value.get("year") for value in values if value.get("year") is not None})
+        genres = sorted({value.get("genre") for value in values if value.get("genre")}, key=str.casefold)
+        tracks = [value.get("track") for value in values if value.get("track") is not None]
+        findings = []
+        if len(artists) > 1:
+            findings.append("Album artist is inconsistent across this group.")
+        if len(years) > 1:
+            findings.append("Year is inconsistent across this group.")
+        if len(genres) > 1:
+            findings.append("Genre is inconsistent across this group.")
+        if len(tracks) != len(items):
+            findings.append("One or more tracks have no track number.")
+        if len(tracks) != len(set(tracks)):
+            findings.append("Duplicate track numbers were detected.")
+        if tracks and len(tracks) == len(set(tracks)):
+            expected = set(range(min(tracks), max(tracks) + 1))
+            if set(tracks) != expected:
+                findings.append("The track-number sequence has gaps.")
+        summaries.append({
+            "id": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16],
+            "album": album,
+            "label": album or f"Singles · {artists[0] if artists else 'Unknown Artist'}",
+            "item_ids": [item["id"] for item in items],
+            "track_count": len(items),
+            "values": {
+                "album": album,
+                "album_artist": artists[0] if len(artists) == 1 else None,
+                "year": years[0] if len(years) == 1 else None,
+                "genre": genres[0] if len(genres) == 1 else None,
+            },
+            "findings": findings,
+        })
+    summaries.sort(key=lambda group: group["label"].casefold())
+    return {"groups": summaries, "group_count": len(summaries), "finding_count": sum(len(group["findings"]) for group in summaries)}
 
 
 def _clean_text(value: str | None) -> tuple[str | None, list[str]]:

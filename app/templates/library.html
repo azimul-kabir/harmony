@@ -209,6 +209,18 @@
             <input id="library-upload-files" type="file" multiple accept=".mp3,.flac,.m4a,.mp4,.ogg,.opus,audio/*">
         </label>
         <p id="library-upload-status" class="library-search-status" aria-live="polite"></p>
+        <section id="library-upload-album-review" class="library-upload-album-review" hidden>
+            <header><div><span class="library-eyebrow">Album consistency</span><h3>Apply shared album metadata</h3></div><span id="library-upload-album-summary"></span></header>
+            <label>Album group<select id="library-upload-album-group"></select></label>
+            <div class="library-upload-album-fields">
+                <label>Album<input id="library-upload-album" type="text" maxlength="500"></label>
+                <label>Album artist<input id="library-upload-album-artist" type="text" maxlength="500"></label>
+                <label>Genre<input id="library-upload-album-genre" type="text" maxlength="200"></label>
+                <label>Year<input id="library-upload-album-year" type="number" min="0" max="9999"></label>
+            </div>
+            <p id="library-upload-album-findings" class="library-search-status"></p>
+            <button id="library-upload-album-apply" class="btn-secondary" type="button">Apply to this album</button>
+        </section>
         <div id="library-upload-review" class="library-upload-review"></div>
         <footer class="library-upload-actions">
             <label><input id="library-upload-scan" type="checkbox" checked> Request one Navidrome scan after import</label>

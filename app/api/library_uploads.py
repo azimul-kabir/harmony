@@ -15,6 +15,7 @@ from app.services.library_uploads import (
     import_batch,
     load_batch,
     save_upload,
+    summarize_batch,
 )
 from app.services.navidrome import NavidromeClient, NavidromeError
 
@@ -56,7 +57,8 @@ def start_upload_batch():
 @router.get("/batches/{batch_id}", summary="Read a staged upload review")
 def get_upload_batch(batch_id: str):
     try:
-        return load_batch(batch_id)
+        manifest = load_batch(batch_id)
+        return {**manifest, "summary": summarize_batch(manifest)}
     except UploadValidationError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -89,7 +91,8 @@ def upload_audio_files(batch_id: str, files: list[UploadFile] = File(...)):
                     errors.append({"filename": upload.filename, "error": "The file is not a readable supported audio container."})
             finally:
                 upload.file.close()
-        return {"batch_id": batch_id, "items": items, "errors": errors}
+        updated = load_batch(batch_id)
+        return {"batch_id": batch_id, "items": items, "errors": errors, "summary": summarize_batch(updated)}
     except UploadValidationError as error:
         raise _bad_upload(error) from error
     except (OSError, ValueError) as error:

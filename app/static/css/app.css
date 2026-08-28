@@ -61,6 +61,14 @@
 .library-upload-drop.is-dragging { border-color: var(--primary); background: rgba(29, 185, 84, .06); }
 .library-upload-drop input { max-width: 100%; }
 .library-upload-review { display: grid; gap: .75rem; max-height: 48vh; overflow: auto; }
+.library-upload-album-review { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-surface-alt); }
+.library-upload-album-review > header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.library-upload-album-review h3 { margin: .2rem 0 0; }
+.library-upload-album-review > label { display: grid; gap: .3rem; }
+.library-upload-album-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
+.library-upload-album-fields label { display: grid; gap: .3rem; font-size: .78rem; color: var(--text-muted); }
+.library-upload-album-fields input { width: 100%; min-width: 0; }
+.library-upload-album-review .btn-secondary { justify-self: start; }
 .library-upload-item { display: grid; grid-template-columns: auto 1fr; gap: .85rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 12px; }
 .library-upload-item-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
 .library-upload-item-fields label { display: grid; gap: .3rem; font-size: .78rem; color: var(--text-muted); }
@@ -71,6 +79,7 @@
 
 @media (max-width: 720px) {
     .library-upload-item-fields { grid-template-columns: 1fr 1fr; }
+    .library-upload-album-fields { grid-template-columns: 1fr 1fr; }
     .library-upload-actions { align-items: stretch; flex-direction: column; }
     .library-upload-actions .btn-primary { width: 100%; }
 }

@@ -44,7 +44,7 @@ const libraryState = {
 
 let searchTimer = null;
 let refreshTimer = null;
-const libraryUploadState = { batchId: null, items: [] };
+const libraryUploadState = { batchId: null, items: [], summary: null };
 
 const icons = {
     music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
@@ -1116,6 +1116,56 @@ function renderUploadReview() {
         </article>`;
     }).join("");
     document.getElementById("library-upload-import").disabled = !libraryUploadState.items.length;
+    renderUploadAlbumReview();
+}
+
+function selectedUploadAlbumGroup() {
+    const id = document.getElementById("library-upload-album-group").value;
+    return libraryUploadState.summary?.groups?.find((group) => group.id === id) || null;
+}
+
+function populateUploadAlbumFields() {
+    const group = selectedUploadAlbumGroup();
+    if (!group) return;
+    document.getElementById("library-upload-album").value = group.values.album || "";
+    document.getElementById("library-upload-album-artist").value = group.values.album_artist || "";
+    document.getElementById("library-upload-album-genre").value = group.values.genre || "";
+    document.getElementById("library-upload-album-year").value = group.values.year ?? "";
+    document.getElementById("library-upload-album-findings").textContent = group.findings.length
+        ? group.findings.join(" · ") : "This group has consistent shared album metadata and track numbering.";
+}
+
+function renderUploadAlbumReview() {
+    const section = document.getElementById("library-upload-album-review");
+    const groups = libraryUploadState.summary?.groups || [];
+    section.hidden = !groups.length;
+    if (!groups.length) return;
+    const select = document.getElementById("library-upload-album-group");
+    const previous = select.value;
+    select.innerHTML = groups.map((group) => `<option value="${group.id}">${escapeHtml(group.label)} · ${group.track_count} ${group.track_count === 1 ? "track" : "tracks"}</option>`).join("");
+    if (groups.some((group) => group.id === previous)) select.value = previous;
+    document.getElementById("library-upload-album-summary").textContent = `${groups.length} ${groups.length === 1 ? "group" : "groups"} · ${libraryUploadState.summary.finding_count} findings`;
+    populateUploadAlbumFields();
+}
+
+function applyUploadAlbumMetadata() {
+    const group = selectedUploadAlbumGroup();
+    if (!group) return;
+    const values = {
+        album: document.getElementById("library-upload-album").value.trim(),
+        album_artist: document.getElementById("library-upload-album-artist").value.trim(),
+        genre: document.getElementById("library-upload-album-genre").value.trim(),
+        year: document.getElementById("library-upload-album-year").value,
+    };
+    group.item_ids.forEach((itemId) => {
+        const row = document.querySelector(`[data-upload-item="${itemId}"]`);
+        if (!row) return;
+        Object.entries(values).forEach(([field, value]) => {
+            const input = row.querySelector(`[data-upload-field="${field}"]`);
+            if (input) input.value = value;
+        });
+    });
+    document.getElementById("library-upload-album-findings").textContent = `Applied shared metadata to ${group.item_ids.length} ${group.item_ids.length === 1 ? "track" : "tracks"}. Review individual titles and track numbers below.`;
 }
 
 async function ensureUploadBatch() {
@@ -1137,6 +1187,7 @@ async function stageLocalFiles(files) {
         [...files].forEach((file) => form.append("files", file, file.name));
         const result = await uploadRequest(`/api/library/uploads/batches/${batchId}/files`, {method: "POST", body: form});
         libraryUploadState.items.push(...result.items);
+        libraryUploadState.summary = result.summary;
         renderUploadReview();
         const failures = result.errors?.length ? ` ${result.errors.length} rejected: ${result.errors.map((item) => `${item.filename}: ${item.error}`).join("; ")}` : "";
         status.textContent = `${libraryUploadState.items.length} staged. Review cleanup and metadata before importing.${failures}`;
@@ -1177,7 +1228,13 @@ async function importLocalFiles() {
         status.textContent = `${result.imported} of ${result.total} imported.${scan}${failed.length ? ` ${failed.length} failed: ${failed.map((item) => item.error).join("; ")}` : ""}`;
         const importedIds = new Set(result.items.filter((item) => item.status === "imported").map((item) => item.id));
         libraryUploadState.items = libraryUploadState.items.filter((item) => !importedIds.has(item.id));
-        if (!libraryUploadState.items.length) libraryUploadState.batchId = null;
+        if (!libraryUploadState.items.length) {
+            libraryUploadState.batchId = null;
+            libraryUploadState.summary = null;
+        } else {
+            const remaining = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}`);
+            libraryUploadState.summary = remaining.summary;
+        }
         renderUploadReview();
         await loadLibraryData({preserveState: true});
     } catch (error) {
@@ -1194,6 +1251,7 @@ async function closeLocalUpload() {
     }
     libraryUploadState.batchId = null;
     libraryUploadState.items = [];
+    libraryUploadState.summary = null;
     renderUploadReview();
     document.getElementById("library-upload-status").textContent = "";
 }
@@ -1203,6 +1261,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("library-upload-close").addEventListener("click", closeLocalUpload);
     document.getElementById("library-upload-files").addEventListener("change", (event) => stageLocalFiles(event.target.files));
     document.getElementById("library-upload-import").addEventListener("click", importLocalFiles);
+    document.getElementById("library-upload-album-group").addEventListener("change", populateUploadAlbumFields);
+    document.getElementById("library-upload-album-apply").addEventListener("click", applyUploadAlbumMetadata);
     const uploadDrop = document.getElementById("library-upload-drop");
     ["dragenter", "dragover"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.add("is-dragging"); }));
     ["dragleave", "drop"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.remove("is-dragging"); }));

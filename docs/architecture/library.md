@@ -757,6 +757,12 @@ canonical import engine with `web_upload` provenance. A batch requests at most
 one incremental Navidrome scan, after successful imports. Scan failure does not
 roll back imported Library files.
 
+The staged manifest also produces an album review projection. It groups album
+tracks, identifies inconsistent album artist/year/genre values, and checks
+track numbers for missing values, duplicates, and gaps. Album-wide editing is
+a browser convenience over the same bounded per-item confirmation schema; it
+does not add a second metadata writer or allow the client to choose paths.
+
 Never scan the filesystem unless:
 
 - First startup

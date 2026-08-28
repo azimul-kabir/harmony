@@ -193,6 +193,11 @@ indexed with `web_upload` provenance, and followed by one optional incremental
 Navidrome scan for the batch. Failed or duplicate items remain isolated in the
 private staging batch for review; closing the importer discards them.
 
+The importer groups staged tracks by album and reports inconsistent album
+artist, year, or genre values plus missing, duplicate, and gapped track-number
+sequences. Shared album metadata can be applied to the entire group in one
+step while titles and track numbers remain individually editable.
+
 ### Albums View
 
 - Album artwork grid

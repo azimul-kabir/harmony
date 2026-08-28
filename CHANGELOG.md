@@ -13,6 +13,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added conservative download-site branding cleanup across filenames, common
   music tags, promotional comments/URLs/encoder fields, and individual branded
   lyric lines, with every proposed change visible before import.
+- Added album-level upload review with shared metadata application and explicit
+  findings for inconsistent album fields and missing, duplicate, or gapped
+  track-number sequences.
 
 - Added a responsive per-song Library metadata editor for title, artist, album,
   album artist, genre, year, track, and disc tags. Saving explicitly writes the

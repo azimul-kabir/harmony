@@ -12,6 +12,7 @@ from app.services.library_uploads import (
     import_batch,
     load_batch,
     safe_upload_name,
+    summarize_batch,
 )
 
 
@@ -100,6 +101,25 @@ def test_partial_import_prunes_successes_and_keeps_failures_for_retry(tmp_path, 
     assert result["imported"] == 1
     assert result["items"][1]["error"] == "Harmony could not safely import this file."
     assert [item["id"] for item in load_batch(batch["id"])["items"]] == ["second"]
+
+
+def test_batch_summary_groups_albums_and_explains_inconsistencies():
+    summary = summarize_batch({"items": [
+        {"id": "one", "proposed": {"title": "One", "artist": "A", "album_artist": "A", "album": "Record", "genre": "Rock", "year": 2020, "track": 1}},
+        {"id": "two", "proposed": {"title": "Two", "artist": "B", "album_artist": "Various Artists", "album": "Record", "genre": "Pop", "year": 2021, "track": 1}},
+        {"id": "single", "proposed": {"title": "Loose", "artist": "Solo", "album_artist": "Solo", "album": None, "genre": None, "year": None, "track": None}},
+    ]})
+
+    assert summary["group_count"] == 2
+    album = next(group for group in summary["groups"] if group["album"] == "Record")
+    assert album["item_ids"] == ["one", "two"]
+    assert album["values"]["album_artist"] is None
+    assert album["findings"] == [
+        "Album artist is inconsistent across this group.",
+        "Year is inconsistent across this group.",
+        "Genre is inconsistent across this group.",
+        "Duplicate track numbers were detected.",
+    ]
 
 
 def test_library_page_exposes_review_first_local_import():

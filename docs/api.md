@@ -258,3 +258,7 @@ Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `suc
 
 Batch IDs are UUIDs and never authorize arbitrary paths. Supported extensions
 are MP3, FLAC, M4A/MP4, Ogg, and Opus; container parsing remains authoritative.
+Upload and batch-read responses include a server-derived `summary` of album
+groups, their shared values, member item IDs, and consistency findings. The
+browser uses those bounded IDs to apply album-wide edits to the individual
+metadata values submitted at confirmation.
