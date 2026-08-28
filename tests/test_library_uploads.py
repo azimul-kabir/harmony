@@ -161,6 +161,56 @@ def test_duplicate_preflight_explains_exact_and_probable_library_matches():
     assert by_id["probable"]["matches"][0]["tier"] == "probable"
 
 
+def test_confirmed_upload_creates_durable_locked_import_task(tmp_path, monkeypatch):
+    import app.services.library_uploads as uploads
+    from app.services.library_import_tasks import create_import_task
+    monkeypatch.setattr(uploads, "upload_root", lambda: tmp_path / "uploads")
+    batch = create_batch(); manifest = load_batch(batch["id"])
+    manifest["items"] = [{"id": "one", "staged_name": "one.mp3", "proposed": {"title": "One"}}]
+    uploads._write_manifest(uploads._batch_dir(batch["id"]), manifest)
+    with SessionLocal() as db:
+        task = create_import_task(db, batch_id=batch["id"], selections=[{"id": "one", "metadata": {"title": "One"}}], scan_navidrome=False)
+        assert task.task_type == "library_import"
+        assert task.resource_key == "library-files"
+        assert task.resumable is True
+        assert [item.original_path for item in task.bulk_items] == ["one"]
+
+
+def test_import_worker_revalidates_and_skips_new_exact_duplicate(tmp_path, monkeypatch):
+    import app.services.library_uploads as uploads
+    import app.services.library_import_tasks as tasks
+    from app.database.models import Task
+    monkeypatch.setattr(uploads, "upload_root", lambda: tmp_path / "uploads")
+    batch = create_batch(); manifest = load_batch(batch["id"])
+    manifest["items"] = [{"id": "one", "staged_name": "one.mp3", "proposed": {"title": "One"}}]
+    uploads._write_manifest(uploads._batch_dir(batch["id"]), manifest)
+    with SessionLocal() as db:
+        task = tasks.create_import_task(db, batch_id=batch["id"], selections=[{"id": "one", "metadata": {}}], scan_navidrome=False)
+        task_id = task.id
+        monkeypatch.setattr(tasks, "duplicate_preflight", lambda db, manifest: {"items": [{"item_id": "one", "matches": [{"tier": "exact"}]}]})
+        tasks.LibraryImportWorker().process_task(db, task)
+        refreshed = db.get(Task, task_id)
+        assert refreshed.status == "completed_with_errors"
+        assert refreshed.skipped_items == 1
+        assert refreshed.item_failures[0].error_code == "DUPLICATE_CONFLICT"
+
+
+def test_restart_requeues_running_resumable_import_item(tmp_path, monkeypatch):
+    import app.services.library_uploads as uploads
+    from app.services.library_import_tasks import create_import_task
+    from app.services.task_service import recover_library_jobs
+    monkeypatch.setattr(uploads, "upload_root", lambda: tmp_path / "uploads")
+    batch = create_batch(); manifest = load_batch(batch["id"])
+    manifest["items"] = [{"id": "one", "staged_name": "one.mp3", "proposed": {"title": "One"}}]
+    uploads._write_manifest(uploads._batch_dir(batch["id"]), manifest)
+    with SessionLocal() as db:
+        task = create_import_task(db, batch_id=batch["id"], selections=[{"id": "one", "metadata": {}}], scan_navidrome=False)
+        task.status = "running"; task.bulk_items[0].status = "running"; db.commit()
+        recover_library_jobs(db); db.refresh(task); db.refresh(task.bulk_items[0])
+        assert task.status == "queued"
+        assert task.bulk_items[0].status == "queued"
+
+
 def test_library_page_exposes_review_first_local_import():
     response = TestClient(app).get("/library")
     assert response.status_code == 200

@@ -1,8 +1,10 @@
 import hashlib
+import json
 import secrets
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+from sqlalchemy import select
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,6 +28,7 @@ from app.core.config import get_settings
 from app.core.logging import logger
 from app.database.init_db import init_db
 from app.database.session import SessionLocal
+from app.database.models import Task
 from app.services.dashboard import get_dashboard_snapshot
 from app.services.library_watcher import LibraryWatcher
 from app.services.library_bulk import library_bulk_worker
@@ -42,6 +45,7 @@ from app.workers.download_worker import worker_loop
 from app.services.settings_service import configured_download_workers, initialize_defaults
 from app.services.staging_cleanup import cleanup_staging_downloads
 from app.services.library_uploads import cleanup_expired_batches
+from app.services.library_import_tasks import library_import_worker
 from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.source_auto_sync import source_auto_sync_scheduler
@@ -69,13 +73,26 @@ async def lifespan(app: FastAPI):
         initialize_defaults(db)
         configured_download_workers(db)
         cleanup_staging_downloads(db, Path(settings.staging_path))
-        cleanup_expired_batches()
         recover_library_jobs(db)
+        protected_upload_batches = set()
+        payloads = db.scalars(select(Task.operation_payload).where(
+            Task.task_type == "library_import",
+            Task.status.in_(("queued", "running", "cancelling")),
+        )).all()
+        for payload in payloads:
+            try:
+                batch_id = json.loads(payload or "{}").get("batch_id")
+                if batch_id:
+                    protected_upload_batches.add(batch_id)
+            except (TypeError, ValueError):
+                continue
+        cleanup_expired_batches(protected_batch_ids=protected_upload_batches)
         cleanup_library_jobs(db)
     finally:
         db.close()
     library_bulk_worker.start()
     library_maintenance_worker.start()
+    library_import_worker.start()
     navidrome_playlist_reimport.start()
     source_auto_sync_scheduler.start()
     
@@ -107,6 +124,7 @@ async def lifespan(app: FastAPI):
         download_processes.begin_shutdown()
         library_bulk_worker.stop()
         library_maintenance_worker.stop()
+        library_import_worker.stop()
         navidrome_playlist_reimport.stop()
         source_auto_sync_scheduler.stop()
         if library_watcher is not None:

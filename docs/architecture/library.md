@@ -773,6 +773,13 @@ It never scans files, deletes, or replaces. The UI skips exact and strong
 matches by default, while the import engine remains the authoritative final
 destination-collision guard.
 
+Confirmed browser imports are `library_import` rows in the shared durable
+`tasks` table, with staged item IDs represented by the existing nullable-song
+bulk item model. Jobs are resumable, own the `library-files` resource key, and
+cooperate with cancellation between atomic per-file imports. Startup recovery
+returns an interrupted running item to `queued`; completed items are never
+replayed. Final duplicate preflight runs immediately before each import.
+
 Never scan the filesystem unless:
 
 - First startup

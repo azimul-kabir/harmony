@@ -425,15 +425,18 @@ def discard_batch(batch_id: str) -> None:
     shutil.rmtree(directory)
 
 
-def cleanup_expired_batches(*, max_age_seconds: int = 24 * 60 * 60) -> int:
+def cleanup_expired_batches(*, max_age_seconds: int = 24 * 60 * 60, protected_batch_ids: set[str] | None = None) -> int:
     """Remove abandoned private upload batches without touching active Library files."""
     root = upload_root()
     if not root.exists():
         return 0
     cutoff = time.time() - max_age_seconds
+    protected_batch_ids = protected_batch_ids or set()
     removed = 0
     for directory in root.iterdir():
         if not directory.is_dir():
+            continue
+        if directory.name in protected_batch_ids:
             continue
         try:
             created_at = int(load_batch(directory.name).get("created_at", 0))

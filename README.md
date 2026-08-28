@@ -209,6 +209,13 @@ ID, ISRC, normalized artist/title/album, and duration produce explainable
 exact, strong, probable, or possible matches. Exact and strong matches are
 unchecked by default; Harmony never replaces an existing file automatically.
 
+Confirmation queues a persistent `library_import` job instead of keeping the
+browser request open. The job owns Harmony's `library-files` mutex, records
+per-file progress and safe failures, supports cooperative cancellation, and
+resumes unfinished staged items after a restart. Exact/strong conflicts are
+revalidated immediately before every move. One Navidrome scan is requested
+after the job finishes importing files.
+
 ### Albums View
 
 - Album artwork grid

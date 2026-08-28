@@ -22,6 +22,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added explainable staged-versus-Library duplicate preflight using canonical
   paths, provider IDs, ISRC, normalized metadata, and duration; exact and strong
   matches are skipped by default without ever replacing indexed files.
+- Moved confirmed local imports onto resumable persistent `library_import`
+  tasks with `library-files` locking, progress, cancellation, restart recovery,
+  bounded failures, final duplicate revalidation, and one terminal Navidrome
+  scan request.
 
 - Added a responsive per-song Library metadata editor for title, artist, album,
   album artist, genre, year, track, and disc tags. Saving explicitly writes the

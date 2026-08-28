@@ -275,3 +275,10 @@ Each staged item lists matching available Song IDs, identity tier, evidence,
 and a `skip` or `review` recommendation. Exact destination and canonical IDs
 take precedence over normalized metadata/duration signals. This projection is
 advisory; the canonical import engine still refuses destination collisions.
+
+`POST /api/library/uploads/batches/{id}/import` queues a persistent
+`library_import` task and returns the shared Task progress contract. Clients
+poll `GET /api/tasks/jobs/{job_id}`, cancel through the standard job-cancel
+endpoint, and paginate bounded failures through the standard failure endpoint.
+The worker reserves `library-files`, revalidates exact/strong duplicate signals
+per item, and requests Navidrome only after terminal file processing.

@@ -239,7 +239,7 @@ def get_dashboard_snapshot(db) -> dict:
         select(Task)
         .where(
             Task.task_type.in_(
-                (TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value)
+                (TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value, TaskType.LIBRARY_IMPORT.value)
             ),
             Task.status.in_(
                 (

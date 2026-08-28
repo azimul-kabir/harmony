@@ -12,7 +12,6 @@ from app.services.library_uploads import (
     UploadValidationError,
     create_batch,
     discard_batch,
-    import_batch,
     load_batch,
     save_upload,
     summarize_batch,
@@ -20,7 +19,8 @@ from app.services.library_uploads import (
     duplicate_preflight,
 )
 from app.services.artwork import ArtworkService, ArtworkValidationError, MAX_EMBEDDED_ARTWORK_BYTES
-from app.services.navidrome import NavidromeClient, NavidromeError
+from app.services.library_import_tasks import create_import_task
+from app.services.task_progress import serialize_task_progress
 
 
 router = APIRouter(prefix="/api/library/uploads", tags=["library"])
@@ -113,32 +113,26 @@ def upload_audio_files(batch_id: str, files: list[UploadFile] = File(...)):
 
 
 @router.post("/batches/{batch_id}/import", summary="Confirm, organize, and index staged audio")
-async def confirm_upload_batch(batch_id: str, request: ImportUploadBatch):
+def confirm_upload_batch(batch_id: str, request: ImportUploadBatch):
     db = SessionLocal()
     try:
         try:
-            result = import_batch(
-                db,
-                batch_id,
+            task = create_import_task(
+                db, batch_id=batch_id,
+                scan_navidrome=request.scan_navidrome,
+                selections=
                 [
                     {"id": item.id, "metadata": item.metadata.model_dump(exclude_unset=True) if item.metadata else {}}
                     for item in request.items
                 ],
             )
-        except UploadValidationError as error:
+            return serialize_task_progress(task)
+        except (UploadValidationError, ValueError) as error:
+            if str(error).startswith("CONFLICTING_JOB"):
+                raise HTTPException(status_code=409, detail="Another Library file operation is already active.") from error
             raise _bad_upload(error) from error
     finally:
         db.close()
-
-    result["navidrome"] = {"status": "not_requested"}
-    if request.scan_navidrome and result["imported"]:
-        try:
-            scan = await NavidromeClient().start_scan(full_scan=False)
-            result["navidrome"] = {"status": "requested", **scan}
-        except NavidromeError as error:
-            logger.warning("Library upload imported, but Navidrome scan failed: {}", error)
-            result["navidrome"] = {"status": "failed", "message": str(error)}
-    return result
 
 
 @router.delete("/batches/{batch_id}", status_code=204, summary="Discard staged uploads")

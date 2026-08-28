@@ -20,7 +20,7 @@ router = APIRouter(
     tags=["tasks"],
 )
 
-LIBRARY_TASK_TYPES = ("library_bulk", "library_maintenance")
+LIBRARY_TASK_TYPES = ("library_bulk", "library_maintenance", "library_import")
 ACTIVE_JOB_STATES = ("queued", "running", "cancelling")
 TERMINAL_JOB_STATES = ("cancelled", "completed", "completed_with_errors", "failed", "interrupted")
 ATTENTION_JOB_STATES = ("completed_with_errors", "failed", "interrupted")

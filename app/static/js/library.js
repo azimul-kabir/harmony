@@ -44,7 +44,7 @@ const libraryState = {
 
 let searchTimer = null;
 let refreshTimer = null;
-const libraryUploadState = { batchId: null, items: [], summary: null, duplicates: null };
+const libraryUploadState = { batchId: null, items: [], summary: null, duplicates: null, taskId: null };
 
 const icons = {
     music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
@@ -1267,25 +1267,27 @@ async function importLocalFiles() {
     button.disabled = true;
     status.textContent = `Cleaning, verifying, and importing ${items.length} ${items.length === 1 ? "file" : "files"}…`;
     try {
-        const result = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/import`, {
+        const task = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/import`, {
             method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({items, scan_navidrome: document.getElementById("library-upload-scan").checked}),
         });
-        const failed = result.items.filter((item) => item.status === "failed");
-        const scan = result.navidrome.status === "requested" ? " Navidrome scan requested."
-            : result.navidrome.status === "failed" ? ` Imported files are safe, but Navidrome scan failed: ${result.navidrome.message}` : "";
-        status.textContent = `${result.imported} of ${result.total} imported.${scan}${failed.length ? ` ${failed.length} failed: ${failed.map((item) => item.error).join("; ")}` : ""}`;
-        const importedIds = new Set(result.items.filter((item) => item.status === "imported").map((item) => item.id));
-        libraryUploadState.items = libraryUploadState.items.filter((item) => !importedIds.has(item.id));
-        if (!libraryUploadState.items.length) {
-            libraryUploadState.batchId = null;
-            libraryUploadState.summary = null;
-            libraryUploadState.duplicates = null;
-        } else {
-            const remaining = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}`);
-            libraryUploadState.summary = remaining.summary;
-            libraryUploadState.duplicates = remaining.duplicates;
+        libraryUploadState.taskId = task.id;
+        document.getElementById("library-upload-cancel").hidden = false;
+        let progress = task;
+        while (["queued", "running", "cancelling"].includes(progress.status)) {
+            status.textContent = `${progress.status.replaceAll("_", " ")} · ${progress.processed}/${progress.total}${progress.current ? ` · ${progress.current}` : ""}`;
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            progress = await uploadRequest(`/api/tasks/jobs/${task.id}`);
         }
+        status.textContent = `${progress.status.replaceAll("_", " ")} · ${progress.completed} imported · ${progress.failed} failed · ${progress.skipped} skipped${progress.error_summary ? ` · ${progress.error_summary}` : ""}`;
+        try {
+            const remaining = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}`);
+            libraryUploadState.items = remaining.items; libraryUploadState.summary = remaining.summary; libraryUploadState.duplicates = remaining.duplicates;
+        } catch (_) {
+            libraryUploadState.items=[]; libraryUploadState.batchId=null; libraryUploadState.summary=null; libraryUploadState.duplicates=null;
+        }
+        libraryUploadState.taskId = null;
+        document.getElementById("library-upload-cancel").hidden = true;
         renderUploadReview();
         await loadLibraryData({preserveState: true});
     } catch (error) {
@@ -1297,6 +1299,7 @@ async function importLocalFiles() {
 
 async function closeLocalUpload() {
     document.getElementById("library-upload-dialog").close();
+    if (libraryUploadState.taskId) return;
     if (libraryUploadState.batchId && libraryUploadState.items.length) {
         try { await fetch(`/api/library/uploads/batches/${libraryUploadState.batchId}`, {method: "DELETE"}); } catch (_) { /* Startup cleanup is the fallback. */ }
     }
@@ -1313,6 +1316,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("library-upload-close").addEventListener("click", closeLocalUpload);
     document.getElementById("library-upload-files").addEventListener("change", (event) => stageLocalFiles(event.target.files));
     document.getElementById("library-upload-import").addEventListener("click", importLocalFiles);
+    document.getElementById("library-upload-cancel").addEventListener("click", async () => { if (libraryUploadState.taskId) await fetch(`/api/tasks/jobs/${libraryUploadState.taskId}/cancel`, {method:"POST"}); });
     document.getElementById("library-upload-album-group").addEventListener("change", populateUploadAlbumFields);
     document.getElementById("library-upload-album-apply").addEventListener("click", applyUploadAlbumMetadata);
     document.getElementById("library-upload-album-search").addEventListener("click", searchUploadAlbumMetadata);
