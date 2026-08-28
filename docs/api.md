@@ -247,6 +247,8 @@ Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `suc
 ## Local Library uploads
 
 - `POST /api/library/uploads/batches` creates a private review batch.
+- `GET /api/library/uploads/batches` lists recoverable batches with bounded
+  size/count/expiry metadata, the latest related task, and configured limits.
 - `POST /api/library/uploads/batches/{id}/files` accepts multipart `files`,
   streams them to staging, validates audio metadata, and returns proposed tags,
   sanitizer findings, warnings, and the canonical destination preview.
@@ -254,7 +256,8 @@ Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `suc
 - `POST /api/library/uploads/batches/{id}/import` accepts selected item IDs,
   bounded metadata overrides, and `scan_navidrome`; files are sanitized,
   verified, organized, indexed, and reported independently.
-- `DELETE /api/library/uploads/batches/{id}` discards staged files.
+- `DELETE /api/library/uploads/batches/{id}` discards staged files and orphaned
+  staged artwork. It returns `409` while that batch has an active import task.
 
 Batch IDs are UUIDs and never authorize arbitrary paths. Supported extensions
 are MP3, FLAC, M4A/MP4, Ogg, and Opus; container parsing remains authoritative.
@@ -282,3 +285,7 @@ poll `GET /api/tasks/jobs/{job_id}`, cancel through the standard job-cancel
 endpoint, and paginate bounded failures through the standard failure endpoint.
 The worker reserves `library-files`, revalidates exact/strong duplicate signals
 per item, and requests Navidrome only after terminal file processing.
+The browser stores only the opaque batch/task IDs locally. After refresh it
+reloads the server-owned manifest and reconnects task polling; local storage is
+not authoritative. Already-staged files are recoverable, while an interrupted
+in-flight HTTP file transfer must be selected again.

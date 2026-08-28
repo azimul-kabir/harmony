@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
                     protected_upload_batches.add(batch_id)
             except (TypeError, ValueError):
                 continue
-        cleanup_expired_batches(protected_batch_ids=protected_upload_batches)
+        cleanup_expired_batches(protected_batch_ids=protected_upload_batches, db=db)
         cleanup_library_jobs(db)
     finally:
         db.close()

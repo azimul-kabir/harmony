@@ -8,8 +8,10 @@ import os
 from pathlib import Path
 import re
 import shutil
+import threading
 import time
 from typing import BinaryIO
+from functools import wraps
 from uuid import UUID, uuid4
 
 from mutagen import File as MutagenFile
@@ -30,6 +32,8 @@ from app.services.duplicate_detector import _normal
 
 SUPPORTED_AUDIO_EXTENSIONS = {".flac", ".m4a", ".mp3", ".mp4", ".ogg", ".opus"}
 CHUNK_SIZE = 1024 * 1024
+_BATCH_LOCKS: dict[str, threading.RLock] = {}
+_BATCH_LOCKS_GUARD = threading.Lock()
 PROMOTIONAL_WORDS = re.compile(
     r"(?i)\b(downloaded\s+from|free\s+download|visit\s+(?:us|our)|follow\s+us|"
     r"telegram|whatsapp|official\s+website)\b"
@@ -43,6 +47,27 @@ WRAPPED_BRANDING = re.compile(
 
 class UploadValidationError(ValueError):
     pass
+
+
+def _batch_lock(batch_id: str) -> threading.RLock:
+    with _BATCH_LOCKS_GUARD:
+        return _BATCH_LOCKS.setdefault(batch_id, threading.RLock())
+
+
+def _locked_batch(function):
+    @wraps(function)
+    def wrapped(batch_id, *args, **kwargs):
+        with _batch_lock(batch_id):
+            return function(batch_id, *args, **kwargs)
+    return wrapped
+
+
+def _locked_db_batch(function):
+    @wraps(function)
+    def wrapped(db, batch_id, *args, **kwargs):
+        with _batch_lock(batch_id):
+            return function(db, batch_id, *args, **kwargs)
+    return wrapped
 
 
 def upload_root() -> Path:
@@ -62,10 +87,18 @@ def _batch_dir(batch_id: str) -> Path:
 
 
 def create_batch() -> dict:
+    settings = get_settings()
+    root = upload_root()
+    root.mkdir(parents=True, exist_ok=True)
+    active = sum(1 for path in root.iterdir() if path.is_dir() and (path / "manifest.json").is_file())
+    if active >= settings.library_upload_max_active_batches:
+        raise UploadValidationError("Too many unfinished upload batches. Resume or discard an existing batch.")
+    _require_free_space(root, 0)
     batch_id = str(uuid4())
     directory = _batch_dir(batch_id)
     directory.mkdir(parents=True, exist_ok=False)
-    manifest = {"id": batch_id, "created_at": int(time.time()), "items": []}
+    created_at = int(time.time())
+    manifest = {"id": batch_id, "created_at": created_at, "expires_at": created_at + settings.library_upload_expiration_hours * 3600, "revision": 0, "total_bytes": 0, "items": []}
     _write_manifest(directory, manifest)
     return manifest
 
@@ -82,6 +115,9 @@ def load_batch(batch_id: str) -> dict:
 
 
 def _write_manifest(directory: Path, manifest: dict) -> None:
+    manifest["revision"] = int(manifest.get("revision", 0)) + 1
+    manifest["updated_at"] = int(time.time())
+    manifest["total_bytes"] = sum(int(item.get("size", 0)) for item in manifest.get("items", []))
     temporary = directory / "manifest.json.tmp"
     temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(temporary, directory / "manifest.json")
@@ -97,6 +133,36 @@ def safe_upload_name(filename: str | None) -> str:
     return name[:500]
 
 
+def _require_free_space(path: Path, required_bytes: int) -> None:
+    settings = get_settings()
+    path.mkdir(parents=True, exist_ok=True)
+    free = shutil.disk_usage(path).free
+    if free - required_bytes < settings.library_upload_min_free_bytes:
+        raise UploadValidationError("Not enough free storage while preserving Harmony's configured reserve.")
+
+
+def list_batches() -> list[dict]:
+    root = upload_root()
+    if not root.exists():
+        return []
+    batches = []
+    for directory in root.iterdir():
+        if not directory.is_dir():
+            continue
+        try:
+            manifest = load_batch(directory.name)
+        except UploadValidationError:
+            continue
+        batches.append({"id": manifest["id"], "created_at": manifest.get("created_at"), "updated_at": manifest.get("updated_at"), "expires_at": manifest.get("expires_at"), "revision": manifest.get("revision", 0), "total_bytes": manifest.get("total_bytes", 0), "item_count": len(manifest["items"])})
+    return sorted(batches, key=lambda item: item["created_at"] or 0, reverse=True)
+
+
+def upload_limits() -> dict:
+    settings = get_settings()
+    return {"max_file_bytes": settings.library_upload_max_file_bytes, "max_batch_bytes": settings.library_upload_max_batch_bytes, "max_files": settings.library_upload_max_files, "min_free_bytes": settings.library_upload_min_free_bytes, "max_active_batches": settings.library_upload_max_active_batches, "expiration_hours": settings.library_upload_expiration_hours}
+
+
+@_locked_batch
 def save_upload(batch_id: str, filename: str | None, stream: BinaryIO, *, max_bytes: int) -> dict:
     manifest = load_batch(batch_id)
     if len(manifest["items"]) >= get_settings().library_upload_max_files:
@@ -105,12 +171,16 @@ def save_upload(batch_id: str, filename: str | None, stream: BinaryIO, *, max_by
     item_id = str(uuid4())
     staged_path = _batch_dir(batch_id) / f"{item_id}{Path(original_name).suffix.lower()}"
     size = 0
+    existing_bytes = int(manifest.get("total_bytes", 0))
     try:
         with staged_path.open("xb") as target:
             while chunk := stream.read(CHUNK_SIZE):
                 size += len(chunk)
                 if size > max_bytes:
                     raise UploadValidationError("The uploaded file exceeds the configured size limit.")
+                if existing_bytes + size > get_settings().library_upload_max_batch_bytes:
+                    raise UploadValidationError("The upload batch exceeds the configured total-size limit.")
+                _require_free_space(staged_path.parent, len(chunk))
                 target.write(chunk)
         metadata = read_metadata(staged_path)
     except Exception:
@@ -195,6 +265,7 @@ def summarize_batch(manifest: dict) -> dict:
     return {"groups": summaries, "group_count": len(summaries), "finding_count": sum(len(group["findings"]) for group in summaries)}
 
 
+@_locked_batch
 def set_batch_artwork(batch_id: str, group_id: str, artwork: Artwork | None) -> dict:
     manifest = load_batch(batch_id)
     group = next((item for item in summarize_batch(manifest)["groups"] if item["id"] == group_id), None)
@@ -361,6 +432,7 @@ def analyze_metadata(metadata: dict, *, original_name: str, path: Path | None = 
     return {"proposed": proposed, "changes": changes, "warnings": warnings}
 
 
+@_locked_db_batch
 def import_batch(db: Session, batch_id: str, selections: list[dict]) -> dict:
     manifest = load_batch(batch_id)
     summary = summarize_batch(manifest)
@@ -382,6 +454,10 @@ def import_batch(db: Session, batch_id: str, selections: list[dict]) -> dict:
             results.append({"id": selection.get("id"), "status": "failed", "error": "Upload item not found."})
             continue
         staged_path = _batch_dir(batch_id) / item["staged_name"]
+        music_root = Path(get_settings().music_path)
+        music_root.mkdir(parents=True, exist_ok=True)
+        required_copy_bytes = 0 if staged_path.stat().st_dev == music_root.stat().st_dev else staged_path.stat().st_size
+        _require_free_space(music_root, required_copy_bytes)
         values = {**item["proposed"], **(selection.get("metadata") or {})}
         try:
             sanitize_auxiliary_tags(staged_path, apply=True)
@@ -418,19 +494,34 @@ def import_batch(db: Session, batch_id: str, selections: list[dict]) -> dict:
     return {"batch_id": batch_id, "imported": imported, "total": len(selections), "items": results}
 
 
-def discard_batch(batch_id: str) -> None:
+@_locked_batch
+def discard_batch(batch_id: str, db: Session | None = None) -> None:
     directory = _batch_dir(batch_id)
     if not directory.exists():
         raise UploadValidationError("Upload batch was not found or has expired.")
+    manifest = load_batch(batch_id)
+    artwork_ids = {int(value["id"]) for value in (manifest.get("artwork") or {}).values() if value.get("id")}
     shutil.rmtree(directory)
+    if db is not None and artwork_ids:
+        referenced = set(db.scalars(select(Song.artwork_id).where(Song.artwork_id.in_(artwork_ids))).all())
+        for other in list_batches():
+            for value in (load_batch(other["id"]).get("artwork") or {}).values():
+                if value.get("id"): referenced.add(int(value["id"]))
+        for artwork_id in artwork_ids - referenced:
+            artwork = db.get(Artwork, artwork_id)
+            if artwork is not None:
+                Path(artwork.cache_path).unlink(missing_ok=True)
+                db.delete(artwork)
+        db.commit()
 
 
-def cleanup_expired_batches(*, max_age_seconds: int = 24 * 60 * 60, protected_batch_ids: set[str] | None = None) -> int:
+def cleanup_expired_batches(*, max_age_seconds: int | None = None, protected_batch_ids: set[str] | None = None, db: Session | None = None) -> int:
     """Remove abandoned private upload batches without touching active Library files."""
     root = upload_root()
     if not root.exists():
         return 0
-    cutoff = time.time() - max_age_seconds
+    effective_max_age = max_age_seconds if max_age_seconds is not None else get_settings().library_upload_expiration_hours * 3600
+    cutoff = time.time() - effective_max_age
     protected_batch_ids = protected_batch_ids or set()
     removed = 0
     for directory in root.iterdir():
@@ -443,6 +534,9 @@ def cleanup_expired_batches(*, max_age_seconds: int = 24 * 60 * 60, protected_ba
         except UploadValidationError:
             created_at = int(directory.stat().st_mtime)
         if created_at and created_at < cutoff:
-            shutil.rmtree(directory, ignore_errors=True)
-            removed += 1
+            try:
+                discard_batch(directory.name, db=db)
+                removed += 1
+            except UploadValidationError:
+                continue
     return removed

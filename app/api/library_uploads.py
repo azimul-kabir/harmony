@@ -1,6 +1,7 @@
 """Review-first browser upload endpoints for the managed music library."""
 
 from __future__ import annotations
+import json
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -17,10 +18,15 @@ from app.services.library_uploads import (
     summarize_batch,
     set_batch_artwork,
     duplicate_preflight,
+    list_batches,
+    upload_limits,
 )
 from app.services.artwork import ArtworkService, ArtworkValidationError, MAX_EMBEDDED_ARTWORK_BYTES
 from app.services.library_import_tasks import create_import_task
 from app.services.task_progress import serialize_task_progress
+from app.database.models import Task
+from app.domain.task import TaskStatus
+from sqlalchemy import select
 
 
 router = APIRouter(prefix="/api/library/uploads", tags=["library"])
@@ -54,7 +60,29 @@ def _bad_upload(error: Exception) -> HTTPException:
 
 @router.post("/batches", summary="Create an isolated Library upload batch")
 def start_upload_batch():
-    return create_batch()
+    try:
+        return {**create_batch(), "limits": upload_limits()}
+    except UploadValidationError as error:
+        raise _bad_upload(error) from error
+
+
+@router.get("/batches", summary="List recoverable staged upload batches")
+def recoverable_upload_batches():
+    batches = list_batches()
+    db = SessionLocal()
+    try:
+        tasks = db.scalars(select(Task).where(Task.task_type == "library_import").order_by(Task.created_at.desc()).limit(100)).all()
+        task_by_batch = {}
+        for task in tasks:
+            try:
+                batch_id = json.loads(task.operation_payload or "{}").get("batch_id")
+            except (TypeError, ValueError):
+                continue
+            if batch_id and batch_id not in task_by_batch:
+                task_by_batch[batch_id] = serialize_task_progress(task)
+        return {"items": [{**batch, "task": task_by_batch.get(batch["id"])} for batch in batches], "limits": upload_limits()}
+    finally:
+        db.close()
 
 
 @router.get("/batches/{batch_id}", summary="Read a staged upload review")
@@ -66,7 +94,7 @@ def get_upload_batch(batch_id: str):
             duplicates = duplicate_preflight(db, manifest)
         finally:
             db.close()
-        return {**manifest, "summary": summarize_batch(manifest), "duplicates": duplicates}
+        return {**manifest, "summary": summarize_batch(manifest), "duplicates": duplicates, "limits": upload_limits()}
     except UploadValidationError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -137,10 +165,34 @@ def confirm_upload_batch(batch_id: str, request: ImportUploadBatch):
 
 @router.delete("/batches/{batch_id}", status_code=204, summary="Discard staged uploads")
 def delete_upload_batch(batch_id: str):
+    db = SessionLocal()
     try:
-        discard_batch(batch_id)
+        active_statuses = {
+            TaskStatus.QUEUED.value,
+            TaskStatus.RUNNING.value,
+            TaskStatus.CANCELLING.value,
+        }
+        tasks = db.scalars(
+            select(Task).where(
+                Task.task_type == "library_import",
+                Task.status.in_(active_statuses),
+            )
+        ).all()
+        for task in tasks:
+            try:
+                active_batch_id = json.loads(task.operation_payload or "{}").get("batch_id")
+            except (TypeError, ValueError):
+                continue
+            if active_batch_id == batch_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This upload batch is being imported. Cancel the import before discarding it.",
+                )
+        discard_batch(batch_id, db=db)
     except UploadValidationError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    finally:
+        db.close()
 
 
 @router.post("/batches/{batch_id}/groups/{group_id}/artwork", summary="Stage album artwork")

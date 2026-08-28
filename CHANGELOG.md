@@ -26,6 +26,10 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   tasks with `library-files` locking, progress, cancellation, restart recovery,
   bounded failures, final duplicate revalidation, and one terminal Navidrome
   scan request.
+- Added upload storage guardrails for total batch bytes, reserved free space,
+  unfinished batch count, configurable expiration, and active-task-safe cleanup.
+- Added refresh recovery for staged upload reviews and active import progress,
+  server-side recoverable batch discovery, and explicit safe batch discard.
 
 - Added a responsive per-song Library metadata editor for title, artist, album,
   album artist, genre, year, track, and disc tags. Saving explicitly writes the

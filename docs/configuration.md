@@ -61,9 +61,16 @@ reverse proxy or NAS with tighter storage constraints:
 ```env
 LIBRARY_UPLOAD_MAX_FILE_BYTES=1073741824
 LIBRARY_UPLOAD_MAX_FILES=200
+LIBRARY_UPLOAD_MAX_BATCH_BYTES=21474836480
+LIBRARY_UPLOAD_MIN_FREE_BYTES=2147483648
+LIBRARY_UPLOAD_MAX_ACTIVE_BATCHES=10
+LIBRARY_UPLOAD_EXPIRATION_HOURS=24
 ```
 
-Incomplete browser-upload batches older than 24 hours are removed at startup.
+The batch limit includes all staged audio in one review. The free-space reserve
+is enforced on staging and, when a cross-filesystem copy is required, on the
+managed music volume. Unfinished batches expire at startup after the configured
+window; batches attached to active import tasks are preserved.
 The reverse proxy must allow a request body large enough for the selected
 files; Harmony still enforces its own per-file limit while streaming to disk.
 

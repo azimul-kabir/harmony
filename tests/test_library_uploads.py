@@ -1,4 +1,6 @@
 from pathlib import Path
+import io
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +19,9 @@ from app.services.library_uploads import (
     summarize_batch,
     set_batch_artwork,
     duplicate_preflight,
+    cleanup_expired_batches,
+    list_batches,
+    save_upload,
 )
 
 
@@ -89,6 +94,8 @@ def test_partial_import_prunes_successes_and_keeps_failures_for_retry(tmp_path, 
     monkeypatch.setattr(uploads, "sanitize_auxiliary_tags", lambda path, apply=False: [])
     monkeypatch.setattr(uploads, "write_metadata", lambda path, values: None)
     monkeypatch.setattr(uploads, "read_metadata", lambda path: {"title": path.stem})
+    monkeypatch.setattr(uploads, "_require_free_space", lambda path, required_bytes: None)
+    monkeypatch.setattr(uploads, "get_settings", lambda: type("Settings", (), {"music_path": str(tmp_path / "music")})())
     monkeypatch.setattr(
         uploads,
         "import_download",
@@ -105,6 +112,48 @@ def test_partial_import_prunes_successes_and_keeps_failures_for_retry(tmp_path, 
     assert result["imported"] == 1
     assert result["items"][1]["error"] == "Harmony could not safely import this file."
     assert [item["id"] for item in load_batch(batch["id"])["items"]] == ["second"]
+
+
+def test_upload_storage_limits_and_recoverable_batch_listing(tmp_path, monkeypatch):
+    import app.services.library_uploads as uploads
+
+    settings = type("Settings", (), {
+        "library_upload_max_active_batches": 1,
+        "library_upload_expiration_hours": 2,
+        "library_upload_min_free_bytes": 0,
+        "library_upload_max_files": 10,
+        "library_upload_max_batch_bytes": 3,
+        "library_upload_max_file_bytes": 10,
+    })()
+    monkeypatch.setattr(uploads, "upload_root", lambda: tmp_path / "uploads")
+    monkeypatch.setattr(uploads, "get_settings", lambda: settings)
+    monkeypatch.setattr(uploads, "read_metadata", lambda path: {})
+
+    batch = create_batch()
+    assert batch["expires_at"] == batch["created_at"] + 7200
+    with pytest.raises(UploadValidationError, match="Too many unfinished"):
+        create_batch()
+    with pytest.raises(UploadValidationError, match="total-size"):
+        save_upload(batch["id"], "oversized.mp3", io.BytesIO(b"four"), max_bytes=10)
+    assert list_batches()[0]["id"] == batch["id"]
+    assert list_batches()[0]["total_bytes"] == 0
+
+
+def test_expired_cleanup_preserves_active_batches(tmp_path, monkeypatch):
+    import app.services.library_uploads as uploads
+
+    monkeypatch.setattr(uploads, "upload_root", lambda: tmp_path / "uploads")
+    expired = create_batch()
+    protected = create_batch()
+    for batch in (expired, protected):
+        manifest = load_batch(batch["id"])
+        manifest["created_at"] = int(time.time()) - 100
+        uploads._write_manifest(uploads._batch_dir(batch["id"]), manifest)
+
+    assert cleanup_expired_batches(max_age_seconds=10, protected_batch_ids={protected["id"]}) == 1
+    with pytest.raises(UploadValidationError):
+        load_batch(expired["id"])
+    assert load_batch(protected["id"])["id"] == protected["id"]
 
 
 def test_batch_summary_groups_albums_and_explains_inconsistencies():
@@ -216,4 +265,5 @@ def test_library_page_exposes_review_first_local_import():
     assert response.status_code == 200
     assert 'id="library-upload-open"' in response.text
     assert 'id="library-upload-dialog"' in response.text
+    assert 'id="library-upload-discard"' in response.text
     assert "Request one Navidrome scan after import" in response.text

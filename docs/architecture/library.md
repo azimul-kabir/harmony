@@ -767,6 +767,19 @@ Artwork service and referenced by ID in the private manifest. Confirmation
 embeds that validated cache object before the import engine indexes each file,
 so Harmony and Navidrome see the same cover.
 
+Each manifest has a monotonically increasing revision, update timestamp,
+expiry, and server-calculated byte total. Creation and streaming enforce the
+configured active-batch, batch-byte, file-byte, file-count, and disk-reserve
+limits. Startup expiration skips batches referenced by queued, running, or
+cancelling tasks. Explicit discard is rejected for those tasks and removes
+artwork only when neither the Library nor another staged batch references it.
+
+Page recovery uses a server batch-list endpoint plus a non-authoritative
+browser hint containing the last batch/task IDs. A refresh reconstructs review
+state from the manifest and reconnects persistent task polling. This protects
+completed staging work and task progress; the current multipart transport does
+not resume bytes from a partially transmitted individual file.
+
 Staged duplicate preflight queries at most 20 available indexed candidates per
 item and reuses the Library detector's exact/strong/probable/possible language.
 It never scans files, deletes, or replaces. The UI skips exact and strong

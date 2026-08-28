@@ -191,7 +191,14 @@ Confirmed files are rewritten without transcoding, read back for verification,
 organized through the canonical `Album Artist/Album/Track - Title` path builder,
 indexed with `web_upload` provenance, and followed by one optional incremental
 Navidrome scan for the batch. Failed or duplicate items remain isolated in the
-private staging batch for review; closing the importer discards them.
+private staging batch for review. Closing or refreshing the page preserves the
+review, and Harmony restores the newest unfinished batch and reconnects to any
+active import task. Use **Discard batch** to remove staged files explicitly.
+
+Harmony streams uploads to disk while enforcing per-file, per-batch, active-
+batch, and free-space-reserve limits. Unfinished batches expire after the
+configured retention window; active import tasks are protected from cleanup
+and cannot be discarded through the API.
 
 The importer groups staged tracks by album and reports inconsistent album
 artist, year, or genre values plus missing, duplicate, and gapped track-number
