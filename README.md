@@ -203,6 +203,12 @@ fields, and stage the corresponding Cover Art Archive image. A manual JPEG or
 PNG can be selected instead. Artwork remains a preview until import,
 when Harmony embeds it in every selected album track before indexing.
 
+Before confirmation, each staged track is also compared with bounded indexed
+Library candidates. Canonical destination, MusicBrainz recording ID, Spotify
+ID, ISRC, normalized artist/title/album, and duration produce explainable
+exact, strong, probable, or possible matches. Exact and strong matches are
+unchecked by default; Harmony never replaces an existing file automatically.
+
 ### Albums View
 
 - Album artwork grid

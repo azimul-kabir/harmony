@@ -19,6 +19,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added MusicBrainz-assisted staged album matching plus manual or Cover Art
   Archive artwork selection, preview, removal, and album-wide embedding at
   confirmed import.
+- Added explainable staged-versus-Library duplicate preflight using canonical
+  paths, provider IDs, ISRC, normalized metadata, and duration; exact and strong
+  matches are skipped by default without ever replacing indexed files.
 
 - Added a responsive per-song Library metadata editor for title, artist, album,
   album artist, genre, year, track, and disc tags. Saving explicitly writes the

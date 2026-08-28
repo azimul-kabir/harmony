@@ -4,6 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.database.models import Song
+from app.database.session import SessionLocal
 from app.services.library_uploads import (
     UploadValidationError,
     _auxiliary_action,
@@ -14,6 +16,7 @@ from app.services.library_uploads import (
     safe_upload_name,
     summarize_batch,
     set_batch_artwork,
+    duplicate_preflight,
 )
 
 
@@ -139,6 +142,23 @@ def test_staged_artwork_is_attached_to_server_derived_album_group(tmp_path, monk
     group = set_batch_artwork(batch["id"], group_id, Artwork())
     assert group["artwork"] == {"id": 42, "mime_type": "image/jpeg", "url": "/api/artwork/42/file"}
     assert set_batch_artwork(batch["id"], group_id, None)["artwork"] is None
+
+
+def test_duplicate_preflight_explains_exact_and_probable_library_matches():
+    with SessionLocal() as db:
+        exact = Song(path="/music/A/Record/01 - One.flac", filename="01 - One.flac", title="One", artist="A", album="Record", duration=180, isrc="USAAA0000001")
+        probable = Song(path="/music/A/Other/Two.flac", filename="Two.flac", title="Two!", artist="Á", album="Other", duration=201)
+        db.add_all([exact, probable]); db.commit()
+        result = duplicate_preflight(db, {"items": [
+            {"id": "exact", "destination": exact.path, "metadata": {"isrc": "USAAA0000001", "duration": 180}, "proposed": {"title": "One", "artist": "A", "album": "Record"}},
+            {"id": "probable", "destination": "/music/A/New/Two.flac", "metadata": {"duration": 199}, "proposed": {"title": "two", "artist": "a", "album": "New"}},
+        ]})
+
+    by_id = {item["item_id"]: item for item in result["items"]}
+    assert by_id["exact"]["recommended_action"] == "skip"
+    assert by_id["exact"]["matches"][0]["tier"] == "exact"
+    assert by_id["probable"]["recommended_action"] == "review"
+    assert by_id["probable"]["matches"][0]["tier"] == "probable"
 
 
 def test_library_page_exposes_review_first_local_import():

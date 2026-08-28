@@ -17,6 +17,7 @@ from app.services.library_uploads import (
     save_upload,
     summarize_batch,
     set_batch_artwork,
+    duplicate_preflight,
 )
 from app.services.artwork import ArtworkService, ArtworkValidationError, MAX_EMBEDDED_ARTWORK_BYTES
 from app.services.navidrome import NavidromeClient, NavidromeError
@@ -60,7 +61,12 @@ def start_upload_batch():
 def get_upload_batch(batch_id: str):
     try:
         manifest = load_batch(batch_id)
-        return {**manifest, "summary": summarize_batch(manifest)}
+        db = SessionLocal()
+        try:
+            duplicates = duplicate_preflight(db, manifest)
+        finally:
+            db.close()
+        return {**manifest, "summary": summarize_batch(manifest), "duplicates": duplicates}
     except UploadValidationError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -94,7 +100,12 @@ def upload_audio_files(batch_id: str, files: list[UploadFile] = File(...)):
             finally:
                 upload.file.close()
         updated = load_batch(batch_id)
-        return {"batch_id": batch_id, "items": items, "errors": errors, "summary": summarize_batch(updated)}
+        db = SessionLocal()
+        try:
+            duplicates = duplicate_preflight(db, updated)
+        finally:
+            db.close()
+        return {"batch_id": batch_id, "items": items, "errors": errors, "summary": summarize_batch(updated), "duplicates": duplicates}
     except UploadValidationError as error:
         raise _bad_upload(error) from error
     except (OSError, ValueError) as error:

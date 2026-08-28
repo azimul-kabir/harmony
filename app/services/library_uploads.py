@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from mutagen import File as MutagenFile
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
 
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -23,7 +24,8 @@ from app.services.library_paths import build_destination
 from app.services.metadata import read_metadata
 from app.services.metadata_editor import write_metadata
 from app.services.artwork import ArtworkService
-from app.database.models import Artwork
+from app.database.models import Artwork, Song
+from app.services.duplicate_detector import _normal
 
 
 SUPPORTED_AUDIO_EXTENSIONS = {".flac", ".m4a", ".mp3", ".mp4", ".ogg", ".opus"}
@@ -135,6 +137,7 @@ def _public_metadata(metadata: dict) -> dict:
     keys = (
         "title", "artist", "album_artist", "album", "genre", "year", "track", "disc",
         "duration", "bitrate", "codec", "sample_rate", "artwork_status", "isrc",
+        "musicbrainz_recording_id", "spotify_track_id",
     )
     return {key: metadata.get(key) for key in keys}
 
@@ -204,6 +207,54 @@ def set_batch_artwork(batch_id: str, group_id: str, artwork: Artwork | None) -> 
         artwork_map[group_id] = {"id": artwork.id, "mime_type": artwork.mime_type, "url": f"/api/artwork/{artwork.id}/file"}
     _write_manifest(_batch_dir(batch_id), manifest)
     return next(item for item in summarize_batch(manifest)["groups"] if item["id"] == group_id)
+
+
+def duplicate_preflight(db: Session, manifest: dict) -> dict:
+    """Compare staged identities with a bounded set of available Library rows."""
+    results = []
+    for item in manifest.get("items", []):
+        metadata = item.get("proposed") or item.get("metadata") or {}
+        clauses = [Song.path == item.get("destination")]
+        for field in ("musicbrainz_recording_id", "isrc", "spotify_track_id"):
+            value = (item.get("metadata") or {}).get(field)
+            if value:
+                clauses.append(getattr(Song, field) == value)
+        if metadata.get("artist") and metadata.get("title"):
+            # Title-only SQL blocking keeps the candidate set bounded while
+            # Python normalization handles accents and punctuation reliably.
+            title_token = _normal(metadata["title"]).split(" ")[0]
+            if title_token:
+                clauses.append(Song.title.ilike(f"%{title_token}%"))
+        candidates = list(db.scalars(
+            select(Song).where(Song.availability_status == "available", or_(*clauses)).order_by(Song.id).limit(20)
+        ).all())
+        matches = []
+        staged_ids = item.get("metadata") or {}
+        for song in candidates:
+            tier = evidence = None
+            if item.get("destination") == song.path:
+                tier, evidence = "exact", "Same canonical destination"
+            elif staged_ids.get("musicbrainz_recording_id") and _normal(staged_ids["musicbrainz_recording_id"]) == _normal(song.musicbrainz_recording_id):
+                tier, evidence = "exact", "Same MusicBrainz recording ID"
+            elif staged_ids.get("spotify_track_id") and _normal(staged_ids["spotify_track_id"]) == _normal(song.spotify_track_id):
+                tier, evidence = "exact", "Same Spotify track ID"
+            elif staged_ids.get("isrc") and _normal(staged_ids["isrc"]) == _normal(song.isrc):
+                tier, evidence = "strong", "Same ISRC"
+            elif _normal(metadata.get("artist")) == _normal(song.artist) and _normal(metadata.get("title")) == _normal(song.title):
+                conflicts = any(staged_ids.get(field) and getattr(song, field) and _normal(staged_ids[field]) != _normal(getattr(song, field)) for field in ("musicbrainz_recording_id", "isrc", "spotify_track_id"))
+                if conflicts:
+                    continue
+                duration = (item.get("metadata") or {}).get("duration")
+                if duration is not None and song.duration is not None and abs(duration - song.duration) <= 3:
+                    tier, evidence = "probable", f"Same artist/title; duration differs by {abs(duration-song.duration):.1f}s"
+                elif _normal(metadata.get("album")) and _normal(metadata.get("album")) == _normal(song.album):
+                    tier, evidence = "possible", "Same artist, title, and album"
+            if tier:
+                matches.append({"song_id": song.id, "tier": tier, "evidence": evidence, "title": song.title, "artist": song.artist, "album": song.album, "filename": song.filename, "duration": song.duration, "bitrate": song.bitrate, "cover_url": song.cover_url})
+        if matches:
+            matches.sort(key=lambda match: ({"exact": 0, "strong": 1, "probable": 2, "possible": 3}[match["tier"]], match["song_id"]))
+            results.append({"item_id": item["id"], "recommended_action": "skip" if matches[0]["tier"] in {"exact", "strong"} else "review", "matches": matches})
+    return {"items": results, "match_count": sum(len(item["matches"]) for item in results)}
 
 
 def _clean_text(value: str | None) -> tuple[str | None, list[str]]:

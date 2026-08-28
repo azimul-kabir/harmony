@@ -767,6 +767,12 @@ Artwork service and referenced by ID in the private manifest. Confirmation
 embeds that validated cache object before the import engine indexes each file,
 so Harmony and Navidrome see the same cover.
 
+Staged duplicate preflight queries at most 20 available indexed candidates per
+item and reuses the Library detector's exact/strong/probable/possible language.
+It never scans files, deletes, or replaces. The UI skips exact and strong
+matches by default, while the import engine remains the authoritative final
+destination-collision guard.
+
 Never scan the filesystem unless:
 
 - First startup

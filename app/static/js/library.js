@@ -44,7 +44,7 @@ const libraryState = {
 
 let searchTimer = null;
 let refreshTimer = null;
-const libraryUploadState = { batchId: null, items: [], summary: null };
+const libraryUploadState = { batchId: null, items: [], summary: null, duplicates: null };
 
 const icons = {
     music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
@@ -1096,12 +1096,13 @@ function uploadField(item, field, label, type = "text") {
 function renderUploadReview() {
     const review = document.getElementById("library-upload-review");
     review.innerHTML = libraryUploadState.items.map((item) => {
+        const duplicate = libraryUploadState.duplicates?.items?.find((entry) => entry.item_id === item.id);
         const findings = [
             ...item.changes.map((change) => `${change.field}: “${change.before || ""}” → “${change.after || "removed"}”`),
             ...item.warnings,
         ];
         return `<article class="library-upload-item" data-upload-item="${item.id}">
-            <input data-upload-selected type="checkbox" checked aria-label="Import ${escapeHtml(item.original_name)}">
+            <input data-upload-selected type="checkbox" ${duplicate?.recommended_action === "skip" ? "" : "checked"} aria-label="Import ${escapeHtml(item.original_name)}">
             <div>
                 <strong>${escapeHtml(item.original_name)}</strong>
                 <div class="library-upload-item-fields">
@@ -1112,6 +1113,7 @@ function renderUploadReview() {
                 </div>
                 <p class="library-upload-findings">${findings.length ? `<strong>Review:</strong> ${escapeHtml(findings.join(" · "))}` : "No obvious download-site branding detected."}</p>
                 <small class="library-upload-destination">Proposed location: ${escapeHtml(item.destination)}</small>
+                ${duplicate ? `<div class="library-upload-duplicates"><strong>${duplicate.matches.length} existing Library ${duplicate.matches.length === 1 ? "match" : "matches"} · ${duplicate.recommended_action === "skip" ? "Skipped by default" : "Review before importing"}</strong>${duplicate.matches.map((match) => `<div><span class="duplicate-tier-badge">${escapeHtml(match.tier)}</span> ${escapeHtml(match.title || match.filename)} — ${escapeHtml(match.artist || "Unknown artist")} <small>${escapeHtml(match.evidence)}</small></div>`).join("")}</div>` : ""}
             </div>
         </article>`;
     }).join("");
@@ -1234,6 +1236,7 @@ async function stageLocalFiles(files) {
         const result = await uploadRequest(`/api/library/uploads/batches/${batchId}/files`, {method: "POST", body: form});
         libraryUploadState.items.push(...result.items);
         libraryUploadState.summary = result.summary;
+        libraryUploadState.duplicates = result.duplicates;
         renderUploadReview();
         const failures = result.errors?.length ? ` ${result.errors.length} rejected: ${result.errors.map((item) => `${item.filename}: ${item.error}`).join("; ")}` : "";
         status.textContent = `${libraryUploadState.items.length} staged. Review cleanup and metadata before importing.${failures}`;
@@ -1277,9 +1280,11 @@ async function importLocalFiles() {
         if (!libraryUploadState.items.length) {
             libraryUploadState.batchId = null;
             libraryUploadState.summary = null;
+            libraryUploadState.duplicates = null;
         } else {
             const remaining = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}`);
             libraryUploadState.summary = remaining.summary;
+            libraryUploadState.duplicates = remaining.duplicates;
         }
         renderUploadReview();
         await loadLibraryData({preserveState: true});
@@ -1298,6 +1303,7 @@ async function closeLocalUpload() {
     libraryUploadState.batchId = null;
     libraryUploadState.items = [];
     libraryUploadState.summary = null;
+    libraryUploadState.duplicates = null;
     renderUploadReview();
     document.getElementById("library-upload-status").textContent = "";
 }

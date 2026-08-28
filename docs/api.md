@@ -269,3 +269,9 @@ Archive release via the `/artwork/musicbrainz?release_id=` suffix, and staged
 artwork removal with `DELETE` on the group artwork endpoint. Group IDs are
 derived from the server manifest. Confirmed imports embed the selected cached
 artwork before canonical indexing.
+
+Batch upload/read responses also include a bounded `duplicates` projection.
+Each staged item lists matching available Song IDs, identity tier, evidence,
+and a `skip` or `review` recommendation. Exact destination and canonical IDs
+take precedence over normalized metadata/duration signals. This projection is
+advisory; the canonical import engine still refuses destination collisions.

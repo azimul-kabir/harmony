@@ -79,6 +79,8 @@
 .library-upload-findings { grid-column: 1 / -1; margin: .35rem 0 0; color: var(--text-muted); font-size: .82rem; }
 .library-upload-findings strong { color: var(--text-main); }
 .library-upload-destination { overflow-wrap: anywhere; }
+.library-upload-duplicates { display:grid; gap:.4rem; margin-top:.7rem; padding:.7rem; border-left:3px solid var(--danger); background:var(--error-bg); border-radius:6px; font-size:.82rem; }
+.library-upload-duplicates > div { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
 
 @media (max-width: 720px) {
     .library-upload-item-fields { grid-template-columns: 1fr 1fr; }
