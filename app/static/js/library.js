@@ -44,6 +44,7 @@ const libraryState = {
 
 let searchTimer = null;
 let refreshTimer = null;
+const libraryUploadState = { batchId: null, items: [] };
 
 const icons = {
     music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
@@ -1073,7 +1074,139 @@ function connectLibraryEvents() {
     });
 }
 
+async function uploadRequest(url, options = {}) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        let message = `Request failed: ${response.status}`;
+        try {
+            const payload = await response.json();
+            message = typeof payload.detail === "string" ? payload.detail : payload.detail?.message || message;
+        } catch (_) { /* Use the bounded status message. */ }
+        throw new Error(message);
+    }
+    return response.status === 204 ? null : response.json();
+}
+
+function uploadField(item, field, label, type = "text") {
+    const value = item.proposed[field] ?? "";
+    const limits = type === "number" ? ' min="0" max="9999"' : ' maxlength="500"';
+    return `<label>${label}<input data-upload-field="${field}" type="${type}" value="${escapeHtml(String(value))}"${limits}></label>`;
+}
+
+function renderUploadReview() {
+    const review = document.getElementById("library-upload-review");
+    review.innerHTML = libraryUploadState.items.map((item) => {
+        const findings = [
+            ...item.changes.map((change) => `${change.field}: “${change.before || ""}” → “${change.after || "removed"}”`),
+            ...item.warnings,
+        ];
+        return `<article class="library-upload-item" data-upload-item="${item.id}">
+            <input data-upload-selected type="checkbox" checked aria-label="Import ${escapeHtml(item.original_name)}">
+            <div>
+                <strong>${escapeHtml(item.original_name)}</strong>
+                <div class="library-upload-item-fields">
+                    ${uploadField(item, "title", "Title")}${uploadField(item, "artist", "Artist")}
+                    ${uploadField(item, "album_artist", "Album artist")}${uploadField(item, "album", "Album")}
+                    ${uploadField(item, "genre", "Genre")}${uploadField(item, "year", "Year", "number")}
+                    ${uploadField(item, "track", "Track", "number")}${uploadField(item, "disc", "Disc", "number")}
+                </div>
+                <p class="library-upload-findings">${findings.length ? `<strong>Review:</strong> ${escapeHtml(findings.join(" · "))}` : "No obvious download-site branding detected."}</p>
+                <small class="library-upload-destination">Proposed location: ${escapeHtml(item.destination)}</small>
+            </div>
+        </article>`;
+    }).join("");
+    document.getElementById("library-upload-import").disabled = !libraryUploadState.items.length;
+}
+
+async function ensureUploadBatch() {
+    if (libraryUploadState.batchId) return libraryUploadState.batchId;
+    const batch = await uploadRequest("/api/library/uploads/batches", {method: "POST"});
+    libraryUploadState.batchId = batch.id;
+    return batch.id;
+}
+
+async function stageLocalFiles(files) {
+    if (!files.length) return;
+    const status = document.getElementById("library-upload-status");
+    const input = document.getElementById("library-upload-files");
+    status.textContent = `Uploading and inspecting ${files.length} ${files.length === 1 ? "file" : "files"}…`;
+    input.disabled = true;
+    try {
+        const batchId = await ensureUploadBatch();
+        const form = new FormData();
+        [...files].forEach((file) => form.append("files", file, file.name));
+        const result = await uploadRequest(`/api/library/uploads/batches/${batchId}/files`, {method: "POST", body: form});
+        libraryUploadState.items.push(...result.items);
+        renderUploadReview();
+        const failures = result.errors?.length ? ` ${result.errors.length} rejected: ${result.errors.map((item) => `${item.filename}: ${item.error}`).join("; ")}` : "";
+        status.textContent = `${libraryUploadState.items.length} staged. Review cleanup and metadata before importing.${failures}`;
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        input.disabled = false;
+        input.value = "";
+    }
+}
+
+function selectedUploadItems() {
+    return [...document.querySelectorAll("[data-upload-item]")].filter((row) => row.querySelector("[data-upload-selected]").checked).map((row) => {
+        const metadata = {};
+        row.querySelectorAll("[data-upload-field]").forEach((input) => {
+            metadata[input.dataset.uploadField] = input.type === "number"
+                ? (input.value === "" ? null : Number(input.value)) : input.value.trim() || null;
+        });
+        return {id: row.dataset.uploadItem, metadata};
+    });
+}
+
+async function importLocalFiles() {
+    const items = selectedUploadItems();
+    const status = document.getElementById("library-upload-status");
+    if (!items.length) { status.textContent = "Select at least one file to import."; return; }
+    const button = document.getElementById("library-upload-import");
+    button.disabled = true;
+    status.textContent = `Cleaning, verifying, and importing ${items.length} ${items.length === 1 ? "file" : "files"}…`;
+    try {
+        const result = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/import`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({items, scan_navidrome: document.getElementById("library-upload-scan").checked}),
+        });
+        const failed = result.items.filter((item) => item.status === "failed");
+        const scan = result.navidrome.status === "requested" ? " Navidrome scan requested."
+            : result.navidrome.status === "failed" ? ` Imported files are safe, but Navidrome scan failed: ${result.navidrome.message}` : "";
+        status.textContent = `${result.imported} of ${result.total} imported.${scan}${failed.length ? ` ${failed.length} failed: ${failed.map((item) => item.error).join("; ")}` : ""}`;
+        const importedIds = new Set(result.items.filter((item) => item.status === "imported").map((item) => item.id));
+        libraryUploadState.items = libraryUploadState.items.filter((item) => !importedIds.has(item.id));
+        if (!libraryUploadState.items.length) libraryUploadState.batchId = null;
+        renderUploadReview();
+        await loadLibraryData({preserveState: true});
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        button.disabled = !libraryUploadState.items.length;
+    }
+}
+
+async function closeLocalUpload() {
+    document.getElementById("library-upload-dialog").close();
+    if (libraryUploadState.batchId && libraryUploadState.items.length) {
+        try { await fetch(`/api/library/uploads/batches/${libraryUploadState.batchId}`, {method: "DELETE"}); } catch (_) { /* Startup cleanup is the fallback. */ }
+    }
+    libraryUploadState.batchId = null;
+    libraryUploadState.items = [];
+    renderUploadReview();
+    document.getElementById("library-upload-status").textContent = "";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("library-upload-open").addEventListener("click", () => document.getElementById("library-upload-dialog").showModal());
+    document.getElementById("library-upload-close").addEventListener("click", closeLocalUpload);
+    document.getElementById("library-upload-files").addEventListener("change", (event) => stageLocalFiles(event.target.files));
+    document.getElementById("library-upload-import").addEventListener("click", importLocalFiles);
+    const uploadDrop = document.getElementById("library-upload-drop");
+    ["dragenter", "dragover"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.add("is-dragging"); }));
+    ["dragleave", "drop"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.remove("is-dragging"); }));
+    uploadDrop.addEventListener("drop", (event) => stageLocalFiles(event.dataTransfer.files));
     document.getElementById("metadata-search-button").addEventListener("click", searchMetadata);
     document.getElementById("metadata-editor-form").addEventListener("submit", saveMetadata);
     ["metadata-editor-close", "metadata-editor-cancel"].forEach((id) => document.getElementById(id).addEventListener("click", () => document.getElementById("metadata-editor-dialog").close()));

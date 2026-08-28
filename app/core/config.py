@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     download_path: str = "/downloads"
     staging_path: str = "/downloads/staging"
     failed_path: str = "/downloads/failed"
+    library_upload_max_file_bytes: int = 1024 * 1024 * 1024
+    library_upload_max_files: int = 200
 
     log_level: str = "INFO"
 

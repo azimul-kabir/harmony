@@ -746,6 +746,17 @@ Library maintenance API:
 - `POST /api/library/rescan` reconciles the managed library.
 - `POST /api/library/reindex` forces a complete metadata rebuild.
 
+Browser imports are review-first and use `/api/library/uploads/batches`.
+Uploaded files are streamed into an opaque UUID directory below the private
+staging root, validated with Mutagen, and represented by a server-authored
+manifest. The browser can edit only bounded public metadata fields; it never
+supplies a filesystem source or destination. Confirmation sanitizes high-
+confidence promotional tags and lyric lines, writes the reviewed easy tags,
+reads the file back, then delegates the move and index transaction to the
+canonical import engine with `web_upload` provenance. A batch requests at most
+one incremental Navidrome scan, after successful imports. Scan failure does not
+roll back imported Library files.
+
 Never scan the filesystem unless:
 
 - First startup

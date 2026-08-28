@@ -7,6 +7,13 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Added
 
+- Added review-first local music imports on the Library page with multi-file
+  upload, private staging, metadata correction, canonical album organization,
+  `web_upload` Library provenance, and one optional Navidrome scan per batch.
+- Added conservative download-site branding cleanup across filenames, common
+  music tags, promotional comments/URLs/encoder fields, and individual branded
+  lyric lines, with every proposed change visible before import.
+
 - Added a responsive per-song Library metadata editor for title, artist, album,
   album artist, genre, year, track, and disc tags. Saving explicitly writes the
   selected audio file and immediately refreshes its Library index projection.

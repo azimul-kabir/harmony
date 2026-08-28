@@ -11,6 +11,7 @@
             <p>Browse every track Harmony has indexed across songs, albums, and artists.</p>
         </div>
         <div class="library-hero-actions">
+        <button id="library-upload-open" class="btn-primary" type="button">Import local music</button>
         <a class="btn-secondary library-health-link" href="/library/health">Library Health</a>
         <button id="library-duplicates-open" class="btn-secondary" type="button">Review duplicates</button>
         <button id="btn-rescan" class="btn-secondary library-rescan" type="button">
@@ -195,6 +196,27 @@
     </div>
 </dialog>
 
+<dialog id="library-upload-dialog" class="library-upload-dialog">
+    <div class="library-upload-shell">
+        <header>
+            <div><span class="library-eyebrow">Local import</span><h2>Upload and clean music</h2></div>
+            <button id="library-upload-close" class="btn-secondary" type="button">Close</button>
+        </header>
+        <p>Harmony stages these files privately, previews conservative branding cleanup, and only organizes them after you confirm.</p>
+        <label id="library-upload-drop" class="library-upload-drop">
+            <strong>Choose songs or drop them here</strong>
+            <span>MP3, FLAC, M4A/MP4, Ogg, or Opus</span>
+            <input id="library-upload-files" type="file" multiple accept=".mp3,.flac,.m4a,.mp4,.ogg,.opus,audio/*">
+        </label>
+        <p id="library-upload-status" class="library-search-status" aria-live="polite"></p>
+        <div id="library-upload-review" class="library-upload-review"></div>
+        <footer class="library-upload-actions">
+            <label><input id="library-upload-scan" type="checkbox" checked> Request one Navidrome scan after import</label>
+            <button id="library-upload-import" class="btn-primary" type="button" disabled>Import selected files</button>
+        </footer>
+    </div>
+</dialog>
+
 <dialog id="metadata-editor-dialog" class="metadata-editor-dialog">
     <form id="metadata-editor-form" class="metadata-editor-shell">
         <header>
@@ -240,5 +262,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/library.js?v={{ version }}-metadata-sync"></script>
+<script src="/static/js/library.js?v={{ version }}-metadata-sync-local-import"></script>
 {% endblock %}

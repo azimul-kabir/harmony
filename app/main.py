@@ -16,6 +16,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.library import router as library_router
 from app.api.library_bulk import router as library_bulk_router
 from app.api.library_health import router as library_health_router
+from app.api.library_uploads import router as library_uploads_router
 from app.api.navidrome import router as navidrome_router
 from app.api.playlist import router as playlist_router
 from app.api.settings import router as settings_router
@@ -40,6 +41,7 @@ from app.web.templates import template_context, templates
 from app.workers.download_worker import worker_loop
 from app.services.settings_service import configured_download_workers, initialize_defaults
 from app.services.staging_cleanup import cleanup_staging_downloads
+from app.services.library_uploads import cleanup_expired_batches
 from app.services.download_processes import download_processes
 from app.services.navidrome_playlist_sync import navidrome_playlist_reimport
 from app.services.source_auto_sync import source_auto_sync_scheduler
@@ -67,6 +69,7 @@ async def lifespan(app: FastAPI):
         initialize_defaults(db)
         configured_download_workers(db)
         cleanup_staging_downloads(db, Path(settings.staging_path))
+        cleanup_expired_batches()
         recover_library_jobs(db)
         cleanup_library_jobs(db)
     finally:
@@ -142,6 +145,7 @@ app.include_router(downloads_page_router)
 app.include_router(library_router)
 app.include_router(library_bulk_router)
 app.include_router(library_health_router)
+app.include_router(library_uploads_router)
 app.include_router(navidrome_router)
 app.include_router(artwork_router)
 app.include_router(library_page_router)

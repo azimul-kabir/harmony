@@ -243,3 +243,18 @@ Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `suc
 
 - `POST /api/navidrome/test` calls authenticated Subsonic `ping`.
 - `POST /api/navidrome/rescan` requests a bounded Navidrome library scan.
+
+## Local Library uploads
+
+- `POST /api/library/uploads/batches` creates a private review batch.
+- `POST /api/library/uploads/batches/{id}/files` accepts multipart `files`,
+  streams them to staging, validates audio metadata, and returns proposed tags,
+  sanitizer findings, warnings, and the canonical destination preview.
+- `GET /api/library/uploads/batches/{id}` restores an unfinished review.
+- `POST /api/library/uploads/batches/{id}/import` accepts selected item IDs,
+  bounded metadata overrides, and `scan_navidrome`; files are sanitized,
+  verified, organized, indexed, and reported independently.
+- `DELETE /api/library/uploads/batches/{id}` discards staged files.
+
+Batch IDs are UUIDs and never authorize arbitrary paths. Supported extensions
+are MP3, FLAC, M4A/MP4, Ogg, and Opus; container parsing remains authoritative.

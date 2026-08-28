@@ -54,6 +54,19 @@ MUSIC_HOST_PATH=/volume1/music/library
 DOWNLOAD_HOST_PATH=/volume1/music/incoming
 ```
 
+Browser Library imports use a private directory beneath `STAGING_PATH`. The
+defaults allow 200 files per review batch and 1 GiB per file; lower these for a
+reverse proxy or NAS with tighter storage constraints:
+
+```env
+LIBRARY_UPLOAD_MAX_FILE_BYTES=1073741824
+LIBRARY_UPLOAD_MAX_FILES=200
+```
+
+Incomplete browser-upload batches older than 24 hours are removed at startup.
+The reverse proxy must allow a request body large enough for the selected
+files; Harmony still enforces its own per-file limit while streaming to disk.
+
 ## Navidrome
 
 ```env

@@ -180,6 +180,19 @@ MusicBrainz result also previews its Cover Art Archive image and imports it only
 when the form is saved. Artwork is stored in Harmony's content-addressed cache;
 manual replacement and online import do not rewrite embedded audio artwork.
 
+### Import Local Music
+
+Choose **Import local music** on the Library page to stage MP3, FLAC, M4A/MP4,
+Ogg, or Opus files. Harmony validates each container, reads its tags, previews
+conservative download-site branding cleanup, and lets you correct the title,
+artist, album artist, album, genre, year, track, and disc before confirmation.
+
+Confirmed files are rewritten without transcoding, read back for verification,
+organized through the canonical `Album Artist/Album/Track - Title` path builder,
+indexed with `web_upload` provenance, and followed by one optional incremental
+Navidrome scan for the batch. Failed or duplicate items remain isolated in the
+private staging batch for review; closing the importer discards them.
+
 ### Albums View
 
 - Album artwork grid

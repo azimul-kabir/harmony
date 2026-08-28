@@ -31,6 +31,50 @@
     --shadow: 0 2px 12px rgba(0,0,0,0.06);
 }
 
+.library-upload-dialog {
+    width: min(940px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
+
+.library-upload-dialog::backdrop { background: rgba(0, 0, 0, .72); }
+.library-upload-shell { display: grid; gap: 1rem; padding: clamp(1rem, 3vw, 1.75rem); }
+.library-upload-shell > header,
+.library-upload-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.library-upload-shell h2 { margin: .25rem 0 0; }
+.library-upload-drop {
+    display: grid;
+    place-items: center;
+    gap: .35rem;
+    min-height: 130px;
+    padding: 1.25rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 14px;
+    text-align: center;
+    cursor: pointer;
+}
+.library-upload-drop:hover,
+.library-upload-drop.is-dragging { border-color: var(--primary); background: rgba(29, 185, 84, .06); }
+.library-upload-drop input { max-width: 100%; }
+.library-upload-review { display: grid; gap: .75rem; max-height: 48vh; overflow: auto; }
+.library-upload-item { display: grid; grid-template-columns: auto 1fr; gap: .85rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 12px; }
+.library-upload-item-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
+.library-upload-item-fields label { display: grid; gap: .3rem; font-size: .78rem; color: var(--text-muted); }
+.library-upload-item-fields input { width: 100%; min-width: 0; }
+.library-upload-findings { grid-column: 1 / -1; margin: .35rem 0 0; color: var(--text-muted); font-size: .82rem; }
+.library-upload-findings strong { color: var(--text-main); }
+.library-upload-destination { overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+    .library-upload-item-fields { grid-template-columns: 1fr 1fr; }
+    .library-upload-actions { align-items: stretch; flex-direction: column; }
+    .library-upload-actions .btn-primary { width: 100%; }
+}
+
 /* Fallback for OS auto dark mode when the user selects "auto" */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
