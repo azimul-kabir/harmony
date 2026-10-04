@@ -5,8 +5,16 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+## [v3.1.0] - 2026-10-04
+
 ### Added
 
+- Added backup and restore under **Settings → Operations**: download a
+  consistent SQLite snapshot with cached artwork, or restore one to replace the
+  database and overlay artwork. Portable JSON settings export and import cover
+  database-managed preferences; environment secrets and paths are excluded.
+- Added durable automatic and manual schedule history for each Source, with
+  late-run counts and run-now outcomes shown on the Sources page.
 - Added review-first local music imports on the Library page with multi-file
   upload, private staging, metadata correction, canonical album organization,
   `web_upload` Library provenance, and one optional Navidrome scan per batch.

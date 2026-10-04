@@ -29,7 +29,7 @@ def test_musicbrainz_search_uses_manually_supplied_terms(monkeypatch):
     assert "Riotous" not in captured["url"]
     assert "/recording?" in captured["url"]
     assert "/recording/?" not in captured["url"]
-    assert captured["user_agent"].startswith("Harmony/3.0.0 (")
+    assert captured["user_agent"].startswith("Harmony/3.1.0 (")
     assert results[0]["album"] == "Riotous 14"
     assert results[0]["track"] == "3"
     assert results[0]["artwork_url"].endswith("/front-250")

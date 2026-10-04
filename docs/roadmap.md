@@ -1,10 +1,10 @@
 # Harmony Roadmap
 
-> Current release: v3.0.0
+> Current release: v3.1.0
 >
-> Previous stable baseline: v2.1.0
+> Previous stable baseline: v3.0.0
 >
-> Last updated: 2026-08-21
+> Last updated: 2026-10-04
 
 Harmony v3 deliberately narrows the product around one dependable path:
 
