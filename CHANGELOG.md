@@ -72,6 +72,9 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   the app shell, the Library Health score ring, and download details showing
   "Invalid Date" for values containing a capital T.
 
+- The mobile bottom navigation now holds five tabs (Dashboard, Downloads,
+  Sources, Playlists, Library). Settings moved to a gear button in a new
+  phone-only top bar beside the Harmony brand; desktop navigation is unchanged.
 - Added a README hero banner and desktop, light-theme, and mobile screenshots
   of the redesigned interface, captured from a demo library of fictional
   artists.
