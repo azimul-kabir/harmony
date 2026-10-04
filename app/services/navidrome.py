@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 from collections.abc import Sequence
 from typing import Any
@@ -10,6 +11,29 @@ import httpx
 import asyncio
 
 from app.core.config import get_settings
+
+
+# Navidrome 0.64 re-encodes every internal ID to canonical 128-bit Base62
+# during its upgrade.  IDs persisted by Harmony before that point are stale.
+CANONICAL_ID_VERSION = (0, 64, 0)
+SUBSONIC_NOT_FOUND = 70
+
+
+def parse_server_version(value: Any) -> tuple[int, int, int] | None:
+    """Parse ``0.64.0``, ``v0.64.1`` or ``0.64.0 (abc123)`` into a tuple."""
+    match = re.match(r"\s*v?(\d+)\.(\d+)(?:\.(\d+))?", str(value or ""))
+    if not match:
+        return None
+    major, minor, patch = match.groups()
+    return int(major), int(minor), int(patch or 0)
+
+
+def navidrome_id_scheme(value: Any) -> str | None:
+    """Name the ID format a Navidrome version exposes, when it is known."""
+    version = parse_server_version(value)
+    if version is None:
+        return None
+    return "canonical_base62" if version >= CANONICAL_ID_VERSION else "legacy"
 
 
 class NavidromeError(RuntimeError):
@@ -180,6 +204,7 @@ class NavidromeClient:
             "last_scan": scan.get("lastScan"),
             "folder_count": int(scan.get("folderCount") or 0),
             "server_version": envelope.get("serverVersion"),
+            "id_scheme": navidrome_id_scheme(envelope.get("serverVersion")),
         }
 
     async def status(self) -> dict[str, Any]:
@@ -192,6 +217,7 @@ class NavidromeClient:
                 "last_scan": None,
                 "folder_count": 0,
                 "server_version": None,
+                "id_scheme": None,
                 "error": None,
             }
         try:
@@ -205,6 +231,7 @@ class NavidromeClient:
                 "last_scan": None,
                 "folder_count": 0,
                 "server_version": None,
+                "id_scheme": None,
                 "error": str(error),
             }
 
@@ -218,6 +245,42 @@ class NavidromeClient:
             "accepted": True,
             "full_scan": full_scan,
         }
+
+    async def library_songs(self, *, page_size: int = 500) -> list[dict[str, Any]]:
+        """Return every song visible to the configured user (read-only)."""
+        size = max(1, min(int(page_size), 500))
+        songs: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            envelope = await self._request(
+                "search3",
+                extra_params={
+                    "query": "",
+                    "songCount": str(size),
+                    "songOffset": str(offset),
+                    "albumCount": "0",
+                    "artistCount": "0",
+                },
+            )
+            page = self._as_list((envelope.get("searchResult3") or {}).get("song"))
+            songs.extend(page)
+            if len(page) < size:
+                return songs
+            offset += size
+
+    async def get_playlists(self) -> list[dict[str, Any]]:
+        envelope = await self._request("getPlaylists")
+        return self._as_list((envelope.get("playlists") or {}).get("playlist"))
+
+    async def song_exists(self, song_id: str) -> bool:
+        """Return whether Navidrome still resolves a persisted song ID."""
+        try:
+            envelope = await self._request("getSong", extra_params={"id": song_id})
+        except NavidromeError as error:
+            if error.api_code == SUBSONIC_NOT_FOUND:
+                return False
+            raise
+        return isinstance(envelope.get("song"), dict)
 
     async def ping(self) -> dict[str, Any]:
         envelope = await self._request("ping")

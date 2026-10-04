@@ -31,6 +31,10 @@ RETIRED_SETTING_KEYS = {
     "spotify_genre_replace_existing",
 }
 
+# Harmony-owned bookkeeping rows (for example Navidrome ID reconciliation state).
+# They are never shown, exported, or imported as user settings.
+INTERNAL_SETTING_CATEGORY = "internal"
+
 DEFAULT_SETTINGS = [
     {"key": "timezone", "value": "Asia/Dhaka", "type": "string", "category": "general"},
     {"key": "date_format", "value": "DD/MM/YYYY", "type": "string", "category": "general"},

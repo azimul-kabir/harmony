@@ -14,7 +14,11 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.database.models import AppSetting
 from app.database.session import SessionLocal, engine
-from app.services.settings_service import RETIRED_SETTING_KEYS, apply_runtime_overrides
+from app.services.settings_service import (
+    INTERNAL_SETTING_CATEGORY,
+    RETIRED_SETTING_KEYS,
+    apply_runtime_overrides,
+)
 
 BACKUP_VERSION = 1
 
@@ -29,7 +33,10 @@ def _database_path() -> Path:
 def export_settings(db) -> dict:
     rows = db.scalars(
         select(AppSetting)
-        .where(AppSetting.key.not_in(RETIRED_SETTING_KEYS))
+        .where(
+            AppSetting.key.not_in(RETIRED_SETTING_KEYS),
+            AppSetting.category != INTERNAL_SETTING_CATEGORY,
+        )
         .order_by(AppSetting.key)
     ).all()
     return {
@@ -54,7 +61,7 @@ def import_settings(db, payload: dict) -> int:
         if not isinstance(item, dict) or not {"key", "value", "type", "category"} <= item.keys():
             raise ValueError("The settings export contains an invalid entry.")
         key = str(item["key"])
-        if key in RETIRED_SETTING_KEYS:
+        if key in RETIRED_SETTING_KEYS or item["category"] == INTERNAL_SETTING_CATEGORY:
             continue
         row = db.get(AppSetting, key)
         if row is None:

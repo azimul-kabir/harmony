@@ -14,6 +14,10 @@ from app.database.models import Playlist, SyncSource, Task
 from app.database.session import SessionLocal
 from app.domain.task import TaskType
 from app.services.navidrome import NavidromeClient, NavidromeError
+from app.services.navidrome_id_reconciliation import (
+    NavidromeIdReconciler,
+    navidrome_id_reconciler,
+)
 from app.services.playlist_manager import export_m3u
 
 
@@ -26,10 +30,12 @@ class NavidromePlaylistReimportCoordinator:
         settings=None,
         client_factory: Callable[[], NavidromeClient] = NavidromeClient,
         session_factory=SessionLocal,
+        id_reconciler: NavidromeIdReconciler = navidrome_id_reconciler,
     ) -> None:
         self.settings = settings or get_settings()
         self.client_factory = client_factory
         self.session_factory = session_factory
+        self.id_reconciler = id_reconciler
         self._queue: queue.Queue[int | None] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._stopping = threading.Event()
@@ -71,7 +77,17 @@ class NavidromePlaylistReimportCoordinator:
         )
         return True
 
+    async def check_navidrome_ids(self, client: NavidromeClient | None = None) -> None:
+        """Repair persisted Navidrome IDs once after a server ID migration."""
+        try:
+            await self.id_reconciler.reconcile_if_needed(
+                client or self.client_factory()
+            )
+        except Exception:
+            logger.exception("Unexpected Navidrome ID reconciliation failure.")
+
     def _worker(self) -> None:
+        asyncio.run(self.check_navidrome_ids())
         while not self._stopping.is_set():
             task_id = self._queue.get()
             if task_id is None:
@@ -218,6 +234,7 @@ class NavidromePlaylistReimportCoordinator:
                 "Navidrome playlist reconciliation completed for {} playlist(s).",
                 rewritten,
             )
+            await self.check_navidrome_ids(client)
             return True
         except NavidromeError as error:
             logger.warning(

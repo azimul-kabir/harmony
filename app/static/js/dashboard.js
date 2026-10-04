@@ -88,6 +88,55 @@ function renderNavidromeStatus(status) {
     const enabled = Boolean(status.configured && status.reachable && !status.scanning);
     rescan.disabled = !enabled;
     fullRescan.disabled = !enabled;
+    const refreshIds = document.getElementById("navidrome-refresh-ids");
+    if (refreshIds && !refreshIds.dataset.busy) refreshIds.disabled = !enabled;
+}
+
+function renderNavidromeIdSummary(result) {
+    if (!result || !result.reconciled_at || !result.songs) {
+        setText("navidrome-id-summary", "");
+        return;
+    }
+    const songs = result.songs;
+    const playlists = result.playlists || {};
+    setText(
+        "navidrome-id-summary",
+        `IDs refreshed ${formatNavidromeDate(result.reconciled_at)}: `
+        + `${Number(songs.updated || 0).toLocaleString()} songs updated, `
+        + `${Number(songs.unresolved || 0).toLocaleString()} unresolved; `
+        + `${Number(playlists.updated || 0).toLocaleString()} playlists updated.`
+    );
+}
+
+async function loadNavidromeIdSummary() {
+    try {
+        const response = await fetch("/api/navidrome/id-reconciliation");
+        if (response.ok) renderNavidromeIdSummary(await response.json());
+    } catch (error) {
+        // The summary is informational; status rendering reports connectivity.
+    }
+}
+
+async function refreshNavidromeIds(button) {
+    const originalLabel = button.textContent;
+    button.dataset.busy = "true";
+    button.disabled = true;
+    button.textContent = "Refreshing IDs…";
+    try {
+        const response = await fetch("/api/navidrome/id-reconciliation", { method: "POST" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload.detail?.message || "Navidrome IDs could not be refreshed.");
+        }
+        renderNavidromeIdSummary(payload);
+        setText("navidrome-message", "Navidrome IDs refreshed.");
+    } catch (error) {
+        setText("navidrome-message", error.message || "Navidrome IDs could not be refreshed.");
+    } finally {
+        button.textContent = originalLabel;
+        delete button.dataset.busy;
+        await refreshNavidromeStatus();
+    }
 }
 
 async function refreshNavidromeStatus() {
@@ -159,7 +208,10 @@ function setupNavidromeControls() {
             startNavidromeScan(true, fullRescan);
         }
     });
+    const refreshIds = document.getElementById("navidrome-refresh-ids");
+    refreshIds?.addEventListener("click", () => refreshNavidromeIds(refreshIds));
     refreshNavidromeStatus();
+    loadNavidromeIdSummary();
     window.setInterval(refreshNavidromeStatus, 15000);
 }
 

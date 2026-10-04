@@ -59,6 +59,7 @@ def test_status_uses_token_auth_and_normalizes_scan_state():
         "last_scan": "2026-07-24T04:00:00Z",
         "folder_count": 2,
         "server_version": "0.58.0",
+        "id_scheme": "legacy",
     }
 
 

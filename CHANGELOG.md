@@ -40,6 +40,15 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added manual JPEG, PNG, and WebP artwork replacement from the editor and
   explicit Cover Art Archive import for a selected MusicBrainz release.
 
+- Added Navidrome 0.64 ID-migration safety. Harmony detects the connected
+  server's ID scheme and, once after an ID migration (or on demand from the
+  Dashboard's **Refresh IDs** action), remaps persisted Navidrome song and
+  playlist IDs from library paths, MusicBrainz recording IDs, ISRCs, and
+  normalized metadata. Reconciliation is read-only against Navidrome, never
+  creates duplicate Harmony records, skips while Navidrome is scanning, and
+  logs checked, updated, unchanged, unresolved, and skipped counts. Back up
+  Navidrome's data before upgrading it to 0.64.
+
 ### Changed
 
 - Container publishing now moves the `latest` image tag on every stable `v*`
