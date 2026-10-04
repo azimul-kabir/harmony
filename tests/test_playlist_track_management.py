@@ -224,5 +224,5 @@ def test_playlist_card_exposes_delete_action():
     response = TestClient(app).get("/playlists")
 
     assert response.status_code == 200
-    assert 'class="btn-secondary playlist-delete-btn"' in response.text
+    assert 'class="playlist-delete-btn"' in response.text
     assert 'data-playlist-name="Visible Delete"' in response.text

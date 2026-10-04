@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#080c1c">
+    <meta name="theme-color" content="#070b14" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)">
     <meta name="application-name" content="Harmony">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Harmony">
@@ -13,7 +14,7 @@
     <link rel="icon" type="image/svg+xml" href="/static/brand/harmony-icon.svg">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/pwa/icon-192.png">
     <link rel="apple-touch-icon" href="/static/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/app.css?v={{ version }}&brand=3-density">
+    <link rel="stylesheet" href="/static/css/app.css?v={{ version }}&ui=4">
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -23,7 +24,12 @@
             <img src="/static/brand/harmony-icon.svg" alt="">
             <span>Harmony</span>
         </a>
-        <nav>
+        <button class="btn-primary sidebar-new-download" type="button" data-open-download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            New download
+        </button>
+        <p class="sidebar-section-label">Menu</p>
+        <nav aria-label="Primary">
             <a href="/" class="{% if page == 'dashboard' %}active{% endif %}"{% if page == 'dashboard' %} aria-current="page"{% endif %}>
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 <span class="nav-text">Dashboard</span>
@@ -50,12 +56,15 @@
             </a>
         </nav>
         <div class="sidebar-footer">
+            <div class="sidebar-meta">
+                <strong>{{ app_name }} v{{ version }}</strong>
+                <span>by AziM</span>
+            </div>
             <form method="post" action="/logout">
-                <button class="logout-button" type="submit">Sign out</button>
+                <button class="logout-button" type="submit" title="Sign out" aria-label="Sign out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </button>
             </form>
-            <div class="footer-title">{{ app_name }}</div>
-            <div class="footer-author">by AziM</div>
-            <div class="footer-version">v{{ version }}</div>
         </div>
     </aside>
     
@@ -77,31 +86,32 @@
     </div>
 </div>
 
-<button id="global-fab" class="fab-btn" title="Quick Download">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+<button id="global-fab" class="fab-btn" type="button" title="New download" aria-label="New download" data-open-download>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 </button>
 
 <div id="download-modal" class="modal-overlay hidden">
-    <div class="modal-content">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="download-modal-title">
         <div class="modal-header">
-            <h2>New Download</h2>
-            <button id="modal-close-btn" class="modal-close">&times;</button>
+            <h2 id="download-modal-title">New download</h2>
+            <button id="modal-close-btn" class="modal-close" type="button" aria-label="Close">&times;</button>
         </div>
+        <p class="modal-subtitle">Paste a track, album, or playlist link from Spotify or YouTube Music.</p>
         <form id="modal-download-form" class="modal-form">
             <input 
                 type="url" 
                 id="modal-spotify-url" 
-                placeholder="Paste Spotify or YouTube Music URL..."
+                placeholder="https://open.spotify.com/…"
                 required 
                 autocomplete="off"
             >
-            <button type="submit" id="modal-submit-btn" class="btn-primary">Start Ingestion</button>
+            <button type="submit" id="modal-submit-btn" class="btn-primary">Start download</button>
         </form>
         <div id="modal-result-box"></div>
     </div>
 </div>
 
-<script src="/static/js/app.js?v={{ version }}"></script>
+<script src="/static/js/app.js?v={{ version }}&ui=4"></script>
 <script src="/static/js/pwa.js?v={{ version }}"></script>
 {% block scripts %}{% endblock %}
 </body>

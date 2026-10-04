@@ -3,7 +3,26 @@
 
 {% block content %} 
 <div class="downloads-header">
-    <div><span class="library-eyebrow">Download queue</span><h1>Command Center</h1></div>
+    <div>
+        <span class="library-eyebrow">Queue</span>
+        <h1>Downloads</h1>
+        <p class="page-description">Paste a link to start a download, then follow progress and history below.</p>
+    </div>
+</div>
+
+<div class="panel download-ingest-panel">
+    <form id="download-form" class="download-ingest-form">
+        <input 
+            type="url" 
+            id="spotify-url" 
+            placeholder="Paste a Spotify or YouTube Music link…"
+            aria-label="Spotify or YouTube Music link"
+            required 
+            autocomplete="off"
+        >
+        <button type="submit" id="download-submit-btn" class="btn-primary">Download</button>
+    </form>
+    <div id="download-result" role="status" aria-live="polite"></div>
 </div>
 
 <section class="downloads-summary" aria-label="Download queue summary">
@@ -23,22 +42,8 @@
     <div id="download-failure-reasons" class="download-failure-reasons"></div>
 </section>
 
-<div class="panel download-ingest-panel">
-    <form id="download-form" class="download-ingest-form">
-        <input 
-            type="url" 
-            id="spotify-url" 
-            placeholder="Paste Spotify or YouTube Music URL…"
-            required 
-            autocomplete="off"
-        >
-        <button type="submit" id="download-submit-btn" class="btn-primary">Download</button>
-    </form>
-    <div id="download-result" role="status" aria-live="polite"></div>
-</div>
-
 <section class="download-queue-panel panel" aria-labelledby="active-downloads-heading">
-    <div class="queue-section-heading"><div><span class="library-eyebrow">Live queue</span><h2 id="active-downloads-heading">Active Downloads</h2></div></div>
+    <div class="queue-section-heading"><div><span class="library-eyebrow">Live</span><h2 id="active-downloads-heading">Active downloads</h2></div></div>
     <div id="active-downloads" class="active-downloads-grid" aria-live="polite"></div>
     <p id="active-downloads-empty" class="empty-state">No downloads are currently running.</p>
     <div class="queue-section-heading queue-waiting-heading"><h2>Waiting</h2></div>
@@ -81,12 +86,12 @@
         <table class="table command-table download-history-table">
             <thead>
                 <tr>
-                    <th style="width: 48px; padding-left: 24px;"><input id="select-visible-downloads-checkbox" type="checkbox" aria-label="Select all visible downloads"></th>
+                    <th style="width: 48px; padding-left: 20px;"><input id="select-visible-downloads-checkbox" type="checkbox" aria-label="Select all visible downloads"></th>
                     <th style="width: 120px;">Status</th>
                     <th>Song</th>
                     <th>Artist</th>
                     <th>Album</th>
-                    <th style="width: 100px; text-align: right; padding-right: 24px;">Actions</th>
+                    <th style="width: 100px; text-align: right; padding-right: 20px;"><span class="visually-hidden">Actions</span></th>
                 </tr>
             </thead>
             <tbody id="downloads-body">
@@ -130,5 +135,5 @@
 {% endblock %} 
 
 {% block scripts %} 
-<script src="/static/js/downloads.js"></script> 
+<script src="/static/js/downloads.js?v={{ version }}&ui=4"></script> 
 {% endblock %}

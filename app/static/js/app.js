@@ -1,4 +1,5 @@
 // Shared JavaScript for Harmony
+const SUBMIT_LABEL = "Start download";
 
 document.addEventListener("DOMContentLoaded", () => {
     // --- 1. Global Mini Player Management ---
@@ -48,25 +49,42 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalSubmit = document.getElementById("modal-submit-btn");
     const resultBox = document.getElementById("modal-result-box");
 
+    const openTriggers = document.querySelectorAll("[data-open-download]");
     if (fabBtn && modal) {
-        // Open Modal
-        fabBtn.addEventListener("click", () => {
+        let returnFocus = null;
+        const openModal = (trigger) => {
+            returnFocus = trigger || document.activeElement;
             modal.classList.remove("hidden");
             resultBox.innerHTML = "";
             modalInput.value = "";
-            modalInput.focus();
+            modalInput.style.borderColor = "";
+            modalSubmit.disabled = false;
+            modalSubmit.textContent = SUBMIT_LABEL;
+            window.setTimeout(() => modalInput.focus(), 30);
+        };
+        const closeModal = () => {
+            if (modal.classList.contains("hidden")) return;
+            modal.classList.add("hidden");
+            if (returnFocus?.isConnected) returnFocus.focus();
+        };
+
+        // Open from the sidebar button or the mobile floating button
+        openTriggers.forEach((trigger) => {
+            trigger.addEventListener("click", () => openModal(trigger));
         });
 
         // Close Modal via button
-        closeBtn.addEventListener("click", () => {
-            modal.classList.add("hidden");
-        });
+        closeBtn.addEventListener("click", closeModal);
 
         // Close Modal clicking outside content box
         modal.addEventListener("click", (e) => {
             if (e.target === modal) {
-                modal.classList.add("hidden");
+                closeModal();
             }
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") closeModal();
         });
 
         // Accept the public URL forms supported by the server-side provider registry.
@@ -78,9 +96,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 modalSubmit.disabled = true;
                 modalSubmit.textContent = "Unsupported URL";
             } else {
-                modalInput.style.borderColor = "var(--border-input)";
+                modalInput.style.borderColor = "";
                 modalSubmit.disabled = false;
-                modalSubmit.textContent = "Start Ingestion";
+                modalSubmit.textContent = SUBMIT_LABEL;
             }
         });
 
@@ -125,28 +143,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (data.summary) {
                     resultBox.innerHTML = `
                         <div class="success-message" style="margin-top:12px;">
-                            <strong>Playlist ingestion added</strong><br>
-                            Tracks Queued: ${data.summary.queued}<br>
-                            Duplicates Skipped: ${data.summary.owned}
+                            <strong>Playlist added to the queue</strong><br>
+                            Tracks queued: ${data.summary.queued}<br>
+                            Already in library: ${data.summary.owned}
                         </div>
                     `;
                 } else if (data.status === "owned") {
-                    resultBox.innerHTML = `<div class="success-message" style="margin-top:12px;">Track verified. Already matches an existing file in library.</div>`;
+                    resultBox.innerHTML = `<div class="success-message" style="margin-top:12px;">This track is already in your library.</div>`;
                 } else {
-                    resultBox.innerHTML = `<div class="success-message" style="margin-top:12px;">Track ingestion thread created.</div>`;
+                    resultBox.innerHTML = `<div class="success-message" style="margin-top:12px;">Download queued.</div>`;
                 }
                 
                 // Keep window open briefly so status can be reviewed, then close auto
-                setTimeout(() => {
-                    modal.classList.add("hidden");
-                }, 2500);
+                setTimeout(closeModal, 2500);
 
             } catch (err) {
-                resultBox.innerHTML = `<div class="error-message" style="margin-top:12px;">${err.message}</div>`;
+                const message = document.createElement("div");
+                message.className = "error-message";
+                message.textContent = err.message;
+                resultBox.replaceChildren(message);
             } finally {
                 window.clearInterval(metadataTimer);
                 modalSubmit.disabled = false;
-                modalSubmit.textContent = "Start Ingestion";
+                modalSubmit.textContent = SUBMIT_LABEL;
             }
         });
     }

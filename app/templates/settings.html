@@ -2,8 +2,12 @@
 {% block title %}Settings{% endblock %}
 
 {% block content %}
-<div class="settings-header">
-    <div><span class="library-eyebrow">Application</span><h1>Settings</h1></div>
+<div class="page-heading settings-header">
+    <div>
+        <span class="library-eyebrow">Application</span>
+        <h1>Settings</h1>
+        <p class="page-description">Preferences stored in Harmony's database. Paths and secrets stay in the server environment.</p>
+    </div>
 </div>
 
 <div class="settings-container">
@@ -63,7 +67,7 @@
                     </select>
                 </div>
                 <div style="margin-top: 32px;">
-                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <button type="submit" class="btn-primary">Save changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
             </form>
@@ -111,7 +115,7 @@
                     <label>Maximum queued items<input type="number" min="1" max="5000" name="youtube_music_max_queue_items" class="form-control responsive-input-small" value="{{ downloads.youtube_music_max_queue_items }}"></label>
                 </div>
                 <div style="margin-top: 32px;">
-                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <button type="submit" class="btn-primary">Save changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
             </form>
@@ -130,7 +134,7 @@
                     </select>
                 </div>
                 <div style="margin-top: 32px;">
-                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <button type="submit" class="btn-primary">Save changes</button>
                     <span class="save-status" style="margin-left: 12px; color: var(--success); display: none; font-weight: bold;">✓ Saved</span>
                 </div>
             </form>
@@ -142,7 +146,7 @@
                 <div class="settings-field-grid">
                     <label>Cover art timeout (seconds)<input type="number" min="1" max="120" step="0.5" name="cover_art_archive_timeout_seconds" class="form-control responsive-input-small" value="{{ metadata.cover_art_archive_timeout_seconds }}"></label>
                 </div>
-                <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
+                <div class="settings-save-row"><button type="submit" class="btn-primary">Save changes</button><span class="save-status">✓ Saved</span></div>
             </form>
         </div>
 
@@ -155,7 +159,7 @@
                 <label>Password<input class="form-control" type="password" value="" placeholder="{{ 'Stored server-side' if settings.navidrome_password else 'Not configured' }}" readonly></label>
             </div>
             <p class="settings-help">Set the Navidrome URL, username, and password in the server environment. Credentials are never rendered.</p>
-            <button id="navidrome-test-connection" class="btn-secondary" type="button">Test Connection</button>
+            <button id="navidrome-test-connection" class="btn-secondary" type="button">Test connection</button>
             <span id="navidrome-test-result" role="status" aria-live="polite"></span>
             <form class="settings-form" data-category="navidrome">
                 <div class="settings-toggle-list">
@@ -167,7 +171,7 @@
                     <label>Scan poll interval (seconds)<input type="number" min="0.25" max="60" step="0.25" name="navidrome_playlist_reimport_poll_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_poll_seconds }}"></label>
                     <label>Scan timeout (seconds)<input type="number" min="10" max="3600" step="1" name="navidrome_playlist_reimport_scan_timeout_seconds" class="form-control responsive-input-small" value="{{ navidrome.navidrome_playlist_reimport_scan_timeout_seconds }}"></label>
                 </div>
-                <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
+                <div class="settings-save-row"><button type="submit" class="btn-primary">Save changes</button><span class="save-status">✓ Saved</span></div>
             </form>
         </div>
 
@@ -181,7 +185,7 @@
                     <label>Watcher debounce (seconds)<input type="number" min="0.1" max="60" step="0.05" name="library_watcher_debounce_seconds" class="form-control responsive-input-small" value="{{ library_settings.library_watcher_debounce_seconds }}"></label>
                 </div>
                 <p class="settings-help">Watcher changes take effect after restarting Harmony.</p>
-                <div class="settings-save-row"><button type="submit" class="btn-primary">Save Changes</button><span class="save-status">✓ Saved</span></div>
+                <div class="settings-save-row"><button type="submit" class="btn-primary">Save changes</button><span class="save-status">✓ Saved</span></div>
             </form>
         </div>
 
@@ -211,233 +215,127 @@
 </div>
 
 <style>
-    .settings-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 24px;
-    }
-    .settings-header h1 { margin: 0; }
+    .settings-header { margin-bottom: 24px; }
     .settings-mobile-picker { display: none; }
 
-    /* Base Container Styles */
     .settings-container {
-        display: flex;
-        min-height: 60vh;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        overflow: hidden;
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
     }
-    
     .settings-sidebar {
-        width: 250px;
-        border-right: 1px solid var(--border-color);
+        position: sticky;
+        top: 20px;
+        padding: 6px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
         background: var(--bg-surface);
     }
-    
+    .settings-tabs { display: grid; gap: 2px; }
     .settings-content {
-        flex: 1;
-        padding: 32px;
-        background: var(--bg-surface-alt);
+        min-width: 0;
+        padding: 28px 32px 32px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        background: var(--bg-surface);
+        box-shadow: var(--shadow-sm);
     }
+    .settings-section { max-width: 760px; }
+    .settings-section h2 { margin: 0 0 6px !important; font-size: 1.3rem; font-weight: 700; }
+    .settings-section h2 + * { margin-top: 18px; }
+    .settings-section h3 { margin: 26px 0 4px; font-size: 1rem; font-weight: 700; }
+    .settings-section hr { margin: 24px 0 !important; border-top-color: var(--border-color) !important; }
 
-    /* Tab Styles */
     .settings-tab {
-        display: block;
+        display: flex;
+        align-items: center;
         width: 100%;
-        text-align: left;
-        padding: 14px 24px;
+        min-height: 38px;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 9px;
         background: transparent;
-        border: none;
-        border-left: 3px solid transparent;
-        font-size: 1rem;
-        color: var(--text-main);
+        color: var(--text-secondary);
+        font: inherit;
+        font-size: .94rem;
+        font-weight: 550;
+        text-align: left;
         cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s;
+        transition: background-color .15s ease, color .15s ease;
     }
-    .settings-tab:hover { background: var(--bg-surface-hover); }
-    .settings-tab.active { 
-        border-left-color: var(--primary); 
-        background: var(--bg-surface-hover); 
-        font-weight: 600; 
-        color: var(--primary); 
-    }
+    .settings-tab:hover { background: var(--bg-surface-hover); color: var(--text-main); }
+    .settings-tab.active { background: var(--primary-soft); color: var(--primary); font-weight: 650; }
     .settings-submenu-link { box-sizing: border-box; text-decoration: none; }
 
-    /* Input Styles */
-    .responsive-input {
-        padding: 10px;
-        width: 300px;
-        border-radius: 6px;
-        border: 1px solid var(--border-color);
-        background: var(--bg-surface);
-        color: var(--text-main);
-    }
-    .responsive-input-small {
-        padding: 10px;
-        width: 100px;
-        border-radius: 6px;
-        border: 1px solid var(--border-color);
-        background: var(--bg-surface);
-        color: var(--text-main);
-    }
+    .settings-form .form-group { margin-bottom: 20px; }
+    .settings-form .form-group > label:first-child { color: var(--text-main); font-size: .9rem; }
+    .responsive-input { width: min(360px, 100%); }
+    .responsive-input-small { width: 140px; }
 
     .settings-field-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-        gap: 18px;
-        margin-top: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
     }
-    .settings-field-grid label, .settings-toggle-list label {
-        color: var(--text-main);
-        font-weight: 600;
+    .settings-field-grid label, .settings-toggle-list label { display: grid; gap: 6px; color: var(--text-main); font-size: .88rem; font-weight: 600; }
+    .settings-field-grid input { width: 100%; margin-top: 0; }
+    .settings-toggle-list { display: grid; gap: 10px; margin: 16px 0; }
+    .settings-toggle-list label { display: flex; align-items: center; gap: 10px; }
+    .settings-toggle-list input, .settings-form .form-group input[type="checkbox"] { width: 18px !important; height: 18px !important; margin: 0; }
+    .settings-help { margin: 8px 0; color: var(--text-muted); font-size: .86rem; line-height: 1.5; }
+    .settings-save-row,
+    .settings-form > div[style*="margin-top: 32px"] {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 28px !important;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
     }
-    .settings-field-grid input {
-        display: block;
-        margin-top: 8px;
-    }
-    .settings-toggle-list {
-        display: grid;
-        gap: 14px;
-        margin: 18px 0;
-    }
-    .settings-toggle-list input {
-        width: 18px;
-        height: 18px;
-        margin-right: 8px;
-        vertical-align: middle;
-    }
-    .settings-help {
-        color: var(--text-muted);
-        font-size: 0.85rem;
-    }
-    .settings-save-row {
-        margin-top: 32px;
-    }
-    .operations-card { padding: 18px; margin: 18px 0; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface); }
-    .operations-card h3 { margin-top: 0; }
-    .operations-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .settings-save-row .save-status { display: none; color: var(--success); font-weight: 650; }
+    .settings-form > div[style*="margin-top: 32px"] .save-status { margin-left: 0 !important; }
+    #navidrome-test-result { margin-left: 10px; color: var(--text-muted); font-size: .88rem; }
+    .operations-card { margin: 16px 0; padding: 18px; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--bg-surface-alt); }
+    .operations-card h3 { margin: 0 0 4px; }
+    .operations-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .operations-actions a { text-decoration: none; }
     .operation-file-button { cursor: pointer; }
-    .settings-save-row .save-status {
-        display: none;
-        margin-left: 12px;
-        color: var(--success);
-        font-weight: bold;
-    }
 
-    /* MOBILE RESPONSIVE QUERIES */
     @media (max-width: 768px) {
         .settings-header { margin-bottom: 18px; }
-        .settings-container {
-            flex-direction: column;
-            min-height: 0;
-            overflow: visible;
-        }
-        .settings-sidebar {
-            width: 100%;
-            border-right: none;
-            border-bottom: 1px solid var(--border-color);
-            overflow: hidden;
-        }
+        .settings-container { grid-template-columns: 1fr; gap: 12px; }
+        .settings-sidebar { position: static; padding: 0; border: 0; background: transparent; }
         .settings-mobile-picker {
             position: relative;
             display: grid;
-            gap: 9px;
-            padding: 16px;
+            gap: 8px;
             color: var(--text-muted);
             font-size: .72rem;
-            font-weight: 800;
+            font-weight: 700;
             letter-spacing: .06em;
             text-transform: uppercase;
         }
-        .settings-mobile-picker::after {
-            position: absolute;
-            right: 35px;
-            bottom: 38px;
-            width: 9px;
-            height: 9px;
-            border-right: 2px solid var(--text-main);
-            border-bottom: 2px solid var(--text-main);
-            content: "";
-            pointer-events: none;
-            transform: rotate(45deg);
-        }
         .settings-mobile-picker select {
-            appearance: none;
-            -webkit-appearance: none;
             width: 100%;
             min-height: 56px;
-            box-sizing: border-box;
-            padding: 0 52px 0 18px;
-            border: 2px solid color-mix(in srgb, var(--primary) 42%, var(--border-color));
+            padding: 0 44px 0 16px;
             border-radius: 14px;
-            background: linear-gradient(
-                145deg,
-                color-mix(in srgb, var(--primary) 12%, var(--bg-surface)),
-                var(--bg-surface-alt)
-            );
             color: var(--text-main);
-            font: inherit;
             font-size: 16px;
-            font-weight: 700;
+            font-weight: 650;
             letter-spacing: normal;
-            box-shadow:
-                inset 0 1px 0 color-mix(in srgb, white 7%, transparent),
-                0 8px 22px color-mix(in srgb, black 16%, transparent);
             text-transform: none;
-            transition: border-color .18s ease, box-shadow .18s ease;
         }
-        .settings-mobile-picker select:focus {
-            border-color: var(--primary);
-            box-shadow:
-                0 0 0 4px color-mix(in srgb, var(--primary) 16%, transparent),
-                0 10px 26px color-mix(in srgb, black 20%, transparent);
-        }
-        .settings-tabs {
-            display: none;
-        }
-        .settings-content {
-            padding: 18px 16px;
-        }
-        .settings-section h2 {
-            margin-bottom: 20px !important;
-            font-size: 1.3rem;
-        }
-        .responsive-input,
-        .responsive-input-small {
-            width: 100%;
-            min-height: 44px;
-            box-sizing: border-box;
-            font-size: 16px;
-        }
-        .settings-field-grid {
-            grid-template-columns: 1fr;
-            gap: 14px;
-        }
-        .settings-toggle-list label {
-            display: flex;
-            min-height: 44px;
-            align-items: center;
-            padding: 0 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 9px;
-            background: var(--bg-surface);
-        }
-        .settings-save-row,
-        .settings-form > div[style*="margin-top: 32px"] {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 24px !important;
-        }
+        .settings-tabs { display: none; }
+        .settings-content { padding: 18px 16px; border-radius: var(--radius); }
+        .settings-section h2 { font-size: 1.2rem; }
+        .responsive-input, .responsive-input-small { width: 100%; min-height: 44px; }
+        .settings-field-grid { grid-template-columns: 1fr; gap: 14px; }
+        .settings-toggle-list label { min-height: 44px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-alt); }
         .settings-save-row .btn-primary,
-        .settings-form > div[style*="margin-top: 32px"] .btn-primary {
-            flex: 1;
-            min-height: 46px;
-        }
+        .settings-form > div[style*="margin-top: 32px"] .btn-primary { flex: 1; min-height: 46px; }
     }
 </style>
 {% endblock %}

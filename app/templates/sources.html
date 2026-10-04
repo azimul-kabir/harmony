@@ -3,22 +3,24 @@
 
 {% block content %} 
 <div class="page-heading source-page-heading">
-    <div><span class="library-eyebrow">Playlist automation</span><h1>Sources</h1></div>
+    <div>
+        <span class="library-eyebrow">Playlist automation</span>
+        <h1>Sources</h1>
+        <p class="page-description">Follow Spotify or YouTube Music playlists. Harmony downloads what's missing and keeps each M3U in sync.</p>
+    </div>
 </div>
 
-<div class="panel source-add-panel">
-    <p>
-        Add Spotify or YouTube Music playlists here to automatically keep your local library synced.
-    </p>
-    <form id="add-source-form" class="form-row source-add-form">
+<div class="panel source-add-panel download-ingest-panel">
+    <form id="add-source-form" class="download-ingest-form source-add-form">
         <input
             id="source-url"
             type="url"
-            placeholder="Paste a Spotify or YouTube Music playlist URL…"
+            placeholder="Paste a Spotify or YouTube Music playlist link…"
+            aria-label="Playlist link"
             required
             autocomplete="off"
         >
-        <button type="submit">
+        <button type="submit" class="btn-primary">
             Add source
         </button>
     </form>
@@ -47,5 +49,5 @@
     window.USER_DATE_FORMAT = "{{ general.get('date_format', 'DD/MM/YYYY') if general else 'DD/MM/YYYY' }}";
     window.USER_TIME_FORMAT = "{{ general.get('time_format', '12h') if general else '12h' }}";
 </script>
-<script src="/static/js/sources.js?v={{ version }}"></script> 
+<script src="/static/js/sources.js?v={{ version }}&ui=4"></script> 
 {% endblock %}

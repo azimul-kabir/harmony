@@ -111,5 +111,5 @@ def test_playlists_page_shows_cover_controls(db_session, tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert f'src="/api/playlists/{playlist.id}/artwork"' in response.text
-    assert 'class="btn-secondary playlist-artwork-btn"' in response.text
+    assert 'class="playlist-artwork-btn"' in response.text
     assert 'id="playlist-artwork-dialog"' in response.text

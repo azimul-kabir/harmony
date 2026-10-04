@@ -51,6 +51,27 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Changed
 
+- Redesigned the web UI around a shared design system aligned with the
+  Harmony brand mark: ink surfaces, a teal accent, refined light and dark
+  themes, consistent page headers, buttons, form controls, tables, and soft
+  status badges.
+- Added a persistent **New download** button and icon navigation to the
+  desktop sidebar; the floating download button is now mobile-only and no
+  longer covers table actions. The download dialog closes with Escape and
+  restores focus.
+- Reorganized the Dashboard into a live-work column (attention items,
+  workers, active tasks, recent activity) beside a status rail (queue,
+  library health, trends, Navidrome, maintenance, shortcuts). Metric tiles
+  use a compact grid on phones instead of a sideways scroll.
+- Simplified Downloads, Sources, Playlists, Library, Library Health, and
+  Settings headers and cards: the link box leads Downloads and Sources,
+  playlist cards separate primary actions from links, and the Library
+  header no longer overflows on phones.
+- Fixed elements with the `hidden` attribute reappearing when styled as
+  buttons, the download details drawer rendering beneath sticky filters and
+  the app shell, the Library Health score ring, and download details showing
+  "Invalid Date" for values containing a capital T.
+
 - Container publishing now moves the `latest` image tag on every stable `v*`
   release tag as well as on pushes to `main`; pre-release tags (for example
   `v3.1.0-rc.1`) publish only their own tag. Removed the temporary
