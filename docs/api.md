@@ -50,11 +50,22 @@ never raw tracebacks or authentication data.
 ## Navidrome status and scan controls
 
 - `GET /api/navidrome/status` returns configuration, connectivity, scanner,
-  last-scan, folder-count, and server-version state. An unavailable or
+  last-scan, folder-count, server-version, and `id_scheme` (`legacy` before
+  Navidrome 0.64, `canonical_base62` from 0.64) state. An unavailable or
   unconfigured server is represented as a safe status payload so the dashboard
   can continue operating.
 - `POST /api/navidrome/rescan?full_scan=false` requests an incremental scan.
 - `POST /api/navidrome/rescan?full_scan=true` requests a full scan.
+- `GET /api/navidrome/id-reconciliation` returns the last persisted Navidrome ID
+  reconciliation summary (an empty object when none has run).
+- `POST /api/navidrome/id-reconciliation` refreshes persisted
+  `songs.navidrome_id` and `playlists.navidrome_playlist_id` references from the
+  live Navidrome catalog and returns per-type `checked`, `unchanged`,
+  `updated`, `unresolved`, and `skipped` counts plus the song match method
+  breakdown. It is read-only against Navidrome and never creates, deletes, or
+  merges Harmony songs or playlists. Returns `409` while Navidrome is scanning
+  or another reconciliation is running, and `503` when Navidrome is
+  unconfigured or unreachable.
 
 Harmony authenticates server-to-server using the Subsonic token flow. The
 Navidrome password and generated authentication token are never returned to

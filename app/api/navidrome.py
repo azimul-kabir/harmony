@@ -1,6 +1,9 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services.navidrome import NavidromeClient, NavidromeError
+from app.services.navidrome_id_reconciliation import navidrome_id_reconciler
 
 router = APIRouter(prefix="/api/navidrome", tags=["navidrome"])
 
@@ -50,3 +53,35 @@ async def test_navidrome_connection():
         return {"success": True, **result}
     except NavidromeError as error:
         raise _http_error(error) from error
+
+
+@router.get("/id-reconciliation")
+async def navidrome_id_reconciliation_status():
+    """Return the last persisted Navidrome ID reconciliation summary."""
+    return await asyncio.to_thread(navidrome_id_reconciler.last_result)
+
+
+@router.post("/id-reconciliation")
+async def reconcile_navidrome_ids():
+    """Refresh persisted Navidrome song and playlist IDs from the live catalog."""
+    result = await navidrome_id_reconciler.reconcile(trigger="manual")
+    status_code = {
+        "unconfigured": 503,
+        "unavailable": 503,
+        "busy": 409,
+        "scanning": 409,
+        "failed": 502,
+    }.get(result["state"])
+    if status_code is not None:
+        messages = {
+            "unconfigured": "Navidrome credentials are not configured.",
+            "unavailable": result.get("error") or "Harmony could not reach Navidrome.",
+            "busy": "Navidrome ID reconciliation is already running.",
+            "scanning": "Navidrome is scanning; try again when the scan finishes.",
+            "failed": result.get("error") or "Navidrome ID reconciliation failed.",
+        }
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": f"navidrome_ids_{result['state']}", "message": messages[result["state"]]},
+        )
+    return result

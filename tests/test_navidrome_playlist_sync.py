@@ -25,6 +25,11 @@ def _settings(**overrides):
     return SimpleNamespace(**values)
 
 
+class _NoopIdReconciler:
+    async def reconcile_if_needed(self, client):
+        return None
+
+
 def _playlist_sync_task(db):
     source = SyncSource(
         type="playlist",
@@ -84,6 +89,7 @@ def test_reconcile_scans_rewrites_then_scans_again(monkeypatch):
         coordinator = NavidromePlaylistReimportCoordinator(
             settings=_settings(),
             client_factory=Client,
+            id_reconciler=_NoopIdReconciler(),
         )
 
         assert asyncio.run(coordinator.reconcile({task.id})) is True

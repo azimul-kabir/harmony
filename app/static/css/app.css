@@ -520,6 +520,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .playlist-scan-status { color: var(--text-muted); font-size: .8rem; max-width: 22rem; text-align: right; }
 .navidrome-controls p { color: var(--text-muted); font-size: .85rem; margin: 0 0 10px; }
 .navidrome-controls > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.navidrome-controls .navidrome-id-summary { margin: 10px 0 0; font-size: .8rem; }
+.navidrome-controls .navidrome-id-summary:empty { display: none; }
 .dashboard-trends-content { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(150px, .75fr); gap: 16px; align-items: end; }
 .download-trend-chart { height: 150px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; align-items: end; border-bottom: 1px solid var(--border-color); padding: 0 2px 4px; }
 .download-trend-bar { height: 100%; min-width: 0; display: grid; grid-template-rows: auto 1fr auto; align-items: end; gap: 4px; text-align: center; }

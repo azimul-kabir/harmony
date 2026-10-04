@@ -87,6 +87,23 @@ server-side and use the Subsonic token flow. Harmony exports M3U playlists and
 asks Navidrome to scan after completed playlist downloads. Reimport debounce,
 poll interval, and scan timeout can be adjusted under **Settings → Navidrome**.
 
+### Navidrome 0.64 ID migration
+
+Navidrome 0.64 re-encodes every internal song, album, artist, and playlist ID
+to a canonical Base62 format during its upgrade. **Back up Navidrome's data
+directory (including `navidrome.db`) before upgrading Navidrome.**
+
+Harmony's playlist delivery is unaffected because M3U files reference library
+paths, not Navidrome IDs. Harmony treats the Navidrome IDs it has persisted as
+rebuildable references: when it sees the connected server move to a different
+ID scheme (or a later version stop resolving stored IDs), it remaps them once
+from library paths, MusicBrainz recording IDs, ISRCs, and normalized metadata.
+The check runs when Harmony starts and after each Navidrome playlist
+reconciliation; **Dashboard → Navidrome → Refresh IDs** runs it on demand.
+Items that cannot be matched have their stale reference cleared and are bound
+again by a later refresh once Navidrome indexes them. Navidrome must be idle,
+so Harmony skips the refresh while a scan is running.
+
 ## YouTube Music
 
 ```env
