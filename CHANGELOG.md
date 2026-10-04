@@ -40,6 +40,19 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 - Added manual JPEG, PNG, and WebP artwork replacement from the editor and
   explicit Cover Art Archive import for a selected MusicBrainz release.
 
+### Changed
+
+- Container publishing now moves the `latest` image tag on every stable `v*`
+  release tag as well as on pushes to `main`; pre-release tags (for example
+  `v3.1.0-rc.1`) publish only their own tag. Removed the temporary
+  `codex/library-upload-storage-recovery` publish trigger.
+- CI now also runs a Ruff lint job (syntax errors, undefined names, invalid
+  comparisons) and a migration check that requires exactly one Alembic head.
+- Added a Claude Code cloud session-start hook that provisions a Python 3.12
+  virtual environment with the development extra.
+- Refreshed README, GUIDE, AGENTS, and release documentation for the current
+  release, CI jobs, and image tagging.
+
 ### Security
 
 - Metadata provider failures return bounded user-facing errors, and all remote
