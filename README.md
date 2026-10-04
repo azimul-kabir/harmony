@@ -1,7 +1,7 @@
 # Harmony
 
 <p align="center">
-  <img src="docs/images/logo.png" alt="Harmony Logo" width="180">
+  <img src="docs/images/hero.jpg" alt="Harmony: self-hosted music acquisition, playlist sync, and library management for Navidrome, shown on desktop and mobile" width="100%">
 </p>
 
 <p align="center">
@@ -32,6 +32,70 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete development history and the
 summary of the streamlined acquisition, Source synchronization, Library, and
 mobile/PWA experience. Future work is tracked in the [roadmap](docs/roadmap.md).
 Harmony v1.6.0 was never published.
+
+---
+
+# Screenshots
+
+Harmony ships one responsive web interface for desktop browsers, phones, and
+the installable PWA. Screenshots use a demo library of fictional artists.
+
+### Desktop
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/desktop-dashboard.jpg" alt="Dashboard with library totals, attention items, live download workers, and queue health"></td>
+    <td width="50%"><img src="docs/images/screenshots/desktop-library.jpg" alt="Library songs table with artwork, artist, album, duration, and bitrate"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Dashboard</b>: library totals, attention items, live workers, and queue health</sub></td>
+    <td align="center"><sub><b>Library</b>: search, filter, sort, and edit every indexed track</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/desktop-albums.jpg" alt="Library album grid with square artwork"></td>
+    <td width="50%"><img src="docs/images/screenshots/desktop-downloads.jpg" alt="Downloads page with link box, queue summary, failure diagnosis, and active downloads"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Albums</b>: square artwork from the local cache</sub></td>
+    <td align="center"><sub><b>Downloads</b>: paste a link, follow live progress and history</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/desktop-sources.jpg" alt="Sources page with Spotify and YouTube Music playlists and auto-sync controls"></td>
+    <td width="50%"><img src="docs/images/screenshots/desktop-playlists.jpg" alt="Playlists page with exported M3U playlists, sync health, and actions"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Sources</b>: followed playlists with scheduled auto-sync</sub></td>
+    <td align="center"><sub><b>Playlists</b>: exported M3U files, sync health, and artwork</sub></td>
+  </tr>
+</table>
+
+### Light theme
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/desktop-dashboard-light.jpg" alt="Dashboard in the light theme"></td>
+    <td width="50%"><img src="docs/images/screenshots/desktop-library-light.jpg" alt="Library in the light theme"></td>
+  </tr>
+</table>
+
+Choose **Auto**, **Dark**, or **Light** under **Settings → Appearance**.
+
+### Mobile
+
+<table>
+  <tr>
+    <td width="25%"><img src="docs/images/screenshots/mobile-dashboard.jpg" alt="Mobile dashboard with compact metric grid and bottom navigation"></td>
+    <td width="25%"><img src="docs/images/screenshots/mobile-library.jpg" alt="Mobile library with song cards"></td>
+    <td width="25%"><img src="docs/images/screenshots/mobile-downloads.jpg" alt="Mobile downloads page"></td>
+    <td width="25%"><img src="docs/images/screenshots/mobile-playlists.jpg" alt="Mobile playlist cards"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Dashboard</b></sub></td>
+    <td align="center"><sub><b>Library</b></sub></td>
+    <td align="center"><sub><b>Downloads</b></sub></td>
+    <td align="center"><sub><b>Playlists</b></sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -740,22 +804,6 @@ Just a synchronized self-hosted music library.
 - Plugin system
 - API authentication and external integration hardening
 - Additional Navidrome event hooks
-
----
-
-# Screenshots
-
-| Dashboard | Downloads |
-|-----------|-----------|
-| Coming Soon | Coming Soon |
-
-| Sources | Playlists |
-|----------|-----------|
-| Coming Soon | Coming Soon |
-
-| Library | Settings |
-|----------|----------|
-| Coming Soon | Coming Soon |
 
 ---
 

@@ -1370,6 +1370,7 @@ progress { accent-color: var(--primary); }
     .filters-bar { flex-direction: column; align-items: stretch; padding: 14px !important; }
     .search-input { width: 100%; }
     .panel { max-width: 100vw; padding: 16px; overflow: hidden !important; border-radius: var(--radius); }
+    .panel.dashboard-stream-panel, .panel.download-history-panel { padding: 0; }
     .sources-grid { grid-template-columns: 1fr; }
 
     .mini-player {
