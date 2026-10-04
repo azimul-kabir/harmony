@@ -1,4 +1,4 @@
-"""Explicit user-approved fallback acquisition for failed matched downloads."""
+"""Explicit user-approved YouTube link acquisition for failed downloads."""
 
 from app.database.models import DownloadJob
 from app.domain.download import JobStatus
@@ -7,24 +7,23 @@ from app.providers.download_sources import get_source
 from app.services.task_service import create_task
 
 
-ELIGIBLE_REASONS = frozenset(
-    {
-        "exact_match_unavailable",
-        "fallback_match_unavailable",
-        "provider_no_match",
-        "provider_unavailable",
-        "manual_fallback_unavailable",
-        "manual_fallback_mismatch",
-    }
-)
+def manual_fallback_eligible(job: DownloadJob) -> bool:
+    """Any failed download may be retried from a user-supplied YouTube link.
+
+    Failures end with many different reason codes (matching, provider
+    timeouts, the SpotDL rescue, legacy rows with no code at all), and a
+    specific link the user chose can help with all of them. The worker still
+    validates the linked track's title and duration before importing it.
+    """
+    return (job.status or "").strip().lower() == JobStatus.FAILED.value
 
 
 def queue_manual_fallback(db, *, job_id: int, url: str) -> DownloadJob:
     original = db.get(DownloadJob, job_id)
     if original is None:
         raise LookupError("Download not found.")
-    if original.status != JobStatus.FAILED.value or original.reason_code not in ELIGIBLE_REASONS:
-        raise ValueError("Manual fallback is available only for failed matching jobs.")
+    if not manual_fallback_eligible(original):
+        raise ValueError("A YouTube link can be supplied only for failed downloads.")
 
     source = get_source("youtube_music")
     detected = source.detect_url(url.strip())

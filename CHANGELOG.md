@@ -51,6 +51,12 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ### Changed
 
+- Every failed download now offers **Download from a YouTube link** at the
+  top of its details drawer. Previously the option appeared only for six
+  matching-related failure reasons, so failures such as a SpotDL timeout,
+  title mismatch, provider error, or legacy rows without a reason code had
+  no way to supply a link. Linked tracks are still checked for title and
+  duration before import.
 - Redesigned the web UI around a shared design system aligned with the
   Harmony brand mark: ink surfaces, a teal accent, refined light and dark
   themes, consistent page headers, buttons, form controls, tables, and soft

@@ -15,6 +15,7 @@ VIDEO_URL = "https://music.youtube.com/watch?v=manual12345"
 
 def _failed_job(**values):
     reason_code = values.pop("reason_code", "fallback_match_unavailable")
+    status = values.pop("status", "failed")
     return DownloadJob(
         spotify_url="https://open.spotify.com/track/original",
         source_provider="spotify",
@@ -25,7 +26,7 @@ def _failed_job(**values):
         artist="Original artist",
         album="Original album",
         spotify_artist_ids=json.dumps([]),
-        status="failed",
+        status=status,
         reason_code=reason_code,
         **values,
     )
@@ -49,23 +50,49 @@ def test_manual_fallback_creates_new_job_and_preserves_failed_history():
         assert download_details(original)["can_manual_fallback"] is True
 
 
-def test_manual_fallback_rejects_non_track_and_ineligible_failure():
+def test_manual_fallback_rejects_non_track_and_non_failed_jobs():
     with SessionLocal() as db:
-        ineligible = _failed_job(reason_code="disk_full")
-        db.add(ineligible)
+        completed = _failed_job(status="completed", reason_code=None)
+        db.add(completed)
         db.commit()
 
-        with pytest.raises(ValueError, match="failed matching jobs"):
-            queue_manual_fallback(db, job_id=ineligible.id, url=VIDEO_URL)
+        assert download_details(completed)["can_manual_fallback"] is False
+        with pytest.raises(ValueError, match="only for failed downloads"):
+            queue_manual_fallback(db, job_id=completed.id, url=VIDEO_URL)
 
-        ineligible.reason_code = "provider_no_match"
+        failed = _failed_job(reason_code="provider_no_match")
+        db.add(failed)
         db.commit()
         with pytest.raises(ValueError, match="specific YouTube"):
             queue_manual_fallback(
                 db,
-                job_id=ineligible.id,
+                job_id=failed.id,
                 url="https://music.youtube.com/playlist?list=PLnotatrack",
             )
+
+
+@pytest.mark.parametrize(
+    "reason_code",
+    [
+        "spotdl_fallback_timeout",
+        "title_mismatch",
+        "provider_error",
+        "download_timeout",
+        "unexpected_error",
+        None,
+    ],
+)
+def test_any_failed_download_accepts_a_youtube_link(reason_code):
+    with SessionLocal() as db:
+        original = _failed_job(reason_code=reason_code)
+        db.add(original)
+        db.commit()
+
+        assert download_details(original)["can_manual_fallback"] is True
+        fallback = queue_manual_fallback(db, job_id=original.id, url=VIDEO_URL)
+
+        assert fallback.status == "queued"
+        assert fallback.manual_fallback_url == VIDEO_URL
 
 
 def test_worker_uses_approved_url_but_keeps_original_source_identity(

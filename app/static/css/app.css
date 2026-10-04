@@ -2667,9 +2667,12 @@ progress { accent-color: var(--primary); }
 .download-timeline li { border-left: 3px solid var(--primary); padding: 0 0 16px 12px; margin-left: 6px; }
 .download-timeline li:last-child { padding-bottom: 0; }.download-timeline time { display: block; color: var(--text-muted); font-size: .82rem; margin-top: 3px; }
 .download-detail-actions { display: flex; gap: 8px; margin-top: 20px; }
-.manual-fallback-form { display: grid; gap: 8px; margin-top: 18px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-alt); }
-.manual-fallback-form label { font-weight: 800; }
-.manual-fallback-form input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--border-input); border-radius: 8px; background: var(--bg-surface); color: var(--text-main); }
+.manual-fallback-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 18px; padding: 14px; border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border-color)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary) 7%, var(--bg-surface-alt)); }
+.manual-fallback-title { font-size: .98rem; }
+.manual-fallback-form label { color: var(--text-secondary); font-size: .86rem; font-weight: 500; }
+.manual-fallback-row { display: flex; gap: 8px; }
+.manual-fallback-row input { flex: 1; width: 100%; min-width: 0; }
+.manual-fallback-result:empty { display: none; }
 .manual-fallback-form small, .manual-fallback-result { color: var(--text-muted); font-size: .78rem; }
 .manual-fallback-result { margin: 0; }
 .download-details-button { min-height: 44px; }
