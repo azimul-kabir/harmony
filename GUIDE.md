@@ -113,10 +113,11 @@ the audio file.
 
 ### Current Status
 
-Harmony has reached **v2.1.0**. The release adds a secure-by-default web login,
-public YouTube Music playlist Sources and stronger Navidrome reconciliation and
-download validation. See the [v2.1.0 release notes](docs/releases/v2.1.0.md)
-before upgrading. Harmony v1.6.0 was never published.
+Harmony has reached **v3.0.0**, which narrows the product around Sources →
+Downloads → Library → M3U/Navidrome. See the
+[v3.0.0 release notes](docs/releases/v3.0.0.md) before upgrading, and the
+[changelog](CHANGELOG.md) for work on `main` since the release, including
+review-first local uploads and the Library metadata editor. Harmony v1.6.0 was never published.
 
 I'm continuing to improve it, and suggestions, feedback, or feature requests are always welcome. If you've also been frustrated by duplicate downloads and messy music folders, I'd love to hear your thoughts!
 

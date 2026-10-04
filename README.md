@@ -597,8 +597,10 @@ platform-neutral.
 
 Opening a pull request runs CI, including a production-image build that is
 discarded after validation. It does **not** publish a registry image. The
-development branch publishes `v3-preview`; `main` publishes `latest`, and a
-`v3.0.0` Git tag publishes the stable versioned image. Maintainers can also
+development branch publishes `v3-preview`; `main` publishes `latest`, and every
+release `v*` Git tag (for example `v3.0.0`) publishes its versioned image and
+also moves `latest` to that release. Pre-release tags with a suffix such as
+`-rc.1` publish only their own tag. Maintainers can also
 start the publish workflow manually. All published images currently target
 `linux/amd64`, including Intel-based Synology models such as the DS220+.
 
@@ -630,6 +632,18 @@ Do not install from a separate requirements file: production, development, and
 test dependencies are declared in `pyproject.toml`. If dependency installation
 fails, resolve the package index, proxy, or network configuration first rather
 than skipping the watcher tests.
+
+Pull requests must pass four CI jobs, which you can reproduce locally:
+
+| Job | Local equivalent |
+| --- | --- |
+| `tests` | `python -m compileall -q app && python -m pytest` |
+| `lint` | `python -m pip install ruff && ruff check app tests --select E9,F63,F7,F82` |
+| `migrations` | `alembic heads` must report exactly one `(head)` |
+| `container` | `docker build .` (built in CI but never pushed) |
+
+Claude Code cloud sessions run `.claude/hooks/session-start.sh`, which creates a
+Python 3.12 `.venv` and installs the development extra automatically.
 
 ---
 

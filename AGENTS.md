@@ -18,8 +18,18 @@ Harmony is a self-hosted Spotify music downloader, playlist synchronizer, and li
 4.  **Error Handling:** Fail gracefully. If a Spotify URL is invalid or an ISRC lookup fails, catch the error, log it via Loguru, and return a clean JSON response to the frontend.
 
 ## Current State
-Harmony **v2.1.0** is the current release. It adds secure web login, public
-YouTube Music playlist Sources, Navidrome-powered auto-playlists and playlist
-Love/Unlove actions, stronger Navidrome reconciliation, and stricter download
-identity validation to the v2.0 Library and operations foundation.
-Harmony v1.6.0 was never published.
+Harmony **v3.0.0** is the current release. It narrows the product around one
+dependable path (**Sources → Downloads → Library → M3U/Navidrome**) while
+keeping existing installations upgradeable. Unreleased work on `main` adds
+review-first local music uploads with durable import jobs and storage recovery,
+and a per-song Library metadata editor.
+
+## CI and Releases
+*   CI (`.github/workflows/ci.yml`) runs `tests` (`compileall` + `pytest`),
+    `lint` (Ruff, real-error rules only), `migrations` (exactly one Alembic
+    head), and a non-pushed `container` build. Keep all four green.
+*   The container publish workflow pushes `latest` for `main` and for every
+    stable `v*` release tag; pre-release tags (with `-`) do not move `latest`.
+*   Claude cloud sessions install dependencies through
+    `.claude/hooks/session-start.sh` (Python 3.12 `.venv`).
+*   Record user-visible changes under `## [Unreleased]` in `CHANGELOG.md`.
