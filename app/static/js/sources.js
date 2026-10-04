@@ -43,7 +43,7 @@ function renderSources(sources) {
 
     if (sources.length === 0) {
         container.innerHTML = `
-            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
+            <div class="empty-state empty-card">
                 <h3>No sources yet</h3>
                 <p>Add your first Spotify or YouTube Music playlist above to start syncing.</p>
             </div>
@@ -200,7 +200,7 @@ function renderSources(sources) {
         let actionsHtml = "";
         if (!isTaskActive) {
             actionsHtml = `
-                <button class="btn-secondary sync-btn" data-id="${source.id}">Sync now</button>
+                <button class="btn-primary sync-btn" data-id="${source.id}">↻ Sync now</button>
                 <button class="btn-secondary toggle-btn" data-id="${source.id}" data-enabled="${source.enabled}">
                     ${source.enabled ? "Disable" : "Enable"}
                 </button>
@@ -230,26 +230,33 @@ function renderSources(sources) {
             ` : ""}
         ` : "";
 
+        const providerLabel = source.provider === "youtube_music" ? "YouTube Music" : "Spotify";
         const innerHTML = `
             <div class="source-header">
-                <h3>${escapeHtml(source.name)}</h3>
-                <span class="badge source-provider-badge">${source.provider === "youtube_music" ? "YouTube Music" : "Spotify"}</span>
+                <div class="source-title">
+                    <h3>${escapeHtml(source.name)}</h3>
+                    <p class="source-subtitle">
+                        <span class="source-provider source-provider-${source.provider === "youtube_music" ? "youtube" : "spotify"}">${providerLabel}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>${escapeHtml(source.type)}</span>
+                    </p>
+                </div>
                 <span class="badge ${source.enabled ? "badge-completed" : "badge-cancelled"}">
                     ${source.enabled ? "Active" : "Disabled"}
                 </span>
             </div>
-            <div class="source-meta" style="margin-top: 16px;">
-                <div><strong>Type:</strong> ${escapeHtml(source.type)}</div>
-                <div><strong>Last Sync:</strong> ${lastSync}</div>
+            <div class="source-meta">
+                <span>Last sync</span>
+                <strong>${lastSync}</strong>
             </div>
             ${autoSyncHtml}
             ${scheduleHtml}
             ${playlistHtml}
             ${outcomeHtml}
             ${taskHtml}
-            <div class="source-actions" style="margin-top: 16px; align-items: center;">
+            <div class="source-actions">
                 ${actionsHtml}
-                <a class="btn-secondary source-open-link" href="${escapeHtml(source.source_url || source.spotify_url)}" target="_blank" rel="noopener">${source.provider === "youtube_music" ? "YouTube Music" : "Spotify"}</a>
+                <a class="btn-secondary source-open-link" href="${escapeHtml(source.source_url || source.spotify_url)}" target="_blank" rel="noopener">Open in ${providerLabel} ↗</a>
             </div>
         `;
 
@@ -281,7 +288,7 @@ function renderSources(sources) {
 
     if (container.children.length === 0) {
         container.innerHTML = `
-            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color);" class="empty-state">
+            <div class="empty-state empty-card">
                 <h3>No sources yet</h3>
                 <p>Add your first Spotify or YouTube Music playlist above to start syncing.</p>
             </div>
@@ -424,7 +431,7 @@ async function addSource(event) {
     const submitBtn = event.target.querySelector('button[type="submit"]');
     
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner" style="border-top-color:#fff;"></span> Adding...';
+    submitBtn.innerHTML = '<span class="spinner"></span> Adding…';
     
     try {
         const response = await fetch("/api/sources", {
@@ -443,7 +450,7 @@ async function addSource(event) {
         alert(error.message);
     } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = "+ Add Source";
+        submitBtn.textContent = "Add source";
     }
 }
 

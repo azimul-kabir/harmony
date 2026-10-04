@@ -6,20 +6,23 @@
 <section class="library-page" aria-labelledby="library-title">
     <header class="library-hero">
         <div>
-            <span class="library-eyebrow">Library Index</span>
-            <h1 id="library-title">Your music, organized</h1>
-            <p>Browse every track Harmony has indexed across songs, albums, and artists.</p>
+            <span class="library-eyebrow">Collection</span>
+            <h1 id="library-title">Library</h1>
+            <p>Browse, search, and edit every track Harmony has indexed.</p>
         </div>
         <div class="library-hero-actions">
-        <button id="library-upload-open" class="btn-primary" type="button">Import local music</button>
-        <a class="btn-secondary library-health-link" href="/library/health">Library Health</a>
-        <button id="library-duplicates-open" class="btn-secondary" type="button">Review duplicates</button>
-        <button id="btn-rescan" class="btn-secondary library-rescan" type="button">
+        <button id="btn-rescan" class="btn-secondary library-rescan" type="button" title="Rescan library">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M20 11a8 8 0 1 0-2.34 5.66"></path>
                 <path d="M20 4v7h-7"></path>
             </svg>
-            <span>Rescan Library</span>
+            <span>Rescan</span>
+        </button>
+        <a class="btn-secondary library-health-link" href="/library/health">Health</a>
+        <button id="library-duplicates-open" class="btn-secondary" type="button">Duplicates</button>
+        <button id="library-upload-open" class="btn-primary" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Import music
         </button>
         </div>
     </header>
