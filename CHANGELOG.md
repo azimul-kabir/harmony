@@ -72,6 +72,11 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
   the app shell, the Library Health score ring, and download details showing
   "Invalid Date" for values containing a capital T.
 
+- Added a README hero banner and desktop, light-theme, and mobile screenshots
+  of the redesigned interface, captured from a demo library of fictional
+  artists.
+- Fixed doubled padding around the Dashboard's live panels and the Downloads
+  history table on phones.
 - Container publishing now moves the `latest` image tag on every stable `v*`
   release tag as well as on pushes to `main`; pre-release tags (for example
   `v3.1.0-rc.1`) publish only their own tag. Removed the temporary
