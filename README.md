@@ -84,7 +84,7 @@ Choose **Auto**, **Dark**, or **Light** under **Settings → Appearance**.
 
 <table>
   <tr>
-    <td width="25%"><img src="docs/images/screenshots/mobile-dashboard.jpg" alt="Mobile dashboard with compact metric grid and bottom navigation"></td>
+    <td width="25%"><img src="docs/images/screenshots/mobile-dashboard.jpg" alt="Mobile dashboard with top bar, compact metric grid, and five-tab bottom navigation"></td>
     <td width="25%"><img src="docs/images/screenshots/mobile-library.jpg" alt="Mobile library with song cards"></td>
     <td width="25%"><img src="docs/images/screenshots/mobile-downloads.jpg" alt="Mobile downloads page"></td>
     <td width="25%"><img src="docs/images/screenshots/mobile-playlists.jpg" alt="Mobile playlist cards"></td>
