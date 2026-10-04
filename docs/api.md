@@ -102,6 +102,29 @@ Manual artwork replacement uses multipart uploads:
 Replacement and removal do not modify embedded audio-file artwork or delete
 shared cached resources.
 
+## Song metadata editing and assisted lookup
+
+- `GET /api/library/metadata/search` accepts optional `title`, `artist`, and
+  `album` query parameters. At least one non-blank value is required. The
+  values are supplied by the editor rather than taken from the Song row, and
+  the endpoint returns at most eight normalized MusicBrainz recording/release
+  candidates. It does not mutate the Song or audio file.
+- `PUT /api/library/songs/{song_id}/metadata` accepts `title`, `artist`,
+  `album`, `album_artist`, `genre`, `year`, `track`, `disc`, and optional
+  MusicBrainz recording/release IDs. It requires an available Song, writes the
+  editable tags to the audio file, force-reindexes that path, and publishes a
+  `library.track.updated` event. Blank nullable fields remove their editable
+  tag; unrelated tags are preserved.
+- `POST /api/library/songs/{song_id}/metadata/artwork` accepts
+  `{ "release_id": "<MusicBrainz release UUID>" }`, downloads the bounded
+  Cover Art Archive front image, associates the cached artwork with the Song,
+  and stores that release ID. It does not embed the image in the audio file.
+
+The metadata and artwork write routes are intentionally separate. Clients can
+report an artwork-provider failure without implying that an already completed
+audio-tag write was rolled back. Provider and unsupported-file failures use
+clean HTTP 400 responses; unknown and missing Songs use HTTP 404 and 409.
+
 Advanced Library search remains available through `GET /api/library/search`.
 The `q` value supports:
 
@@ -220,3 +243,49 @@ Responses contain aggregate-only fields: `action`, `requested`, `eligible`, `suc
 
 - `POST /api/navidrome/test` calls authenticated Subsonic `ping`.
 - `POST /api/navidrome/rescan` requests a bounded Navidrome library scan.
+
+## Local Library uploads
+
+- `POST /api/library/uploads/batches` creates a private review batch.
+- `GET /api/library/uploads/batches` lists recoverable batches with bounded
+  size/count/expiry metadata, the latest related task, and configured limits.
+- `POST /api/library/uploads/batches/{id}/files` accepts multipart `files`,
+  streams them to staging, validates audio metadata, and returns proposed tags,
+  sanitizer findings, warnings, and the canonical destination preview.
+- `GET /api/library/uploads/batches/{id}` restores an unfinished review.
+- `POST /api/library/uploads/batches/{id}/import` accepts selected item IDs,
+  bounded metadata overrides, and `scan_navidrome`; files are sanitized,
+  verified, organized, indexed, and reported independently.
+- `DELETE /api/library/uploads/batches/{id}` discards staged files and orphaned
+  staged artwork. It returns `409` while that batch has an active import task.
+
+Batch IDs are UUIDs and never authorize arbitrary paths. Supported extensions
+are MP3, FLAC, M4A/MP4, Ogg, and Opus; container parsing remains authoritative.
+Upload and batch-read responses include a server-derived `summary` of album
+groups, their shared values, member item IDs, and consistency findings. The
+browser uses those bounded IDs to apply album-wide edits to the individual
+metadata values submitted at confirmation.
+
+Album groups accept manual artwork at
+`POST /api/library/uploads/batches/{id}/groups/{group_id}/artwork`, a Cover Art
+Archive release via the `/artwork/musicbrainz?release_id=` suffix, and staged
+artwork removal with `DELETE` on the group artwork endpoint. Group IDs are
+derived from the server manifest. Confirmed imports embed the selected cached
+artwork before canonical indexing.
+
+Batch upload/read responses also include a bounded `duplicates` projection.
+Each staged item lists matching available Song IDs, identity tier, evidence,
+and a `skip` or `review` recommendation. Exact destination and canonical IDs
+take precedence over normalized metadata/duration signals. This projection is
+advisory; the canonical import engine still refuses destination collisions.
+
+`POST /api/library/uploads/batches/{id}/import` queues a persistent
+`library_import` task and returns the shared Task progress contract. Clients
+poll `GET /api/tasks/jobs/{job_id}`, cancel through the standard job-cancel
+endpoint, and paginate bounded failures through the standard failure endpoint.
+The worker reserves `library-files`, revalidates exact/strong duplicate signals
+per item, and requests Navidrome only after terminal file processing.
+The browser stores only the opaque batch/task IDs locally. After refresh it
+reloads the server-owned manifest and reconnects task polling; local storage is
+not authoritative. Already-staged files are recoverable, while an interrupted
+in-flight HTTP file transfer must be selected again.

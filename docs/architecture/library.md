@@ -294,6 +294,42 @@ Favorites
 
 The Library Engine is composed of independent services.
 
+## Explicit Metadata Editor
+
+The active v3 editor is deliberately smaller than the retired v2 discovery and
+suggestion system. It has no candidate tables, background discovery jobs,
+confidence engine, or automatic application. Its boundaries are:
+
+1. The browser starts with current Song values but owns independent title,
+   artist, and album search inputs.
+2. `metadata_editor.search_musicbrainz` performs one bounded recording query
+   and normalizes at most eight preview candidates.
+3. Selecting a candidate copies values into the form only; it does not mutate
+   persistence or the filesystem.
+4. A confirmed metadata save writes the supported easy tags, preserves
+   unrelated tags, force-reindexes the file, and emits a track-updated event.
+5. Manual artwork uploads and selected-release artwork imports use the existing
+   content-addressed `ArtworkService`. They update the canonical Song artwork
+   association but do not modify embedded audio artwork.
+
+Metadata editing owns a short-lived `SessionLocal` session closed in a
+`finally` block. File/format and provider failures are logged and translated to
+bounded client errors. Tag writing necessarily precedes reindexing; artwork is
+a separate request so its remote failure is visible and cannot misrepresent a
+successful tag save as rolled back.
+
+### Active metadata editor API
+
+| Method | Path | Effect |
+| --- | --- | --- |
+| `GET` | `/api/library/metadata/search` | Read-only MusicBrainz preview using user-supplied terms |
+| `PUT` | `/api/library/songs/{id}/metadata` | Explicit tag write and single-file reindex |
+| `POST` | `/api/library/songs/{id}/metadata/artwork` | Cache and associate selected release artwork |
+| `POST` | `/api/artwork/songs/{id}` | Validate, cache, and associate a manual upload |
+
+Search and selection are always non-mutating. Only the two explicit save/import
+requests change state.
+
 ## Metadata Health Engine (v2 historical design)
 
 Harmony v3 removes this persisted rule/issue engine from the active product. Missing
@@ -709,6 +745,53 @@ Library maintenance API:
 - `POST /api/library/index` incrementally indexes one file.
 - `POST /api/library/rescan` reconciles the managed library.
 - `POST /api/library/reindex` forces a complete metadata rebuild.
+
+Browser imports are review-first and use `/api/library/uploads/batches`.
+Uploaded files are streamed into an opaque UUID directory below the private
+staging root, validated with Mutagen, and represented by a server-authored
+manifest. The browser can edit only bounded public metadata fields; it never
+supplies a filesystem source or destination. Confirmation sanitizes high-
+confidence promotional tags and lyric lines, writes the reviewed easy tags,
+reads the file back, then delegates the move and index transaction to the
+canonical import engine with `web_upload` provenance. A batch requests at most
+one incremental Navidrome scan, after successful imports. Scan failure does not
+roll back imported Library files.
+
+The staged manifest also produces an album review projection. It groups album
+tracks, identifies inconsistent album artist/year/genre values, and checks
+track numbers for missing values, duplicates, and gaps. Album-wide editing is
+a browser convenience over the same bounded per-item confirmation schema; it
+does not add a second metadata writer or allow the client to choose paths.
+Manual or Cover Art Archive album artwork is cached through the canonical
+Artwork service and referenced by ID in the private manifest. Confirmation
+embeds that validated cache object before the import engine indexes each file,
+so Harmony and Navidrome see the same cover.
+
+Each manifest has a monotonically increasing revision, update timestamp,
+expiry, and server-calculated byte total. Creation and streaming enforce the
+configured active-batch, batch-byte, file-byte, file-count, and disk-reserve
+limits. Startup expiration skips batches referenced by queued, running, or
+cancelling tasks. Explicit discard is rejected for those tasks and removes
+artwork only when neither the Library nor another staged batch references it.
+
+Page recovery uses a server batch-list endpoint plus a non-authoritative
+browser hint containing the last batch/task IDs. A refresh reconstructs review
+state from the manifest and reconnects persistent task polling. This protects
+completed staging work and task progress; the current multipart transport does
+not resume bytes from a partially transmitted individual file.
+
+Staged duplicate preflight queries at most 20 available indexed candidates per
+item and reuses the Library detector's exact/strong/probable/possible language.
+It never scans files, deletes, or replaces. The UI skips exact and strong
+matches by default, while the import engine remains the authoritative final
+destination-collision guard.
+
+Confirmed browser imports are `library_import` rows in the shared durable
+`tasks` table, with staged item IDs represented by the existing nullable-song
+bulk item model. Jobs are resumable, own the `library-files` resource key, and
+cooperate with cancellation between atomic per-file imports. Startup recovery
+returns an interrupted running item to `queued`; completed items are never
+replayed. Final duplicate preflight runs immediately before each import.
 
 Never scan the filesystem unless:
 

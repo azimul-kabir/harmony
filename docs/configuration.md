@@ -54,6 +54,26 @@ MUSIC_HOST_PATH=/volume1/music/library
 DOWNLOAD_HOST_PATH=/volume1/music/incoming
 ```
 
+Browser Library imports use a private directory beneath `STAGING_PATH`. The
+defaults allow 200 files per review batch and 1 GiB per file; lower these for a
+reverse proxy or NAS with tighter storage constraints:
+
+```env
+LIBRARY_UPLOAD_MAX_FILE_BYTES=1073741824
+LIBRARY_UPLOAD_MAX_FILES=200
+LIBRARY_UPLOAD_MAX_BATCH_BYTES=21474836480
+LIBRARY_UPLOAD_MIN_FREE_BYTES=2147483648
+LIBRARY_UPLOAD_MAX_ACTIVE_BATCHES=10
+LIBRARY_UPLOAD_EXPIRATION_HOURS=24
+```
+
+The batch limit includes all staged audio in one review. The free-space reserve
+is enforced on staging and, when a cross-filesystem copy is required, on the
+managed music volume. Unfinished batches expire at startup after the configured
+window; batches attached to active import tasks are preserved.
+The reverse proxy must allow a request body large enough for the selected
+files; Harmony still enforces its own per-file limit while streaming to disk.
+
 ## Navidrome
 
 ```env
@@ -226,6 +246,17 @@ size for files that already contain a canonical MusicBrainz release ID.
 
 The defaults are conservative for public infrastructure. Fetching artwork
 never authorizes canonical metadata changes or file-tag writes.
+
+`MUSICBRAINZ_BASE_URL` (default `https://musicbrainz.org/ws/2`) and
+`MUSICBRAINZ_TIMEOUT_SECONDS` (default `12`) configure the Library editor's
+manual metadata search. Searches are user initiated, require at least one of
+title, artist, or album, and return a small bounded result set. No API key is
+required. Keep the public default unless routing requests through a compatible
+MusicBrainz mirror.
+
+Choosing a result is only a preview. Audio tags and the canonical release ID
+change only after **Save changes**; the Cover Art Archive timeout and size
+settings continue to bound the subsequent artwork import.
 
 ## Spotify metadata credentials
 

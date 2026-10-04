@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.logging import logger
 from app.core.time import utcnow_naive
-from app.database.models import SyncSource, Task
+from app.database.models import ScheduleRun, SyncSource, Task
 from app.database.session import SessionLocal
 from app.services.playlist_sync import sync_playlist
 
@@ -51,6 +51,34 @@ def due_sources(db, *, now=None):
     ]
 
 
+def run_source_sync(db, source: SyncSource, *, trigger: str, scheduled_for=None):
+    started_at = utcnow_naive()
+    delay = max(0, int((started_at - scheduled_for).total_seconds())) if scheduled_for else 0
+    run = ScheduleRun(
+        source_id=source.id,
+        trigger=trigger,
+        status="running",
+        scheduled_for=scheduled_for,
+        started_at=started_at,
+        delay_seconds=delay,
+    )
+    db.add(run)
+    db.commit()
+    try:
+        task = sync_playlist(db, source)
+        run.task_id = task.id if task else None
+        run.status = task.status if task else "failed"
+        run.message = task.error_summary if task and task.status == "failed" else None
+    except Exception as exc:
+        run.status = "failed"
+        run.message = str(exc)[:500]
+        raise
+    finally:
+        run.completed_at = utcnow_naive()
+        db.commit()
+    return run
+
+
 class SourceAutoSyncScheduler:
     def __init__(self, poll_seconds: float = 30):
         self.poll_seconds = poll_seconds
@@ -84,10 +112,13 @@ class SourceAutoSyncScheduler:
                 for source in sources:
                     if self._stop.is_set():
                         break
+                    scheduled_for = next_sync_at(source)
                     source.auto_sync_last_attempt_at = utcnow_naive()
                     db.commit()
                     logger.info("Starting automatic sync for source '{}'", source.name)
-                    sync_playlist(db, source)
+                    run_source_sync(
+                        db, source, trigger="scheduled", scheduled_for=scheduled_for
+                    )
             except Exception:
                 logger.exception("Source auto-sync scheduler iteration failed")
             finally:

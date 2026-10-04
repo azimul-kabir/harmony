@@ -287,6 +287,29 @@ class SyncSource(Base):
     auto_sync_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    schedule_runs: Mapped[list["ScheduleRun"]] = relationship(
+        back_populates="source", cascade="all, delete-orphan"
+    )
+
+
+class ScheduleRun(Base):
+    __tablename__ = "schedule_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("sync_sources.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source: Mapped["SyncSource"] = relationship(back_populates="schedule_runs")
+    task: Mapped["Task | None"] = relationship()
 
 class Playlist(Base):
     __tablename__ = "playlists"

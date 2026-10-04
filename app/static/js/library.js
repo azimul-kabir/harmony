@@ -1,4 +1,5 @@
 const LIBRARY_PREFERENCES_KEY = "harmony.library.preferences.v1";
+const LIBRARY_UPLOAD_RECOVERY_KEY = "harmony.library.upload.recovery.v1";
 const DEFAULT_BITRATE_RANGES = {
     lossless: { min: 900000, max: null },
     high: { min: 320000, max: null },
@@ -44,6 +45,7 @@ const libraryState = {
 
 let searchTimer = null;
 let refreshTimer = null;
+const libraryUploadState = { batchId: null, items: [], summary: null, duplicates: null, taskId: null };
 
 const icons = {
     music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
@@ -501,6 +503,7 @@ function renderSongs() {
                 <td data-label="Duration" class="library-mono">${formatDuration(song.duration)}</td>
                 <td data-label="Bitrate"><span class="library-bitrate">${formatBitrate(song.bitrate)}</span></td>
                 <td data-label="Actions"><div class="library-row-actions">
+                    <button class="btn-secondary library-edit-metadata" type="button" data-edit-metadata="${song.id}">Edit</button>
                 </div></td>
             </tr>
         `).join("");
@@ -514,9 +517,94 @@ function renderSongs() {
             updateBulkSelection(page.items);
         });
     });
+    body.querySelectorAll("[data-edit-metadata]").forEach((button) => {
+        button.addEventListener("click", () => openMetadataEditor(Number(button.dataset.editMetadata)));
+    });
     updateBulkSelection(page.items);
 
     renderPagination("pagination-songs", page, "songs", renderSongs);
+}
+
+let metadataEditorSong = null;
+let metadataEditorArtworkRelease = null;
+
+function setMetadataForm(song) {
+    const form = document.getElementById("metadata-editor-form");
+    ["title", "artist", "album", "album_artist", "genre", "year", "track", "disc"].forEach((field) => {
+        form.elements[field].value = song[field] ?? song[`${field}_number`] ?? "";
+    });
+    form.elements.musicbrainz_recording_id.value = song.musicbrainz_recording_id || "";
+    form.elements.musicbrainz_release_id.value = "";
+}
+
+function openMetadataEditor(songId) {
+    metadataEditorSong = libraryState.songs.find((song) => song.id === songId);
+    if (!metadataEditorSong) return;
+    metadataEditorArtworkRelease = null;
+    setMetadataForm(metadataEditorSong);
+    document.getElementById("metadata-search-title-input").value = metadataEditorSong.title || "";
+    document.getElementById("metadata-search-artist").value = metadataEditorSong.artist || "";
+    document.getElementById("metadata-search-album").value = metadataEditorSong.album || "";
+    document.getElementById("metadata-artwork-preview").src = metadataEditorSong.cover_url || "";
+    document.getElementById("metadata-artwork-file").value = "";
+    document.getElementById("metadata-search-results").innerHTML = "";
+    document.getElementById("metadata-search-status").textContent = "";
+    document.getElementById("metadata-editor-status").textContent = "";
+    document.getElementById("metadata-editor-dialog").showModal();
+}
+
+async function searchMetadata() {
+    const params = new URLSearchParams();
+    [["title", "metadata-search-title-input"], ["artist", "metadata-search-artist"], ["album", "metadata-search-album"]].forEach(([field, id]) => {
+        const value = document.getElementById(id).value.trim(); if (value) params.set(field, value);
+    });
+    const status = document.getElementById("metadata-search-status");
+    const results = document.getElementById("metadata-search-results");
+    status.textContent = "Searching…"; results.innerHTML = "";
+    try {
+        const payload = await fetchJson(`/api/library/metadata/search?${params}`);
+        status.textContent = `${payload.items.length} possible ${payload.items.length === 1 ? "match" : "matches"}`;
+        results.innerHTML = payload.items.map((item, index) => `<button type="button" data-metadata-result="${index}" class="metadata-search-result">
+            ${item.artwork_url ? `<img src="${escapeAttribute(item.artwork_url)}" alt="" loading="lazy">` : `<span class="library-artwork-placeholder">${icons.music}</span>`}
+            <span><strong>${escapeHtml(item.title || "Untitled")}</strong><small>${escapeHtml(item.artist || "Unknown artist")} · ${escapeHtml(item.album || "Unknown album")}${item.year ? ` · ${item.year}` : ""}</small></span>
+        </button>`).join("") || "<p>No matches found. Try shorter or corrected search terms.</p>";
+        results.querySelectorAll("[data-metadata-result]").forEach((button) => button.onclick = () => {
+            const item = payload.items[Number(button.dataset.metadataResult)];
+            setMetadataForm(item);
+            metadataEditorArtworkRelease = item.release_id || null;
+            if (item.artwork_url) document.getElementById("metadata-artwork-preview").src = item.artwork_url;
+            results.querySelectorAll("button").forEach((entry) => entry.classList.toggle("is-selected", entry === button));
+            status.textContent = "Match copied below. Review every field before saving.";
+        });
+    } catch (error) { status.textContent = error.message; }
+}
+
+async function saveMetadata(event) {
+    event.preventDefault();
+    if (!metadataEditorSong) return;
+    const form = event.currentTarget;
+    const status = document.getElementById("metadata-editor-status");
+    const payload = {};
+    ["title", "artist", "album", "album_artist", "genre", "musicbrainz_recording_id", "musicbrainz_release_id"].forEach((field) => { payload[field] = form.elements[field].value.trim() || null; });
+    ["year", "track", "disc"].forEach((field) => { payload[field] = form.elements[field].value === "" ? null : Number(form.elements[field].value); });
+    status.textContent = "Saving metadata…";
+    try {
+        const response = await fetch(`/api/library/songs/${metadataEditorSong.id}/metadata`, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+        const result = await response.json(); if (!response.ok) throw new Error(result.detail || "Metadata could not be saved.");
+        const file = document.getElementById("metadata-artwork-file").files[0];
+        if (file) {
+            const data = new FormData(); data.append("file", file);
+            const artworkResponse = await fetch(`/api/artwork/songs/${metadataEditorSong.id}`, {method: "POST", body: data});
+            if (!artworkResponse.ok) { const error = await artworkResponse.json(); throw new Error(error.detail || "Artwork could not be saved."); }
+        } else if (metadataEditorArtworkRelease) {
+            const artworkResponse = await fetch(`/api/library/songs/${metadataEditorSong.id}/metadata/artwork`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({release_id: metadataEditorArtworkRelease})});
+            if (!artworkResponse.ok) { const error = await artworkResponse.json(); throw new Error(error.detail || "Artwork could not be imported."); }
+        }
+        // Navidrome reads tags and embedded covers from the shared audio file.
+        // Start an incremental scan after either metadata or artwork changes.
+        fetch("/api/navidrome/rescan?full_scan=false", {method: "POST"}).catch(() => {});
+        status.textContent = "Saved."; await loadLibraryData({preserveState: true}); setTimeout(() => document.getElementById("metadata-editor-dialog").close(), 350);
+    } catch (error) { status.textContent = error.message; }
 }
 
 function renderAlbums() {
@@ -987,7 +1075,281 @@ function connectLibraryEvents() {
     });
 }
 
+async function uploadRequest(url, options = {}) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        let message = `Request failed: ${response.status}`;
+        try {
+            const payload = await response.json();
+            message = typeof payload.detail === "string" ? payload.detail : payload.detail?.message || message;
+        } catch (_) { /* Use the bounded status message. */ }
+        throw new Error(message);
+    }
+    return response.status === 204 ? null : response.json();
+}
+
+function uploadField(item, field, label, type = "text") {
+    const value = item.proposed[field] ?? "";
+    const limits = type === "number" ? ' min="0" max="9999"' : ' maxlength="500"';
+    return `<label>${label}<input data-upload-field="${field}" type="${type}" value="${escapeHtml(String(value))}"${limits}></label>`;
+}
+
+function renderUploadReview() {
+    const review = document.getElementById("library-upload-review");
+    review.innerHTML = libraryUploadState.items.map((item) => {
+        const duplicate = libraryUploadState.duplicates?.items?.find((entry) => entry.item_id === item.id);
+        const findings = [
+            ...item.changes.map((change) => `${change.field}: “${change.before || ""}” → “${change.after || "removed"}”`),
+            ...item.warnings,
+        ];
+        return `<article class="library-upload-item" data-upload-item="${item.id}">
+            <input data-upload-selected type="checkbox" ${duplicate?.recommended_action === "skip" ? "" : "checked"} aria-label="Import ${escapeHtml(item.original_name)}">
+            <div>
+                <strong>${escapeHtml(item.original_name)}</strong>
+                <div class="library-upload-item-fields">
+                    ${uploadField(item, "title", "Title")}${uploadField(item, "artist", "Artist")}
+                    ${uploadField(item, "album_artist", "Album artist")}${uploadField(item, "album", "Album")}
+                    ${uploadField(item, "genre", "Genre")}${uploadField(item, "year", "Year", "number")}
+                    ${uploadField(item, "track", "Track", "number")}${uploadField(item, "disc", "Disc", "number")}
+                </div>
+                <p class="library-upload-findings">${findings.length ? `<strong>Review:</strong> ${escapeHtml(findings.join(" · "))}` : "No obvious download-site branding detected."}</p>
+                <small class="library-upload-destination">Proposed location: ${escapeHtml(item.destination)}</small>
+                ${duplicate ? `<div class="library-upload-duplicates"><strong>${duplicate.matches.length} existing Library ${duplicate.matches.length === 1 ? "match" : "matches"} · ${duplicate.recommended_action === "skip" ? "Skipped by default" : "Review before importing"}</strong>${duplicate.matches.map((match) => `<div><span class="duplicate-tier-badge">${escapeHtml(match.tier)}</span> ${escapeHtml(match.title || match.filename)} — ${escapeHtml(match.artist || "Unknown artist")} <small>${escapeHtml(match.evidence)}</small></div>`).join("")}</div>` : ""}
+            </div>
+        </article>`;
+    }).join("");
+    document.getElementById("library-upload-import").disabled = !libraryUploadState.items.length;
+    renderUploadAlbumReview();
+}
+
+function selectedUploadAlbumGroup() {
+    const id = document.getElementById("library-upload-album-group").value;
+    return libraryUploadState.summary?.groups?.find((group) => group.id === id) || null;
+}
+
+function populateUploadAlbumFields() {
+    const group = selectedUploadAlbumGroup();
+    if (!group) return;
+    document.getElementById("library-upload-album").value = group.values.album || "";
+    document.getElementById("library-upload-album-artist").value = group.values.album_artist || "";
+    document.getElementById("library-upload-album-genre").value = group.values.genre || "";
+    document.getElementById("library-upload-album-year").value = group.values.year ?? "";
+    document.getElementById("library-upload-album-findings").textContent = group.findings.length
+        ? group.findings.join(" · ") : "This group has consistent shared album metadata and track numbering.";
+    const preview = document.getElementById("library-upload-album-artwork-preview");
+    preview.src = group.artwork?.url || "";
+    preview.hidden = !group.artwork?.url;
+    document.getElementById("library-upload-album-artwork-remove").hidden = !group.artwork;
+    document.getElementById("library-upload-album-matches").innerHTML = "";
+}
+
+function renderUploadAlbumReview() {
+    const section = document.getElementById("library-upload-album-review");
+    const groups = libraryUploadState.summary?.groups || [];
+    section.hidden = !groups.length;
+    if (!groups.length) return;
+    const select = document.getElementById("library-upload-album-group");
+    const previous = select.value;
+    select.innerHTML = groups.map((group) => `<option value="${group.id}">${escapeHtml(group.label)} · ${group.track_count} ${group.track_count === 1 ? "track" : "tracks"}</option>`).join("");
+    if (groups.some((group) => group.id === previous)) select.value = previous;
+    document.getElementById("library-upload-album-summary").textContent = `${groups.length} ${groups.length === 1 ? "group" : "groups"} · ${libraryUploadState.summary.finding_count} findings`;
+    populateUploadAlbumFields();
+}
+
+function applyUploadAlbumMetadata() {
+    const group = selectedUploadAlbumGroup();
+    if (!group) return;
+    const values = {
+        album: document.getElementById("library-upload-album").value.trim(),
+        album_artist: document.getElementById("library-upload-album-artist").value.trim(),
+        genre: document.getElementById("library-upload-album-genre").value.trim(),
+        year: document.getElementById("library-upload-album-year").value,
+    };
+    group.item_ids.forEach((itemId) => {
+        const row = document.querySelector(`[data-upload-item="${itemId}"]`);
+        if (!row) return;
+        Object.entries(values).forEach(([field, value]) => {
+            const input = row.querySelector(`[data-upload-field="${field}"]`);
+            if (input) input.value = value;
+        });
+    });
+    document.getElementById("library-upload-album-findings").textContent = `Applied shared metadata to ${group.item_ids.length} ${group.item_ids.length === 1 ? "track" : "tracks"}. Review individual titles and track numbers below.`;
+}
+
+async function searchUploadAlbumMetadata() {
+    const group = selectedUploadAlbumGroup();
+    if (!group) return;
+    const target = document.getElementById("library-upload-album-matches");
+    const album = document.getElementById("library-upload-album").value.trim();
+    const artist = document.getElementById("library-upload-album-artist").value.trim();
+    target.textContent = "Searching MusicBrainz…";
+    try {
+        const result = await uploadRequest(`/api/library/metadata/search?album=${encodeURIComponent(album)}&artist=${encodeURIComponent(artist)}`);
+        const unique = [...new Map(result.items.filter((item) => item.release_id).map((item) => [item.release_id, item])).values()];
+        target.innerHTML = unique.map((item) => `<article class="metadata-suggestion-card"><strong>${escapeHtml(item.album || item.title || "Unknown release")}</strong><small>${escapeHtml(item.album_artist || item.artist || "Unknown artist")} · ${item.year || "Year unknown"}</small><button type="button" class="btn-secondary" data-upload-album-match="${item.release_id}">Use release</button></article>`).join("") || "No matching releases found.";
+        target.querySelectorAll("[data-upload-album-match]").forEach((button) => button.addEventListener("click", () => applyUploadAlbumMatch(unique.find((item) => item.release_id === button.dataset.uploadAlbumMatch))));
+    } catch (error) { target.textContent = error.message; }
+}
+
+async function applyUploadAlbumMatch(match) {
+    if (!match) return;
+    document.getElementById("library-upload-album").value = match.album || "";
+    document.getElementById("library-upload-album-artist").value = match.album_artist || match.artist || "";
+    document.getElementById("library-upload-album-year").value = match.year ?? "";
+    applyUploadAlbumMetadata();
+    const group = selectedUploadAlbumGroup();
+    try {
+        const updated = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/groups/${group.id}/artwork/musicbrainz?release_id=${encodeURIComponent(match.release_id)}`, {method:"POST"});
+        group.artwork = updated.artwork;
+        populateUploadAlbumFields();
+    } catch (error) { document.getElementById("library-upload-album-findings").textContent = `Metadata applied. Artwork was unavailable: ${error.message}`; }
+}
+
+async function uploadAlbumArtwork(file) {
+    const group = selectedUploadAlbumGroup(); if (!group || !file) return;
+    const form = new FormData(); form.append("file", file, file.name);
+    try { const updated = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/groups/${group.id}/artwork`, {method:"POST",body:form}); group.artwork=updated.artwork; populateUploadAlbumFields(); }
+    catch(error){ document.getElementById("library-upload-album-findings").textContent=error.message; }
+}
+
+async function removeAlbumArtwork() {
+    const group=selectedUploadAlbumGroup(); if(!group)return;
+    await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/groups/${group.id}/artwork`,{method:"DELETE"}); group.artwork=null; populateUploadAlbumFields();
+}
+
+async function ensureUploadBatch() {
+    if (libraryUploadState.batchId) return libraryUploadState.batchId;
+    const batch = await uploadRequest("/api/library/uploads/batches", {method: "POST"});
+    libraryUploadState.batchId = batch.id;
+    document.getElementById("library-upload-discard").hidden = false;
+    saveUploadRecovery();
+    return batch.id;
+}
+
+function saveUploadRecovery() {
+    try {
+        if (!libraryUploadState.batchId && !libraryUploadState.taskId) localStorage.removeItem(LIBRARY_UPLOAD_RECOVERY_KEY);
+        else localStorage.setItem(LIBRARY_UPLOAD_RECOVERY_KEY, JSON.stringify({batchId:libraryUploadState.batchId,taskId:libraryUploadState.taskId}));
+    } catch (_) {}
+}
+
+async function loadUploadBatch(batchId) {
+    const batch=await uploadRequest(`/api/library/uploads/batches/${batchId}`);
+    libraryUploadState.batchId=batch.id; libraryUploadState.items=batch.items; libraryUploadState.summary=batch.summary; libraryUploadState.duplicates=batch.duplicates;
+    document.getElementById("library-upload-discard").hidden=false; renderUploadReview(); saveUploadRecovery(); return batch;
+}
+
+async function monitorUploadTask(task) {
+    const status=document.getElementById("library-upload-status"); libraryUploadState.taskId=task.id; saveUploadRecovery();
+    document.getElementById("library-upload-cancel").hidden=false; document.getElementById("library-upload-discard").hidden=true;
+    let progress=task;
+    while(["queued","running","cancelling"].includes(progress.status)){
+        status.textContent=`${progress.status.replaceAll("_"," ")} · ${progress.processed}/${progress.total}${progress.current?` · ${progress.current}`:""}`;
+        await new Promise((resolve)=>setTimeout(resolve,700)); progress=await uploadRequest(`/api/tasks/jobs/${task.id}`);
+    }
+    status.textContent=`${progress.status.replaceAll("_"," ")} · ${progress.completed} imported · ${progress.failed} failed · ${progress.skipped} skipped${progress.error_summary?` · ${progress.error_summary}`:""}`;
+    libraryUploadState.taskId=null; document.getElementById("library-upload-cancel").hidden=true;
+    try{await loadUploadBatch(libraryUploadState.batchId);}catch(_){libraryUploadState.items=[];libraryUploadState.batchId=null;libraryUploadState.summary=null;libraryUploadState.duplicates=null;document.getElementById("library-upload-discard").hidden=true;renderUploadReview();}
+    saveUploadRecovery(); await loadLibraryData({preserveState:true});
+}
+
+async function restoreLocalUpload() {
+    if(libraryUploadState.taskId||libraryUploadState.batchId)return;
+    let saved={}; try{saved=JSON.parse(localStorage.getItem(LIBRARY_UPLOAD_RECOVERY_KEY)||"{}");}catch(_){}
+    if(saved.taskId){try{const task=await uploadRequest(`/api/tasks/jobs/${saved.taskId}`); if(["queued","running","cancelling"].includes(task.status)){libraryUploadState.batchId=saved.batchId; monitorUploadTask(task).catch((error)=>{document.getElementById("library-upload-status").textContent=error.message;}); return;}}catch(_){} }
+    try{
+        const listing=await uploadRequest("/api/library/uploads/batches"); const candidate=listing.items.find((item)=>item.id===saved.batchId)||listing.items[0];
+        if(candidate){await loadUploadBatch(candidate.id); document.getElementById("library-upload-status").textContent=`Restored ${candidate.item_count} staged ${candidate.item_count===1?"file":"files"}. Batch expires ${new Date(candidate.expires_at*1000).toLocaleString()}.`; if(candidate.task&&["queued","running","cancelling"].includes(candidate.task.status))monitorUploadTask(candidate.task).catch((error)=>{document.getElementById("library-upload-status").textContent=error.message;});}
+    }catch(_){}
+}
+
+async function discardLocalUpload() {
+    if(!libraryUploadState.batchId||libraryUploadState.taskId)return;
+    await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}`,{method:"DELETE"});
+    libraryUploadState.batchId=null;libraryUploadState.items=[];libraryUploadState.summary=null;libraryUploadState.duplicates=null;saveUploadRecovery();renderUploadReview();document.getElementById("library-upload-discard").hidden=true;document.getElementById("library-upload-status").textContent="Staged batch discarded.";
+}
+
+async function stageLocalFiles(files) {
+    if (!files.length) return;
+    const status = document.getElementById("library-upload-status");
+    const input = document.getElementById("library-upload-files");
+    status.textContent = `Uploading and inspecting ${files.length} ${files.length === 1 ? "file" : "files"}…`;
+    input.disabled = true;
+    try {
+        const batchId = await ensureUploadBatch();
+        const form = new FormData();
+        [...files].forEach((file) => form.append("files", file, file.name));
+        const result = await uploadRequest(`/api/library/uploads/batches/${batchId}/files`, {method: "POST", body: form});
+        libraryUploadState.items.push(...result.items);
+        libraryUploadState.summary = result.summary;
+        libraryUploadState.duplicates = result.duplicates;
+        renderUploadReview();
+        const failures = result.errors?.length ? ` ${result.errors.length} rejected: ${result.errors.map((item) => `${item.filename}: ${item.error}`).join("; ")}` : "";
+        status.textContent = `${libraryUploadState.items.length} staged. Review cleanup and metadata before importing.${failures}`;
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        input.disabled = false;
+        input.value = "";
+    }
+}
+
+function selectedUploadItems() {
+    return [...document.querySelectorAll("[data-upload-item]")].filter((row) => row.querySelector("[data-upload-selected]").checked).map((row) => {
+        const metadata = {};
+        row.querySelectorAll("[data-upload-field]").forEach((input) => {
+            metadata[input.dataset.uploadField] = input.type === "number"
+                ? (input.value === "" ? null : Number(input.value)) : input.value.trim() || null;
+        });
+        return {id: row.dataset.uploadItem, metadata};
+    });
+}
+
+async function importLocalFiles() {
+    const items = selectedUploadItems();
+    const status = document.getElementById("library-upload-status");
+    if (!items.length) { status.textContent = "Select at least one file to import."; return; }
+    const button = document.getElementById("library-upload-import");
+    button.disabled = true;
+    status.textContent = `Cleaning, verifying, and importing ${items.length} ${items.length === 1 ? "file" : "files"}…`;
+    try {
+        const task = await uploadRequest(`/api/library/uploads/batches/${libraryUploadState.batchId}/import`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({items, scan_navidrome: document.getElementById("library-upload-scan").checked}),
+        });
+        await monitorUploadTask(task);
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        button.disabled = !libraryUploadState.items.length;
+    }
+}
+
+async function closeLocalUpload() {
+    document.getElementById("library-upload-dialog").close();
+    saveUploadRecovery();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("library-upload-open").addEventListener("click", async () => { await restoreLocalUpload(); document.getElementById("library-upload-dialog").showModal(); });
+    document.getElementById("library-upload-close").addEventListener("click", closeLocalUpload);
+    document.getElementById("library-upload-files").addEventListener("change", (event) => stageLocalFiles(event.target.files));
+    document.getElementById("library-upload-import").addEventListener("click", importLocalFiles);
+    document.getElementById("library-upload-cancel").addEventListener("click", async () => { if (libraryUploadState.taskId) await fetch(`/api/tasks/jobs/${libraryUploadState.taskId}/cancel`, {method:"POST"}); });
+    document.getElementById("library-upload-discard").addEventListener("click", discardLocalUpload);
+    document.getElementById("library-upload-album-group").addEventListener("change", populateUploadAlbumFields);
+    document.getElementById("library-upload-album-apply").addEventListener("click", applyUploadAlbumMetadata);
+    document.getElementById("library-upload-album-search").addEventListener("click", searchUploadAlbumMetadata);
+    document.getElementById("library-upload-album-artwork-file").addEventListener("change", (event) => uploadAlbumArtwork(event.target.files[0]));
+    document.getElementById("library-upload-album-artwork-remove").addEventListener("click", removeAlbumArtwork);
+    const uploadDrop = document.getElementById("library-upload-drop");
+    ["dragenter", "dragover"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.add("is-dragging"); }));
+    ["dragleave", "drop"].forEach((name) => uploadDrop.addEventListener(name, (event) => { event.preventDefault(); uploadDrop.classList.remove("is-dragging"); }));
+    uploadDrop.addEventListener("drop", (event) => stageLocalFiles(event.dataTransfer.files));
+    document.getElementById("metadata-search-button").addEventListener("click", searchMetadata);
+    document.getElementById("metadata-editor-form").addEventListener("submit", saveMetadata);
+    ["metadata-editor-close", "metadata-editor-cancel"].forEach((id) => document.getElementById(id).addEventListener("click", () => document.getElementById("metadata-editor-dialog").close()));
+    document.getElementById("metadata-artwork-file").addEventListener("change", (event) => { const file = event.target.files[0]; if (file) { metadataEditorArtworkRelease = null; document.getElementById("metadata-artwork-preview").src = URL.createObjectURL(file); } });
     const params = new URLSearchParams(window.location.search);
     const requestedView = params.get("view");
     const requestedAlbumKey = params.get("album_key");
@@ -1013,4 +1375,5 @@ document.addEventListener("DOMContentLoaded", () => {
     switchView(libraryState.view);
     loadLibraryData();
     connectLibraryEvents();
+    restoreLocalUpload();
 });

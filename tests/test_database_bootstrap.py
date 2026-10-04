@@ -47,7 +47,7 @@ def test_fresh_install_bootstraps_and_stamps_head(tmp_path, monkeypatch):
         "provider_cache_entries",
         "metadata_issues",
     }.isdisjoint(tables)
-    assert revision == "20260812_0032"
+    assert revision == "20260825_0033"
 
     # A second bootstrap detects the existing database and is an Alembic no-op.
     database_init.init_db()
@@ -92,7 +92,7 @@ def test_existing_database_upgrades_without_precreating_future_tables(
         .scalar_one()
     )
     assert {"metadata_suggestions", "metadata_application_locks"} <= tables
-    assert revision == "20260812_0032"
+    assert revision == "20260825_0033"
 
 
 def test_published_v1_5_revision_is_translated_before_upgrade(tmp_path, monkeypatch):
@@ -121,7 +121,7 @@ def test_published_v1_5_revision_is_translated_before_upgrade(tmp_path, monkeypa
         revision = connection.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-    assert revision == "20260812_0032"
+    assert revision == "20260825_0033"
     assert "metadata_suggestions" in inspect(engine).get_table_names()
 
 
@@ -155,7 +155,7 @@ def test_existing_database_retries_interrupted_metadata_migration(
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
     )
-    assert revision == "20260812_0032"
+    assert revision == "20260825_0033"
 
 
 def test_existing_database_retries_interrupted_metadata_health_migration(
@@ -188,7 +188,7 @@ def test_existing_database_retries_interrupted_metadata_health_migration(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260812_0032"
+        == "20260825_0033"
     )
 
 
@@ -222,7 +222,7 @@ def test_existing_database_retries_interrupted_metadata_health_indexes_migration
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260812_0032"
+        == "20260825_0033"
     )
 
 
@@ -263,7 +263,7 @@ def test_existing_database_repairs_missing_song_columns_when_batch_table_exists(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260812_0032"
+        == "20260825_0033"
     )
 
 
@@ -327,7 +327,7 @@ def test_existing_database_recovers_from_legacy_precreated_metadata_schema(
         engine.connect()
         .execute(text("SELECT version_num FROM alembic_version"))
         .scalar_one()
-        == "20260812_0032"
+        == "20260825_0033"
     )
 
 

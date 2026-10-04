@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.database.models import (DownloadJob, Task, TaskItemFailure,
+from app.database.models import (BulkOperationItem, DownloadJob, Task, TaskItemFailure,
     SyncSource)
 from app.domain.download import JobStatus
 from sqlalchemy import and_, or_, select, delete, update
@@ -303,7 +303,7 @@ def cleanup_library_jobs(db: Session, *, retain: int = 200) -> int:
     old_ids = db.scalars(
         select(Task.id)
         .where(
-            Task.task_type.in_((TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value)),
+            Task.task_type.in_((TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value, TaskType.LIBRARY_IMPORT.value)),
             Task.status.in_(terminal),
         )
         .order_by(Task.created_at.desc(), Task.id.desc())
@@ -367,11 +367,17 @@ def clear_library_activity(
 
 def recover_library_jobs(db: Session) -> int:
     """Mark abandoned non-resumable library work interrupted at process startup."""
-    jobs = db.scalars(select(Task).where(Task.task_type.in_((TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value)), Task.status.in_((TaskStatus.RUNNING.value, TaskStatus.CANCELLING.value)))).all()
+    jobs = db.scalars(select(Task).where(Task.task_type.in_((TaskType.LIBRARY_BULK.value, TaskType.LIBRARY_MAINTENANCE.value, TaskType.LIBRARY_IMPORT.value)), Task.status.in_((TaskStatus.RUNNING.value, TaskStatus.CANCELLING.value)))).all()
     for task in jobs:
         task.status = TaskStatus.QUEUED.value if task.resumable else TaskStatus.INTERRUPTED.value
         task.current_item = None
         task.completed_at = None if task.resumable else utcnow_naive()
         task.recovery_metadata = '{"reason":"process_restart"}'
+        if task.task_type == TaskType.LIBRARY_IMPORT.value and task.resumable:
+            db.execute(
+                update(BulkOperationItem)
+                .where(BulkOperationItem.task_id == task.id, BulkOperationItem.status == "running")
+                .values(status="queued", started_at=None)
+            )
     db.commit()
     return len(jobs)

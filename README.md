@@ -160,6 +160,68 @@ operations read this index instead of walking the music filesystem.
 - Multi-song selection
 - Recently Added badges
 - Responsive pagination
+- Per-song metadata and artwork editing
+
+### Edit Metadata and Artwork
+
+Choose **Edit** on any available song to correct title, artist, album, album
+artist, genre, year, track, or disc tags. The editor writes only those
+user-facing tags, preserves unrelated provider tags, and re-indexes the file
+after a successful save. Missing files cannot be edited.
+
+The **Find metadata** fields are intentionally separate from the saved tags.
+Replace a noisy video title or incorrect uploader/album with the title, artist,
+and album you expect, then search MusicBrainz. Select a candidate to copy its
+values into the editable form, review them, and save explicitly; searching or
+selecting a result never changes the file by itself.
+
+Artwork can be replaced with a JPEG, PNG, or WebP file up to 15 MB. Selecting a
+MusicBrainz result also previews its Cover Art Archive image and imports it only
+when the form is saved. Artwork is stored in Harmony's content-addressed cache;
+manual replacement and online import do not rewrite embedded audio artwork.
+
+### Import Local Music
+
+Choose **Import local music** on the Library page to stage MP3, FLAC, M4A/MP4,
+Ogg, or Opus files. Harmony validates each container, reads its tags, previews
+conservative download-site branding cleanup, and lets you correct the title,
+artist, album artist, album, genre, year, track, and disc before confirmation.
+
+Confirmed files are rewritten without transcoding, read back for verification,
+organized through the canonical `Album Artist/Album/Track - Title` path builder,
+indexed with `web_upload` provenance, and followed by one optional incremental
+Navidrome scan for the batch. Failed or duplicate items remain isolated in the
+private staging batch for review. Closing or refreshing the page preserves the
+review, and Harmony restores the newest unfinished batch and reconnects to any
+active import task. Use **Discard batch** to remove staged files explicitly.
+
+Harmony streams uploads to disk while enforcing per-file, per-batch, active-
+batch, and free-space-reserve limits. Unfinished batches expire after the
+configured retention window; active import tasks are protected from cleanup
+and cannot be discarded through the API.
+
+The importer groups staged tracks by album and reports inconsistent album
+artist, year, or genre values plus missing, duplicate, and gapped track-number
+sequences. Shared album metadata can be applied to the entire group in one
+step while titles and track numbers remain individually editable.
+
+Album review can also search MusicBrainz for a release, apply its shared album
+fields, and stage the corresponding Cover Art Archive image. A manual JPEG or
+PNG can be selected instead. Artwork remains a preview until import,
+when Harmony embeds it in every selected album track before indexing.
+
+Before confirmation, each staged track is also compared with bounded indexed
+Library candidates. Canonical destination, MusicBrainz recording ID, Spotify
+ID, ISRC, normalized artist/title/album, and duration produce explainable
+exact, strong, probable, or possible matches. Exact and strong matches are
+unchecked by default; Harmony never replaces an existing file automatically.
+
+Confirmation queues a persistent `library_import` job instead of keeping the
+browser request open. The job owns Harmony's `library-files` mutex, records
+per-file progress and safe failures, supports cooperative cancellation, and
+resumes unfinished staged items after a restart. Exact/strong conflicts are
+revalidated immediately before every move. One Navidrome scan is requested
+after the job finishes importing files.
 
 ### Albums View
 
@@ -242,6 +304,10 @@ without another network request.
 **Refresh artwork** only re-indexes embedded/folder artwork and repairs
 Harmony's cache association. The Harmony cache itself is not a Navidrome media
 file; Navidrome continues to read artwork from the music library.
+
+For a song whose canonical release ID is missing or wrong, use its **Edit**
+dialog instead: enter corrected search terms, select the intended release, and
+save to associate the chosen release artwork.
 
 ---
 
@@ -334,11 +400,15 @@ Current configurable settings include:
 - Optional YouTube Music download source
 - Navidrome connection and playlist synchronization
 - Cover Art Archive request settings
+- MusicBrainz Library-editor request settings
 - Appearance, date/time, and runtime behavior
 - System information
 
 Cover Art Archive access can be tuned with the documented
 `COVER_ART_ARCHIVE_*` environment variables in `.env.example`.
+User-initiated metadata lookup can similarly be pointed at a compatible mirror
+or given a different timeout with `MUSICBRAINZ_BASE_URL` and
+`MUSICBRAINZ_TIMEOUT_SECONDS`.
 
 ---
 
@@ -633,7 +703,7 @@ Just a synchronized self-hosted music library.
 
 ### Library Intelligence
 
-- Optional metadata editing and repair workflows
+- Additional provider-assisted metadata review workflows
 - Advanced search improvements
 
 ---

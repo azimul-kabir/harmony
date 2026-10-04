@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - codex/harmony-v3-completed
+      - codex/library-upload-storage-recovery
     tags:
       - "v*"
   workflow_dispatch:

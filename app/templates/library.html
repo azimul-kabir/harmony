@@ -11,6 +11,7 @@
             <p>Browse every track Harmony has indexed across songs, albums, and artists.</p>
         </div>
         <div class="library-hero-actions">
+        <button id="library-upload-open" class="btn-primary" type="button">Import local music</button>
         <a class="btn-secondary library-health-link" href="/library/health">Library Health</a>
         <button id="library-duplicates-open" class="btn-secondary" type="button">Review duplicates</button>
         <button id="btn-rescan" class="btn-secondary library-rescan" type="button">
@@ -195,8 +196,85 @@
     </div>
 </dialog>
 
+<dialog id="library-upload-dialog" class="library-upload-dialog">
+    <div class="library-upload-shell">
+        <header>
+            <div><span class="library-eyebrow">Local import</span><h2>Upload and clean music</h2></div>
+            <button id="library-upload-close" class="btn-secondary" type="button">Close</button>
+        </header>
+        <p>Harmony stages these files privately, previews conservative branding cleanup, and only organizes them after you confirm.</p>
+        <label id="library-upload-drop" class="library-upload-drop">
+            <strong>Choose songs or drop them here</strong>
+            <span>MP3, FLAC, M4A/MP4, Ogg, or Opus</span>
+            <input id="library-upload-files" type="file" multiple accept=".mp3,.flac,.m4a,.mp4,.ogg,.opus,audio/*">
+        </label>
+        <p id="library-upload-status" class="library-search-status" aria-live="polite"></p>
+        <section id="library-upload-album-review" class="library-upload-album-review" hidden>
+            <header><div><span class="library-eyebrow">Album consistency</span><h3>Apply shared album metadata</h3></div><span id="library-upload-album-summary"></span></header>
+            <label>Album group<select id="library-upload-album-group"></select></label>
+            <div class="library-upload-album-fields">
+                <label>Album<input id="library-upload-album" type="text" maxlength="500"></label>
+                <label>Album artist<input id="library-upload-album-artist" type="text" maxlength="500"></label>
+                <label>Genre<input id="library-upload-album-genre" type="text" maxlength="200"></label>
+                <label>Year<input id="library-upload-album-year" type="number" min="0" max="9999"></label>
+            </div>
+            <p id="library-upload-album-findings" class="library-search-status"></p>
+            <div class="library-upload-album-actions"><button id="library-upload-album-apply" class="btn-secondary" type="button">Apply to this album</button><button id="library-upload-album-search" class="btn-secondary" type="button">Find on MusicBrainz</button></div>
+            <div id="library-upload-album-matches" class="metadata-search-results"></div>
+            <div class="library-upload-album-artwork"><img id="library-upload-album-artwork-preview" alt="Selected album artwork"><label>Replace album artwork<input id="library-upload-album-artwork-file" type="file" accept="image/jpeg,image/png"></label><button id="library-upload-album-artwork-remove" class="btn-secondary" type="button">Remove selection</button></div>
+        </section>
+        <div id="library-upload-review" class="library-upload-review"></div>
+        <footer class="library-upload-actions">
+            <label><input id="library-upload-scan" type="checkbox" checked> Request one Navidrome scan after import</label>
+            <div><button id="library-upload-discard" class="btn-secondary" type="button" hidden>Discard batch</button> <button id="library-upload-cancel" class="btn-secondary" type="button" hidden>Cancel import</button> <button id="library-upload-import" class="btn-primary" type="button" disabled>Import selected files</button></div>
+        </footer>
+    </div>
+</dialog>
+
+<dialog id="metadata-editor-dialog" class="metadata-editor-dialog">
+    <form id="metadata-editor-form" class="metadata-editor-shell">
+        <header>
+            <div><span class="library-eyebrow">Track details</span><h2>Edit metadata &amp; artwork</h2></div>
+            <button id="metadata-editor-close" class="btn-secondary" type="button">Close</button>
+        </header>
+        <p class="library-search-status">Correct the search terms independently of the saved tags, review a match, then save.</p>
+        <section class="metadata-editor-search" aria-labelledby="metadata-search-title">
+            <h3 id="metadata-search-title">Find metadata</h3>
+            <div class="metadata-editor-grid">
+                <label>Title<input id="metadata-search-title-input" type="text" maxlength="500"></label>
+                <label>Artist<input id="metadata-search-artist" type="text" maxlength="500"></label>
+                <label>Album<input id="metadata-search-album" type="text" maxlength="500"></label>
+            </div>
+            <button id="metadata-search-button" class="btn-secondary" type="button">Search MusicBrainz</button>
+            <p id="metadata-search-status" class="library-search-status" aria-live="polite"></p>
+            <div id="metadata-search-results" class="metadata-search-results"></div>
+        </section>
+        <section>
+            <h3>Saved tags</h3>
+            <div class="metadata-editor-grid">
+                <label>Title<input name="title" type="text" maxlength="500"></label>
+                <label>Artist<input name="artist" type="text" maxlength="500"></label>
+                <label>Album<input name="album" type="text" maxlength="500"></label>
+                <label>Album artist<input name="album_artist" type="text" maxlength="500"></label>
+                <label>Genre<input name="genre" type="text" maxlength="200"></label>
+                <label>Year<input name="year" type="number" min="0" max="9999"></label>
+                <label>Track<input name="track" type="number" min="0" max="9999"></label>
+                <label>Disc<input name="disc" type="number" min="0" max="999"></label>
+            </div>
+            <input name="musicbrainz_recording_id" type="hidden"><input name="musicbrainz_release_id" type="hidden">
+        </section>
+        <section class="metadata-artwork-editor">
+            <img id="metadata-artwork-preview" alt="Current or selected album artwork">
+            <label>Replace artwork<input id="metadata-artwork-file" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <small>JPEG, PNG, or WebP; up to 15 MB. Search-result artwork is imported when you save.</small>
+        </section>
+        <p id="metadata-editor-status" class="library-search-status" aria-live="polite"></p>
+        <footer><button class="btn-secondary" id="metadata-editor-cancel" type="button">Cancel</button><button class="btn-primary" type="submit">Save changes</button></footer>
+    </form>
+</dialog>
+
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/library.js?v={{ version }}-forget-missing"></script>
+<script src="/static/js/library.js?v={{ version }}-metadata-sync-local-import"></script>
 {% endblock %}

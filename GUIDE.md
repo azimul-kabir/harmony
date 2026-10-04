@@ -90,6 +90,27 @@ Harmony runs anywhere Docker is available.
 
 That's it. Open your browser, add a Spotify playlist, and Harmony takes care of the rest.
 
+### Correcting Library Metadata and Artwork
+
+1. Open **Library → Songs** and select **Edit** beside an available song.
+2. Correct the saved title, artist, album, album artist, genre, year, track, or
+   disc fields directly when you already know the right values.
+3. For provider assistance, edit the separate **Find metadata** title, artist,
+   and album inputs. These begin with the current tags but can be completely
+   replaced—for example, shorten a video-style title and replace an uploader
+   name with the actual recording artist.
+4. Choose **Search MusicBrainz**, select a likely match, and review every copied
+   value. A search result is never applied automatically.
+5. Optionally select a JPEG, PNG, or WebP artwork file (maximum 15 MB), or keep
+   the selected result's Cover Art Archive preview for import.
+6. Choose **Save changes**. Harmony updates the audio tags, refreshes the
+   Library index, and then applies the chosen artwork. A failed artwork import
+   is reported separately so the metadata save is not hidden.
+
+The editor is unavailable for missing files. Manual and imported artwork update
+Harmony's canonical artwork cache and do not replace artwork embedded inside
+the audio file.
+
 ### Current Status
 
 Harmony has reached **v2.1.0**. The release adds a secure-by-default web login,

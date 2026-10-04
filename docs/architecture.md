@@ -51,6 +51,8 @@ Spotify / YouTube Music
 - Database sessions are closed predictably, including worker-owned sessions.
 - Provider failures are bounded and returned as safe errors.
 - Library scanning reads embedded metadata without silently rewriting files.
+  The per-song editor is the explicit exception: a user-confirmed save writes
+  only supported editable tags and then force-reindexes that one file.
 - Playlist exports include only existing files linked through available
   canonical Song associations and are replaced atomically; job completion and
   predicted paths never count as availability.

@@ -19,12 +19,11 @@ from app.database.crud_sync_sources import (
     create_sync_source,
     get_sync_source_by_identity,
 )
-from app.database.models import DownloadJob, Playlist, Task
+from app.database.models import DownloadJob, Playlist, ScheduleRun, Task
 from app.database.session import get_db, SessionLocal
-from app.services.playlist_sync import sync_playlist
 from app.services.playlist_manager import count_m3u_entries, playlist_file_path
 from app.services.playlist_source import PlaylistSourceError, parse_playlist_source
-from app.services.source_auto_sync import next_sync_at
+from app.services.source_auto_sync import next_sync_at, run_source_sync
 
 router = APIRouter(
     prefix="/api/sources",
@@ -55,7 +54,7 @@ def run_background_sync(source_id: int):
     try:
         source = get_sync_source(db=db, sync_id=source_id)
         if source:
-            sync_playlist(db=db, source=source)
+            run_source_sync(db, source, trigger="manual")
     finally:
         db.close()
 
@@ -79,8 +78,11 @@ def create_playlist_source(db: Session, source_url: str):
 @router.get("")
 def list_sources(db: Session = Depends(get_db)):
     sources = list_sync_sources(db)
-    return [
-        {
+    payload = []
+    for source in sources:
+        latest_run = db.scalar(select(ScheduleRun).where(ScheduleRun.source_id == source.id).order_by(ScheduleRun.started_at.desc()).limit(1))
+        missed_runs = db.scalar(select(func.count(ScheduleRun.id)).where(ScheduleRun.source_id == source.id, ScheduleRun.trigger == "scheduled", ScheduleRun.delay_seconds >= 300)) or 0
+        payload.append({
             "id": source.id,
             "type": source.type,
             "name": source.name,
@@ -94,9 +96,26 @@ def list_sources(db: Session = Depends(get_db)):
             "auto_sync_last_attempt_at": source.auto_sync_last_attempt_at,
             "next_auto_sync_at": next_sync_at(source) if source.auto_sync_enabled else None,
             "last_synced_at": source.last_synced_at,
-        }
-        for source in sources
-    ]
+            "latest_schedule_run": _schedule_run_payload(latest_run),
+            "missed_run_count": missed_runs,
+        })
+    return payload
+
+
+def _schedule_run_payload(row):
+    if row is None:
+        return None
+    effective_status = row.task.status if row.task and row.status in {"queued", "running"} else row.status
+    return {
+        "id": row.id, "task_id": row.task_id, "trigger": row.trigger,
+        "status": effective_status,
+        "scheduled_for": row.scheduled_for.isoformat() if row.scheduled_for else None,
+        "started_at": row.started_at.isoformat(),
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "delay_seconds": row.delay_seconds,
+        "missed": row.trigger == "scheduled" and row.delay_seconds >= 300,
+        "message": row.message,
+    }
 
 @router.post("", status_code=201)
 def create_source(request: SyncSourceRequest, db: Session = Depends(get_db)):
@@ -132,6 +151,20 @@ def sync_source(source_id: int, background_tasks: BackgroundTasks, db: Session =
     return {
         "message": "Playlist sync started in the background.",
     }
+
+
+@router.get("/{source_id}/schedule-history")
+def source_schedule_history(source_id: int, limit: int = 25, db: Session = Depends(get_db)):
+    source = get_sync_source(db=db, sync_id=source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found.")
+    rows = db.scalars(
+        select(ScheduleRun)
+        .where(ScheduleRun.source_id == source_id)
+        .order_by(ScheduleRun.started_at.desc())
+        .limit(max(1, min(limit, 100)))
+    ).all()
+    return [_schedule_run_payload(row) for row in rows]
 
 @router.delete("/{source_id}")
 def delete_source(source_id: int, db: Session = Depends(get_db)):
@@ -198,6 +231,17 @@ async def stream_sources_data(request: Request):
                         .order_by(Task.created_at.desc())
                         .limit(1)
                     ).scalar_one_or_none()
+                    latest_run = db.scalar(
+                        select(ScheduleRun).where(ScheduleRun.source_id == source.id)
+                        .order_by(ScheduleRun.started_at.desc()).limit(1)
+                    )
+                    missed_runs = db.scalar(
+                        select(func.count(ScheduleRun.id)).where(
+                            ScheduleRun.source_id == source.id,
+                            ScheduleRun.trigger == "scheduled",
+                            ScheduleRun.delay_seconds >= 300,
+                        )
+                    ) or 0
                     
                     task_data = None
                     if latest_task:
@@ -236,6 +280,8 @@ async def stream_sources_data(request: Request):
                         "auto_sync_last_attempt_at": source.auto_sync_last_attempt_at.isoformat() if source.auto_sync_last_attempt_at else None,
                         "next_auto_sync_at": next_sync_at(source).isoformat() if source.auto_sync_enabled else None,
                         "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None,
+                        "latest_schedule_run": _schedule_run_payload(latest_run),
+                        "missed_run_count": missed_runs,
                         "playlist": {
                             "id": playlist.id,
                             "total": playlist.track_count,

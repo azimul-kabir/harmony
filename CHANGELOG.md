@@ -3,6 +3,48 @@
 All notable changes to Harmony are documented in this file. The format is based
 on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
+## [Unreleased]
+
+### Added
+
+- Added review-first local music imports on the Library page with multi-file
+  upload, private staging, metadata correction, canonical album organization,
+  `web_upload` Library provenance, and one optional Navidrome scan per batch.
+- Added conservative download-site branding cleanup across filenames, common
+  music tags, promotional comments/URLs/encoder fields, and individual branded
+  lyric lines, with every proposed change visible before import.
+- Added album-level upload review with shared metadata application and explicit
+  findings for inconsistent album fields and missing, duplicate, or gapped
+  track-number sequences.
+- Added MusicBrainz-assisted staged album matching plus manual or Cover Art
+  Archive artwork selection, preview, removal, and album-wide embedding at
+  confirmed import.
+- Added explainable staged-versus-Library duplicate preflight using canonical
+  paths, provider IDs, ISRC, normalized metadata, and duration; exact and strong
+  matches are skipped by default without ever replacing indexed files.
+- Moved confirmed local imports onto resumable persistent `library_import`
+  tasks with `library-files` locking, progress, cancellation, restart recovery,
+  bounded failures, final duplicate revalidation, and one terminal Navidrome
+  scan request.
+- Added upload storage guardrails for total batch bytes, reserved free space,
+  unfinished batch count, configurable expiration, and active-task-safe cleanup.
+- Added refresh recovery for staged upload reviews and active import progress,
+  server-side recoverable batch discovery, and explicit safe batch discard.
+
+- Added a responsive per-song Library metadata editor for title, artist, album,
+  album artist, genre, year, track, and disc tags. Saving explicitly writes the
+  selected audio file and immediately refreshes its Library index projection.
+- Added a bounded MusicBrainz search inside the editor. Search title, artist,
+  and album are independently editable, so incorrect downloaded tags do not
+  constrain lookup; results remain previews until the user selects and saves.
+- Added manual JPEG, PNG, and WebP artwork replacement from the editor and
+  explicit Cover Art Archive import for a selected MusicBrainz release.
+
+### Security
+
+- Metadata provider failures return bounded user-facing errors, and all remote
+  search and artwork requests retain configured time and response-size limits.
+
 ## [v3.0.0] - 2026-08-21
 
 ### Added

@@ -85,9 +85,12 @@ The cleanup proceeded in small, independently testable changes:
 The first post-v3 work should favor operational fundamentals over rebuilding
 removed feature suites:
 
-- Backup and restore for database, settings, Sources, playlists, and artwork.
-- Settings import/export and clearer restart-required state.
-- Schedule history, missed-run visibility, and explicit run-now diagnostics.
+- ✅ Backup and restore for the SQLite database (including settings, Sources,
+  and playlists) and cached artwork, available under Settings → Operations.
+- ✅ Portable JSON settings import/export with restart guidance; environment
+  paths and credentials remain intentionally excluded.
+- ✅ Durable automatic/manual schedule history, late-run visibility, and
+  run-now outcome diagnostics on each Source.
 - API tokens for automation clients beyond browser-session authentication.
 - Provider/plugin boundaries only when a second maintained implementation
   proves the abstraction is necessary.

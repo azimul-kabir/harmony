@@ -75,7 +75,8 @@ async def upload_song_artwork(
     service = ArtworkService()
     try:
         artwork = service.cache_manual_upload(db, data)
-    except ArtworkValidationError as error:
+        service.embed(song.path, artwork)
+    except (ArtworkValidationError, OSError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     previous_id = song.artwork_id
     service.associate(song, artwork)
@@ -86,7 +87,7 @@ async def upload_song_artwork(
         "song_id": song.id,
         "previous_artwork_id": previous_id,
         "artwork": serialize_artwork(artwork),
-        "message": "Canonical artwork updated. Audio-file artwork was not modified.",
+        "message": "Canonical and embedded audio-file artwork updated.",
     }
 
 

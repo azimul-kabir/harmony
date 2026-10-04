@@ -16,7 +16,7 @@ def test_missing_review_exposes_forget_instead_of_file_delete():
         'data-bulk-action="forget_missing" >'
     ) in response.text
     assert "/static/js/library.js?v=" in response.text
-    assert "-forget-missing" in response.text
+    assert "-metadata-sync" in response.text
 
 
 def test_normal_library_exposes_file_delete_not_forget():

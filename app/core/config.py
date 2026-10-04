@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     download_path: str = "/downloads"
     staging_path: str = "/downloads/staging"
     failed_path: str = "/downloads/failed"
+    library_upload_max_file_bytes: int = 1024 * 1024 * 1024
+    library_upload_max_files: int = 200
+    library_upload_max_batch_bytes: int = 20 * 1024 * 1024 * 1024
+    library_upload_min_free_bytes: int = 2 * 1024 * 1024 * 1024
+    library_upload_max_active_batches: int = 10
+    library_upload_expiration_hours: int = 24
 
     log_level: str = "INFO"
 
@@ -71,6 +77,8 @@ class Settings(BaseSettings):
     cover_art_archive_base_url: str = "https://coverartarchive.org"
     cover_art_archive_timeout_seconds: float = 20.0
     cover_art_archive_max_bytes: int = 15 * 1024 * 1024
+    musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
+    musicbrainz_timeout_seconds: float = 12.0
 
 
 
