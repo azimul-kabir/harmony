@@ -29,6 +29,39 @@ jobs:
       - name: Run test suite
         run: pytest -q
 
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Ruff
+        run: python -m pip install ruff
+      # Syntax errors, undefined names and invalid comparisons only; stylistic
+      # rules are intentionally not enforced.
+      - name: Lint for real errors
+        run: ruff check app tests --select E9,F63,F7,F82
+
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Ensure a single Alembic head
+        run: |
+          heads=$(alembic heads | grep -c '(head)')
+          echo "Alembic heads: $heads"
+          test "$heads" -eq 1
+
   container:
     runs-on: ubuntu-latest
     timeout-minutes: 25
