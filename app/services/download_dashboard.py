@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, load_only
 from app.database.models import DownloadJob
 from app.domain.download import JobStatus
 from app.services.download_bulk import capabilities
+from app.services.manual_download_fallback import manual_fallback_eligible
 
 
 TERMINAL_STATUSES = ("completed", "failed", "skipped", "cancelled", "canceled")
@@ -221,14 +222,7 @@ def download_details(job: DownloadJob) -> dict:
             "run_duration_seconds": _duration_seconds(job.started_at, job.completed_at),
             "retry_count": max(0, (job.attempt_count or 0) - 1),
             "can_cancel": status in ("queued", "running"), "can_retry": status == "failed" and bool(job.retryable),
-            "can_manual_fallback": status == "failed" and job.reason_code in {
-                "exact_match_unavailable",
-                "fallback_match_unavailable",
-                "provider_no_match",
-                "provider_unavailable",
-                "manual_fallback_unavailable",
-                "manual_fallback_mismatch",
-            },
+            "can_manual_fallback": manual_fallback_eligible(job),
             **outcome,
             "events": [event for _, _, event in events[:DETAIL_EVENT_LIMIT]]}
 
