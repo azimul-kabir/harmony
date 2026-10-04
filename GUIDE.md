@@ -113,11 +113,11 @@ the audio file.
 
 ### Current Status
 
-Harmony has reached **v3.0.0**, which narrows the product around Sources →
-Downloads → Library → M3U/Navidrome. See the
-[v3.0.0 release notes](docs/releases/v3.0.0.md) before upgrading, and the
-[changelog](CHANGELOG.md) for work on `main` since the release, including
-review-first local uploads and the Library metadata editor. Harmony v1.6.0 was never published.
+Harmony has reached **v3.1.0**, which adds review-first local uploads, a
+per-song Library metadata editor, backup and restore, and a redesigned
+interface to the Sources → Downloads → Library → M3U/Navidrome workflow. See
+the [v3.1.0 release notes](docs/releases/v3.1.0.md) before upgrading, and the
+[changelog](CHANGELOG.md) for the complete history. Harmony v1.6.0 was never published.
 
 I'm continuing to improve it, and suggestions, feedback, or feature requests are always welcome. If you've also been frustrated by duplicate downloads and messy music folders, I'd love to hear your thoughts!
 

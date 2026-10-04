@@ -70,7 +70,7 @@ def search_musicbrainz(*, title: str | None, artist: str | None, album: str | No
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "Harmony/3.0.0 (https://github.com/azimul-kabir/harmony)",
+            "User-Agent": "Harmony/3.1.0 (https://github.com/azimul-kabir/harmony)",
         },
     )
     try:

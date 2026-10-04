@@ -18,11 +18,11 @@ Harmony is a self-hosted Spotify music downloader, playlist synchronizer, and li
 4.  **Error Handling:** Fail gracefully. If a Spotify URL is invalid or an ISRC lookup fails, catch the error, log it via Loguru, and return a clean JSON response to the frontend.
 
 ## Current State
-Harmony **v3.0.0** is the current release. It narrows the product around one
-dependable path (**Sources → Downloads → Library → M3U/Navidrome**) while
-keeping existing installations upgradeable. Unreleased work on `main` adds
+Harmony **v3.1.0** is the current release. It keeps the v3 product focused on
+one dependable path (**Sources → Downloads → Library → M3U/Navidrome**) and adds
 review-first local music uploads with durable import jobs and storage recovery,
-and a per-song Library metadata editor.
+a per-song Library metadata editor, backup and restore, Navidrome 0.64 ID
+reconciliation, and a redesigned UI.
 
 ## CI and Releases
 *   CI (`.github/workflows/ci.yml`) runs `tests` (`compileall` + `pytest`),
