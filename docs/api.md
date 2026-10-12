@@ -319,3 +319,24 @@ The browser stores only the opaque batch/task IDs locally. After refresh it
 reloads the server-owned manifest and reconnects task polling; local storage is
 not authoritative. Already-staged files are recoverable, while an interrupted
 in-flight HTTP file transfer must be selected again.
+
+## Backup, restore, and settings transfer
+
+- `GET /api/settings/operations/backup` returns a ZIP containing
+  `manifest.json`, a consistent `database/harmony.db` snapshot, and the
+  `artwork/` cache. Artwork is stored without recompression.
+- `POST /api/settings/operations/restore` accepts a multipart `file` with a
+  backup ZIP of at most 2 GB (HTTP 413 above that). Harmony checks the
+  manifest, SQLite integrity, and Harmony schema before replacing the
+  database, then overlays artwork. Invalid archives return HTTP 422 with a
+  `detail` message. A successful response is
+  `{ "status": "restored", "artwork_files": n, "restart_recommended": true }`.
+- `GET /api/settings/operations/settings-export` returns portable JSON of
+  database-managed settings, excluding internal values, secrets, and paths.
+- `POST /api/settings/operations/settings-import` accepts that JSON as a
+  multipart `file` and responds with `settings_imported` and
+  `restart_recommended`.
+
+Backups and restores are mutually exclusive: while one runs, the other
+endpoints return HTTP 409. Restores run in a worker thread so other pages and
+live streams keep responding.

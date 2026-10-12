@@ -111,6 +111,14 @@ The editor is unavailable for missing files. Manual and imported artwork update
 Harmony's canonical artwork cache and do not replace artwork embedded inside
 the audio file.
 
+### Backing Up Harmony
+
+Open **Settings → Operations** and choose **Download backup** to save a ZIP of
+Harmony's database (Library index, Sources, playlists, history, and settings)
+and its artwork cache. To move to a new machine or recover, choose **Restore
+backup** on the new install, then restart Harmony. Your music files are not in
+the backup, so keep a copy of the music folder as well.
+
 ### Current Status
 
 Harmony is at **v3.1.0**, with review-first local uploads, a per-song Library

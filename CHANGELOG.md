@@ -5,6 +5,27 @@ on **Keep a Changelog**, and this project follows **Semantic Versioning**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Restoring a backup no longer loads the whole archive into memory or blocks
+  the server while it runs. Large restores previously could exhaust memory on
+  small NAS hosts and freeze or crash the web interface.
+- Damaged, non-SQLite, or non-Harmony databases inside a backup are rejected
+  with a clear message instead of an internal error.
+- Backups and restores can no longer run at the same time; a second request
+  returns HTTP 409.
+- A failed backup download no longer replaces the Settings page with an error
+  page, and restore failures show the server's message instead of a generic or
+  parsing error. Backup controls are disabled while an operation runs.
+
+### Changed
+
+- Backups store cached artwork without recompressing it, making backups of
+  large artwork caches several times faster.
+- Moved backup/restore and other v3.1 deliverables into a "Shipped in v3.1"
+  roadmap section, and documented backup, restore, and settings-transfer
+  behavior and APIs.
+
 ## [v3.1.0] - 2026-10-04
 
 ### Added
