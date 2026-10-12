@@ -8,6 +8,12 @@ SQLite and applies them without rewriting the environment file. Credentials,
 paths, executable locations, listener settings, and the database URL remain
 deployment environment concerns.
 
+The version shown in the web UI and health response is not a runtime setting.
+Published container images embed their Git release tag (for example,
+`v3.1.0` is displayed as `3.1.0`). Local and CI builds without a release tag
+use the version in `pyproject.toml`. An old `APP_VERSION` entry in `.env` is
+ignored and can be removed.
+
 ## Web login
 
 Authentication is enabled by default and protects the Web UI, API, interactive

@@ -3,6 +3,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.version import get_app_version
+
 ROOT = Path(__file__).resolve().parents[2]
 
 ENV_FILE = ROOT / ".env"
@@ -16,7 +18,6 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Harmony"
-    app_version: str = "3.1.0"
 
     host: str = "0.0.0.0"
     port: int = 8080
@@ -79,6 +80,10 @@ class Settings(BaseSettings):
     cover_art_archive_max_bytes: int = 15 * 1024 * 1024
     musicbrainz_base_url: str = "https://musicbrainz.org/ws/2"
     musicbrainz_timeout_seconds: float = 12.0
+
+    @property
+    def app_version(self) -> str:
+        return get_app_version()
 
 
 
