@@ -475,6 +475,7 @@ Current configurable settings include:
 - Cover Art Archive request settings
 - MusicBrainz Library-editor request settings
 - Appearance, date/time, and runtime behavior
+- Backup, restore, and settings transfer (**Settings → Operations**)
 - System information
 
 Cover Art Archive access can be tuned with the documented
@@ -482,6 +483,28 @@ Cover Art Archive access can be tuned with the documented
 User-initiated metadata lookup can similarly be pointed at a compatible mirror
 or given a different timeout with `MUSICBRAINZ_BASE_URL` and
 `MUSICBRAINZ_TIMEOUT_SECONDS`.
+
+---
+
+## 💾 Backup and Restore
+
+**Settings → Operations** keeps Harmony's state portable:
+
+- **Download backup** creates a ZIP containing a consistent snapshot of the
+  SQLite database (Library index, Sources, playlists, download history, and
+  settings) plus the artwork cache. The snapshot is taken while Harmony keeps
+  running.
+- **Restore backup** validates the archive (manifest, SQLite integrity, and
+  that it is a Harmony database) before replacing the database and overlaying
+  the artwork cache. Archives up to 2 GB are accepted, and restores are read
+  from disk rather than memory, so large archives don't exhaust RAM on small
+  NAS hosts.
+- **Export/Import settings** transfers database-managed preferences as JSON.
+  Environment secrets and storage paths are never included.
+
+Only one backup or restore runs at a time. Restart Harmony after a restore or
+settings import so startup-only services pick up the restored configuration.
+Music files themselves are not included; back up your music folder separately.
 
 ---
 
@@ -778,8 +801,8 @@ Just a synchronized self-hosted music library.
 
 # Roadmap
 
-See the [maintained roadmap](docs/roadmap.md) for completed v3 work and
-explicitly deferred priorities. Older feature concepts are not promises of
+See the [maintained roadmap](docs/roadmap.md) for what shipped in v3 and
+v3.1, what comes next, and explicitly deferred priorities. Older feature concepts are not promises of
 current functionality.
 
 ---

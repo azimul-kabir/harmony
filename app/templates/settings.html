@@ -195,7 +195,7 @@
                 <h3>Backup &amp; restore</h3>
                 <p class="settings-help">Download a consistent database snapshot with cached artwork. Restoring replaces Harmony's database and overlays artwork from the archive.</p>
                 <div class="operations-actions">
-                    <a class="btn-primary" href="/api/settings/operations/backup">Download backup</a>
+                    <a class="btn-primary" id="backup-download" href="/api/settings/operations/backup" download>Download backup</a>
                     <label class="btn-secondary operation-file-button">Restore backup<input id="backup-restore-file" type="file" accept=".zip,application/zip" hidden></label>
                 </div>
                 <p id="backup-operation-status" class="settings-help" role="status" aria-live="polite"></p>
@@ -302,6 +302,7 @@
     .operations-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .operations-actions a { text-decoration: none; }
     .operation-file-button { cursor: pointer; }
+    .operations-actions .is-disabled { opacity: .55; pointer-events: none; }
 
     @media (max-width: 768px) {
         .settings-header { margin-bottom: 18px; }
@@ -425,20 +426,38 @@
         finally { button.disabled = false; }
     });
 
-    async function uploadOperation(input, url, statusId, confirmation) {
+    // The download link uses the `download` attribute, so a failed backup stays
+    // in the browser's download list instead of replacing this page.
+    document.getElementById('backup-download')?.addEventListener('click', () => {
+        document.getElementById('backup-operation-status').textContent =
+            'Preparing backup… Large libraries can take a few minutes; the download starts when it is ready.';
+    });
+    let operationRunning = false;
+    async function uploadOperation(input, url, statusId, confirmation, busyText) {
         const file = input.files?.[0];
         if (!file) return;
+        if (operationRunning) { input.value = ''; return; }
         if (confirmation && !window.confirm(confirmation)) { input.value = ''; return; }
         const status = document.getElementById(statusId);
-        status.textContent = 'Uploading…';
+        const controls = document.querySelectorAll('#tab-operations .operations-actions > *');
+        operationRunning = true;
+        controls.forEach(control => control.classList.add('is-disabled'));
+        status.textContent = busyText || 'Uploading…';
         const body = new FormData(); body.append('file', file);
         try {
-            const response = await fetch(url, {method: 'POST', body});
-            const payload = await response.json();
-            if (!response.ok) throw new Error(payload.detail || 'Operation failed.');
+            let response;
+            try { response = await fetch(url, {method: 'POST', body}); }
+            catch { throw new Error('Harmony stopped responding. It may be restarting; wait a minute, then reload this page.'); }
+            let payload = {};
+            try { payload = await response.json(); } catch { /* proxy or server error page */ }
+            if (!response.ok) throw new Error(payload.detail || payload.error?.message || `Operation failed (HTTP ${response.status}).`);
             status.textContent = payload.restart_recommended ? 'Complete. Restart Harmony now.' : 'Complete.';
         } catch (error) { status.textContent = error.message; }
-        finally { input.value = ''; }
+        finally {
+            input.value = '';
+            operationRunning = false;
+            controls.forEach(control => control.classList.remove('is-disabled'));
+        }
     }
     document.getElementById('settings-import-file')?.addEventListener('change', event => uploadOperation(
         event.currentTarget, '/api/settings/operations/settings-import', 'settings-operation-status',
@@ -446,7 +465,8 @@
     ));
     document.getElementById('backup-restore-file')?.addEventListener('change', event => uploadOperation(
         event.currentTarget, '/api/settings/operations/restore', 'backup-operation-status',
-        'Restore this backup? The current Harmony database will be replaced. This cannot be undone unless you download a backup first.'
+        'Restore this backup? The current Harmony database will be replaced. This cannot be undone unless you download a backup first.',
+        'Uploading and restoring… Keep this page open; large backups can take a few minutes.'
     ));
 </script>
 {% endblock %}

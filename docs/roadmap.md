@@ -4,7 +4,7 @@
 >
 > Previous stable baseline: v3.0.0
 >
-> Last updated: 2026-10-04
+> Last updated: 2026-10-12
 
 Harmony v3 deliberately narrows the product around one dependable path:
 
@@ -80,20 +80,32 @@ The cleanup proceeded in small, independently testable changes:
 - Validate each maintenance release on a DS220+-class Synology deployment
   before publishing its version tag.
 
-## After v3
+## Shipped in v3.1
 
-The first post-v3 work should favor operational fundamentals over rebuilding
-removed feature suites:
+v3.1.0 delivered the operational fundamentals planned after v3:
 
-- ✅ Backup and restore for the SQLite database (including settings, Sources,
-  and playlists) and cached artwork, available under Settings → Operations.
-- ✅ Portable JSON settings import/export with restart guidance; environment
+- Backup and restore for the SQLite database (including settings, Sources,
+  and playlists) and cached artwork, under **Settings → Operations**.
+- Portable JSON settings import/export with restart guidance; environment
   paths and credentials remain intentionally excluded.
-- ✅ Durable automatic/manual schedule history, late-run visibility, and
-  run-now outcome diagnostics on each Source.
+- Durable automatic/manual schedule history, late-run visibility, and run-now
+  outcome diagnostics on each Source.
+- Review-first local music uploads with staged metadata correction, album
+  review, duplicate preflight, and resumable import jobs.
+- A per-song Library metadata and artwork editor with MusicBrainz lookup.
+- Navidrome 0.64 ID-migration safety.
+- A redesigned interface, five-tab mobile navigation, and a YouTube-link
+  fallback for every failed download.
+
+See the [v3.1.0 release notes](releases/v3.1.0.md) for details.
+
+## Next
+
 - API tokens for automation clients beyond browser-session authentication.
 - Provider/plugin boundaries only when a second maintained implementation
   proves the abstraction is necessary.
+
+## Deferred
 
 Multi-user permissions, additional media servers, and additional acquisition
 providers are intentionally deferred until the smaller v3 core is stable.

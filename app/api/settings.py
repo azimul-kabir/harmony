@@ -3,10 +3,18 @@ import shutil
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.services import settings_service
-from app.services.operations import create_backup, export_settings, import_settings, restore_backup
+from app.services.operations import (
+    MAX_RESTORE_BYTES,
+    OperationBusyError,
+    create_backup,
+    export_settings,
+    import_settings,
+    restore_backup,
+)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -51,6 +59,8 @@ async def upload_settings(file: UploadFile = File(...), db: Session = Depends(ge
 def download_backup():
     try:
         path, filename = create_backup()
+    except OperationBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return FileResponse(
@@ -63,10 +73,14 @@ def download_backup():
 
 @router.post("/operations/restore")
 async def upload_backup(file: UploadFile = File(...)):
+    # Starlette has already spooled the upload to a temporary file. Restore from
+    # that file in a worker thread: reading it into memory can exhaust a small
+    # NAS, and blocking the event loop freezes every page and live stream.
+    if file.size is not None and file.size > MAX_RESTORE_BYTES:
+        raise HTTPException(status_code=413, detail="Backup files larger than 2 GB are not accepted.")
     try:
-        payload = await file.read()
-        if len(payload) > 2 * 1024 * 1024 * 1024:
-            raise ValueError("Backup files larger than 2 GB are not accepted.")
-        return restore_backup(payload)
-    except (ValueError, json.JSONDecodeError) as exc:
+        return await run_in_threadpool(restore_backup, file.file)
+    except OperationBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
