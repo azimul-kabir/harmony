@@ -2,13 +2,17 @@
 
 > Version: 3.1.0
 > Status: Current Library architecture
-> Last Updated: 2026-08-21
+> Last Updated: 2026-10-12
+>
+> This document contains current v3 architecture and explicitly marked v2
+> migration history. Historical sections are not active API or product
+> contracts; use [the API guide](../api.md) for current endpoints.
 
 ---
 
 # Overview
 
-The Library Engine is the core of Harmony.
+The Library is Harmony's canonical index for managed music.
 
 Harmony is **not a music player**.
 
@@ -16,8 +20,8 @@ Harmony's responsibility is to:
 
 - Acquire music
 - Organize music
-- Maintain metadata
-- Keep the library healthy
+- Support explicit, user-confirmed metadata editing
+- Keep indexed files and artwork healthy
 - Expose the library through APIs
 
 Playback is delegated to applications like Navidrome.
@@ -36,47 +40,36 @@ The Library must be:
 
 Never depend on one metadata provider or one download source.
 
-Future integrations include:
-
-- MusicBrainz
-- Cover Art Archive
-- YouTube Music
-- Deezer
-- Discogs
-- Navidrome
+Current external services are limited to Spotify and public YouTube Music
+Sources/downloads, user-initiated MusicBrainz/Cover Art Archive lookups, and
+Navidrome scan/playlist delivery. Other integrations are deferred; they are
+not implied by the provider-neutral internal boundaries.
 
 ---
 
 # High-Level Architecture
 
 ```
-Spotify Playlist
+Spotify / public YouTube Music Source
         │
         ▼
-Download Engine
+Harmony API + durable workers
         │
         ▼
-Library Index
+Library Index ──► M3U ──► Navidrome / media server
         │
- ┌──────┼─────────────┐
- ▼      ▼             ▼
-Metadata Artwork   Search Index
-        │             │
-        ▼             ▼
-Collections     Analytics
-        │
-        ▼
-REST API
-        │
-        ▼
-Web UI
+ ┌──────┼──────────────┐
+ ▼      ▼              ▼
+Search Artwork     Library Health
+Index  Cache       and bulk jobs
 ```
 
 ## Dashboard Attention Center
 
 The Dashboard exposes a bounded, navigation-oriented **Needs Attention** summary.
-It combines source-of-truth library health metrics, failed download totals, pending
-metadata suggestions, and terminal Library Maintenance or Library Bulk task outcomes.
+It combines failed-download and missing-file totals, missing metadata and
+artwork counts, and unreviewed terminal Library Maintenance and Bulk task
+outcomes.
 Items with no affected records are omitted. Critical issues are shown before warnings,
 then informational items; their order within a severity is a fixed operational priority,
 not a count-based ranking.
@@ -144,7 +137,7 @@ Library
 │
 ├── Sources
 │
-└── Collections
+└── Durable Tasks
 ```
 
 ---
@@ -155,42 +148,25 @@ Library
 
 Represents one audio file.
 
-Fields
-
-- id
-- path
-- filename
-- artist
-- album
-- album_artist
-- title
-- track_number
-- track_total
-- disc_number
-- disc_total
-- genre
-- year
-- duration
-- bitrate
-- codec
-- sample_rate
-- file_size
-- date_added
-- last_modified
-- artwork_id
-- artwork_status
-- availability_status
-- download_source
+Core fields include `id`, `path`, `filename`, `artist`, `album_artist`,
+`album`, `title`, `track`, `track_total`, `disc`, `disc_total`, `genre`, `year`,
+`duration`, `bitrate`, `codec`, `sample_rate`, `file_size`, `artwork_id`,
+`artwork_status`, `availability_status`, `download_source`, `last_modified`,
+`last_indexed_at`, and `metadata_hash`.
 
 External IDs
 
-- spotify_id
+- spotify_track_id
+- spotify_album_id
+- navidrome_id
 - musicbrainz_recording_id
 - musicbrainz_release_id
+- musicbrainz_release_group_id
 - musicbrainz_artist_id
 - isrc
 
-Additional indexed release context includes a nullable compilation marker.
+Additional indexed release context includes release dates and a nullable
+compilation marker.
 
 Relationships
 
@@ -242,51 +218,25 @@ Fields
 - width
 - height
 
-Possible Sources
-
-Embedded
-
-Folder
-
-Spotify
-
-Cover Art Archive
-
-Manual
+Sources include embedded audio artwork, supported folder images, manually
+uploaded images, and remote Cover Art Archive images. Cached resources are
+content-addressed and associated with Songs independently of audio tags.
 
 ---
 
-## Playlist
+## Playlist and Source
 
-Represents where a song came from.
+Playlists retain ordered track membership and provider-neutral Source identity.
+Spotify-specific IDs remain compatibility fields where required; the
+`(provider, external_id)` Source identity is authoritative.
 
-Fields
-
-- id
-- spotify_playlist_id
-- name
-- owner
-- source
+The playlist stores `source_provider`, `source_external_id`, and `source_url`;
+legacy Spotify identity columns remain for compatibility. Ordered
+`PlaylistTrack` rows preserve membership and position.
 
 A song may belong to multiple playlists.
 
 ---
-
-## Collection
-
-Generated automatically.
-
-Examples
-
-Recently Added
-
-Highest Bitrate
-
-Missing Artwork
-
-Duplicate Songs
-
-Favorites
 
 ---
 
@@ -593,10 +543,6 @@ ArtworkService
 
 SearchService
 
-CollectionService
-
-AnalyticsService
-
 IndexService
 
 WatcherService
@@ -614,7 +560,7 @@ Current canonical boundaries:
 - `library_search`: transactional FTS projection maintenance and bounded search.
 - `library_filters`: composable query filters and stable sorting.
 - `library_predicates`: shared semantic SQL definitions such as missing metadata.
-- `library_analytics` and `library_health`: index-only projections.
+- `library_health`: index-only operational projections.
 - `artwork`: content-addressed local artwork detection and storage.
 - `library_bulk` and `library_health`: task-backed filesystem orchestration.
 - `task_progress`: the shared durable-task API contract.
@@ -659,55 +605,11 @@ parallel scanner, serializer, path builder, or task response format.
 
 # Event Flow
 
-Downloads should never update the UI directly.
-
-Everything passes through the Library.
-
-```
-Download Completed
-
-↓
-
-Index File
-
-↓
-
-Extract Metadata
-
-↓
-
-Generate Artwork Cache
-
-↓
-
-Update Search Index
-
-↓
-
-Refresh Collections
-
-↓
-
-Refresh Analytics
-
-↓
-
-Notify UI
-```
-
-Future
-
-↓
-
-Metadata Repair
-
-↓
-
-Duplicate Detection
-
-↓
-
-Navidrome Sync
+Downloads and imports validate and place managed audio, then update the
+canonical Song index, search and artwork projections, affected M3Us, and UI
+events. Explicit file operations use the same index and durable task services.
+Duplicate detection is read-only; resolution queues confirmed removals through
+the Library bulk-task boundary.
 
 ---
 
@@ -723,8 +625,8 @@ API routes, and future integrations must not maintain parallel song records.
 In addition to descriptive metadata, each indexed file stores technical audio
 properties, artwork status, availability, filesystem timestamps, metadata hash,
 download source, Spotify/MusicBrainz/ISRC identifiers, and indexing timestamps.
-Playlist sources are resolved from the persistent `playlists` and
-`playlist_tracks` index using the Spotify track ID. This avoids duplicating
+Playlist membership is resolved from persistent ordered playlist-track
+associations and provider-neutral Source identity. This avoids duplicating
 playlist membership on each song row while still exposing it in Library APIs.
 
 Playlist artwork is stored beside each exported M3U with the same sanitized
@@ -905,15 +807,15 @@ Search API:
   records only.
 
 The web Library search box queries this API with a debounce and projects the
-ranked Song matches into the Songs, Albums, and Artists views. Collection names
-remain locally filtered UI navigation rather than FTS content.
+ranked Song matches into the Songs, Albums, and Artists views. Harmony v3 has
+no separate Collections API or persisted collection model.
 
 ## Advanced query grammar
 
 Simple whitespace searches retain prefix matching across every FTS field.
 Advanced syntax adds allow-listed field qualifiers, quoted phrases, and
-leading-hyphen exclusions. Special index-only controls filter Songs with open
-metadata issues, artwork presence/absence, missing metadata, availability, or
+leading-hyphen exclusions. Special index-only controls filter Songs with
+missing title/artist/album tags, artwork presence/absence, availability, or
 membership in an explainable duplicate candidate group.
 
 The parser never passes raw operators or column names through to SQLite. It
@@ -981,10 +883,6 @@ Artwork resolution runs as part of Library indexing and uses this priority:
 
 4 Cover Art Archive front artwork, when a user explicitly selects **Fetch
 album art** for a Song with an accepted MusicBrainz release ID
-
-5 Future providers
-
-- Spotify
 
 Supported folder filenames are `cover`, `folder`, `front`, and `album` with
 JPEG, PNG, or WebP extensions. Embedded images are read through Mutagen from
@@ -1058,11 +956,12 @@ Confidence
 
 Last Updated
 
-## Metadata Intelligence foundation
+## Retired metadata suggestions (v2 migration history)
 
-> Historical v2 design: suggestions, application batches, manual canonical
-> edits, history, rollback, and explicit tag writing are removed from Harmony
-> v3. Their schema remains only for upgrade compatibility.
+> Historical v2 design: provider suggestion/application batches and their
+> audit tables are not active in Harmony v3. The separate v3.1 per-song editor
+> is documented under **Explicit Metadata Editor** above; it writes supported
+> tags only after user confirmation.
 
 Canonical metadata remains on the existing `songs` Library Index. The
 `metadata_suggestions` table is a provider-neutral review queue and never
@@ -1173,26 +1072,14 @@ Custom Rules
 
 ---
 
-# Analytics
+# Retired Library analytics (v2 history)
 
-Library Analytics use available records in the Library Index exclusively.
-They never inspect files, parse tags, or walk the filesystem.
+Harmony v3 removed the detailed Library analytics endpoint and insight cards.
+The Dashboard still presents operational totals, queue trends, and worker
+health, while Library Health provides indexed-file maintenance views.
 
-`LibraryAnalyticsService` is limited to the operational summary shared by
-Library Health and the Dashboard: available songs, albums, artists, and indexed
-storage. The public analytics endpoint and album/quality insight cards are not
-part of the v3 surface.
-
-The same Dashboard snapshot includes at most three recent terminal Library
-Maintenance or Library Bulk jobs. These are durable task summaries without
-paths, item details, or raw errors, giving operators a direct health-page route
-to investigate partial or failed maintenance work.
-
-Composite indexes on availability/album/album-artist and
-availability/year/album support grouped album insights for large libraries.
-
-Future metrics such as Health Score should be added to this service and API,
-not recomputed in UI code.
+The former v2 analytics design is retained here only as migration context and
+does not describe an active service or API.
 
 ---
 
@@ -1239,20 +1126,19 @@ membership, metadata, or tags into the keeper.
 # Multi-Source Downloads
 
 Harmony keeps source selection explicit and preserves the requested source
-identity through download and import. For Spotify jobs, SpotDL receives the
-original Spotify track URL exactly once. Harmony does not generate artist/title
-queries, request unfiltered search results, or fall back automatically to the
-YouTube Music source.
+identity through download and import. Spotify jobs first use one bounded,
+metadata-only yt-dlp candidate search using resolved metadata. Candidates must
+pass artist, title/version, album-context, and duration checks before transfer.
+If that route cannot produce a safe result, the bounded SpotDL rescue may run;
+its output must pass the same embedded-identity checks.
 
-The Spotify attempt is accepted only after it exits successfully, produces one
-supported audio file, and the file's embedded identity matches the stored
-request. Primary artist and title are mandatory; reliable duration and material
-version markers provide additional hard checks. A rejected candidate is cleaned
-from staging and becomes a non-retryable `exact_match_unavailable` attempt, so
-the worker cannot tag, import, link, or export it.
+Harmony imports exactly one supported audio file only after embedded identity
+validation. A rejected candidate is removed from staging and recorded as
+`exact_match_unavailable`; it is not imported or linked to the requested track.
 
-YouTube Music remains a separate opt-in source selected by the user. Its
-existence does not weaken the Spotify exact-match boundary.
+YouTube Music remains a separate opt-in download source. A user may also
+provide a specific YouTube/YouTube Music track URL for any failed download;
+the manual fallback is a separate job and remains subject to identity checks.
 
 Playlist synchronization uses the same explicit provider boundary. A durable
 Source is identified by `(provider, external_id)` and retains a canonical
@@ -1262,9 +1148,9 @@ playlist reader; public YouTube Music Sources use flat yt-dlp playlist
 extraction, retain playable Music watch URLs and `youtube_music` item IDs, and
 enter the provider-neutral download queue without fabricating Spotify IDs.
 
-Both readers feed the ordered playlist persistence, M3U export, per-Source
-manual/automatic scheduling, and Navidrome reimport pipeline. Local and smart
-playlists have no required external provider identity.
+Both readers feed ordered playlist persistence, M3U export, per-Source
+manual/automatic scheduling, and Navidrome scan requests. Local uploads use the
+same canonical Library index but do not create a Source.
 
 Metadata
 
@@ -1300,76 +1186,37 @@ Media servers consume it.
 
 Harmony never becomes a streaming server.
 
-Harmony uses Navidrome's Subsonic-compatible API for scanner controls and
-ordered playlist reconciliation. `getScanStatus` and `startScan` expose scanner
-state and index newly downloaded audio. `search3` and `getSong` resolve
-Harmony's local songs to stable Navidrome IDs. `createPlaylist` replaces the
-target playlist with the IDs in original source order, and `getPlaylist`
-verifies the result before Harmony records success. Navidrome remains
-responsible for its own media index; it never writes Harmony's `songs` table.
+Harmony uses Navidrome's Subsonic-compatible API for connection status and
+scanner controls. Playlists are delivered as M3U files for Navidrome to scan;
+Harmony does not directly create or replace Navidrome playlists. The v3.1
+reconciliation workflow refreshes persisted Navidrome song and playlist IDs
+from the server catalog after ID-scheme changes; it does not create, delete, or
+merge Harmony records.
 
 Configure `NAVIDROME_URL`, `NAVIDROME_USERNAME`, and `NAVIDROME_PASSWORD` in
 Harmony's environment. In Docker, the URL must be reachable from the Harmony
 container (for example `http://navidrome:4533` on a shared Compose network).
 Credentials stay server-side.
 
-Completed playlist syncs are batched for a configurable debounce window.
-Harmony waits for any active scan, requests an incremental scan to index newly
-downloaded audio, rewrites the affected M3Us, and requests a second scan so
-Navidrome imports those playlists. This background integration is controlled by
-`NAVIDROME_PLAYLIST_REIMPORT_ENABLED`,
-`NAVIDROME_PLAYLIST_REIMPORT_DEBOUNCE_SECONDS`,
-`NAVIDROME_PLAYLIST_REIMPORT_POLL_SECONDS`, and
-`NAVIDROME_PLAYLIST_REIMPORT_SCAN_TIMEOUT_SECONDS`.
+Harmony can request incremental or full scans and may request a scan after
+playlist synchronization or a completed import. The M3U files and Harmony
+database remain authoritative for playlist order and membership.
 
-Supported servers
-
-Navidrome
-
-Jellyfin
-
-Subsonic-compatible
+M3U files can also be consumed by Jellyfin, Plex, Kodi, VLC, and other
+M3U-compatible software; direct API integration is currently limited to
+Navidrome scanner and ID-reconciliation operations.
 
 ---
 
 # Database Design
 
-The database should be normalized.
-
-Recommended tables
-
-artists
-
-albums
-
-songs
-
-artwork
-
-Current `artwork` fields: id, checksum, cache_path, source, mime_type, width,
-height, file_size, provider, provider_id, original_url, created_at, updated_at.
-
-playlists
-
-playlist_songs
-
-collections
-
-collection_items
-
-library_events
-
-download_sources
-
-metadata_sources
-
-Future tables
-
-duplicates
-
-metadata_history
-
-play_history
+The active persistence model uses SQLAlchemy entities and Alembic migrations.
+`songs` is the canonical managed-file index; Sources and ordered playlist
+membership retain acquisition identity; artwork is content-addressed; durable
+download and Library work is tracked through jobs/tasks and item failures.
+Retired v2 tables/columns may remain in upgrade databases for compatibility,
+but their presence does not imply an active service. Consult the current ORM
+models and migrations before changing schema assumptions.
 
 ---
 
@@ -1480,8 +1327,6 @@ Responsibilities
 
 ✓ Detect duplicates
 
-✓ Generate collections
-
 ✓ Expose APIs
 
 ✗ Stream music
@@ -1537,16 +1382,13 @@ API surface:
 
 # Library Health
 
-`LibraryHealthService` provides a reusable, index-only health snapshot. It
-combines the existing analytics aggregates with registered health checks for
-artwork completeness, metadata completeness, and explainable duplicate
-candidate groups.
-
-The Health Score is a bounded 0–100 completeness indicator. Missing metadata,
-missing artwork, and missing files currently contribute weighted penalties.
-New checks such as metadata confidence, duplicate groups, and repair history
-must be added to the service's check registry and score policy, not hard-coded
-in the web page. `GET /api/library/health` exposes this stable snapshot shape.
+`LibraryHealthService` provides an index-only snapshot of Library totals,
+artwork and metadata completeness, duplicate candidates, missing files, and
+last-indexed time. The bounded 0–100 Health Score applies weights of 0.30 to
+missing artwork, 0.50 to missing metadata, and 0.20 to missing files, divided
+by the available-plus-missing song count; duplicate groups are reported as a
+separate check and do not affect the score. `GET /api/library/health` exposes
+this snapshot.
 
 Maintenance actions reuse Harmony Tasks with the `library_maintenance` type and
 run in a supervised background worker:
@@ -1564,21 +1406,18 @@ aggregate progress, and publish `library.health.updated` after completion. API:
 - `GET /api/library/health/tasks/{task_id}` reports progress.
 - `POST /api/library/health/tasks/{task_id}/cancel` requests cancellation.
 
-The `/library/health` dashboard consumes only these APIs. Future metadata repair
-and duplicate detection should register checks and actions behind the same
-service/API boundaries, preserving the dashboard layout.
+The `/library/health` dashboard consumes these APIs. Duplicate detection is
+read-only; explicit resolution uses the separate preview-and-confirm Library
+bulk workflow.
 
 ---
 
-# Canonical Metadata Application
+# Retired metadata application pipeline (v2 migration history)
 
-Manual Song edits use this same application boundary rather than updating
-database rows directly. Preview is read-only. Apply creates already-reviewed
-`manual` proposals for changed fields, then queues the normal durable task.
-Consequently manual edits retain per-Song locking, stale-write protection,
-immutable history, rollback, FTS maintenance, and metadata-health refresh.
-Writing the resulting canonical values to an audio file remains a separate
-explicit action.
+The v2 proposal/application-batch workflow described below was removed in v3.
+It is not the active metadata editor: in v3.1, the per-song editor described
+above performs a user-confirmed audio-tag write, reindexes that file, and
+handles artwork in a separate request.
 
 Accepted metadata is applied only to canonical `Song` database columns by a
 durable `library_maintenance` Task. The application service never opens an

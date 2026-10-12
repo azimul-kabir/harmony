@@ -1,24 +1,27 @@
 # Spotify download and embedded-metadata audit
 
+**Last updated:** 2026-10-12
+
 **Audit scope:** Harmony's Spotify track, album, and playlist queue paths; the
-SpotDL 4.5.2 invocation; download validation; download-time tag mutation; import
-and indexing. This is a static code audit, not a claim that every audio provider
-will return a playable match for every Spotify item.
+direct yt-dlp acquisition path and SpotDL 4.5.2 fallback; download validation;
+download-time tag mutation; import and indexing. This is a static code audit,
+not a claim that every audio provider will return a playable match for every
+Spotify item. The tag table below describes SpotDL fallback output only.
 
 ## Executive summary
 
-All three supported Spotify URL types ultimately create one durable job per
-track and use the same `SpotDLClient.download()` path. That is a good design:
-album and playlist downloads do not have a less-validated bulk-download bypass.
-Every produced file must be the only supported audio output and must match the
-requested title, artist, version markers, and duration before it leaves the
-temporary directory.
+All three supported Spotify URL types create durable per-track jobs and share
+the same acquisition and validation path. Spotify jobs first inspect a bounded
+set of yt-dlp candidates and download only the strongest candidate that passes
+strict identity checks. When direct acquisition cannot produce a safe result,
+the bounded SpotDL fallback runs and its output is validated before import.
+Album and playlist jobs therefore do not bypass track-level validation.
 
-Metadata embedding, however, is owned principally by SpotDL rather than by
-Harmony. Harmony explicitly writes only its enriched genre before import.
-Consequently, the exact embedded fields depend on SpotDL, output format, and
-which upstream fields are available. Harmony persists richer queue metadata,
-but it does not reconcile that canonical snapshot into the downloaded file.
+Metadata embedding depends on the acquisition path. Direct yt-dlp acquisition
+uses the resolved Harmony `Track` metadata; SpotDL fallback output is still
+provider-owned. Spotify genre enrichment was removed in v3, so Harmony no
+longer replaces file genres with Spotify-derived values. Harmony does not
+reconcile every field in the queued track snapshot into SpotDL output.
 
 The highest-value improvements are:
 
@@ -34,18 +37,20 @@ The highest-value improvements are:
 ### Single track
 
 1. `POST /api/downloads` parses the URL as `track`.
-2. Harmony resolves the Spotify Web API track payload and enriches artist
-   genres.
+2. Harmony resolves the Spotify track metadata and stores a durable job
+   snapshot.
 3. One durable job snapshots the resolved fields.
-4. The worker asks SpotDL for the Spotify URL. If that attempt fails or produces
-   no file, it tries a metadata search.
-5. Harmony accepts exactly one audio file only after identity validation, writes
-   the enriched genre when available, imports it, indexes its embedded tags,
-   and links the indexed song to the Spotify track ID in the database.
+4. The worker inspects a bounded yt-dlp candidate search, validates candidates,
+   and downloads only a safe match. If that path fails, it tries the bounded
+   SpotDL fallback.
+5. Harmony accepts exactly one audio file only after identity validation,
+   imports it, indexes its embedded tags, and links the indexed song to the
+   Spotify track ID in the database.
 
-**Assessment:** strongest metadata input path. The Web API response supplies an
-ISRC and album ID. The final file still relies on SpotDL re-resolving metadata;
-the queue snapshot is not used to repair or verify tags.
+**Assessment:** the Web API response supplies the strongest queue context,
+including ISRC and album ID. The direct path uses that resolved metadata to
+inspect and tag its selected candidate. If SpotDL fallback is needed, Harmony
+validates its output identity but does not rewrite every tag from the snapshot.
 
 ### Album
 
@@ -54,12 +59,10 @@ the queue snapshot is not used to repair or verify tags.
 2. Harmony creates a task and one job for every not-owned/not-queued track.
 3. Every child job follows the same validated single-track worker path.
 
-**Assessment:** audio validation is equivalent to a single track. Metadata
-resolution is weaker: Spotify's simplified album-track objects are mapped with
-`isrc=None`, and Harmony does not fetch full track objects to fill it. Track and
-disc numbers are retained, but totals and the full release date are discarded.
-The subsequent SpotDL invocation may independently recover those fields for the
-file, but Harmony cannot guarantee or verify that it did.
+**Assessment:** each child job uses the same direct-acquisition, fallback, and
+identity-validation pipeline as a single track. Album metadata is resolved
+before the child jobs are queued; optional-field fidelity still depends on the
+upstream response and the selected acquisition path.
 
 ### Playlist
 
@@ -70,17 +73,14 @@ file, but Harmony cannot guarantee or verify that it did.
    not-owned track with its playlist position.
 4. Every child job follows the same validated single-track worker path.
 
-**Assessment:** audio validation is equivalent to a single track. Playlist
-membership/order is database and M3U metadata, not audio-file metadata (which is
-correct). The mapper drops SpotDL's available `album_id`, `artist_id`, artists
-list, and list position/length when creating a `Track`. Playlist position is
-separately passed to the job, so ordering is not lost, but album identity and
-multi-artist fidelity in Harmony's snapshot are incomplete.
+**Assessment:** each child job uses the same direct-acquisition, fallback, and
+identity-validation pipeline as a single track. Playlist membership and order
+remain database/M3U metadata rather than audio tags.
 
-## What is currently embedded
+## SpotDL fallback tags
 
-The following table describes the effective download result with the pinned
-SpotDL 4.5.2 implementation. “SpotDL” means Harmony does not independently
+The following table describes SpotDL 4.5.2 fallback output. It does not
+describe direct yt-dlp output. “SpotDL” means Harmony does not independently
 guarantee the value. Optional values are omitted when unavailable upstream.
 
 | Field | MP3 | M4A | FLAC / OGG / Opus | Harmony action |
@@ -92,7 +92,7 @@ guarantee the value. Optional values are omitted when unavailable upstream.
 | Release date/year | `TDRC` plus `TYER` | `©day` | `date` | Harmony imports only integer year |
 | Track number/total | `TRCK` (`n/total`) | `trkn` tuple | `tracknumber`, `tracktotal` | Imported when readable |
 | Disc number/total | `TPOS` (`n/total`) | `disk` tuple | `discnumber`, `disctotal` | Imported when readable |
-| Genre | `TCON` | `©gen` | `genre` | SpotDL writes its first genre; Harmony then replaces it with its enriched genre list when available |
+| Genre | `TCON` | `©gen` | `genre` | Provider-written value is retained; Harmony no longer enriches genres from Spotify |
 | Publisher/encoded by | `TENC` | `©too` | `encodedby` | Not imported into Harmony |
 | Copyright | `TCOP` | `cprt` | `copyright` | Not imported |
 | Spotify URL | `WOAS` | freeform `spotdl:WOAS` | `woas` | Not imported as a tag identity |
@@ -116,13 +116,14 @@ to the tested metadata contract.
 
 ### High priority
 
-#### H1 — No Harmony-owned canonical tag contract
+#### H1 — No Harmony-owned canonical tag contract for SpotDL fallback
 
-Harmony validates only embedded title, artist, and duration. It does not verify
-album, album artist, numbering, date, ISRC, URL, or artwork against the queued
-Spotify snapshot. A SpotDL regression or metadata-search fallback can therefore
-produce the correct recording with incomplete or inconsistent tags, which then
-become the values used for the destination path and library row.
+Harmony validates embedded artist, title, material-version identity, and
+reliable duration. It does not verify album, album artist, numbering, date,
+ISRC, URL, or artwork in SpotDL fallback output against the queued Spotify
+snapshot. A SpotDL regression can therefore produce the correct recording with
+incomplete or inconsistent optional tags, which may affect the destination
+path and Library row.
 
 **Recommendation:** after identity validation and before import, write canonical
 job metadata with an atomic backup/restore strategy, then re-read and verify it.
@@ -167,9 +168,10 @@ relation (not in audio tags).
 
 #### M3 — Genre semantics are lossy and inconsistent
 
-SpotDL writes only its first genre. Harmony can replace it with multiple genres,
-but the library reader stores only the first easy-tag value in `Song.genre`, and
-the source delimiter varies by format/player.
+SpotDL fallback may write only its first genre, and the library reader stores
+only the first easy-tag value in `Song.genre`; the source delimiter varies by
+format/player. Harmony no longer enriches genres from Spotify or replaces
+downloaded genre tags.
 
 **Recommendation:** specify one canonical database representation and explicit
 per-format serialization rules. Verify semantic values after writing rather
