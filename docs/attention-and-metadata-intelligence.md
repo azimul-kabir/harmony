@@ -1,6 +1,11 @@
-# Dashboard attention and metadata intelligence
+# Dashboard attention and metadata intelligence (v2 history)
 
 > v2.0.0 operational contract
+>
+> Historical reference only. Harmony v3 removed the metadata-issue engine and
+> its scoring contract; do not use the metadata sections below as current API
+> behavior. Current Library jobs and endpoints are documented in [the API
+> guide](api.md).
 
 ## Attention-item contract
 
@@ -12,7 +17,7 @@
 | Missing library files | song records | `availability_status=missing` | available records |
 | Maintenance jobs | jobs | `failed`, `completed_with_errors`, `interrupted` | queued, running, paused, cancelling, completed, cancelled |
 | Bulk jobs | jobs | `failed`, `completed_with_errors`, `interrupted` | queued, running, paused, cancelling, completed, cancelled |
-| Open metadata issues | included current issue records | `open` and current entity scope | ignored, resolved, stale, and missing-file song records |
+| Open metadata issues (removed in v3) | historical issue records | `open` and current entity scope | ignored, resolved, stale, and missing-file song records |
 
 Library-job attention can be acknowledged per job or by category. Review state
 suppresses the warning while preserving job summaries and safe per-item failure

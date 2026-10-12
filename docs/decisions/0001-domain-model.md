@@ -12,14 +12,16 @@ timestamps. Albums and Artists are indexed projections; playlists retain
 ordered membership and source identity.
 
 Filesystem scans reconcile the model but do not become the query layer.
-Browsing, search, analytics, health, collections, metadata workflows, playlist
-availability, and bulk actions query the index.
+Browsing, search, Library health, duplicate detection, playlist availability,
+and bulk actions query the index. Harmony v3 removed the former analytics,
+collection, and metadata-discovery surfaces; historical migration notes do
+not imply those features remain active.
 
 ## Consequences
 
 - A missing file does not immediately erase Song identity or audit history.
-- Metadata provider values are proposals until explicitly applied.
-- Writing canonical metadata to an audio file is a separate operation.
+- Metadata lookup results are previews until explicitly selected and saved.
+- The v3.1 metadata editor writes supported tags only after user confirmation.
 - Navidrome consumes music and playlists but does not own Harmony's domain.
 - Schema changes use Alembic and preserve upgrades from published releases.
 

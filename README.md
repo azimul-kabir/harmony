@@ -21,9 +21,9 @@
 
 ## Overview
 
-Harmony is a modern self-hosted music management platform that bridges Spotify with your local music library.
+Harmony is a self-hosted music acquisition and library manager. It synchronizes Spotify and public YouTube Music playlist Sources, downloads missing recordings, organizes local music, and exports M3U playlists for Navidrome and other media servers.
 
-It automatically downloads tracks, synchronizes playlists, organizes your collection, exports M3U playlists, and provides a beautiful web interface for browsing your music. Harmony acts as the **single source of truth** for your library while integrating seamlessly with media servers such as **Navidrome**, **Jellyfin**, and **Plex**.
+Harmony's indexed Library is the source of truth for managed music. Media servers scan the music files and M3U playlists; Harmony does not provide playback or directly manage other servers' catalogs.
 
 Current stable version: **v3.1.0**
 
@@ -192,8 +192,8 @@ Features include:
 - Download only missing songs
 - Automatic M3U generation
 - Direct `.m3u` downloads from the web interface
-- Direct, order-preserving Navidrome playlist synchronization with safe M3U
-  fallback
+- Navidrome scan requests after playlist and Library changes; M3U files remain
+  the playlist interchange format
 - Playlist availability counts, filtering, and one-click source resync
 - Ordered playlist Library-file management and safe saved-playlist deletion
 - Per-source scheduled auto-sync (hourly, every 6 or 12 hours, daily, or weekly)
@@ -375,10 +375,13 @@ save to associate the chosen release artwork.
 
 ---
 
-## 📊 Analytics and Library Health
+## 📊 Library Health
 
-The Library dashboard reports songs, albums, artists, genres, storage usage,
-average bitrate and duration, recently added music, and album insights.
+The Dashboard shows operational Library totals and queue health. The dedicated
+**Library Health** page focuses on indexed-file availability, artwork and
+metadata completeness, duplicate candidates, verification, and maintenance
+actions; Harmony v3 does not include the retired v2 analytics and
+metadata-issue scoring consoles.
 
 The dedicated **Library Health** page adds:
 
@@ -410,6 +413,12 @@ Select multiple Songs and run asynchronous:
 
 Operations continue after individual failures and expose per-song progress,
 errors, cancellation, and recovery through Harmony's task system.
+
+Downloads also has bounded bulk actions for retrying eligible failed jobs, cancelling
+queued or running jobs, and clearing terminal history. The completed-history
+action also clears skipped records. Clearing history never deletes music files
+or Library records; see the
+[download bulk-action safety notes](docs/api.md#post-apidownloadsbulk).
 
 ---
 
@@ -483,6 +492,8 @@ Harmony is designed for desktop and mobile devices.
 Features include:
 
 - Responsive layouts
+- Five mobile tabs (Dashboard, Downloads, Sources, Playlists, Library), with
+  Settings in the phone-only top bar
 - Installable Progressive Web App on supported browsers
 - Offline connection screen when the Harmony server cannot be reached
 - Compact mobile navigation and discoverable Settings sections
@@ -495,44 +506,40 @@ Features include:
 
 ---
 
-# Download Pipeline
+# Spotify Source and Download Pipeline
 
 ```text
-Spotify
+Spotify track or playlist
     │
     ▼
-Fetch Metadata
+Resolve track or playlist metadata
     │
     ▼
-Update Playlist Database
+Queue missing track jobs
     │
     ▼
-Generate M3U Playlists
+Bounded yt-dlp candidate search
     │
     ▼
-Queue Missing Songs
+Select best safe match
     │
     ▼
-Multi-worker Exact Spotify-URL Download
+Download selected recording
+    │
+    ├── SpotDL rescue when direct acquisition cannot produce a safe result
     │
     ▼
-Isolated Temporary Output
+Validate one temporary audio file
     │
     ▼
-Identity Validation
+Import and index in the Library
     │
     ▼
-Staging Folder
-    │
-    ▼
-Library Import
-    │
-    ▼
-Persistent Library Index
+Refresh affected M3U playlists
     │
     ├── FTS Search
     ├── Artwork Cache
-    ├── Collections / Analytics / Health
+    ├── Library Health
     │
     ▼
 Rebuild Playlists
@@ -738,9 +745,12 @@ and artwork cache should remain on persistent storage outside the music tree.
 
 # Why Harmony?
 
-Harmony is more than a Spotify downloader.
+Harmony is more than a Spotify downloader: it also supports public YouTube
+Music Sources and review-first local music imports.
 
-It continuously synchronizes Spotify playlists, downloads only missing tracks, organizes your music collection, exports playlists, and provides a modern interface for browsing your entire library.
+It synchronizes playlists, downloads only missing tracks, organizes your music
+collection, exports playlists, and provides a modern interface for browsing
+your entire library.
 
 ```text
 Spotify
@@ -768,42 +778,9 @@ Just a synchronized self-hosted music library.
 
 # Roadmap
 
-## Near Term
-
-### Operations and Automation
-
-- Backup & restore
-- Import/export settings
-- Additional media-server API integrations beyond Navidrome
-- Schedule history and missed-run visibility
-
----
-
-### Library Intelligence
-
-- Additional provider-assisted metadata review workflows
-- Advanced search improvements
-
----
-
-### Smart Library
-
-- Favorites
-- Ratings
-- Tags
-- User-defined collection rules
-
----
-
-## Future
-
-- Apple Music support
-- Deezer support
-- Multiple music providers
-- Multi-user support
-- Plugin system
-- API authentication and external integration hardening
-- Additional Navidrome event hooks
+See the [maintained roadmap](docs/roadmap.md) for completed v3 work and
+explicitly deferred priorities. Older feature concepts are not promises of
+current functionality.
 
 ---
 
