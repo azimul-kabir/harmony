@@ -44,6 +44,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy remaining project files after dependency installation.
 COPY . .
 
+# Release builds pass their Git tag here. Local and CI builds leave it empty
+# and use the version declared in pyproject.toml.
+ARG HARMONY_RELEASE_TAG=""
+RUN printf '%s' "$HARMONY_RELEASE_TAG" > /app/.release-tag
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
